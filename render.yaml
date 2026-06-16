@@ -2,7 +2,7 @@ services:
   - type: web
     name: rentos-api
     runtime: docker
-    repo: https://github.com/your-org/rentos.git
+    repo: https://github.com/stanleyHayes/userentos.git
     branch: main
     rootDir: .
     dockerfilePath: ./Dockerfile
