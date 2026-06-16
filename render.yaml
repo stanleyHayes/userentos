@@ -2,6 +2,7 @@ services:
   - type: web
     name: rentos-api
     runtime: docker
+    plan: free
     repo: https://github.com/stanleyHayes/userentos.git
     branch: main
     rootDir: .
@@ -12,15 +13,13 @@ services:
       - key: PORT
         value: 3002
       - key: MONGO_URI
-        fromDatabase:
-          name: rentos-mongo
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: PUBLIC_BASE_URL
-        value: https://rentos-api.onrender.com
+        sync: false
       - key: PAYMENTS_PROVIDER_MODE
         value: simulated
       - key: ANTHROPIC_API_KEY
@@ -28,7 +27,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: FROM_EMAIL
-        value: noreply@rentos.gh
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
@@ -37,12 +36,15 @@ services:
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
       - key: SENTRY_DSN
         sync: false
     healthCheckPath: /api/health
     autoDeploy: true
-
-databases:
-  - name: rentos-mongo
-    databaseName: rentos
-    ipAllowList: []

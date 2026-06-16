@@ -100,10 +100,11 @@ E2E Tests:          5 spec files (auth active, others ready to run)
 - [ ] Verify MongoDB connection
 
 ### Render (Production)
-- [ ] Create MongoDB Atlas cluster
+- [ ] Create a MongoDB Atlas M0/free cluster
 - [ ] Whitelist `0.0.0.0/0` (or Render static IPs)
-- [ ] Set all environment variables from `.env.example`
+- [ ] Set all environment variables from `.env.example`, including the Atlas URL as the Render `MONGO_URI` secret
 - [ ] Deploy using either:
+  - **Blueprint:** root `render.yaml` (Render Free Docker web service, no Render-managed database)
   - **Native Node:** Root dir `server`, build `npm install && npm run build`, start `npm start`
   - **Docker:** Runtime `Docker`, root dir `/`, auto-detects `Dockerfile`
 
@@ -144,6 +145,9 @@ E2E Tests:          5 spec files (auth active, others ready to run)
 | `RESEND_API_KEY` | Transactional email |
 | `TWILIO_ACCOUNT_SID` | SMS provider |
 | `TWILIO_AUTH_TOKEN` | SMS provider |
+| `CLOUDINARY_CLOUD_NAME` | Upload storage |
+| `CLOUDINARY_API_KEY` | Upload storage |
+| `CLOUDINARY_API_SECRET` | Upload storage |
 | `PUBLIC_BASE_URL` | Base URL for email links and webhooks |
 
 ### Optional
@@ -154,6 +158,7 @@ E2E Tests:          5 spec files (auth active, others ready to run)
 | `PAYMENTS_PROVIDER_MODE` | Payment behavior | `simulated` |
 | `SENTRY_DSN` | Error tracking | disabled |
 | `FIREBASE_SERVICE_ACCOUNT` | Push notifications | disabled |
+| `REDIS_URL` | Redis-compatible cache | in-memory fallback |
 | `FROM_EMAIL` | Email sender | `onboarding@resend.dev` |
 | `TWILIO_PHONE_NUMBER` | SMS sender | `+1234567890` |
 

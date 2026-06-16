@@ -36,6 +36,10 @@ Copy `.env.example` to `.env` and fill in values:
 | `TWILIO_AUTH_TOKEN` | Twilio auth token **(required)** |
 | `TWILIO_PHONE_NUMBER` | Twilio sender phone number |
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase service account JSON (single line) |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for uploads |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `REDIS_URL` | Optional Redis-compatible cache URL |
 | `PUBLIC_BASE_URL` | Public-facing base URL for email links and webhooks |
 | `PAYMENTS_PROVIDER_MODE` | `simulated` (default) or `live` |
 
@@ -88,6 +92,10 @@ Render will monitor your service. Ensure your server responds on the configured 
 
 Use the included `Dockerfile` at the project root for containerized deployment.
 
+### Blueprint Free Deployment
+
+The root `render.yaml` deploys one Render **Free** Docker web service and does not create a Render database. During Blueprint setup, paste your MongoDB Atlas Free cluster connection string into the prompted `MONGO_URI` secret and provide the other prompted values from `server/.env`. Do not commit the Atlas URL or any other secret to Git.
+
 1. Create a new **Web Service** on Render
 2. Select **Docker** as the runtime
 3. Set the **Root Directory** to `/` (project root)
@@ -133,7 +141,7 @@ Runs `src/reseed.ts` to seed the database with initial data.
 
 ### MongoDB Atlas (Production)
 
-1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+1. Create a free M0 cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
 2. Whitelist `0.0.0.0/0` for Render access (or use Render's static IPs)
 3. Copy the connection string to `MONGO_URI`
 
