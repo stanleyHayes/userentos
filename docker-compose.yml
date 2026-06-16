@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rentos-api
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGO_URI=mongodb://mongo:27017/rentos
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3002}
+      - PAYMENTS_PROVIDER_MODE=${PAYMENTS_PROVIDER_MODE:-simulated}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - FROM_EMAIL=${FROM_EMAIL:-onboarding@resend.dev}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+      - FIREBASE_SERVICE_ACCOUNT=${FIREBASE_SERVICE_ACCOUNT:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - ML_SERVICE_URL=${ML_SERVICE_URL:-http://ml-service:8000}
+    depends_on:
+      - mongo
+      - ml-service
+    volumes:
+      - uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: rentos-ml-service
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/data/pricing-model.json
+      - PORT=8000
+    volumes:
+      - ml-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  mongo:
+    image: mongo:7
+    container_name: rentos-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo-data:
+  uploads:
+  ml-data:

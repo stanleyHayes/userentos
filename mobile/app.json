@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "RentOS Ghana",
+    "slug": "rentos-ghana",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "rentos",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e3a5f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "gh.rentos.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to sign in to RentOS quickly and securely."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1e3a5f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "gh.rentos.mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-audio",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to sign in to RentOS quickly and securely."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1e3a5f",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "53d5caec-4dd2-4471-978e-daff85b4b61f"
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "rentos",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "sync-types": "cp shared/types/index.ts client/src/types/shared.ts && cp shared/types/index.ts server/src/types/shared.ts && cp shared/types/index.ts mobile/types/shared.ts",
+    "dev": "npm run sync-types && concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:mobile": "npm run sync-types && npm run start --prefix mobile",
+    "build": "npm run sync-types && npm run build --prefix client && npm run build --prefix server",
+    "install:all": "npm install --prefix client && npm install --prefix server && npm install --prefix mobile",
+    "e2e:install": "npm install --prefix e2e && npx --prefix e2e playwright install --with-deps chromium",
+    "e2e:dev": "npm run sync-types && MONGO_URI=mongodb://localhost:27017/rentos_e2e JWT_SECRET=e2e-test-secret PAYMENTS_PROVIDER_MODE=simulated concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "e2e:test": "npm test --prefix e2e",
+    "e2e:test:local": "npm run test:local --prefix e2e",
+    "e2e:test:ui": "npm run test:ui --prefix e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

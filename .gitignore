@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+.env.production.local
+.env.staging
+.env.backup
+*.log
+logs/
+.DS_Store
+
+# Claude Code agent worktrees (per-agent isolated git checkouts)
+.claude/worktrees/
+
+# Synced shared types (generated from shared/types/index.ts — do not edit directly)
+client/src/types/shared.ts
+server/src/types/shared.ts
+mobile/types/shared.ts
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+*.app
+.vercel/
+
+# Python virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc

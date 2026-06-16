@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server (lint • typecheck • test • build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      JWT_SECRET: test-jwt-secret-for-ci-only
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  client:
+    name: Client (lint • typecheck • build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: rentos-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Server env — points at the Mongo service container above.
+      MONGO_URI: mongodb://localhost:27017/rentos_e2e
+      JWT_SECRET: test-jwt-secret-for-ci-only
+      PORT: '3002'
+      NODE_ENV: development
+      PAYMENTS_PROVIDER_MODE: simulated
+      # Client env — Vite proxy already targets /api -> :3002 in dev mode.
+      VITE_API_URL: /api
+      VITE_SOCKET_URL: http://localhost:3002
+      # Playwright will reuse the dev server we boot manually.
+      PLAYWRIGHT_REUSE_SERVER: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install workspace dependencies
+        run: |
+          npm ci
+          npm ci --prefix server
+          npm ci --prefix client
+          npm ci --prefix e2e
+
+      - name: Sync shared types
+        run: npm run sync-types
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Start dev servers (client + server)
+        run: nohup npm run dev > dev.log 2>&1 &
+
+      - name: Wait for client and server to be ready
+        run: |
+          # Vite may fall back to 5174 if 5173 is taken; check both.
+          CLIENT_PORT=5173
+          if ! npx --yes wait-on "http://localhost:$CLIENT_PORT" --timeout 30000 2>/dev/null; then
+            CLIENT_PORT=5174
+            npx --yes wait-on "http://localhost:$CLIENT_PORT" --timeout 30000 || true
+          fi
+          echo "CLIENT_PORT=$CLIENT_PORT" >> "$GITHUB_ENV"
+          npx --yes wait-on "http://localhost:$CLIENT_PORT" http://localhost:3002/api/health --timeout 180000 || \
+            (echo '--- dev.log ---' && cat dev.log && exit 1)
+
+      - name: Run Playwright tests
+        run: DEV_CLIENT_PORT=${CLIENT_PORT:-5173} npm test
+        working-directory: e2e
+
+      - name: Upload Playwright HTML report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 14
+
+      - name: Upload dev server log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-log
+          path: dev.log
+          retention-days: 7
