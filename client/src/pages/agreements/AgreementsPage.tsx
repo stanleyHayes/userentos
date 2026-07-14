@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Modal } from '@/components/ui/Modal'
 import { useAuthStore } from '@/stores/authStore'
 import { useAgreements, useCreateAgreement } from '@/hooks/useApi'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { FileText, Plus, CheckCircle, AlertTriangle, PenTool, Shield, Calendar, Building2, CreditCard, ChevronRight, Search, ChevronLeft } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
@@ -48,6 +49,7 @@ export function AgreementsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(statusFilter)
 
   // Filter
   const filtered = agreements.filter((a) => {
@@ -110,14 +112,16 @@ export function AgreementsPage() {
               className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm bg-white dark:bg-[#161927] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <div className="flex gap-1.5 flex-wrap">
+          <div ref={pillAttach} className="relative isolate flex gap-1.5 flex-wrap">
+            <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary/10 dark:bg-blue-500/15 transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
             {statusFilters.map((sf) => (
               <button
                 key={sf.value}
+                data-tab-key={sf.value}
                 onClick={() => { setStatusFilter(sf.value); setPage(1) }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   statusFilter === sf.value
-                    ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400'
+                    ? 'text-primary dark:text-blue-400'
                     : 'text-muted dark:text-gray-500 hover:bg-surface dark:hover:bg-[#0c0e1a]'
                 }`}
               >

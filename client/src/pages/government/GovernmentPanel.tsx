@@ -11,6 +11,7 @@ import { FinancialTab } from './components/FinancialTab'
 import { PeopleTab } from './components/PeopleTab'
 import { EngagementTab } from './components/EngagementTab'
 import { SystemTab } from './components/SystemTab'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 type TabKey = 'overview' | 'properties' | 'financial' | 'people' | 'engagement' | 'system'
 
@@ -26,6 +27,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 export function GovernmentPanel() {
   const { data: raw, isLoading } = usePlatformAnalytics()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
   if (isLoading) return <DashboardSkeleton />
 
@@ -78,15 +80,21 @@ export function GovernmentPanel() {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+      <div ref={pillAttach} className="relative isolate flex gap-1 overflow-x-auto rounded-full border border-border/70 bg-surface/60 p-1 scrollbar-hide dark:border-white/10 dark:bg-white/[0.04]">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-md transition-[transform,width,height] duration-300 ease-out"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {TABS.map((tab) => (
           <button
             key={tab.key}
+            data-tab-key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+            className={`relative z-10 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
               activeTab === tab.key
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-surface dark:bg-[#161927] text-muted hover:text-primary-dark dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#252a3a]'
+                ? 'text-white'
+                : 'text-muted hover:bg-white/60 hover:text-foreground dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white'
             }`}
           >
             {tab.icon}

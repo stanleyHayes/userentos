@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from '@/components/ui/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Footer } from '@/components/layout/Footer'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   Menu, X, Scale, Shield, FileText, Lock, ArrowRight,
   Home, ChevronRight,
@@ -42,6 +43,9 @@ export function PublicLayout() {
     return () => { document.body.style.overflow = '' }
   }, [open])
 
+  const activeTo = NAV_LINKS.find((l) => isNavActive(l.to))?.to ?? null
+  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(activeTo)
+
   return (
     <div className="public-shell-bg min-h-screen flex flex-col">
       {/* ── Navbar ── */}
@@ -53,17 +57,23 @@ export function PublicLayout() {
           </Link>
 
           {/* Desktop links */}
-          <div className="hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-white/10 dark:bg-white/[0.06] md:flex">
+          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-white/10 dark:bg-white/[0.06] md:flex">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-cyan-300"
+              style={{ ...navPillStyle, opacity: navPillVisible ? 1 : 0 }}
+            />
             {NAV_LINKS.map(({ to, label }) => {
               const active = isNavActive(to)
               return (
                 <Link
                   key={to}
                   to={to}
+                  data-tab-key={to}
                   aria-current={active ? 'page' : undefined}
-                  className={`focus-ring relative rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors ${
+                  className={`focus-ring relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors ${
                     active
-                      ? 'bg-primary text-white shadow-sm dark:bg-cyan-300 dark:text-[#071018]'
+                      ? 'text-white dark:text-[#071018]'
                       : 'text-muted hover:bg-white hover:text-primary-dark dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white'
                   }`}
                 >
@@ -195,7 +205,9 @@ export function PublicLayout() {
 
       {/* Page content */}
       <main className="flex-1">
-        <Outlet />
+        <div key={location.pathname} className="page-enter">
+          <Outlet />
+        </div>
       </main>
 
       <Footer />

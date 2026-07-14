@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useInsuranceClaims, useDecideInsuranceClaim, type InsuranceClaimReview } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -69,6 +70,7 @@ function DetailTile({ label, value, icon }: { label: string; value: string; icon
 export function InsuranceClaimsPage() {
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'paid' | 'all'>('pending')
   const [search, setSearch] = useState('')
+  const { attach: statusPillAttach, style: statusPillStyle, visible: statusPillVisible } = useSlidingIndicator<HTMLDivElement>(statusFilter)
   const queryParams = useMemo(() => statusFilter === 'all' ? undefined : { status: statusFilter }, [statusFilter])
   const activeClaimsQuery = useInsuranceClaims(queryParams)
   const allClaimsQuery = useInsuranceClaims()
@@ -186,16 +188,25 @@ export function InsuranceClaimsPage() {
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex flex-wrap gap-2">
+            <div ref={statusPillAttach} className="relative isolate flex flex-wrap gap-2">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out"
+                style={{ ...statusPillStyle, opacity: statusPillVisible ? 1 : 0 }}
+              />
               {STATUS_FILTERS.map((f) => (
-                <Button
+                <button
                   key={f.value}
-                  size="sm"
-                  variant={statusFilter === f.value ? 'primary' : 'outline'}
+                  data-tab-key={f.value}
                   onClick={() => setStatusFilter(f.value)}
+                  className={`relative z-10 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                    statusFilter === f.value
+                      ? 'text-white'
+                      : 'border border-border/60 bg-surface text-muted hover:text-foreground dark:border-[#252a3a] dark:bg-[#161927] dark:text-white/60 dark:hover:text-white'
+                  }`}
                 >
                   {f.label}
-                </Button>
+                </button>
               ))}
             </div>
             <div className="min-w-0 lg:w-72">

@@ -13,6 +13,7 @@ import { IconWatermark } from '@/components/ui/Watermark'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 interface RegistryListing {
   id: string
@@ -99,6 +100,9 @@ export function PublicRegistryPage() {
   const [propertyType, setPropertyType] = useState<string>('')
   const [priceRangeIdx, setPriceRangeIdx] = useState<number | null>(null)
   const [page, setPage] = useState(1)
+  const { attach: regionPillAttach, style: regionPillStyle, visible: regionPillVisible } = useSlidingIndicator<HTMLDivElement>(region || '__any_region__')
+  const { attach: typePillAttach, style: typePillStyle, visible: typePillVisible } = useSlidingIndicator<HTMLDivElement>(propertyType || '__any_type__')
+  const { attach: pricePillAttach, style: pricePillStyle, visible: pricePillVisible } = useSlidingIndicator<HTMLDivElement>(priceRangeIdx ?? '__any_price__')
 
   // SEO meta
   useEffect(() => {
@@ -233,26 +237,47 @@ export function PublicRegistryPage() {
         <div className="flex flex-wrap items-center gap-2 mb-6">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted dark:text-white/50 mr-1">Filter:</span>
 
-          <ChipButton active={!region} onClick={() => setRegion('')}>Any region</ChipButton>
-          {GHANA_REGIONS.map((r) => (
-            <ChipButton key={r} active={region === r} onClick={() => setRegion(r)}>{r}</ChipButton>
-          ))}
+          <div ref={regionPillAttach} className="relative isolate flex flex-wrap items-center gap-2">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              style={{ ...regionPillStyle, opacity: regionPillVisible ? 1 : 0 }}
+            />
+            <ChipButton tabKey="__any_region__" active={!region} onClick={() => setRegion('')}>Any region</ChipButton>
+            {GHANA_REGIONS.map((r) => (
+              <ChipButton key={r} tabKey={r} active={region === r} onClick={() => setRegion(r)}>{r}</ChipButton>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted dark:text-white/50 mr-1">Type:</span>
-          <ChipButton active={!propertyType} onClick={() => setPropertyType('')}>Any type</ChipButton>
-          {PROPERTY_TYPES.map((t) => (
-            <ChipButton key={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>{t.label}</ChipButton>
-          ))}
+          <div ref={typePillAttach} className="relative isolate flex flex-wrap items-center gap-2">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              style={{ ...typePillStyle, opacity: typePillVisible ? 1 : 0 }}
+            />
+            <ChipButton tabKey="__any_type__" active={!propertyType} onClick={() => setPropertyType('')}>Any type</ChipButton>
+            {PROPERTY_TYPES.map((t) => (
+              <ChipButton key={t.value} tabKey={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>{t.label}</ChipButton>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted dark:text-white/50 mr-1">Rent:</span>
-          <ChipButton active={priceRangeIdx === null} onClick={() => setPriceRangeIdx(null)}>Any price</ChipButton>
-          {PRICE_RANGES.map((r, i) => (
-            <ChipButton key={r.label} active={priceRangeIdx === i} onClick={() => setPriceRangeIdx(i)}>{r.label}</ChipButton>
-          ))}
+          <div ref={pricePillAttach} className="relative isolate flex flex-wrap items-center gap-2">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              style={{ ...pricePillStyle, opacity: pricePillVisible ? 1 : 0 }}
+            />
+            <ChipButton tabKey="__any_price__" active={priceRangeIdx === null} onClick={() => setPriceRangeIdx(null)}>Any price</ChipButton>
+            {PRICE_RANGES.map((r, i) => (
+              <ChipButton key={r.label} tabKey={i} active={priceRangeIdx === i} onClick={() => setPriceRangeIdx(i)}>{r.label}</ChipButton>
+            ))}
+          </div>
         </div>
 
         {/* Results header */}
@@ -331,10 +356,12 @@ export function PublicRegistryPage() {
 }
 
 function ChipButton({
+  tabKey,
   active,
   onClick,
   children,
 }: {
+  tabKey: string | number
   active: boolean
   onClick: () => void
   children: React.ReactNode
@@ -342,10 +369,11 @@ function ChipButton({
   return (
     <button
       type="button"
+      data-tab-key={tabKey}
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+      className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
         active
-          ? 'bg-primary text-white border-primary shadow-sm dark:bg-blue-500 dark:border-blue-500'
+          ? 'text-white border-primary dark:border-blue-500'
           : 'bg-white dark:bg-[#161927] text-muted dark:text-white/60 border-border dark:border-[#252a3a] hover:border-primary/40 hover:text-primary-dark dark:hover:text-white'
       }`}
     >

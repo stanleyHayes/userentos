@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import { useDisputes, useCreateDispute, useAgreements } from '@/hooks/useApi'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useAuthStore } from '@/stores/authStore'
 import { cn, accentFromColorClass, formatDate } from '@/lib/utils'
 import {
@@ -77,6 +78,7 @@ export function DisputesPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
   // Stats
   const stats = useMemo(() => ({
@@ -182,15 +184,17 @@ export function DisputesPage() {
       {/* Filter Tabs + Search */}
       {disputes.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          <div ref={pillAttach} className="relative isolate flex-1 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+            <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm dark:bg-blue-600 transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
             {tabs.map((tab) => (
               <button
                 key={tab.key}
+                data-tab-key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap',
+                  'relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap',
                   activeTab === tab.key
-                    ? 'bg-primary text-white dark:bg-blue-600'
+                    ? 'text-white'
                     : 'bg-surface dark:bg-[#161927] text-muted dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#252a3a]'
                 )}
               >

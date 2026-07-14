@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { FormGrid } from '@/components/ui/FormGrid'
 import { cn } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   TrendingUp, BarChart3, Search, Loader2, MapPin,
   CheckCircle, AlertTriangle, DollarSign, Activity,
@@ -143,6 +144,7 @@ function PricingEmptyState({ icon, children }: { icon: ReactNode; children: Reac
 
 export function PricingEnginePage() {
   const [tab, setTab] = useState<Tab>('analysis')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
 
   // Analysis state
   const [analysisInput, setAnalysisInput] = useState({
@@ -331,15 +333,21 @@ export function PricingEnginePage() {
         </div>
       </div>
 
-      <div className="mb-6 flex gap-2 overflow-x-auto rounded-full border border-border/80 bg-white/80 p-1.5 shadow-sm [-webkit-overflow-scrolling:touch] dark:border-white/10 dark:bg-white/[0.04]">
+      <div ref={pillAttach} className="relative isolate mb-6 flex gap-2 overflow-x-auto rounded-full border border-border/80 bg-white/80 p-1.5 shadow-sm [-webkit-overflow-scrolling:touch] dark:border-white/10 dark:bg-white/[0.04]">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-sky-300"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {tabs.map(t => (
           <button
             key={t.key}
+            data-tab-key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              'flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition-colors',
+              'relative z-10 flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition-colors',
               tab === t.key
-                ? 'bg-primary text-white shadow-sm dark:bg-sky-300 dark:text-slate-950'
+                ? 'text-white dark:text-slate-950'
                 : 'text-muted hover:bg-surface dark:hover:bg-white/[0.06] dark:hover:text-white'
             )}
           >

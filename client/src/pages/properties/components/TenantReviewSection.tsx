@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { usePropertyReviews } from '@/hooks/useReviews'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { User, Star, UserCircle, Mail, Phone, Plus } from 'lucide-react'
 import { ReviewCard } from './ReviewCard'
 import { CreateReviewModal } from './CreateReviewModal'
@@ -23,6 +24,7 @@ export function TenantReviewSection({ propertyId, pastAgreements }: TenantReview
   const user = useAuthStore((s) => s.user)
   const qc = useQueryClient()
   const [tab, setTab] = useState<'tenants' | 'reviews'>('tenants')
+  const { attach: tabUnderlineAttach, style: tabUnderlineStyle, visible: tabUnderlineVisible } = useSlidingIndicator<HTMLDivElement, 'underline'>(tab, 'underline')
   const [showCreateReview, setShowCreateReview] = useState(false)
   const { data: reviewsData, isLoading: reviewsLoading } = usePropertyReviews(propertyId)
   const reviews = reviewsData?.items ?? []
@@ -37,11 +39,12 @@ export function TenantReviewSection({ propertyId, pastAgreements }: TenantReview
 
   return (
     <Card>
-      <div className="flex border-b border-border/30 dark:border-[#252a3a]/30">
-        <button onClick={() => setTab('tenants')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'tenants' ? 'text-primary dark:text-blue-400 border-b-2 border-primary dark:border-blue-400' : 'text-muted dark:text-gray-400'}`}>
+      <div ref={tabUnderlineAttach} className="relative isolate flex border-b border-border/30 dark:border-[#252a3a]/30">
+        <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 rounded-full bg-primary transition-[transform,width] duration-300 ease-out dark:bg-blue-400" style={{ ...tabUnderlineStyle, opacity: tabUnderlineVisible ? 1 : 0 }} />
+        <button data-tab-key="tenants" onClick={() => setTab('tenants')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'tenants' ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-400'}`}>
           <User size={14} className="inline mr-1.5" />Tenants ({pastAgreements.length})
         </button>
-        <button onClick={() => setTab('reviews')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'reviews' ? 'text-primary dark:text-blue-400 border-b-2 border-primary dark:border-blue-400' : 'text-muted dark:text-gray-400'}`}>
+        <button data-tab-key="reviews" onClick={() => setTab('reviews')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'reviews' ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-400'}`}>
           <Star size={14} className="inline mr-1.5" />Reviews ({reviews.length})
         </button>
       </div>

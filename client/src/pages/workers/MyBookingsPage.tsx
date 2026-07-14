@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Wrench, Star, Loader2, CheckCircle, Clock,
@@ -58,6 +59,8 @@ const STATUS_LABELS: Record<string, string> = {
 export function MyBookingsPage() {
   const [view, setView] = useState<'requester' | 'worker'>('requester')
   const [filter, setFilter] = useState('')
+  const { attach: viewPillAttach, style: viewPillStyle, visible: viewPillVisible } = useSlidingIndicator<HTMLDivElement>(view)
+  const { attach: filterPillAttach, style: filterPillStyle, visible: filterPillVisible } = useSlidingIndicator<HTMLDivElement>(filter)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [ratingInput, setRatingInput] = useState<{ bookingId: string; rating: number; review: string } | null>(null)
   const [quoteInput, setQuoteInput] = useState<{ bookingId: string; amount: string; note: string } | null>(null)
@@ -156,24 +159,27 @@ export function MyBookingsPage() {
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-1 mb-4 bg-surface dark:bg-[#0c0e1a] p-1 rounded-lg w-fit">
+      <div ref={viewPillAttach} className="relative isolate flex gap-1 mb-4 bg-surface dark:bg-[#0c0e1a] p-1 rounded-lg w-fit">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded bg-white shadow-sm dark:bg-[#161927] transition-[transform,width,height] duration-300 ease-out" style={{ ...viewPillStyle, opacity: viewPillVisible ? 1 : 0 }} />
         <button
+          data-tab-key="requester"
           onClick={() => setView('requester')}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
+            'relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
             view === 'requester'
-              ? 'bg-white dark:bg-[#161927] text-primary-dark dark:text-white shadow-sm'
+              ? 'text-primary-dark dark:text-white'
               : 'text-muted hover:text-primary-dark dark:hover:text-white'
           )}
         >
           <User size={14} /> My Requests
         </button>
         <button
+          data-tab-key="worker"
           onClick={() => setView('worker')}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
+            'relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
             view === 'worker'
-              ? 'bg-white dark:bg-[#161927] text-primary-dark dark:text-white shadow-sm'
+              ? 'text-primary-dark dark:text-white'
               : 'text-muted hover:text-primary-dark dark:hover:text-white'
           )}
         >
@@ -182,12 +188,13 @@ export function MyBookingsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <button onClick={() => setFilter('')} className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors', filter === '' ? 'bg-primary text-white' : 'bg-surface dark:bg-[#0c0e1a] text-muted')}>
+      <div ref={filterPillAttach} className="relative isolate flex gap-2 mb-4 flex-wrap">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-lg bg-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...filterPillStyle, opacity: filterPillVisible ? 1 : 0 }} />
+        <button data-tab-key="" onClick={() => setFilter('')} className={cn('relative z-10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors', filter === '' ? 'text-white' : 'bg-surface dark:bg-[#0c0e1a] text-muted')}>
           All
         </button>
         {(['pending', 'confirmed', 'in_progress', 'completed'] as const).map(s => (
-          <button key={s} onClick={() => setFilter(s)} className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors', filter === s ? 'bg-primary text-white' : 'bg-surface dark:bg-[#0c0e1a] text-muted')}>
+          <button key={s} data-tab-key={s} onClick={() => setFilter(s)} className={cn('relative z-10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors', filter === s ? 'text-white' : 'bg-surface dark:bg-[#0c0e1a] text-muted')}>
             {STATUS_LABELS[s]}
           </button>
         ))}

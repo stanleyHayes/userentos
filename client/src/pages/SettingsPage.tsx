@@ -7,6 +7,7 @@ import { ProfileTab } from './settings/ProfileTab'
 import { SecurityTab } from './settings/SecurityTab'
 import { AppearanceTab } from './settings/AppearanceTab'
 import { NotificationsTab } from './settings/NotificationsTab'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: <User size={16} /> },
@@ -21,6 +22,7 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams()
   const initialTab = tabs.some((t) => t.id === searchParams.get('tab')) ? (searchParams.get('tab') as TabId) : 'profile'
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
   return (
     <div className="space-y-5">
@@ -32,14 +34,20 @@ export function SettingsPage() {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1.5 p-1 rounded-full bg-surface dark:bg-[#0c0e1a] border border-border/40 dark:border-[#252a3a]/40 w-fit">
+      <div ref={pillAttach} className="relative isolate flex gap-1.5 p-1 rounded-full bg-surface dark:bg-[#0c0e1a] border border-border/40 dark:border-[#252a3a]/40 w-fit">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-[#161927]"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            data-tab-key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+            className={`relative z-10 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
               activeTab === tab.id
-                ? 'bg-white dark:bg-[#161927] text-primary dark:text-blue-400 shadow-sm'
+                ? 'text-primary dark:text-blue-400'
                 : 'text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white'
             }`}
           >

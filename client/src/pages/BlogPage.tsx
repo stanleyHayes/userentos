@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/stores/authStore'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { DoodleUnderline } from '@/components/ui/Doodles'
 import { IconWatermark } from '@/components/ui/Watermark'
 
@@ -32,6 +33,7 @@ export function BlogPage() {
   const [selected, setSelected] = useState<BlogPost | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tag ?? '__all__')
 
   const user = useAuthStore((s) => s.user)
   const isAdmin = user && ADMIN_ROLES.includes(user.activeRole)
@@ -247,12 +249,13 @@ export function BlogPage() {
       />
 
       {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setTag(undefined)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!tag ? 'bg-primary text-white border-primary' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
+        <div ref={pillAttach} className="relative isolate flex flex-wrap gap-1.5">
+          <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary border border-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
+          <button data-tab-key="__all__" onClick={() => setTag(undefined)} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${!tag ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
             All
           </button>
           {allTags.map((t) => (
-            <button key={t} onClick={() => setTag(tag === t ? undefined : t)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${tag === t ? 'bg-primary text-white border-primary' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
+            <button key={t} data-tab-key={t} onClick={() => setTag(tag === t ? undefined : t)} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${tag === t ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
               {t}
             </button>
           ))}

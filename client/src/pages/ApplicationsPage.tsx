@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { DoodleArrow } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import {
@@ -51,6 +52,7 @@ export function ApplicationsPage() {
   const qc = useQueryClient()
   const isTenant = user?.activeRole === 'tenant'
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(statusFilter || 'all')
   const [reviewApp, setReviewApp] = useState<Application | null>(null)
   const [responseNotes, setResponseNotes] = useState('')
 
@@ -128,14 +130,16 @@ export function ApplicationsPage() {
       })()}
 
       {/* Filter */}
-      <div className="flex gap-1.5 flex-wrap">
+      <div ref={pillAttach} className="relative isolate flex gap-1.5 flex-wrap">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-lg bg-primary/10 dark:bg-blue-500/15 transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
         {statuses.map((s) => (
           <button
             key={s || 'all'}
+            data-tab-key={s || 'all'}
             onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize ${
+            className={`relative z-10 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize ${
               statusFilter === s
-                ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400'
+                ? 'text-primary dark:text-blue-400'
                 : 'text-muted dark:text-gray-400 hover:bg-surface dark:hover:bg-[#0c0e1a]'
             }`}
           >

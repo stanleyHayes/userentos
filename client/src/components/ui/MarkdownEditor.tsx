@@ -17,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { useAIGenerate } from '@/hooks/useApi'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 interface MarkdownEditorProps {
   value: string
@@ -50,6 +51,7 @@ const TOOLBAR_ACTIONS: ToolbarAction[] = [
 
 export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: MarkdownEditorProps) {
   const [tab, setTab] = useState<'write' | 'preview'>('write')
+  const { attach: tabPillAttach, style: tabPillStyle, visible: tabPillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const generate = useAIGenerate()
   const [aiLoading, setAiLoading] = useState(false)
@@ -134,13 +136,15 @@ export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: Mar
         )}
 
         {/* Tabs */}
-        <div className="flex items-center border border-border dark:border-[#252a3a] rounded-md overflow-hidden text-xs font-medium">
+        <div ref={tabPillAttach} className="relative isolate flex items-center border border-border dark:border-[#252a3a] rounded-md overflow-hidden text-xs font-medium">
+          <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 bg-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...tabPillStyle, opacity: tabPillVisible ? 1 : 0 }} />
           <button
             type="button"
+            data-tab-key="write"
             onClick={() => setTab('write')}
-            className={`px-3 py-1 transition-colors ${
+            className={`relative z-10 px-3 py-1 transition-colors ${
               tab === 'write'
-                ? 'bg-primary text-white'
+                ? 'text-white'
                 : 'text-muted dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#252a3a]'
             }`}
           >
@@ -148,10 +152,11 @@ export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: Mar
           </button>
           <button
             type="button"
+            data-tab-key="preview"
             onClick={() => setTab('preview')}
-            className={`px-3 py-1 transition-colors ${
+            className={`relative z-10 px-3 py-1 transition-colors ${
               tab === 'preview'
-                ? 'bg-primary text-white'
+                ? 'text-white'
                 : 'text-muted dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#252a3a]'
             }`}
           >

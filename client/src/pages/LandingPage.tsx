@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Footer } from '@/components/layout/Footer'
 import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   ArrowRight,
   Banknote,
@@ -286,6 +287,15 @@ export function LandingPage() {
     { href: '/registry', label: 'Registry' },
   ]
 
+  const drawerLinks = [
+    { href: '#features', label: 'Features', desc: 'Everything in one platform', icon: Sparkles },
+    { href: '#roles', label: 'Roles', desc: 'A workspace for everyone', icon: Users },
+    { href: '#operations', label: 'Operations', desc: 'Payments, savings & disputes', icon: BarChart3 },
+    { href: '#rights', label: 'Rights', desc: 'Know where you stand', icon: ShieldCheck },
+    { href: '/registry', label: 'Registry', desc: 'Verified rentals near you', icon: Search },
+    { href: '/rental-laws', label: 'Rental Laws', desc: 'Tenancy law in plain language', icon: Scale },
+  ]
+
   function isNavActive(href: string) {
     if (href.startsWith('#')) {
       return location.pathname === '/' && activeSection === href.slice(1)
@@ -295,19 +305,27 @@ export function LandingPage() {
 
   function navLinkClass(active: boolean) {
     return cn(
-      'relative rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors',
+      'relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors',
       active
-        ? 'bg-white text-[#0a0d12] shadow-sm'
+        ? 'text-[#0a0d12]'
         : 'text-white/62 hover:bg-white/10 hover:text-white',
     )
   }
+
+  const activeNavHref = navLinks.find((item) => isNavActive(item.href))?.href ?? null
+  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(activeNavHref)
 
   return (
     <div className="public-shell-bg min-h-screen overflow-hidden">
       <nav className="fixed inset-x-0 top-3 z-50 px-3 sm:top-4 sm:px-6">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 rounded-full border border-white/12 bg-[#0a0d12]/78 px-3 shadow-[0_18px_50px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:h-16 sm:px-4">
           <Link to="/" aria-label="RentOS home"><Logo size={28} theme="light" /></Link>
-          <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] p-1 md:flex">
+          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] p-1 md:flex">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out"
+              style={{ ...navPillStyle, opacity: navPillVisible ? 1 : 0 }}
+            />
             {navLinks.map((item) => {
               const active = isNavActive(item.href)
               const content = (
@@ -320,6 +338,7 @@ export function LandingPage() {
                 <a
                   key={item.href}
                   href={item.href}
+                  data-tab-key={item.href}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setActiveSection(item.href.slice(1) as (typeof LANDING_SECTION_IDS)[number])}
                   className={navLinkClass(active)}
@@ -327,7 +346,7 @@ export function LandingPage() {
                   {content}
                 </a>
               ) : (
-                <Link key={item.href} to={item.href} aria-current={active ? 'page' : undefined} className={navLinkClass(active)}>{content}</Link>
+                <Link key={item.href} to={item.href} data-tab-key={item.href} aria-current={active ? 'page' : undefined} className={navLinkClass(active)}>{content}</Link>
               )
             })}
           </div>
@@ -353,30 +372,47 @@ export function LandingPage() {
         </div>
       </nav>
 
-      <div className={`fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm transition-opacity md:hidden ${menuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`} onClick={() => setMenuOpen(false)} />
-      <aside className={`fixed right-0 top-0 z-[70] flex h-full w-72 flex-col bg-[#0a0d12] transition-transform duration-300 md:hidden ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
+      <div className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity md:hidden ${menuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`} onClick={() => setMenuOpen(false)} />
+      <aside
+        className={`fixed right-0 top-0 z-[70] flex h-full w-80 flex-col overflow-hidden transition-transform duration-300 md:hidden ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ background: 'linear-gradient(160deg, #0a0d12 0%, #171122 52%, #10231f 100%)' }}
+      >
+        <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+
+        <div className="relative flex items-center justify-between border-b border-white/10 px-6 py-5">
           <Logo size={28} theme="light" />
           <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-xl bg-white/10 p-2 text-white transition-colors hover:bg-white/20"><X size={18} /></button>
         </div>
-        <div className="flex-1 space-y-1 overflow-y-auto px-4 py-5">
-          {navLinks.map((item) => {
+
+        <div key={menuOpen ? 'open' : 'closed'} className="relative flex-1 space-y-1.5 overflow-y-auto px-4 py-6">
+          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-white/30">Explore</p>
+          {drawerLinks.map((item, i) => {
+            const Icon = item.icon
             const active = isNavActive(item.href)
             const className = cn(
-              'relative flex items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold transition-colors',
-              active ? 'bg-white/15 text-white' : 'text-white/66 hover:bg-white/10 hover:text-white',
+              'group relative flex animate-fade-up items-center gap-3 rounded-xl px-3 py-3 transition-colors',
+              active ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/[0.07] hover:text-white',
             )
             const content = (
               <>
-                {active && <span className="absolute left-1 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-secondary" />}
-                {item.label}<ChevronRight size={14} className={active ? 'opacity-100' : 'opacity-70'} />
+                {active && <span className="absolute left-0 top-1/2 h-9 w-1 -translate-y-1/2 rounded-r-full bg-secondary shadow-[0_0_16px_rgba(245,158,11,0.6)]" />}
+                <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors', active ? 'bg-secondary/25 text-secondary' : 'bg-white/[0.06] text-white/45 group-hover:bg-white/10 group-hover:text-white/80')}>
+                  <Icon size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{item.label}</span>
+                  <span className={cn('block truncate text-xs', active ? 'text-white/55' : 'text-white/35')}>{item.desc}</span>
+                </span>
+                <ChevronRight size={15} className={cn('ml-auto shrink-0 transition-all', active ? 'text-secondary opacity-100' : '-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-60')} />
               </>
             )
+            const style = { animationDelay: `${i * 45}ms`, animationFillMode: 'both' as const }
             return item.href.startsWith('#') ? (
               <a
                 key={item.href}
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
+                style={style}
                 onClick={() => {
                   setActiveSection(item.href.slice(1) as (typeof LANDING_SECTION_IDS)[number])
                   setMenuOpen(false)
@@ -386,14 +422,32 @@ export function LandingPage() {
                 {content}
               </a>
             ) : (
-              <Link key={item.href} to={item.href} aria-current={active ? 'page' : undefined} onClick={() => setMenuOpen(false)} className={className}>
+              <Link key={item.href} to={item.href} aria-current={active ? 'page' : undefined} style={style} onClick={() => setMenuOpen(false)} className={className}>
                 {content}
               </Link>
             )
           })}
-          <Link to="/rental-laws" onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold text-white/66 transition-colors hover:bg-white/10 hover:text-white">
-            Rental Laws<ChevronRight size={14} />
-          </Link>
+        </div>
+
+        <div className="relative border-t border-white/10 px-4 pb-8 pt-4">
+          <div className="mb-3 flex items-center justify-between px-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Theme</span>
+            <ThemeToggle className="rounded-full text-white hover:bg-white/10" />
+          </div>
+          {showDashboard ? (
+            <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-secondary to-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
+              Go to Dashboard <ArrowRight size={15} />
+            </Link>
+          ) : (
+            <div className="space-y-2">
+              <Link to="/register" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-secondary to-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
+                Get Started Free <ArrowRight size={15} />
+              </Link>
+              <Link to="/login" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] py-3 text-sm font-bold text-white transition-colors hover:bg-white/10">
+                Sign In
+              </Link>
+            </div>
+          )}
         </div>
       </aside>
 

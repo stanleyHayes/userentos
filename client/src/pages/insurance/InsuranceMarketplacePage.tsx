@@ -15,6 +15,7 @@ import {
   useInsuranceProducts, useMyPolicies, useBuyPolicy, useFileClaim, useWallet,
   useCreateInsuranceProduct, useUpdateInsuranceProduct,
 } from '@/hooks/useApi'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import type { InsuranceProduct, InsurancePolicy, InsuranceCategory } from '@/types'
@@ -48,6 +49,7 @@ export function InsuranceMarketplacePage() {
   const role = user?.activeRole ?? 'tenant'
   const isAdmin = role === 'admin' || (user?.roles ?? []).includes('super_admin')
   const [tab, setTab] = useState<'browse' | 'policies' | 'manage'>('browse')
+  const { attach: tabIndicatorAttach, style: tabIndicatorStyle, visible: tabIndicatorVisible } = useSlidingIndicator<HTMLDivElement, 'underline'>(tab, 'underline')
 
   // Categories visible per role
   const visibleCategories = useMemo<InsuranceCategory[]>(() => {
@@ -73,10 +75,15 @@ export function InsuranceMarketplacePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border/40 dark:border-[#252a3a]/40">
-        <TabButton active={tab === 'browse'} onClick={() => setTab('browse')}>Browse</TabButton>
-        <TabButton active={tab === 'policies'} onClick={() => setTab('policies')}>My Policies</TabButton>
-        {isAdmin && <TabButton active={tab === 'manage'} onClick={() => setTab('manage')}>Manage Products</TabButton>}
+      <div ref={tabIndicatorAttach} className="relative flex gap-1 border-b border-border/40 dark:border-[#252a3a]/40">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 rounded-full bg-primary transition-[transform,width] duration-300 ease-out dark:bg-blue-400"
+          style={{ ...tabIndicatorStyle, opacity: tabIndicatorVisible ? 1 : 0 }}
+        />
+        <TabButton tabKey="browse" active={tab === 'browse'} onClick={() => setTab('browse')}>Browse</TabButton>
+        <TabButton tabKey="policies" active={tab === 'policies'} onClick={() => setTab('policies')}>My Policies</TabButton>
+        {isAdmin && <TabButton tabKey="manage" active={tab === 'manage'} onClick={() => setTab('manage')}>Manage Products</TabButton>}
       </div>
 
       {tab === 'browse' && <BrowseTab visibleCategories={visibleCategories} />}
@@ -86,13 +93,14 @@ export function InsuranceMarketplacePage() {
   )
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({ tabKey, active, onClick, children }: { tabKey: string; active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
+      data-tab-key={tabKey}
       onClick={onClick}
       className={`px-4 py-2.5 text-sm font-semibold transition-colors ${
         active
-          ? 'text-primary dark:text-blue-400 border-b-2 border-primary dark:border-blue-400'
+          ? 'text-primary dark:text-blue-400'
           : 'text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white'
       }`}
     >
@@ -110,12 +118,19 @@ function BrowseTab({ visibleCategories }: { visibleCategories: InsuranceCategory
   )
   const products = (data?.items ?? []).filter((p) => visibleCategories.includes(p.category))
   const [selected, setSelected] = useState<InsuranceProduct | null>(null)
+  const { attach: categoryPillAttach, style: categoryPillStyle, visible: categoryPillVisible } = useSlidingIndicator<HTMLDivElement>(categoryFilter === 'all' ? '__all__' : categoryFilter)
 
   return (
     <div className="space-y-4">
       {/* Category chips */}
-      <div className="flex flex-wrap gap-1.5">
+      <div ref={categoryPillAttach} className="relative isolate flex flex-wrap gap-1.5">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out"
+          style={{ ...categoryPillStyle, opacity: categoryPillVisible ? 1 : 0 }}
+        />
         <CategoryChip
+          tabKey="__all__"
           active={categoryFilter === 'all'}
           onClick={() => setCategoryFilter('all')}
           label="All"
@@ -123,6 +138,7 @@ function BrowseTab({ visibleCategories }: { visibleCategories: InsuranceCategory
         {visibleCategories.map((c) => (
           <CategoryChip
             key={c}
+            tabKey={c}
             active={categoryFilter === c}
             onClick={() => setCategoryFilter(c)}
             label={CATEGORY_LABELS[c]}
@@ -155,14 +171,15 @@ function BrowseTab({ visibleCategories }: { visibleCategories: InsuranceCategory
   )
 }
 
-function CategoryChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function CategoryChip({ tabKey, active, onClick, label }: { tabKey: string; active: boolean; onClick: () => void; label: string }) {
   return (
     <button
       type="button"
+      data-tab-key={tabKey}
       onClick={onClick}
-      className={`text-[11px] px-3 py-1.5 rounded-full border transition-colors font-medium ${
+      className={`relative z-10 text-[11px] px-3 py-1.5 rounded-full border transition-colors font-medium ${
         active
-          ? 'bg-primary text-white border-primary'
+          ? 'text-white border-primary'
           : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'
       }`}
     >

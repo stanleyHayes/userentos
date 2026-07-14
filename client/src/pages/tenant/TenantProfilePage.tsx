@@ -18,6 +18,7 @@ import {
   DollarSign, Trash2,
 } from 'lucide-react'
 import { DoodleStars } from '@/components/ui/Doodles'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 interface Profile extends Partial<TenantProfile> {
   incomeSources?: Array<{ source: string; amount: number; currency: string }>
@@ -49,6 +50,7 @@ export function TenantProfilePage() {
   const [form, setForm] = useState<Profile>({})
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState('personal')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
   // Hydrate form once when the profile is fetched (compares to previous reference,
   // not an effect — see https://react.dev/learn/you-might-not-need-an-effect).
@@ -129,16 +131,22 @@ export function TenantProfilePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 overflow-x-auto bg-surface dark:bg-[#0c0e1a] rounded-xl border border-border dark:border-[#252a3a] p-1">
+      <div ref={pillAttach} className="relative isolate flex gap-1 overflow-x-auto bg-surface dark:bg-[#0c0e1a] rounded-xl border border-border dark:border-[#252a3a] p-1">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-lg bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-[#161927] dark:shadow-black/20"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {TABS.map((tab) => {
           const tabProg = getTabProgress(tab.key, form)
           return (
             <button
               key={tab.key}
+              data-tab-key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`relative z-10 flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-white dark:bg-[#161927] text-primary dark:text-blue-400 shadow-sm dark:shadow-black/20'
+                  ? 'text-primary dark:text-blue-400'
                   : 'text-muted dark:text-gray-500 hover:text-primary-dark dark:hover:text-gray-300'
               }`}
             >

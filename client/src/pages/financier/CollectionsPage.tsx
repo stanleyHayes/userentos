@@ -15,6 +15,7 @@ import {
   useAddContractNote,
 } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { AlertTriangle, BellRing, FileWarning, MessageSquarePlus } from 'lucide-react'
 import type { FinancingContractStatus } from '@/types'
 
@@ -40,6 +41,7 @@ export function CollectionsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialStatus = searchParams.get('status') as 'in_grace' | 'in_arrears' | 'defaulted' | null
   const [filter, setFilter] = useState<'all' | 'in_grace' | 'in_arrears' | 'defaulted'>(initialStatus ?? 'all')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(filter)
 
   const queryStatus = filter === 'all' ? undefined : filter
   const { data, isLoading } = useFinancierCollections(queryStatus)
@@ -106,15 +108,17 @@ export function CollectionsPage() {
       </div>
 
       {/* Filter chips */}
-      <div className="flex flex-wrap gap-2">
+      <div ref={pillAttach} className="relative isolate flex flex-wrap gap-2">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
         {filterChips.map((c) => (
           <button
             key={c.value}
+            data-tab-key={c.value}
             onClick={() => changeFilter(c.value)}
             className={
-              'px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ' +
+              'relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ' +
               (filter === c.value
-                ? 'bg-primary text-white'
+                ? 'text-white'
                 : 'bg-surface dark:bg-[#161927] text-muted hover:bg-primary/10 dark:hover:bg-blue-500/15')
             }
           >

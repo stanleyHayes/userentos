@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import {
   AdminEmptyState,
   AdminLoadingState,
@@ -12,6 +11,7 @@ import {
   AdminToolbar,
 } from '@/components/admin/AdminPagePrimitives'
 import { adminTableClassName } from '@/components/admin/adminPageUtils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useAdminFinancingContracts } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertTriangle, Banknote, CircleDollarSign, Clock3, FileSignature, Landmark, ReceiptText } from 'lucide-react'
@@ -52,6 +52,7 @@ function label(value: string) {
 export function AdminFinancingPage() {
   const [statusFilter, setStatusFilter] = useState<FinancingContractStatus | 'all'>('all')
   const [page, setPage] = useState(1)
+  const { attach: statusPillAttach, style: statusPillStyle, visible: statusPillVisible } = useSlidingIndicator<HTMLDivElement>(statusFilter)
   const queryParams = useMemo(
     () => ({ status: statusFilter === 'all' ? undefined : statusFilter, page }),
     [statusFilter, page],
@@ -117,20 +118,28 @@ export function AdminFinancingPage() {
         description="Filter by lifecycle status. Totals update from the current API result."
         resultLabel={`${items.length.toLocaleString()} visible`}
       >
-        <div className="flex max-w-full gap-1 overflow-x-auto pb-1">
+        <div ref={statusPillAttach} className="relative isolate flex flex-wrap gap-2">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out"
+            style={{ ...statusPillStyle, opacity: statusPillVisible ? 1 : 0 }}
+          />
           {STATUS_FILTERS.map((f) => (
-            <Button
+            <button
               key={f.value}
-              size="sm"
-              variant={statusFilter === f.value ? 'primary' : 'outline'}
-              className="shrink-0"
+              data-tab-key={f.value}
               onClick={() => {
                 setStatusFilter(f.value)
                 setPage(1)
               }}
+              className={`relative z-10 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                statusFilter === f.value
+                  ? 'text-white'
+                  : 'border border-border/60 bg-surface text-muted hover:text-foreground dark:border-[#252a3a] dark:bg-[#161927] dark:text-white/60 dark:hover:text-white'
+              }`}
             >
               {f.label}
-            </Button>
+            </button>
           ))}
         </div>
       </AdminToolbar>

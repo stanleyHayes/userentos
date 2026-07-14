@@ -18,6 +18,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import type { UserRole, Permission, User, Invitation } from '@/types'
 import { DoodleCircle } from '@/components/ui/Doodles'
 import { ROLE_DEFAULT_PERMISSIONS } from '@/types'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import toast from 'react-hot-toast'
 
 const ALL_ROLES: UserRole[] = ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'super_admin']
@@ -82,6 +83,7 @@ export function UsersPage() {
   const resendInvitation = useResendInvitation()
 
   const [tab, setTab] = useState<Tab>('users')
+  const { attach: tabUnderlineAttach, style: tabUnderlineStyle, visible: tabUnderlineVisible } = useSlidingIndicator<HTMLDivElement, 'underline'>(tab, 'underline')
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('')
 
@@ -190,16 +192,19 @@ export function UsersPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border dark:border-[#252a3a]">
+      <div ref={tabUnderlineAttach} className="relative isolate flex gap-1 border-b border-border dark:border-[#252a3a]">
+        <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 rounded-full bg-primary transition-[transform,width] duration-300 ease-out dark:bg-blue-400" style={{ ...tabUnderlineStyle, opacity: tabUnderlineVisible ? 1 : 0 }} />
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'users' ? 'border-primary text-primary dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-muted hover:text-primary-dark dark:hover:text-white'}`}
+          data-tab-key="users"
+          className={`px-4 py-2 text-sm font-medium transition-colors ${tab === 'users' ? 'text-primary dark:text-blue-400' : 'text-muted hover:text-primary-dark dark:hover:text-white'}`}
           onClick={() => setTab('users')}
         >
           Users ({users.length})
         </button>
         {canInvite && (
           <button
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'invitations' ? 'border-primary text-primary dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-muted hover:text-primary-dark dark:hover:text-white'}`}
+            data-tab-key="invitations"
+            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === 'invitations' ? 'text-primary dark:text-blue-400' : 'text-muted hover:text-primary-dark dark:hover:text-white'}`}
             onClick={() => setTab('invitations')}
           >
             Invitations ({invitations?.length ?? 0})

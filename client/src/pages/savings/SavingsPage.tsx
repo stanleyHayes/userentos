@@ -15,6 +15,7 @@ import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import { DoodleSpiral } from '@/components/ui/Doodles'
 import { InvestmentsTab } from './InvestmentsTab'
 import { LoansTab } from './LoansTab'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 const methodOptions = [
   { value: 'mtn_momo', label: 'MTN Mobile Money' },
@@ -31,6 +32,7 @@ const frequencyOptions = [
 
 export function SavingsPage() {
   const [tab, setTab] = useState<'savings' | 'investments' | 'loans'>('savings')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
   const { data: wallet, isLoading: walletLoading } = useWallet()
   const { data: plansData, isLoading: plansLoading } = useSavingsPlans()
   const plans = plansData?.items ?? []
@@ -57,12 +59,18 @@ export function SavingsPage() {
         </Button>
       </div>
 
-      <div className="flex gap-1 bg-white dark:bg-[#0c0e1a] rounded-full border border-border dark:border-[#252a3a] p-1">
+      <div ref={pillAttach} className="relative isolate flex gap-1 bg-white dark:bg-[#0c0e1a] rounded-full border border-border dark:border-[#252a3a] p-1">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-gradient-to-r from-[#1e3a5f] to-[#2d5a8e] shadow-sm transition-[transform,width,height] duration-300 ease-out dark:from-blue-600 dark:to-blue-500"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {([['savings', 'Savings'], ['investments', 'Investments'], ['loans', 'Micro-Loans']] as const).map(([key, label]) => (
           <button
             key={key}
+            data-tab-key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition-colors ${tab === key ? 'bg-gradient-to-r from-[#1e3a5f] to-[#2d5a8e] dark:from-blue-600 dark:to-blue-500 text-white shadow-sm' : 'text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white'}`}
+            className={`relative z-10 flex-1 rounded-full px-4 py-2 text-sm font-medium transition-colors ${tab === key ? 'text-white' : 'text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white'}`}
           >
             {label}
           </button>

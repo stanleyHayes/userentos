@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { cn } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   Wand2, Type, Languages, CheckCircle, AlertCircle, Loader2,
   Copy, Check, Sparkles, Star, FileText, MessageCircle,
@@ -101,6 +102,7 @@ const chipClassName = (selected: boolean) => cn(
 
 export function AIWritingAssistantPage() {
   const [tab, setTab] = useState<Tab>('listing')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
 
   // Listing generation state
   const [listingInput, setListingInput] = useState({
@@ -268,15 +270,21 @@ export function AIWritingAssistantPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-border/70 bg-white/70 p-2 [-webkit-overflow-scrolling:touch] dark:border-[#252a3a]/80 dark:bg-white/[0.03]">
+      <div ref={pillAttach} className="relative isolate mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-border/70 bg-white/70 p-2 [-webkit-overflow-scrolling:touch] dark:border-[#252a3a]/80 dark:bg-white/[0.03]">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-xl bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-600"
+          style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
+        />
         {tabs.map(t => (
           <button
             key={t.key}
+            data-tab-key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              'flex h-10 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors',
+              'relative z-10 flex h-10 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors',
               tab === t.key
-                ? 'bg-primary text-white shadow-sm dark:bg-blue-600'
+                ? 'text-white'
                 : 'text-muted hover:bg-surface hover:text-primary-dark dark:hover:bg-white/[0.06] dark:hover:text-white'
             )}
           >

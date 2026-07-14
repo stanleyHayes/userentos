@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/Card'
 import { Search, X, Filter, ChevronDown, Grid3X3, List } from 'lucide-react'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { categoryOptions } from '../documentConfig'
 
 interface DocumentsToolbarProps {
@@ -27,6 +28,7 @@ export function DocumentsToolbar({
   categoryCounts,
   totalCount,
 }: DocumentsToolbarProps) {
+  const { attach: viewPillAttach, style: viewPillStyle, visible: viewPillVisible } = useSlidingIndicator<HTMLDivElement>(viewMode)
   return (
     <Card className="!p-3">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -63,16 +65,19 @@ export function DocumentsToolbar({
           </button>
 
           {/* View Toggle */}
-          <div className="flex items-center rounded-lg border border-border/60 dark:border-[#252a3a]/60 overflow-hidden">
+          <div ref={viewPillAttach} className="relative isolate flex items-center rounded-lg border border-border/60 dark:border-[#252a3a]/60 overflow-hidden">
+            <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 bg-primary/10 dark:bg-blue-500/15 transition-[transform,width,height] duration-300 ease-out" style={{ ...viewPillStyle, opacity: viewPillVisible ? 1 : 0 }} />
             <button
+              data-tab-key="list"
               onClick={() => onViewModeChange('list')}
-              className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500 hover:bg-surface dark:hover:bg-[#0c0e1a]'}`}
+              className={`relative z-10 p-2 transition-colors ${viewMode === 'list' ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500 hover:bg-surface dark:hover:bg-[#0c0e1a]'}`}
             >
               <List size={14} />
             </button>
             <button
+              data-tab-key="grid"
               onClick={() => onViewModeChange('grid')}
-              className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500 hover:bg-surface dark:hover:bg-[#0c0e1a]'}`}
+              className={`relative z-10 p-2 transition-colors ${viewMode === 'grid' ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500 hover:bg-surface dark:hover:bg-[#0c0e1a]'}`}
             >
               <Grid3X3 size={14} />
             </button>

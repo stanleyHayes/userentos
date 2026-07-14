@@ -19,6 +19,7 @@ import {
   Grid3X3, List, Send, Accessibility,
 } from 'lucide-react'
 import { DoodleStars } from '@/components/ui/Doodles'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
 
 const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
@@ -79,6 +80,7 @@ export function PropertiesPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [showFilters, setShowFilters] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
+  const { attach: viewPillAttach, style: viewPillStyle, visible: viewPillVisible } = useSlidingIndicator<HTMLDivElement>(view)
 
   const queryParams = new URLSearchParams()
   if (isLandlord) queryParams.set('mine', 'true')
@@ -201,9 +203,10 @@ export function PropertiesPage() {
               {SORT_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
             </TextField>
           </div>
-          <div className="flex border border-border dark:border-[#252a3a] rounded-xl overflow-hidden ml-auto">
-            <button onClick={() => setView('grid')} className={`h-10 w-10 flex items-center justify-center ${view === 'grid' ? 'bg-primary text-white' : 'text-muted'}`}><Grid3X3 size={14} /></button>
-            <button onClick={() => setView('list')} className={`h-10 w-10 flex items-center justify-center ${view === 'list' ? 'bg-primary text-white' : 'text-muted'}`}><List size={14} /></button>
+          <div ref={viewPillAttach} className="relative isolate flex border border-border dark:border-[#252a3a] rounded-xl overflow-hidden ml-auto">
+            <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 bg-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...viewPillStyle, opacity: viewPillVisible ? 1 : 0 }} />
+            <button data-tab-key="grid" onClick={() => setView('grid')} className={`relative z-10 h-10 w-10 flex items-center justify-center transition-colors ${view === 'grid' ? 'text-white' : 'text-muted'}`}><Grid3X3 size={14} /></button>
+            <button data-tab-key="list" onClick={() => setView('list')} className={`relative z-10 h-10 w-10 flex items-center justify-center transition-colors ${view === 'list' ? 'text-white' : 'text-muted'}`}><List size={14} /></button>
           </div>
         </div>
       </div>

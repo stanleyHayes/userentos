@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDate } from '@/lib/utils'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   Lock, Check, X as XIcon, Clock, User, Eye, Ban, RotateCcw,
   MessageSquare, Building2, ChevronDown,
@@ -41,6 +42,7 @@ export function ProfileAccessPage() {
   const isTenant = user?.activeRole === 'tenant'
   const qc = useQueryClient()
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'denied' | 'revoked'>('all')
+  const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(filter)
 
   const { data: requests, isLoading } = useQuery<AccessRequest[]>({
     queryKey: ['profile-access-requests'],
@@ -84,14 +86,16 @@ export function ProfileAccessPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1.5">
+      <div ref={pillAttach} className="relative isolate flex flex-wrap gap-1.5">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-lg bg-primary/10 dark:bg-blue-500/15 transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
         {(['all', 'pending', 'approved', 'denied', 'revoked'] as const).map((f) => (
           <button
             key={f}
+            data-tab-key={f}
             onClick={() => setFilter(f)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            className={`relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               filter === f
-                ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400'
+                ? 'text-primary dark:text-blue-400'
                 : 'text-muted dark:text-gray-400 hover:bg-surface dark:hover:bg-[#0c0e1a]'
             }`}
           >
