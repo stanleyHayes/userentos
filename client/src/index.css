@@ -274,11 +274,19 @@ html {
     linear-gradient(120deg, rgba(45, 212, 191, 0.07), transparent 40%);
 }
 
-.surface-card {
-  background: var(--rentos-card);
-  border-color: var(--rentos-card-border);
-  box-shadow: var(--rentos-shadow-soft);
-  backdrop-filter: blur(18px);
+/*
+ * .surface-card lives in the components layer so Tailwind *utilities*
+ * (bg-gradient-to-*, bg-primary/10, etc.) can override its background —
+ * unlayered, its `background` shorthand clobbered every gradient utility
+ * and rendered those cards white with invisible text.
+ */
+@layer components {
+  .surface-card {
+    background: var(--rentos-card);
+    border-color: var(--rentos-card-border);
+    box-shadow: var(--rentos-shadow-soft);
+    backdrop-filter: blur(18px);
+  }
 }
 
 .surface-card-interactive {
@@ -372,19 +380,23 @@ html {
 /*
  * MUI FormControl injects an unlayered `margin: 0` reset at runtime, which
  * beats Tailwind v4's *layered* space-y-* utilities — stacked form fields
- * (Input/Select/TextField) collapse onto each other. Re-assert the common
- * space-y steps with higher specificity so vertical rhythm survives.
+ * (Input/Select/TextField) collapse onto each other. Tailwind v4 implements
+ * space-y as `margin-block-end` on every `:not(:last-child)` child, so we
+ * re-assert that same direction with higher specificity.
  */
-.space-y-1 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 0.25rem; }
-.space-y-2 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 0.5rem; }
-.space-y-3 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 0.75rem; }
-.space-y-4 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 1rem; }
-.space-y-5 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 1.25rem; }
-.space-y-6 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 1.5rem; }
-.space-y-7 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 1.75rem; }
-.space-y-8 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 2rem; }
-.space-y-10 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 2.5rem; }
-.space-y-12 > :not([hidden]) ~ :not([hidden]).MuiFormControl-root { margin-top: 3rem; }
+.space-y-1 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 0.25rem; }
+.space-y-2 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 0.5rem; }
+.space-y-3 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 0.75rem; }
+.space-y-4 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 1rem; }
+.space-y-5 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 1.25rem; }
+.space-y-6 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 1.5rem; }
+.space-y-7 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 1.75rem; }
+.space-y-8 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 2rem; }
+.space-y-10 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 2.5rem; }
+.space-y-12 > :not([hidden]).MuiFormControl-root:not(:last-child) { margin-block-end: 3rem; }
+
+/* Sticky-header offset for in-page anchor links (footer → landing sections). */
+section[id] { scroll-margin-top: 5rem; }
 
 .focus-ring {
   outline: none;
