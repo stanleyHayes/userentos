@@ -47,7 +47,7 @@ export const disputeController = {
 
   create: async (req: Request, res: Response) => {
     const parsed = createDisputeSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const userId = req.user!.userId
 

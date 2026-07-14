@@ -52,7 +52,7 @@ router.post('/me', authenticate, requireRole('employer'), async (req, res) => {
     paydayDayOfMonth: z.number().int().min(1).max(31).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const existing = await loadMyEmployer(req.user!.userId)
   if (existing) {
@@ -109,7 +109,7 @@ router.post('/employees', authenticate, requireRole('employer'), requirePermissi
     startDate: z.string(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const employer = await loadMyEmployer(req.user!.userId)
   if (!employer) { error(res, 'Create employer profile first'); return }
@@ -145,7 +145,7 @@ router.post('/employees/bulk', authenticate, requireRole('employer'), requirePer
   })
   const schema = z.object({ rows: z.array(z.unknown()) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   if (parsed.data.rows.length > 500) {
     error(res, 'Bulk import is limited to 500 rows per request', 413)
@@ -164,7 +164,7 @@ router.post('/employees/bulk', authenticate, requireRole('employer'), requirePer
     const rowParse = rowSchema.safeParse(parsed.data.rows[i])
     if (!rowParse.success) {
       const raw = parsed.data.rows[i] as { email?: unknown }
-      errors.push({ row: i + 1, email: typeof raw?.email === 'string' ? raw.email : undefined, reason: rowParse.error.errors[0].message })
+      errors.push({ row: i + 1, email: typeof raw?.email === 'string' ? raw.email : undefined, reason: rowParse.error.issues[0].message })
       continue
     }
     const row = rowParse.data
@@ -283,7 +283,7 @@ router.post('/mandates', authenticate, async (req, res) => {
     signature: z.string().min(3),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const employment = await Employment.findOne({ userId: req.user!.userId, status: 'active' })
   if (!employment) { error(res, 'No active employment on file — ask your employer to add you first'); return }
@@ -387,7 +387,7 @@ router.post('/payroll/runs', authenticate, requireRole('employer'), requirePermi
     scheduledPayDate: z.string(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const employer = await loadMyEmployer(req.user!.userId)
   if (!employer) { error(res, 'Create employer profile first'); return }
   const run = await buildPayrollRun(employer._id.toString(), parsed.data.periodLabel, parsed.data.periodStart, parsed.data.periodEnd, parsed.data.scheduledPayDate)

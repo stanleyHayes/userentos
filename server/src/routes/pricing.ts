@@ -25,7 +25,7 @@ const comparablesSchema = z.object({
 
 router.get('/comparables', authenticate, async (req, res) => {
   const parsed = comparablesSchema.safeParse(req.query)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await analyzePropertyPricing(
@@ -57,7 +57,7 @@ const trendsSchema = z.object({
 
 router.get('/trends', authenticate, async (req, res) => {
   const parsed = trendsSchema.safeParse(req.query)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await getRentTrends(
@@ -89,7 +89,7 @@ const fairPriceSchema = z.object({
 
 router.post('/fair-price', authenticate, async (req, res) => {
   const parsed = fairPriceSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await checkFairPrice(
@@ -146,7 +146,7 @@ const predictMlSchema = z.object({
 
 router.post('/predict-ml', authenticate, async (req, res) => {
   const parsed = predictMlSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     if (mlClient.isEnabled()) {

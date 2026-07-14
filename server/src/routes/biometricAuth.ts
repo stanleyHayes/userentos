@@ -40,7 +40,7 @@ router.post('/enroll', authenticate, async (req, res) => {
     deviceLabel: z.string().max(100).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   // Revoke any existing token for this user+device — only one active token per device.
   await BiometricToken.updateMany(
@@ -73,7 +73,7 @@ router.post('/exchange', async (req, res) => {
     deviceId: z.string().min(8).max(128),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const tokenHash = hashToken(parsed.data.refreshToken)
   const record = await BiometricToken.findOne({ tokenHash })

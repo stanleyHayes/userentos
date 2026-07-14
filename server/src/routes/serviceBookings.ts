@@ -20,7 +20,7 @@ const listSchema = z.object({
 
 router.get('/', authenticate, async (req, res) => {
   const parsed = listSchema.safeParse(req.query)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { status, asWorker, page, limit } = parsed.data
   const userId = req.user?.userId
@@ -70,7 +70,7 @@ const createSchema = z.object({
 
 router.post('/', authenticate, async (req, res) => {
   const parsed = createSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const worker = await Worker.findById(parsed.data.workerId)
   if (!worker) { error(res, 'Worker not found', 404); return }
@@ -85,7 +85,7 @@ router.post('/', authenticate, async (req, res) => {
     // and real-time/push notifications actually reach the worker.
     workerUserId: worker.userId,
     requesterId: req.user?.userId,
-    requesterRole: req.user?.activeRole || 'tenant',
+    requesterRole: (req.user?.activeRole || 'tenant') as 'tenant' | 'landlord' | 'property_manager',
   })
 
   // Notify worker in real-time
@@ -129,7 +129,7 @@ const updateSchema = z.object({
 
 router.patch('/:id', authenticate, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const booking = await ServiceBooking.findById(req.params.id)
   if (!booking) { error(res, 'Booking not found', 404); return }

@@ -23,7 +23,7 @@ router.post('/', authenticate, requireRole('admin', 'super_admin', 'legal_office
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { embedding } = await embed(parsed.data.content)
 
@@ -80,7 +80,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'super_admin', 'legal_of
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   // Re-embed if content changed
   if (parsed.data.content && parsed.data.content !== doc.content) {
@@ -108,7 +108,7 @@ router.post('/search', async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const chunks = await retrieveLegalChunks(parsed.data.query, parsed.data.topK)
   success(res, { items: chunks, total: chunks.length })

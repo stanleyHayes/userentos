@@ -36,7 +36,7 @@ export const savingsController = {
 
   deposit: async (req: Request, res: Response) => {
     const parsed = amountMethodSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     // Atomic credit so concurrent deposits can't lose updates.
     const wallet = await Wallet.findOneAndUpdate(
@@ -62,7 +62,7 @@ export const savingsController = {
 
   withdraw: async (req: Request, res: Response) => {
     const parsed = amountMethodSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const tx = {
       type: 'withdrawal',
@@ -100,7 +100,7 @@ export const savingsController = {
 
   createPlan: async (req: Request, res: Response) => {
     const parsed = createPlanSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const plan = await SavingsPlan.create({
       ...parsed.data,

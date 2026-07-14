@@ -1,5 +1,9 @@
 import { test, expect } from '../fixtures/auth'
 
+// API base URL — defaults to the CI/dev port; override with E2E_API_URL when
+// the local API runs on a different port.
+const API_BASE = process.env.E2E_API_URL || 'http://localhost:3002'
+
 /**
  * Tenant views an agreement and signs it.
  *
@@ -26,14 +30,14 @@ test.describe('agreement signing', () => {
     if (!kwameId) throw new Error('Could not read Kwame userId from localStorage JWT')
 
     // ── 2. Log in as landlord (yaw@rentos.gh) via API ──
-    const loginRes = await request.post('http://localhost:3002/api/auth/login', {
+    const loginRes = await request.post(`${API_BASE}/api/auth/login`, {
       data: { email: 'yaw@rentos.gh', password: 'password123' },
     })
     const loginData = await loginRes.json()
     const landlordToken: string = loginData.data.token
 
     // ── 3. Get one of yaw's properties ──
-    const propsRes = await request.get('http://localhost:3002/api/properties', {
+    const propsRes = await request.get(`${API_BASE}/api/properties`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
     })
     const propsData = await propsRes.json()
@@ -41,7 +45,7 @@ test.describe('agreement signing', () => {
     if (!propertyId) throw new Error('No property found for landlord')
 
     // ── 4. Create a draft agreement for Kwame ──
-    const createRes = await request.post('http://localhost:3002/api/agreements', {
+    const createRes = await request.post(`${API_BASE}/api/agreements`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
       data: {
         propertyId,
@@ -58,7 +62,7 @@ test.describe('agreement signing', () => {
     const agreementId: string = createData.data.id
 
     // ── 5. Landlord signs the agreement → status becomes pending_signatures ──
-    await request.post(`http://localhost:3002/api/agreements/${agreementId}/sign`, {
+    await request.post(`${API_BASE}/api/agreements/${agreementId}/sign`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
     })
 

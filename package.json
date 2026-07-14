@@ -17,6 +17,6 @@
     "e2e:test:ui": "npm run test:ui --prefix e2e"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^10.0.3"
   }
 }

@@ -15,4 +15,10 @@ router.post('/change-password', loginLimiter, authenticate, asyncHandler(authCon
 router.post('/forgot-password', loginLimiter, asyncHandler(authController.forgotPassword))
 router.post('/reset-password', loginLimiter, asyncHandler(authController.resetPassword))
 
+// MFA (TOTP two-factor authentication)
+router.post('/login/mfa', loginLimiter, asyncHandler(authController.verifyMfaLogin))
+router.post('/mfa/setup', authenticate, asyncHandler(authController.mfaSetup))
+router.post('/mfa/enable', authenticate, asyncHandler(authController.mfaEnable))
+router.post('/mfa/disable', authenticate, asyncHandler(authController.mfaDisable))
+
 export default router

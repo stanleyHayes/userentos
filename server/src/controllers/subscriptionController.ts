@@ -45,7 +45,7 @@ export const subscriptionController = {
   // Create package (admin)
   create: async (req: Request, res: Response) => {
     const parsed = packageSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     // If this is set as default, unset other defaults
     if (parsed.data.isDefault) {
@@ -62,7 +62,7 @@ export const subscriptionController = {
     if (!pkg) { error(res, 'Package not found', 404); return }
 
     const parsed = packageSchema.partial().safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     // If setting as default, unset other defaults
     if (parsed.data.isDefault) {

@@ -52,7 +52,7 @@ router.post('/', authenticate, async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   // Check if user already reviewed
   const existing = await Review.findOne({ propertyId: parsed.data.propertyId, userId: req.user!.userId })

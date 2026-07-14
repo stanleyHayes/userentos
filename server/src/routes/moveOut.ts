@@ -86,7 +86,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId
     const parsed = initiateSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const agreement = await Agreement.findById(parsed.data.agreementId)
     if (!agreement) { error(res, 'Agreement not found', 404); return }
@@ -166,7 +166,7 @@ router.post(
     }
 
     const parsed = scheduleSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     mo.inspectionDate = parsed.data.inspectionDate
     mo.status = 'inspection_scheduled'
@@ -207,7 +207,7 @@ router.post(
     }
 
     const parsed = inspectionSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     if (parsed.data.inspectionNotes !== undefined) mo.inspectionNotes = parsed.data.inspectionNotes
     mo.damages = parsed.data.damages.map((d) => ({ description: d.description, cost: d.cost, photos: d.photos }))
@@ -248,7 +248,7 @@ router.post(
     }
 
     const parsed = disputeSchema.safeParse(req.body ?? {})
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     mo.status = 'disputed'
     if (parsed.data.reason) {
@@ -408,7 +408,7 @@ router.post(
       error(res, 'Not authorized', 403); return
     }
     const parsed = noteSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
     mo.notes.push({ text: parsed.data.text, by: userId, at: new Date().toISOString() })
     await mo.save()
     success(res, idOf(mo.toObject()))

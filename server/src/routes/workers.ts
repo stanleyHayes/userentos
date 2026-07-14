@@ -23,7 +23,7 @@ const listSchema = z.object({
 
 router.get('/', authenticate, async (req, res) => {
   const parsed = listSchema.safeParse(req.query)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { trade, location, emergency, minRating, verified, page, limit } = parsed.data
 
@@ -84,7 +84,7 @@ const createSchema = z.object({
 
 router.post('/', authenticate, async (req, res) => {
   const parsed = createSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   // One worker profile per user — prevents unbounded duplicate/spam profiles.
   if (await Worker.exists({ userId: req.user?.userId })) {
@@ -129,7 +129,7 @@ const updateSchema = z.object({
 
 router.patch('/:id', authenticate, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const worker = await Worker.findById(req.params.id)
   if (!worker) { error(res, 'Worker not found', 404); return }

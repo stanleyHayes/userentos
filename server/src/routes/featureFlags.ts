@@ -8,6 +8,8 @@ import { success, error } from '../utils/response.js'
 
 const router = Router()
 
+const roleEnum = z.enum(['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'super_admin', 'financier', 'employer'])
+
 // GET /api/feature-flags/me — evaluated map for current user
 router.get('/me', authenticate, async (req, res) => {
   const map = await evaluateAllForContext({
@@ -32,12 +34,12 @@ router.post('/', authenticate, requireRole('super_admin'), async (req, res) => {
     enabled: z.boolean().optional(),
     rolloutPct: z.number().min(0).max(100).optional(),
     enabledForUserIds: z.array(z.string()).optional(),
-    enabledForRoles: z.array(z.string()).optional(),
+    enabledForRoles: z.array(roleEnum).optional(),
     disabledForUserIds: z.array(z.string()).optional(),
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const existing = await FeatureFlag.findOne({ key: parsed.data.key.toLowerCase() })
@@ -64,7 +66,7 @@ router.patch('/:key', authenticate, requireRole('super_admin'), async (req, res)
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const keyParam = Array.isArray(req.params.key) ? req.params.key[0] : req.params.key
   const flag = await FeatureFlag.findOneAndUpdate(

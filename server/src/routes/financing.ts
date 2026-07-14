@@ -53,7 +53,7 @@ router.post('/offers', authenticate, requireRole('financier'), requirePermission
     requiresPayrollDeduction: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   if (parsed.data.maxAmount < parsed.data.minAmount) { error(res, 'maxAmount must be ≥ minAmount'); return }
   if (parsed.data.maxTenureMonths < parsed.data.minTenureMonths) { error(res, 'maxTenureMonths must be ≥ minTenureMonths'); return }
 
@@ -86,7 +86,7 @@ router.post('/applications', authenticate, async (req, res) => {
     willUsePayrollDeduction: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const offer = await FinancingOffer.findById(parsed.data.offerId)
   if (!offer || !offer.active) { error(res, 'Offer not available'); return }

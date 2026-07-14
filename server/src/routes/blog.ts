@@ -56,7 +56,7 @@ router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const post = await BlogPost.create({ ...parsed.data, author: req.user!.userId })
   success(res, { ...post.toObject(), id: post._id.toString() }, 'Post created', 201)
@@ -75,7 +75,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'government', 'legal_off
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const post = await BlogPost.findByIdAndUpdate(param(req.params.id), parsed.data, { new: true }).lean()
   if (!post) { error(res, 'Post not found', 404); return }

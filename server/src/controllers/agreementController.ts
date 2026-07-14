@@ -88,7 +88,7 @@ export const agreementController = {
 
   create: async (req: Request, res: Response) => {
     const parsed = createAgreementSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const property = await Property.findById(parsed.data.propertyId)
     if (!property) { error(res, 'Property not found', 404); return }

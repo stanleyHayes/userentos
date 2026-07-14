@@ -195,7 +195,7 @@ router.post(
 
     const parsed = createSchema.safeParse(req.body)
     if (!parsed.success) {
-      error(res, parsed.error.errors[0].message)
+      error(res, parsed.error.issues[0].message)
       return
     }
     const data = parsed.data
@@ -264,7 +264,7 @@ router.patch(
 
     const parsed = updateSchema.safeParse(req.body)
     if (!parsed.success) {
-      error(res, parsed.error.errors[0].message)
+      error(res, parsed.error.issues[0].message)
       return
     }
     const data = parsed.data
@@ -334,7 +334,7 @@ router.post(
 
     const parsed = noteSchema.safeParse(req.body)
     if (!parsed.success) {
-      error(res, parsed.error.errors[0].message)
+      error(res, parsed.error.issues[0].message)
       return
     }
 
@@ -380,7 +380,7 @@ router.post(
 
     const parsed = completeSchema.safeParse(req.body ?? {})
     if (!parsed.success) {
-      error(res, parsed.error.errors[0].message)
+      error(res, parsed.error.issues[0].message)
       return
     }
 

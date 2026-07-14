@@ -45,7 +45,7 @@ router.post('/search/semantic', asyncHandler(async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { query, city, region, type, minRent, maxRent, topK } = parsed.data
 
@@ -126,7 +126,7 @@ router.get('/nearby', asyncHandler(async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.query)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { lat, lng, radiusKm, type, maxRent } = parsed.data
 

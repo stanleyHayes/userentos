@@ -45,7 +45,7 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
 
   const parsed = createApplicationSchema.safeParse(req.body)
   if (!parsed.success) {
-    error(res, parsed.error.errors[0].message)
+    error(res, parsed.error.issues[0].message)
     return
   }
 
@@ -206,7 +206,7 @@ router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response
 
 router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const parsed = respondSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const application = await Application.findById(param(req.params.id))
   if (!application) { error(res, 'Application not found', 404); return }

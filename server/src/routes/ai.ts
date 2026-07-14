@@ -28,7 +28,7 @@ const chatSchema = z.object({
 
 router.post('/chat', authenticate, aiLimiter, async (req, res) => {
   const parsed = chatSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const reply = await chat(parsed.data.messages as ChatMessage[], parsed.data.language)
   success(res, { reply })
@@ -46,7 +46,7 @@ const generateSchema = z.object({
 
 router.post('/generate', authenticate, aiLimiter, async (req, res) => {
   const parsed = generateSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const text = await generateText(parsed.data.prompt, parsed.data.context, parsed.data.language)
@@ -269,7 +269,7 @@ function analyzeQuery(query: string): AbuseCheckResponse {
 router.post('/abuse-check', publicLimiter, async (req, res) => {
   const parsed = abuseCheckSchema.safeParse(req.body)
   if (!parsed.success) {
-    error(res, parsed.error.errors[0].message)
+    error(res, parsed.error.issues[0].message)
     return
   }
 
@@ -304,7 +304,7 @@ const listingSchema = z.object({
 
 router.post('/listing', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
   const parsed = listingSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await generatePropertyListing(
@@ -326,7 +326,7 @@ const formalizeSchema = z.object({
 
 router.post('/formalize', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
   const parsed = formalizeSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await formalizeText(parsed.data.text, parsed.data.language)
@@ -344,7 +344,7 @@ const translateSchema = z.object({
 
 router.post('/translate', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
   const parsed = translateSchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   try {
     const result = await translatePropertyText(parsed.data.text, parsed.data.targetLanguage)
@@ -370,7 +370,7 @@ const qualitySchema = z.object({
 
 router.post('/listing-quality', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
   const parsed = qualitySchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const result = scoreListingQuality(parsed.data)
   success(res, result)
@@ -391,7 +391,7 @@ const caseSummarySchema = z.object({
 
 router.post('/case-summary', authenticate, requireRole('government', 'admin', 'legal_officer'), aiLimiter, async (req, res) => {
   const parsed = caseSummarySchema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { caseTitle, description, tenantStatement, landlordStatement, evidence, language } = parsed.data
 

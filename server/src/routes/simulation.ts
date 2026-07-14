@@ -20,7 +20,7 @@ router.post('/rent-cap', authenticate, requireRole('government', 'admin', 'legal
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { maxRent, region, propertyType } = parsed.data
 
@@ -57,7 +57,7 @@ router.post('/rent-cap', authenticate, requireRole('government', 'admin', 'legal
 router.post('/advance-limit', authenticate, requireRole('government', 'admin', 'legal_officer'), async (req, res) => {
   const schema = z.object({ maxMonths: z.number().int().min(1).max(24) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { maxMonths } = parsed.data
 
@@ -160,7 +160,7 @@ router.post('/rent-increase', authenticate, requireRole('government', 'admin', '
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { propertyId, currentRent, proposedRent } = parsed.data
 

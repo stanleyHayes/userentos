@@ -93,10 +93,10 @@ Rules:
   } catch (err) {
     const e = err as { status?: number; message?: string }
     if (e.status === 401) {
-      throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.')
+      throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
     }
     console.error('[AI] Generate error:', e.message)
-    throw new Error('Failed to generate text. Please try again.')
+    throw new Error('Failed to generate text. Please try again.', { cause: err })
   }
 }
 
@@ -200,9 +200,9 @@ Do NOT include markdown code fences. Output raw JSON only.`
     }
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.')
+    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
     console.error('[AI] Listing generation error:', e.message)
-    throw new Error('Failed to generate listing. Please try again.')
+    throw new Error('Failed to generate listing. Please try again.', { cause: err })
   }
 }
 
@@ -231,9 +231,9 @@ Rules:
     return text
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.')
+    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
     console.error('[AI] Formalize error:', e.message)
-    throw new Error('Failed to formalize text. Please try again.')
+    throw new Error('Failed to formalize text. Please try again.', { cause: err })
   }
 }
 
@@ -260,9 +260,9 @@ Rules:
     return text
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.')
+    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
     console.error('[AI] Translation error:', e.message)
-    throw new Error('Failed to translate text. Please try again.')
+    throw new Error('Failed to translate text. Please try again.', { cause: err })
   }
 }
 

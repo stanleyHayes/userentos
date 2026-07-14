@@ -61,7 +61,7 @@ router.post('/products', authenticate, requireRole('admin', 'super_admin'), asyn
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const product = await InsuranceProduct.create(parsed.data)
   success(res, { ...product.toObject(), id: product._id.toString() }, 'Insurance product created', 201)
@@ -84,7 +84,7 @@ router.patch('/products/:id', authenticate, requireRole('admin', 'super_admin'),
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const product = await InsuranceProduct.findByIdAndUpdate(param(req.params.id), parsed.data, { new: true })
   if (!product) { error(res, 'Product not found', 404); return }
@@ -111,7 +111,7 @@ router.post('/policies', authenticate, async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { productId, agreementId, propertyId, termMonths } = parsed.data
 
@@ -201,7 +201,7 @@ router.post('/policies/:id/claim', authenticate, async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const policy = await InsurancePolicy.findById(param(req.params.id))
   if (!policy) { error(res, 'Policy not found', 404); return }
@@ -293,7 +293,7 @@ router.post('/policies/:policyId/claims/:claimId/decide', authenticate, requireR
     payoutAmount: z.number().min(0).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const policy = await InsurancePolicy.findById(param(req.params.policyId))
   if (!policy) { error(res, 'Policy not found', 404); return }

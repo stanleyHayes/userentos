@@ -204,7 +204,7 @@ export const propertyController = {
 
   create: async (req: Request, res: Response) => {
     const parsed = createPropertySchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const result = await propertyService.create(parsed.data, req.user!.userId)
 

@@ -26,7 +26,7 @@ function getClientMeta(req: Request) {
 export const authController = {
   register: async (req: Request, res: Response) => {
     const parsed = registerSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const meta = getClientMeta(req)
     const result = await authService.register(parsed.data, meta.deviceLabel, meta.ipAddress)
@@ -36,7 +36,7 @@ export const authController = {
 
   login: async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const meta = getClientMeta(req)
     const result = await authService.login(parsed.data.email, parsed.data.password, meta.deviceLabel, meta.ipAddress)
@@ -47,7 +47,7 @@ export const authController = {
   refresh: async (req: Request, res: Response) => {
     const schema = z.object({ refreshToken: z.string().min(1) })
     const parsed = schema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const meta = getClientMeta(req)
     const result = await authService.refresh(parsed.data.refreshToken, meta.deviceLabel, meta.ipAddress)
@@ -58,7 +58,7 @@ export const authController = {
   logout: async (req: Request, res: Response) => {
     const schema = z.object({ refreshToken: z.string().min(1) })
     const parsed = schema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     await authService.logout(parsed.data.refreshToken)
     success(res, null, 'Logged out successfully')
@@ -75,7 +75,7 @@ export const authController = {
 
     const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) })
     const parsed = schema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const result = await authService.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword)
     if (result.error) { error(res, result.error, result.status); return }
@@ -93,9 +93,46 @@ export const authController = {
   resetPassword: async (req: Request, res: Response) => {
     const schema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) })
     const parsed = schema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const result = await authService.resetPassword(parsed.data.token, parsed.data.newPassword)
+    if (result.error) { error(res, result.error, result.status); return }
+    success(res, result.data, result.message)
+  },
+
+  verifyMfaLogin: async (req: Request, res: Response) => {
+    const schema = z.object({ mfaToken: z.string().min(1), code: z.string().min(6).max(6) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+    const meta = getClientMeta(req)
+    const result = await authService.verifyMfaLogin(parsed.data.mfaToken, parsed.data.code, meta.deviceLabel, meta.ipAddress)
+    if (result.error) { error(res, result.error, result.status); return }
+    success(res, result.data)
+  },
+
+  mfaSetup: async (req: Request, res: Response) => {
+    const result = await authService.mfaSetup(req.user!.userId)
+    if (result.error) { error(res, result.error, result.status); return }
+    success(res, result.data)
+  },
+
+  mfaEnable: async (req: Request, res: Response) => {
+    const schema = z.object({ code: z.string().min(6).max(6) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+    const result = await authService.mfaEnable(req.user!.userId, parsed.data.code)
+    if (result.error) { error(res, result.error, result.status); return }
+    success(res, result.data, result.message)
+  },
+
+  mfaDisable: async (req: Request, res: Response) => {
+    const schema = z.object({ code: z.string().min(6).max(6) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+    const result = await authService.mfaDisable(req.user!.userId, parsed.data.code)
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },

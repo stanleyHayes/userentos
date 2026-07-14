@@ -69,7 +69,7 @@ export const chatController = {
 
   createConversation: async (req: Request, res: Response) => {
     const parsed = createConversationSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const userId = req.user!.userId
     const { participantId, propertyId } = parsed.data
@@ -162,7 +162,7 @@ export const chatController = {
 
   sendMessage: async (req: Request, res: Response) => {
     const parsed = sendMessageSchema.safeParse(req.body)
-    if (!parsed.success) { error(res, parsed.error.errors[0].message); return }
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const userId = req.user!.userId
     const conversationId = param(req.params.id)

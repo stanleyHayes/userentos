@@ -1,11 +1,12 @@
-import admin from 'firebase-admin'
+import { initializeApp, getApps, cert } from 'firebase-admin/app'
+import { getMessaging } from 'firebase-admin/messaging'
 import { DeviceToken, type DevicePlatform } from '../models/DeviceToken.js'
 import { logger } from '../utils/logger.js'
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) })
+    initializeApp({ credential: cert(serviceAccount) })
     logger.info('[Push] Firebase Admin initialized')
   } catch (err) {
     logger.warn(`[Push] Firebase initialization failed: ${(err as Error).message}`)
@@ -82,10 +83,10 @@ async function sendViaExpo(tokens: string[], payload: PushPayload): Promise<stri
 }
 
 async function sendViaFcm(tokens: string[], payload: PushPayload): Promise<string[]> {
-  if (tokens.length === 0 || !admin.apps?.length) return []
+  if (tokens.length === 0 || getApps().length === 0) return []
   const deadTokens: string[] = []
   try {
-    const response = await admin.messaging().sendEachForMulticast({
+    const response = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: payload.title, body: payload.body },
       data: payload.data,

@@ -1,0 +1,32 @@
+name: Reusable — Server
+
+# Reusable workflow: server lint, typecheck, tests, and build.
+# Called by ci.yml — not triggered directly.
+
+on:
+  workflow_call:
+
+jobs:
+  server:
+    name: Server (lint • typecheck • test • build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      JWT_SECRET: test-jwt-secret-for-ci-only
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
