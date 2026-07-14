@@ -7,6 +7,8 @@ import type { AuthPayload } from '../middleware/auth.js'
 import { notifyWelcome } from './notify.js'
 import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
+import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
+import QRCode from 'qrcode'
 
 interface RegisterData {
   email: string
@@ -97,6 +99,17 @@ export class AuthService {
       return { error: 'Invalid email or password', status: 401 }
     }
 
+    // MFA challenge: password is valid but a TOTP code is still required.
+    if (user.mfaEnabled) {
+      const mfaToken = jwt.sign(
+        { userId: user._id.toString(), purpose: 'mfa' },
+        config.jwtSecret,
+        { expiresIn: 300 },
+      )
+      this.logger.info(`MFA challenge issued for: ${email}`)
+      return { data: { mfaRequired: true, mfaToken } }
+    }
+
     const payload: AuthPayload = { userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
     const refreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
@@ -105,6 +118,87 @@ export class AuthService {
     this.logger.info(`User logged in: ${email}`)
 
     return { data: { user: safeUser, token, refreshToken } }
+  }
+
+  /** Second step of login for MFA-enabled accounts: verify the TOTP code. */
+  async verifyMfaLogin(mfaToken: string, code: string, deviceLabel?: string, ipAddress?: string) {
+    let userId: string
+    try {
+      const payload = jwt.verify(mfaToken, config.jwtSecret) as { purpose?: string; userId?: string }
+      if (payload.purpose !== 'mfa' || !payload.userId) throw new Error('Invalid token purpose')
+      userId = payload.userId
+    } catch {
+      return { error: 'MFA session expired. Please log in again.', status: 401 }
+    }
+
+    const user = await this.userRepo.findById(userId)
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      return { error: 'MFA is not enabled for this account', status: 400 }
+    }
+
+    if (!verifyTotp(user.mfaSecret, code)) {
+      this.logger.warn(`Failed MFA attempt for user: ${userId}`)
+      return { error: 'Invalid authentication code', status: 401 }
+    }
+
+    const payload: AuthPayload = { userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const token = this.signAccessToken(payload)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
+
+    const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
+    this.logger.info(`User logged in with MFA: ${user.email}`)
+
+    return { data: { user: safeUser, token, refreshToken } }
+  }
+
+  /** Start MFA enrollment: generate a pending secret + QR code (not yet enabled). */
+  async mfaSetup(userId: string) {
+    const user = await this.userRepo.findById(userId)
+    if (!user) return { error: 'User not found', status: 404 }
+    if (user.mfaEnabled) return { error: 'MFA is already enabled', status: 400 }
+
+    const secret = generateTotpSecret()
+    user.mfaSecret = secret
+    await user.save()
+
+    const otpauthUrl = buildOtpauthUrl(secret, user.email)
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { margin: 1, width: 220 })
+
+    return { data: { secret, otpauthUrl, qrDataUrl } }
+  }
+
+  /** Confirm MFA enrollment by verifying a code against the pending secret. */
+  async mfaEnable(userId: string, code: string) {
+    const user = await this.userRepo.findById(userId)
+    if (!user) return { error: 'User not found', status: 404 }
+    if (user.mfaEnabled) return { error: 'MFA is already enabled', status: 400 }
+    if (!user.mfaSecret) return { error: 'MFA setup has not been started', status: 400 }
+
+    if (!verifyTotp(user.mfaSecret, code)) {
+      return { error: 'Invalid authentication code', status: 401 }
+    }
+
+    user.mfaEnabled = true
+    await user.save()
+    this.logger.info(`MFA enabled for user: ${user.email}`)
+    return { data: null, message: 'Two-factor authentication enabled' }
+  }
+
+  /** Disable MFA — requires a valid code from the current secret. */
+  async mfaDisable(userId: string, code: string) {
+    const user = await this.userRepo.findById(userId)
+    if (!user) return { error: 'User not found', status: 404 }
+    if (!user.mfaEnabled || !user.mfaSecret) return { error: 'MFA is not enabled', status: 400 }
+
+    if (!verifyTotp(user.mfaSecret, code)) {
+      return { error: 'Invalid authentication code', status: 401 }
+    }
+
+    user.mfaEnabled = false
+    user.mfaSecret = undefined
+    await user.save()
+    this.logger.info(`MFA disabled for user: ${user.email}`)
+    return { data: null, message: 'Two-factor authentication disabled' }
   }
 
   async refresh(plainRefreshToken: string, deviceLabel?: string, ipAddress?: string) {

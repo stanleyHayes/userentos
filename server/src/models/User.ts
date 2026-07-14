@@ -17,6 +17,8 @@ export interface IUser extends Document {
   subscriptionEndDate?: Date
   invitedBy?: string
   deletedAt?: Date
+  mfaEnabled: boolean
+  mfaSecret?: string
   settings?: {
     theme: string
     language: string
@@ -47,6 +49,8 @@ const userSchema = new Schema<IUser>({
   subscriptionEndDate: { type: Date },
   invitedBy: { type: String },
   deletedAt: { type: Date, index: true },
+  mfaEnabled: { type: Boolean, default: false },
+  mfaSecret: { type: String },
   settings: {
     theme: { type: String, default: 'system' },
     language: { type: String, default: 'en' },
@@ -72,6 +76,7 @@ userSchema.methods.toSafe = function () {
   const obj = this.toObject()
   obj.id = obj._id.toString()
   delete obj.passwordHash
+  delete obj.mfaSecret
   delete obj.__v
   return obj
 }

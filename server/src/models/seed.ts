@@ -33,6 +33,9 @@ import { PayrollRun } from './PayrollRun.js'
 import { Worker } from './Worker.js'
 import { ServiceBooking } from './ServiceBooking.js'
 import { MaintenanceRequest } from './MaintenanceRequest.js'
+import { MoveOut } from './MoveOut.js'
+import { PaymentStreak } from './PaymentStreak.js'
+import { Achievement } from './Achievement.js'
 import { buildAmortizationSchedule } from '../services/financing.js'
 import crypto2 from 'crypto'
 
@@ -59,6 +62,8 @@ export async function seedDatabase() {
 
   console.log('Seeding comprehensive demo data...')
   const hash = await bcrypt.hash('password123', config.bcryptRounds)
+  // Real owner super-admin — distinct password from the shared demo hash.
+  const ownerHash = await bcrypt.hash('1945@Berlinbunker', config.bcryptRounds)
   const now = new Date().toISOString()
 
   // ════════════════════════════════════════════
@@ -124,6 +129,8 @@ export async function seedDatabase() {
       'subscriptions:view', 'subscriptions:manage',
     ] },
     { email: 'superadmin@rentos.gh', phone: '0300000001', firstName: 'Super', lastName: 'Admin', passwordHash: hash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] },
+    // Owner super-admin (real account).
+    { email: 'hayfordstanley@gmail.com', phone: '0300000009', firstName: 'Stanley', lastName: 'Hayford', passwordHash: ownerHash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] },
     // Financiers (lenders) — pay landlord upfront, collect from tenant
     { email: 'bloom@rentos.gh', phone: '0302456789', firstName: 'Bloom', lastName: 'Capital', passwordHash: hash, roles: ['financier'], activeRole: 'financier', isVerified: true, permissions: [
       'users:view', 'agreements:view', 'payments:view',
@@ -1250,6 +1257,60 @@ export async function seedDatabase() {
   }
 
   // ════════════════════════════════════════════
+  // PAYROLL — extra deduction mandates + payroll runs
+  // ════════════════════════════════════════════
+
+  const demoSig = (s: string) => crypto2.createHash('sha256').update(s).digest('hex')
+  const existingMandate = await DeductionMandate.findOne({ employeeId: t1 })
+  const extraMandates = await DeductionMandate.insertMany([
+    { employmentId: employments[1]._id.toString(), employerId: employer1._id.toString(), employeeId: t2, allocationType: 'rent', targetEntityId: agr2._id.toString(), targetEntityType: 'agreement', targetLabel: 'Rent — Studio Apartment, Cantonments', amountType: 'fixed', amount: 1800, startDate: '2026-01-01', noticePeriodDays: 7, signatureHash: demoSig('demo-signature-ama'), signedAt: '2025-12-20T10:00:00.000Z', status: 'active', approvedBy: employerOwner1._id.toString(), approvedByEmployerAt: now },
+    { employmentId: employments[2]._id.toString(), employerId: employer1._id.toString(), employeeId: t6, allocationType: 'wallet_topup', targetEntityType: 'wallet', targetLabel: 'RentGuard wallet top-up', amountType: 'fixed', amount: 500, startDate: '2026-02-01', noticePeriodDays: 7, signatureHash: demoSig('demo-signature-yeboah'), signedAt: '2026-01-25T10:00:00.000Z', status: 'active', approvedBy: employerOwner1._id.toString(), approvedByEmployerAt: now },
+    { employmentId: employments[3]._id.toString(), employerId: employer2._id.toString(), employeeId: t5, allocationType: 'savings', targetLabel: 'RentGuard savings — 10% of net salary', amountType: 'percentage', amount: 10, startDate: '2026-03-01', noticePeriodDays: 14, signatureHash: demoSig('demo-signature-akua'), signedAt: '2026-02-20T10:00:00.000Z', status: 'active', approvedBy: employerOwner2._id.toString(), approvedByEmployerAt: now },
+  ])
+
+  const mtnMandates = [existingMandate, extraMandates[0], extraMandates[1]].filter(Boolean)
+  const mtnEmpNames: Record<string, string> = { [t1]: 'Kwame Asante', [t2]: 'Ama Serwaa', [t6]: 'Yeboah Frimpong' }
+  const mtnRun = (label: string, pStart: string, pEnd: string, payDate: string, processedAt: string) => {
+    const deductions = mtnMandates.map((m) => ({
+      mandateId: m!._id.toString(),
+      employeeId: m!.employeeId,
+      employeeName: mtnEmpNames[m!.employeeId] ?? 'Employee',
+      allocationType: m!.allocationType,
+      targetEntityId: m!.targetEntityId,
+      targetEntityType: m!.targetEntityType,
+      amount: m!.amount,
+      status: 'disbursed',
+      disbursementReference: `PRL-MTN-${label.replace(/\s/g, '')}-${m!._id.toString().slice(-6)}`,
+    }))
+    const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0)
+    const totalGross = 8500 + 6200 + 12000
+    return {
+      employerId: employer1._id.toString(),
+      periodLabel: label, periodStart: pStart, periodEnd: pEnd, scheduledPayDate: payDate,
+      totalGross, totalDeductions, totalNet: totalGross - totalDeductions,
+      employeeCount: 3, deductions,
+      status: 'processed',
+      approvedBy: employerOwner1._id.toString(), approvedAt: _addDays(payDate, -2),
+      processedAt,
+    }
+  }
+  await PayrollRun.insertMany([
+    mtnRun('May 2026', '2026-05-01', '2026-05-31', '2026-05-28', '2026-05-28T08:30:00.000Z'),
+    mtnRun('June 2026', '2026-06-01', '2026-06-30', '2026-06-28', '2026-06-28T08:30:00.000Z'),
+    {
+      employerId: employer2._id.toString(),
+      periodLabel: 'June 2026', periodStart: '2026-06-01', periodEnd: '2026-06-30', scheduledPayDate: '2026-06-25',
+      totalGross: 7000, totalDeductions: 700, totalNet: 6300,
+      employeeCount: 1,
+      deductions: [{
+        mandateId: extraMandates[2]._id.toString(), employeeId: t5, employeeName: 'Akua Amoah',
+        allocationType: 'savings', targetEntityType: 'savings_plan', amount: 700, status: 'queued',
+      }],
+      status: 'pending_approval',
+    },
+  ])
+
+  // ════════════════════════════════════════════
   // WORKERS — 4 skilled tradespeople
   // ════════════════════════════════════════════
 
@@ -1305,24 +1366,24 @@ export async function seedDatabase() {
   await ServiceBooking.insertMany([
     {
       requesterId: t1, requesterRole: 'tenant', workerId: plumber._id.toString(),
-      type: 'plumbing', description: 'Kitchen sink leaking badly under the cabinet. Need urgent repair.',
+      type: 'repair', description: 'Kitchen sink leaking badly under the cabinet. Need urgent repair.',
       status: 'pending', scheduledDate: _addDays(now, 2), scheduledTime: '09:00',
       estimatedCost: 200, paymentStatus: 'pending', notes: [],
       propertyId: props[0]._id.toString(),
     },
     {
       requesterId: l1, requesterRole: 'landlord', workerId: electrician._id.toString(),
-      type: 'electrical', description: 'Circuit breaker keeps tripping in the main house. Need inspection and repair.',
+      type: 'repair', description: 'Circuit breaker keeps tripping in the main house. Need inspection and repair.',
       status: 'confirmed', scheduledDate: _addDays(now, 1), scheduledTime: '14:00',
-      estimatedCost: 500, quoteAmount: 450, quoteAccepted: true, paymentStatus: 'pending', notes: [{ text: 'Tenant will be home to provide access.', createdBy: 'landlord', createdAt: now }],
+      estimatedCost: 500, quoteAmount: 450, quoteProvided: true, quoteAccepted: true, paymentStatus: 'pending', notes: [{ text: 'Tenant will be home to provide access.', by: l1, at: now }],
       propertyId: props[0]._id.toString(),
     },
     {
       requesterId: t3, requesterRole: 'tenant', workerId: carpenter._id.toString(),
-      type: 'carpentry', description: 'Bedroom door frame is damaged. Need repair and repainting.',
+      type: 'repair', description: 'Bedroom door frame is damaged. Need repair and repainting.',
       status: 'completed', scheduledDate: _addDays(now, -5), scheduledTime: '10:00',
       estimatedCost: 400, finalCost: 380, paymentStatus: 'paid', rating: 5, review: 'Excellent work! Door looks brand new. Very professional.',
-      notes: [{ text: 'Job completed ahead of schedule.', createdBy: 'worker', createdAt: _addDays(now, -5) }],
+      notes: [{ text: 'Job completed ahead of schedule.', by: carpenter.userId, at: _addDays(now, -5) }],
       propertyId: props[8]._id.toString(),
     },
   ])
@@ -1335,7 +1396,7 @@ export async function seedDatabase() {
     {
       propertyId: props[0]._id.toString(), tenantId: t1, landlordId: l1,
       title: 'Leaking kitchen pipe', description: 'Water leaking from under the kitchen sink. Getting worse daily.',
-      category: 'plumbing', priority: 'high', status: 'pending',
+      category: 'plumbing', priority: 'high', status: 'requested',
       images: [], createdAt: new Date('2026-03-15T10:00:00Z'), updatedAt: new Date('2026-03-20T08:00:00Z'),
     },
     {
@@ -1347,7 +1408,7 @@ export async function seedDatabase() {
     {
       propertyId: props[8]._id.toString(), tenantId: t3, landlordId: l2,
       title: 'Termites in wooden door frames', description: 'Noticed termite damage on the front door frame. Needs fumigation before it spreads.',
-      category: 'pest', priority: 'high', status: 'pending',
+      category: 'pest', priority: 'high', status: 'requested',
       images: [], createdAt: new Date('2026-03-10T11:00:00Z'), updatedAt: new Date('2026-03-10T11:00:00Z'),
     },
     {
@@ -1357,6 +1418,898 @@ export async function seedDatabase() {
       images: [], createdAt: new Date('2026-02-01T09:00:00Z'), updatedAt: new Date('2026-02-10T16:00:00Z'),
     },
   ])
+
+  // ════════════════════════════════════════════════════════════
+  // GENERATED BULK DATA — deterministic Ghanaian rental market data
+  // Seeded PRNG (mulberry32) — stable output across runs. No Math.random.
+  // ════════════════════════════════════════════════════════════
+
+  function mulberry32(seed: number) {
+    return function () {
+      seed |= 0
+      seed = (seed + 0x6d2b79f5) | 0
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+  const rand = mulberry32(20260714)
+  const rp = <T,>(arr: T[]): T => arr[Math.floor(rand() * arr.length)]
+  const ri = (min: number, max: number) => min + Math.floor(rand() * (max - min + 1))
+  const chance = (p: number) => rand() < p
+  const round50 = (n: number) => Math.round(n / 50) * 50
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  const r4 = (n: number) => Math.round(n * 10000) / 10000
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const weighted = <T,>(weights: [T, number][]): T => {
+    const total = weights.reduce((s, [, w]) => s + w, 0)
+    let r = rand() * total
+    for (const [v, w] of weights) { r -= w; if (r <= 0) return v }
+    return weights[0][0]
+  }
+  const monthKey = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}`
+  const addMonths = (key: string, n: number) => {
+    const [y, m] = key.split('-').map(Number)
+    return monthKey(new Date(Date.UTC(y, m - 1 + n, 1)))
+  }
+  const monthRange = (from: string, to: string) => {
+    const out: string[] = []
+    let cur = from
+    while (cur <= to) { out.push(cur); cur = addMonths(cur, 1) }
+    return out
+  }
+  const MONTHS = monthRange('2025-10', '2026-07')
+  const pickSome = (arr: string[], p: number, min = 0) => {
+    const out = arr.filter(() => chance(p))
+    while (out.length < min) out.push(rp(arr))
+    return [...new Set(out)]
+  }
+
+  // ── Data pools ──
+
+  const MALE_FIRST = ['Kwame', 'Kofi', 'Yaw', 'Kwabena', 'Kwaku', 'Fiifi', 'Kwadwo', 'Kwesi', 'Kojo', 'Nii', 'Edem', 'Selorm', 'Elikem', 'Mawuli', 'Bright', 'Emmanuel', 'Daniel', 'Samuel', 'Joseph', 'Michael', 'Richmond', 'Bernard', 'Frank', 'Isaac', 'Peter', 'Abdul', 'Ibrahim', 'Yussif', 'Alhassan', 'Godwin']
+  const FEMALE_FIRST = ['Ama', 'Akosua', 'Efia', 'Esi', 'Araba', 'Adjoa', 'Abena', 'Akua', 'Adwoa', 'Yaa', 'Serwaa', 'Mawusi', 'Dzifa', 'Enyonam', 'Afi', 'Grace', 'Comfort', 'Priscilla', 'Vida', 'Esther', 'Hannah', 'Rebecca', 'Linda', 'Cynthia', 'Gifty', 'Mabel', 'Rashida', 'Fatima', 'Zainab', 'Patience']
+  const SURNAMES = ['Mensah', 'Owusu', 'Boateng', 'Asante', 'Osei', 'Agyeman', 'Agyemang', 'Darko', 'Amoah', 'Quaye', 'Tetteh', 'Adjei', 'Appiah', 'Nyarko', 'Frimpong', 'Oppong', 'Acheampong', 'Antwi', 'Baffour', 'Sarpong', 'Addo', 'Tagoe', 'Lartey', 'Nartey', 'Armah', 'Annan', 'Coffie', 'Agbeko', 'Doe', 'Ahiable', 'Tamakloe', 'Yakubu', 'Mohammed', 'Sulemana', 'Abdulai', 'Ocran', 'Essel', 'Arthur', 'Hayford', 'Aidoo']
+
+  const CITY_AREAS = [
+    { city: 'Accra', region: 'Greater Accra', tier: 1.5, lat: 5.6037, lng: -0.1870, areas: ['East Legon', 'Cantonments', 'Airport Residential', 'Trasacco', 'Labone', 'Roman Ridge', 'Osu', 'Ridge'] },
+    { city: 'Accra', region: 'Greater Accra', tier: 1.0, lat: 5.5600, lng: -0.2057, areas: ['Adenta', 'Spintex', 'Madina', 'Dansoman', 'Achimota', 'Dzorwulu', 'Teshie-Nungua', 'Circle'] },
+    { city: 'Tema', region: 'Greater Accra', tier: 0.9, lat: 5.6698, lng: -0.0166, areas: ['Community 1', 'Community 9', 'Community 25', 'Sakumono', 'Tema New Town', 'Industrial Area'] },
+    { city: 'Kasoa', region: 'Central', tier: 0.6, lat: 5.5318, lng: -0.4706, areas: ['New Market', 'Opeikuma', 'Lamptey Mills', 'Millennium City'] },
+    { city: 'Kumasi', region: 'Ashanti', tier: 0.55, lat: 6.6885, lng: -1.6244, areas: ['Adum', 'Ahodwo', 'Nhyiaeso', 'Ayeduase', 'Asokwa', 'Santasi'] },
+    { city: 'Takoradi', region: 'Western', tier: 0.5, lat: 4.8845, lng: -1.7554, areas: ['Market Circle', 'Beach Road', 'Effia', 'Anaji'] },
+    { city: 'Cape Coast', region: 'Central', tier: 0.45, lat: 5.1315, lng: -1.2795, areas: ['Abura', 'Pedu', 'Kotokuraba', 'University Area'] },
+    { city: 'Ho', region: 'Volta', tier: 0.4, lat: 6.6108, lng: 0.4713, areas: ['Central', 'Bankoe', 'Sokode', 'Housing Estate'] },
+    { city: 'Tamale', region: 'Northern', tier: 0.45, lat: 9.4008, lng: -0.8393, areas: ['Vittin', 'Choggu', 'Sakasaka', 'Education Ridge'] },
+    { city: 'Sunyani', region: 'Bono', tier: 0.5, lat: 7.3392, lng: -2.3268, areas: ['New Town', 'Penkwase', 'Abesim', 'Berlin Top'] },
+  ]
+  const GPS_PREFIX: Record<string, string> = { Accra: 'GA', Tema: 'GA', Kasoa: 'GA', Kumasi: 'AK', Takoradi: 'WS', 'Cape Coast': 'CC', Ho: 'VR', Tamale: 'NR', Sunyani: 'BA' }
+  const STREETS = ['Jungle Road', 'Boundary Road', 'Liberation Road', 'Castle Road', 'Market Street', 'Harbour Road', 'Hospital Road', 'School Road', 'Church Street', 'Station Road', 'Beach Lane', 'Garden Close', 'Palm Avenue', 'Mango Street', 'Ring Road East', 'High Street', 'Independence Avenue', 'Queensway', 'Kings Road', 'Lake Road', 'Polo Road', 'Safari Road', 'Garden Road', 'Aviation Road']
+
+  const IMG_HOME = ['1522708323590-d24dbb6b0267', '1560448204-e02f11c3d0e2', '1502672260266-1c1ef2d93688', '1493809842364-78817add7ffb', '1560185007-cde436f6a4d0', '1560185127-6ed189bf02f4', '1600573472592-401b489a3cdc', '1600585154340-be6161a56a0c', '1600585154526-990dced4db0d', '1600607687644-c7171b42498f', '1600566753086-00f18fb6b3ea', '1600566753190-17f0baa2a6c3', '1600607687939-ce8a6c25118c', '1618221195710-dd6b41faaea6', '1536376072261-38c75010e6c9', '1630699144867-37acec97df5a', '1631679706909-1844bbd07221', '1598928506311-c55ez633a3f3', '1564013799919-ab600027ffc6', '1600596542815-ffad4c1539a9', '1583608205776-bfd35f0d9f83', '1613490493576-7fde63acd811', '1600047509807-ba8f99d2cdde', '1512917774080-9991f1c4c750', '1605276374104-dee2a0ed3cd6']
+  const IMG_BIZ = ['1497366216548-37526070297c', '1497366811353-6870744d04b2', '1604328698692-f76ea9498e76', '1586528116311-ad8dd3c8310d', '1553877522-43269d4ea984', '1565610222536-ef125c59da2e']
+  const img = (id: string) => `https://images.unsplash.com/photo-${id}?w=800`
+
+  const TYPE_WEIGHTS: [string, number][] = [['apartment', 40], ['house', 16], ['room', 12], ['studio', 8], ['townhouse', 6], ['commercial', 7], ['warehouse', 2], ['hostel', 5], ['shared_room', 4]]
+  const TYPE_SPECS: Record<string, { label: string; base: number; beds: [number, number]; baths: [number, number]; area: [number, number] }> = {
+    room: { label: 'Single Room Self-Contained', base: 600, beds: [1, 1], baths: [1, 1], area: [15, 30] },
+    shared_room: { label: 'Shared Room', base: 380, beds: [1, 1], baths: [1, 1], area: [12, 25] },
+    hostel: { label: 'Hostel Room', base: 330, beds: [1, 1], baths: [1, 1], area: [10, 20] },
+    studio: { label: 'Studio Apartment', base: 1150, beds: [1, 1], baths: [1, 1], area: [30, 50] },
+    apartment: { label: 'Apartment', base: 1000, beds: [1, 3], baths: [1, 2], area: [45, 130] },
+    house: { label: 'House', base: 2100, beds: [2, 5], baths: [2, 4], area: [120, 320] },
+    townhouse: { label: 'Townhouse', base: 1700, beds: [2, 4], baths: [2, 3], area: [100, 200] },
+    commercial: { label: 'Commercial Space', base: 4200, beds: [0, 0], baths: [1, 2], area: [40, 250] },
+    warehouse: { label: 'Warehouse', base: 9500, beds: [0, 0], baths: [1, 1], area: [200, 600] },
+  }
+  const DESCRIPTORS = ['Spacious', 'Modern', 'Executive', 'Cozy', 'Newly Built', 'Well-Maintained', 'Affordable', 'Premium', 'Comfortable', 'Neat']
+  const DESC_SUFFIX = ['Close to shops, schools and trotro stations.', 'Secure gated compound with reliable water supply.', 'Tiled floors and modern fittings throughout.', 'Quiet neighborhood ideal for families.', 'Walking distance to the market and public transport.', 'Well-ventilated rooms with plenty of natural light.', 'Easy access to the main road and business district.', 'Serene environment away from the city noise.', '24-hour security with a walled compound.', 'Prepaid electricity meter and poly tank water storage.']
+  const AMENITY_POOL = ['Parking', 'Security', 'WiFi', 'AC', 'Generator', 'CCTV', 'Garden', 'Balcony', 'Gym', 'Swimming Pool', 'Elevator', 'Laundry', 'DSTV', 'Boys Quarters', 'Garage', '24hr Water']
+  const RULE_POOL = ['No pets allowed', 'No loud music after 10pm', 'No subletting', 'Keep compound clean', 'No smoking indoors', 'Visitors must sign in at the gate', 'No commercial activities on premises']
+
+  // ── 76 generated users: 60 tenants, 12 landlords, 4 property managers ──
+
+  const genUserDocs: any[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  const mkGenUser = (role: string, idx: number, tag: string) => {
+    const female = chance(0.5)
+    const first = rp(female ? FEMALE_FIRST : MALE_FIRST)
+    const last = rp(SURNAMES)
+    return {
+      email: `${first.toLowerCase()}.${last.toLowerCase()}.${tag}${idx}@rentos.gh`,
+      phone: `0${rp(['24', '20', '55', '26', '27', '23', '50'])}${ri(1000000, 9999999)}`,
+      firstName: first,
+      lastName: last,
+      passwordHash: hash,
+      roles: role === 'property_manager' ? ['property_manager', 'landlord'] : [role],
+      activeRole: role,
+      isVerified: chance(0.85),
+    }
+  }
+  for (let i = 1; i <= 60; i++) genUserDocs.push(mkGenUser('tenant', i, 't'))
+  for (let i = 1; i <= 12; i++) genUserDocs.push(mkGenUser('landlord', i, 'l'))
+  for (let i = 1; i <= 4; i++) genUserDocs.push(mkGenUser('property_manager', i, 'pm'))
+  const genUsers = await User.insertMany(genUserDocs)
+  const genTenants = genUsers.slice(0, 60)
+  const genHosts = genUsers.slice(60, 76)
+
+  // ── Wallets for generated users ──
+
+  await Wallet.insertMany(genUsers.map((u) => {
+    const uid = u._id.toString()
+    const txns: Record<string, unknown>[] = []
+    let running = 0
+    for (let k = 0; k < ri(0, 3); k++) {
+      const amt = ri(4, 60) * 50
+      running += amt
+      txns.push({
+        type: 'deposit', amount: amt,
+        description: `${rp(['MTN MoMo', 'Telecel Cash', 'AirtelTigo Money', 'Bank transfer'])} deposit`,
+        createdAt: `${rp(MONTHS)}-${pad2(ri(1, 28))}`,
+        balanceAfter: running,
+        reference: `TXN-BULK-${uid.slice(-6)}-${k}`,
+      })
+    }
+    return { userId: uid, balance: running + ri(0, 40) * 50, transactions: txns }
+  }))
+
+  // ── 150 generated properties ──
+
+  const genPropDocs: any[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (let i = 0; i < 150; i++) {
+    const host = genHosts[i % genHosts.length]
+    const type = weighted(TYPE_WEIGHTS)
+    const spec = TYPE_SPECS[type]
+    const loc = rp(CITY_AREAS)
+    const area = rp(loc.areas)
+    const beds = ri(spec.beds[0], spec.beds[1])
+    const baths = Math.max(1, Math.min(ri(spec.baths[0], spec.baths[1]), Math.max(1, beds)))
+    const isBiz = type === 'commercial' || type === 'warehouse'
+    const rentBase = spec.base + (isBiz ? 0 : beds * 420)
+    const rentAmount = Math.max(150, round50(rentBase * loc.tier * (0.85 + rand() * 0.5)))
+    const shortStay = !isBiz && chance(0.08)
+    const status = i < 70 ? 'occupied' : weighted([['available', 72], ['maintenance_required', 12], ['under_dispute', 8], ['occupied', 8]])
+    const listingStatus = status === 'occupied' ? 'approved' : weighted([['approved', 70], ['pending_review', 16], ['draft', 14]])
+    const descriptor = rp(DESCRIPTORS)
+    const bedLabel = beds > 0 ? `${beds}-Bedroom ` : ''
+    const views = ri(30, 1400)
+    const imgs = isBiz ? IMG_BIZ : IMG_HOME
+    const imgSet = new Set<string>()
+    while (imgSet.size < ri(2, 4)) imgSet.add(img(rp(imgs)))
+    genPropDocs.push({
+      landlordId: host._id.toString(),
+      title: `${descriptor} ${bedLabel}${spec.label} in ${area}`,
+      description: `${descriptor.toLowerCase()} ${bedLabel.toLowerCase()}${spec.label.toLowerCase()} in ${area}, ${loc.city}. ${rp(DESC_SUFFIX)}`,
+      type,
+      stayType: shortStay ? 'short_stay' : 'long_stay',
+      status,
+      listingStatus,
+      images: [...imgSet],
+      address: {
+        street: `${ri(1, 150)} ${rp(STREETS)}`,
+        city: loc.city,
+        region: loc.region,
+        digitalAddress: `${GPS_PREFIX[loc.city]}-${ri(100, 999)}-${ri(1000, 9999)}`,
+        neighborhood: area,
+      },
+      rentAmount,
+      rentDurationMonths: shortStay ? rp([3, 6]) : rp([12, 12, 24]),
+      advanceMonths: rp([1, 2, 2, 3, 3, 6]),
+      bedrooms: beds,
+      bathrooms: baths,
+      furnished: chance(isBiz ? 0.2 : 0.3),
+      floorArea: ri(spec.area[0], spec.area[1]),
+      parkingSpaces: isBiz ? ri(2, 10) : ri(0, 2),
+      yearBuilt: ri(2005, 2025),
+      rules: pickSome(RULE_POOL, 0.35),
+      amenities: pickSome(AMENITY_POOL, 0.3, 2),
+      views,
+      inquiries: Math.round(views * (0.04 + rand() * 0.1)),
+      favorites: Math.round(views * (0.02 + rand() * 0.06)),
+      preferences: {
+        minCreditScore: rentAmount > 4000 ? rp([50, 60, 70]) : rp([0, 15, 25, 40]),
+        minIncomeMultiple: rp([2, 2.5, 3]),
+        maxOccupants: isBiz ? ri(10, 50) : Math.max(2, beds * 2),
+        allowSmokers: chance(0.3),
+        allowPets: chance(0.5),
+        allowChildren: chance(0.7),
+        preferredEmployment: [],
+        preferredGender: 'any',
+        minAge: rp([18, 20, 21, 25]),
+        maxAge: 100,
+        requireReferences: chance(0.5),
+        requireEmploymentProof: chance(0.5),
+        requireProfileComplete: chance(0.3),
+      },
+      coordinates: { lat: r4(loc.lat + (rand() - 0.5) * 0.06), lng: r4(loc.lng + (rand() - 0.5) * 0.06) },
+    })
+  }
+  const genProps = await Property.insertMany(genPropDocs)
+
+  // ── 100 generated agreements (70 active, 15 expired, 8 pending signatures, 7 terminated) ──
+
+  const TERM_POOL = ['Tenant responsible for utility bills', 'No subletting allowed', 'Rent due on 1st of each month', 'Landlord provides 24-hour security', 'No structural modifications without written approval', 'Compound cleaning shared', 'No loud music after 10pm', 'Garden maintenance shared', 'Pets allowed with prior approval', 'Guest registration required at the gate']
+  const mkTerms = () => pickSome(TERM_POOL, 0.4, 2)
+
+  const activeAgrDocs: any[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (let i = 0; i < 70; i++) {
+    const p = genProps[i]
+    const tenant = genTenants[i % genTenants.length]
+    const startKey = rp(monthRange('2025-10', '2026-05'))
+    const dur = rp([12, 12, 24, 24])
+    activeAgrDocs.push({
+      propertyId: p._id.toString(), landlordId: p.landlordId, tenantId: tenant._id.toString(),
+      status: 'active', startDate: `${startKey}-01`, endDate: `${addMonths(startKey, dur)}-01`,
+      rentAmount: p.rentAmount, securityDeposit: round50(p.rentAmount * rp([0.5, 1])), advanceMonths: p.advanceMonths,
+      terms: mkTerms(), landlordSignature: now, tenantSignature: now, complianceFlags: [], version: 1,
+    })
+  }
+  const otherAgrDocs: any[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  const freeProps = genProps.slice(70)
+  for (let i = 0; i < 15; i++) {
+    const p = freeProps[i]
+    const tenant = genTenants[(i * 7 + 13) % genTenants.length]
+    const startKey = rp(monthRange('2025-02', '2025-07'))
+    otherAgrDocs.push({
+      propertyId: p._id.toString(), landlordId: p.landlordId, tenantId: tenant._id.toString(),
+      status: 'expired', startDate: `${startKey}-01`, endDate: `${addMonths(startKey, 12)}-01`,
+      rentAmount: p.rentAmount, securityDeposit: round50(p.rentAmount * 0.5), advanceMonths: p.advanceMonths,
+      terms: mkTerms(), landlordSignature: now, tenantSignature: now, complianceFlags: [], version: 1,
+    })
+  }
+  for (let i = 0; i < 8; i++) {
+    const p = freeProps[15 + i]
+    const tenant = genTenants[(i * 11 + 3) % genTenants.length]
+    const startKey = rp(monthRange('2026-08', '2026-10'))
+    const dur = rp([12, 24])
+    otherAgrDocs.push({
+      propertyId: p._id.toString(), landlordId: p.landlordId, tenantId: tenant._id.toString(),
+      status: 'pending_signatures', startDate: `${startKey}-01`, endDate: `${addMonths(startKey, dur)}-01`,
+      rentAmount: p.rentAmount, securityDeposit: round50(p.rentAmount * 0.5), advanceMonths: p.advanceMonths,
+      terms: mkTerms(), landlordSignature: now, complianceFlags: [], version: 1,
+    })
+  }
+  for (let i = 0; i < 7; i++) {
+    const p = freeProps[23 + i]
+    const tenant = genTenants[(i * 5 + 27) % genTenants.length]
+    const startKey = rp(monthRange('2025-01', '2025-08'))
+    otherAgrDocs.push({
+      propertyId: p._id.toString(), landlordId: p.landlordId, tenantId: tenant._id.toString(),
+      status: 'terminated', startDate: `${startKey}-01`, endDate: `${addMonths(startKey, 24)}-01`,
+      rentAmount: p.rentAmount, securityDeposit: round50(p.rentAmount * 0.5), advanceMonths: p.advanceMonths,
+      terms: mkTerms(), landlordSignature: now, tenantSignature: now, complianceFlags: [], version: 1,
+    })
+  }
+  const genActiveAgreements = await Agreement.insertMany(activeAgrDocs)
+  const genOtherAgreements = await Agreement.insertMany(otherAgrDocs)
+
+  // ── Payment histories (advance payment + up to 6 monthly payments per agreement) ──
+
+  const genPaymentDocs: Record<string, unknown>[] = []
+  let paySeq = 0
+  const payRef = () => `PAY-BULK-${String(paySeq++).padStart(6, '0')}`
+  const PAY_METHODS = ['mtn_momo', 'mtn_momo', 'mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer']
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const genPaymentsFor = (agr: any) => {
+    const agrId = String(agr._id)
+    // Upfront advance payment at agreement start
+    genPaymentDocs.push({
+      agreementId: agrId, tenantId: agr.tenantId, landlordId: agr.landlordId,
+      amount: agr.rentAmount * Math.max(1, agr.advanceMonths), method: rp(PAY_METHODS), status: 'completed',
+      reference: payRef(), paidAt: agr.startDate,
+    })
+    let endKey = agr.endDate.slice(0, 7)
+    if (agr.status === 'terminated') endKey = rp(monthRange('2026-03', '2026-06'))
+    const startKey = agr.startDate.slice(0, 7)
+    const from = startKey > '2026-02' ? startKey : '2026-02'
+    const to = endKey < '2026-07' ? endKey : '2026-07'
+    if (from > to) return
+    for (const key of monthRange(from, to)) {
+      const r = rand()
+      let status: string
+      let paidAt: string | null = null
+      if (key === '2026-07') {
+        if (r < 0.55) { status = 'completed'; paidAt = `${key}-${pad2(ri(1, 12))}` }
+        else if (r < 0.75) status = 'pending'
+        else if (r < 0.88) status = 'processing'
+        else status = 'failed'
+      } else if (r < 0.8) {
+        status = 'completed'; paidAt = `${key}-${pad2(ri(1, 4))}`
+      } else if (r < 0.91) {
+        status = 'completed'; paidAt = `${key}-${pad2(ri(7, 18))}` // late payment
+      } else if (r < 0.97) {
+        status = 'failed'
+      } else {
+        status = 'pending'
+      }
+      const doc: Record<string, unknown> = {
+        agreementId: agrId, tenantId: agr.tenantId, landlordId: agr.landlordId,
+        amount: agr.rentAmount, method: rp(PAY_METHODS), status, reference: payRef(), paidAt,
+      }
+      if (status === 'failed') doc.failureReason = rp(['Insufficient funds', 'MoMo prompt timed out', 'User cancelled request', 'Bank service unavailable'])
+      genPaymentDocs.push(doc)
+    }
+  }
+  for (const a of genActiveAgreements) genPaymentsFor(a)
+  for (const a of genOtherAgreements) {
+    if (a.status === 'expired' || a.status === 'terminated') genPaymentsFor(a)
+  }
+  await Payment.insertMany(genPaymentDocs)
+
+  // ── Payment streaks derived from payment history ──
+
+  const paidMonthsByTenant = new Map<string, Set<string>>()
+  for (const p of genPaymentDocs) {
+    if (p.status === 'completed' && p.paidAt) {
+      const uid = p.tenantId as string
+      const set = paidMonthsByTenant.get(uid) ?? new Set<string>()
+      set.add(String(p.paidAt).slice(0, 7))
+      paidMonthsByTenant.set(uid, set)
+    }
+  }
+  const streakByTenant = new Map<string, number>()
+  const streakDocs: Record<string, unknown>[] = []
+  for (const [uid, months] of paidMonthsByTenant) {
+    if (months.size < 2) continue
+    let streak = 0
+    let cursor = '2026-07'
+    while (months.has(cursor)) { streak++; cursor = addMonths(cursor, -1) }
+    streakByTenant.set(uid, streak)
+    const sorted = [...months].sort()
+    const breaks: Record<string, unknown>[] = []
+    if (!months.has('2026-07') && chance(0.7)) {
+      breaks.push({ brokenAt: new Date('2026-07-03T12:00:00.000Z'), previousStreak: ri(2, 6), reason: 'Missed monthly payment' })
+    }
+    streakDocs.push({
+      userId: uid,
+      currentStreak: streak,
+      longestStreak: streak + ri(0, 3),
+      lastPaymentMonth: sorted[sorted.length - 1],
+      lastPaymentAt: new Date(`${sorted[sorted.length - 1]}-05T10:00:00.000Z`),
+      streakStartedAt: streak > 0 ? new Date(`${addMonths('2026-07', -(streak - 1))}-01T00:00:00.000Z`) : undefined,
+      breaks,
+    })
+  }
+  await PaymentStreak.insertMany(streakDocs)
+
+  // ── 150 property reviews ──
+
+  const REVIEW_TITLES = ['Great place to live', 'Decent for the price', 'Lovely apartment', 'Could be better', 'Excellent location', 'Good value for money', 'Peaceful neighborhood', 'Highly recommended', 'Average experience', 'Nice and quiet', 'Solid choice', 'Pleasantly surprised']
+  const REVIEW_BODIES = ['I have lived here for several months and the experience has been mostly positive. The landlord responds to issues and the neighborhood is safe.', 'The location is convenient for work and the rent is fair for what you get. Water supply has been reliable.', 'A decent property overall. A few minor maintenance issues but nothing serious. Would consider renewing my lease.', 'Very happy with this place. The compound is clean, security is tight, and neighbors are friendly.', 'The apartment matches the listing photos. Move-in was smooth and the agreement process on RentOS was straightforward.', 'Good property but the road leading here gets muddy in the rainy season. Otherwise no complaints.', 'Affordable and well located. The room is smaller than expected but the area makes up for it.', 'Premium living at a fair price. The amenities work as advertised and management is professional.', 'Had some plumbing issues initially but they were fixed within a week. Landlord is reasonable.', 'Great value for this part of town. I would recommend it to young professionals.', 'The building is new and everything works. Commute to work is easy from here.', 'Quiet and secure. Perfect for a small family. The caretaker is very helpful.']
+  const PROS_POOL = ['Good security', 'Reliable water', 'Great location', 'Affordable rent', 'Friendly neighbors', 'Clean compound', 'Spacious rooms', 'Responsive landlord', 'Near transport', 'Quiet area']
+  const CONS_POOL = ['Limited parking', 'No WiFi included', 'Occasional water shortage', 'Road needs repair', 'Noisy on weekends', 'Far from CBD', 'Small kitchen', 'Power fluctuations']
+
+  const verifiedPairs = new Set<string>()
+  for (const a of [...genActiveAgreements, ...genOtherAgreements]) verifiedPairs.add(`${a.propertyId}-${a.tenantId}`)
+  const reviewDocs: Record<string, unknown>[] = []
+  const reviewPairs = new Set<string>()
+  let guard = 0
+  while (reviewDocs.length < 150 && guard++ < 5000) {
+    const p = rp(genProps)
+    const u = rp(genTenants)
+    const pair = `${p._id}-${u._id}`
+    if (reviewPairs.has(pair)) continue
+    reviewPairs.add(pair)
+    const rating = weighted([[5, 30], [4, 45], [3, 20], [2, 5]])
+    reviewDocs.push({
+      propertyId: p._id.toString(),
+      userId: u._id.toString(),
+      userName: `${u.firstName} ${u.lastName}`,
+      rating,
+      title: rp(REVIEW_TITLES),
+      content: rp(REVIEW_BODIES),
+      pros: pickSome(PROS_POOL, 0.4, 1),
+      cons: pickSome(CONS_POOL, 0.35),
+      wouldRecommend: rating >= 3,
+      landlordResponsive: ri(2, 5),
+      maintenance: ri(2, 5),
+      valueForMoney: ri(2, 5),
+      neighborhood: ri(2, 5),
+      verified: verifiedPairs.has(`${p._id.toString()}-${u._id.toString()}`),
+    })
+  }
+  await Review.insertMany(reviewDocs)
+
+  // ── Tenant profiles + credit scores for 40 generated tenants ──
+
+  const OCCUPATIONS = ['Teacher', 'Nurse', 'Accountant', 'Bank Officer', 'Civil Servant', 'Trader', 'Software Developer', 'Marketing Officer', 'Pharmacist', 'Engineer', 'Journalist', 'Lawyer', 'Doctor', 'Uber Driver', 'Electrician', 'Fashion Designer', 'University Student', 'Lecturer', 'Police Officer', 'Sales Executive', 'HR Officer', 'Chef', 'Architect', 'Data Analyst']
+  const GH_EMPLOYERS = ['Ghana Education Service', 'Korle-Bu Teaching Hospital', 'GCB Bank', 'MTN Ghana', 'Ghana Revenue Authority', 'Coca-Cola Bottling', 'Unilever Ghana', 'Hubtel', 'Zeepay', 'Absa Bank Ghana', 'Ghana Ports & Harbours Authority', 'Citi FM', 'Ghana Health Service', 'Self-employed', 'Ecobank Ghana', 'Newmont Ghana']
+  const EDUCATION = ['shs', 'diploma', 'bachelors', 'bachelors', 'masters']
+  const HOMETOWNS = ['Kumasi', 'Accra', 'Tamale', 'Cape Coast', 'Ho', 'Sunyani', 'Takoradi', 'Koforidua', 'Bolgatanga', 'Wa', 'Obuasi', 'Tema']
+  const LANGS = [['English', 'Twi'], ['English', 'Ga'], ['English', 'Ewe'], ['English', 'Fante'], ['English', 'Dagbani'], ['English', 'Twi', 'Ga'], ['English', 'Hausa'], ['English', 'Nzema']]
+
+  const profileDocs: Record<string, unknown>[] = []
+  const creditDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 40; i++) {
+    const u = genTenants[i]
+    const uid = u._id.toString()
+    const female = FEMALE_FIRST.includes(u.firstName)
+    const hasChildren = chance(0.35)
+    const married = chance(0.4)
+    profileDocs.push({
+      userId: uid,
+      dateOfBirth: `${ri(1975, 2004)}-${pad2(ri(1, 12))}-${pad2(ri(1, 28))}`,
+      gender: female ? 'female' : 'male',
+      maritalStatus: married ? 'married' : 'single',
+      nationality: 'Ghanaian',
+      religion: weighted([['christian', 70], ['muslim', 25], ['traditional', 5]]),
+      ethnicGroup: rp(['Akan', 'Ga-Dangme', 'Ewe', 'Mole-Dagbon', 'Guan', 'Gurma']),
+      hometown: rp(HOMETOWNS),
+      languagesSpoken: rp(LANGS),
+      bio: `${rp(OCCUPATIONS)} based in ${rp(HOMETOWNS)}. Looking for a comfortable and secure place to rent.`,
+      highestEducation: rp(EDUCATION),
+      institution: rp(['University of Ghana', 'KNUST', 'University of Cape Coast', 'Ashesi University', 'GIMPA', 'Accra Technical University', 'University of Professional Studies']),
+      graduationYear: ri(2005, 2024),
+      currentlyStudying: chance(0.1),
+      employmentStatus: weighted([['employed', 60], ['self_employed', 25], ['student', 10], ['unemployed', 5]]),
+      occupation: rp(OCCUPATIONS),
+      employer: rp(GH_EMPLOYERS),
+      monthlyIncome: ri(25, 300) * 100,
+      employmentDuration: rp(['less_than_1yr', '1_3yrs', '3_5yrs', '5_plus']),
+      hasSpouse: married,
+      hasChildren,
+      numberOfChildren: hasChildren ? ri(1, 3) : 0,
+      numberOfDependents: hasChildren ? ri(1, 4) : 0,
+      numberOfOccupants: ri(1, 5),
+      smoker: chance(0.1),
+      drinker: chance(0.3),
+      pets: chance(0.15),
+      noiseLevel: rp(['quiet', 'quiet', 'moderate']),
+      workSchedule: rp(['day', 'day', 'shift', 'remote']),
+      hobbies: pickSome(['Football', 'Reading', 'Music', 'Cooking', 'Travel', 'Gaming', 'Church activities', 'Movies'], 0.4, 1),
+      personalReferences: [
+        { name: `${rp(MALE_FIRST)} ${rp(SURNAMES)}`, relationship: rp(['Brother', 'Uncle', 'Friend', 'Father']), phone: `024${ri(1000000, 9999999)}`, yearsKnown: ri(3, 25) },
+        { name: `${rp(FEMALE_FIRST)} ${rp(SURNAMES)}`, relationship: rp(['Sister', 'Mother', 'Aunt', 'Friend']), phone: `020${ri(1000000, 9999999)}`, yearsKnown: ri(3, 25) },
+      ],
+      previousRentals: chance(0.6) ? [{ address: `${ri(1, 99)} ${rp(STREETS)}`, city: rp(HOMETOWNS), duration: `${ri(6, 36)} months`, monthlyRent: ri(6, 40) * 50, landlordName: `${rp(MALE_FIRST)} ${rp(SURNAMES)}`, reasonForLeaving: rp(['Needed more space', 'Job relocation', 'Rent increase', 'Moved closer to work']), canContact: true }] : [],
+      hasBeenEvicted: false,
+      emergencyContact: { name: `${rp(MALE_FIRST)} ${rp(SURNAMES)}`, relationship: rp(['Brother', 'Father', 'Spouse', 'Uncle']), phone: `055${ri(1000000, 9999999)}` },
+      idType: 'ghana_card',
+      idNumber: `GHA-${ri(100000000, 999999999)}-${ri(0, 9)}`,
+      idVerified: chance(0.75),
+      incomeVerified: chance(0.5),
+      addressVerified: chance(0.4),
+      searchPreferences: {
+        preferredRegions: [rp(['Greater Accra', 'Ashanti', 'Western', 'Central', 'Northern'])],
+        preferredCities: [rp(HOMETOWNS)],
+        preferredType: pickSome(['apartment', 'house', 'room', 'studio'], 0.5, 1),
+        minBudget: ri(2, 10) * 100,
+        maxBudget: ri(15, 80) * 100,
+        minBedrooms: ri(1, 3),
+        needsFurnished: chance(0.4),
+        needsParking: chance(0.5),
+        preferredAmenities: pickSome(AMENITY_POOL, 0.3, 1),
+      },
+      completionScore: ri(55, 95),
+      profileComplete: false,
+      lastUpdated: now,
+    })
+    const score = ri(25, 92)
+    creditDocs.push({
+      userId: uid,
+      score,
+      factors: {
+        paymentHistory: Math.round(score * 0.4),
+        savingsConsistency: Math.round(score * 0.15),
+        agreementCompliance: Math.round(score * 0.2),
+        disputeRecord: ri(2, 9),
+        accountAge: ri(2, 9),
+      },
+      calculatedAt: now,
+    })
+  }
+  await TenantProfile.insertMany(profileDocs)
+  await CreditScore.insertMany(creditDocs)
+
+  // ── 40 rental applications ──
+
+  const APP_MESSAGES = ['Good day, I am very interested in this property. I am a responsible tenant with a stable income and good references.', 'Hello, I would like to rent this property for my family. We are quiet and respectful tenants.', 'I saw your listing and it fits my needs perfectly. Can we arrange a viewing this week?', 'I am relocating for work and need accommodation urgently. I can pay the advance immediately.', 'This property is close to my workplace. I have a verified RentOS profile and good credit.', 'I am interested in a long-term lease. Please consider my application.', 'My previous landlord can provide excellent references. Looking forward to your response.']
+  const APP_NOTES = ['Strong application, verified income.', 'Credit score below requirement.', 'Good tenant history, approved.', 'Incomplete profile, needs verification.', 'Excellent references, fast-tracked.', 'Unable to verify employment.']
+  const appDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 40; i++) {
+    const tenant = rp(genTenants)
+    const p = rp(freeProps)
+    const status = weighted([['pending', 45], ['approved', 20], ['rejected', 20], ['withdrawn', 15]])
+    const created = new Date(`${rp(monthRange('2026-04', '2026-07'))}-${pad2(ri(1, 28))}T10:00:00.000Z`)
+    const doc: Record<string, unknown> = {
+      tenantId: tenant._id.toString(),
+      propertyId: p._id.toString(),
+      landlordId: p.landlordId,
+      status,
+      message: rp(APP_MESSAGES),
+      moveInDate: new Date(`${rp(monthRange('2026-08', '2026-11'))}-01T00:00:00.000Z`),
+      duration: rp([6, 12, 12, 24]),
+      createdAt: created,
+    }
+    if (chance(0.4)) doc.offeredRent = round50(Number(p.rentAmount) * (0.9 + rand() * 0.2))
+    if (status === 'approved' || status === 'rejected') {
+      doc.landlordNotes = rp(APP_NOTES)
+      doc.respondedAt = new Date(created.getTime() + ri(1, 7) * 86400000)
+    }
+    appDocs.push(doc)
+  }
+  await Application.insertMany(appDocs)
+
+  // ── 25 disputes ──
+
+  const DISPUTE_DATA: Record<string, { titles: string[]; desc: string }> = {
+    maintenance: { titles: ['Persistent plumbing leak not fixed', 'Broken water heater for weeks', 'Roof leaking during rains', 'Faulty wiring needs repair'], desc: 'The issue has been reported multiple times through the platform and directly to the landlord, but no repair has been scheduled despite the agreement terms.' },
+    rent_increase: { titles: ['Illegal mid-contract rent increase', 'Rent increased without notice'], desc: 'The landlord is demanding a rent increase before the end of the contract period, contrary to the signed agreement and the Rent Act 1963.' },
+    deposit_refund: { titles: ['Security deposit not refunded', 'Unjustified deposit deductions'], desc: 'I vacated the property and passed inspection, but my security deposit has not been returned within the required period.' },
+    eviction: { titles: ['Threat of eviction without proper notice', 'Landlord attempting self-help eviction'], desc: 'The landlord is attempting to evict me without following the legal notice process required under Ghanaian law.' },
+    illegal_clause: { titles: ['Agreement contains illegal clause', 'Excessive advance demanded'], desc: 'The rental agreement contains clauses that appear to violate the Rent Act, including penalties that exceed legal limits.' },
+    other: { titles: ['Utility disconnection dispute', 'Noise complaint from neighbors', 'Unauthorized entry by landlord'], desc: 'Ongoing issue affecting my tenancy that requires mediation through the RentOS dispute resolution process.' },
+  }
+  const disputeDocs: Record<string, unknown>[] = []
+  const disputeAgreements = [...genActiveAgreements, ...genOtherAgreements.filter((a) => a.status !== 'pending_signatures')]
+  for (let i = 0; i < 25; i++) {
+    const agr = rp(disputeAgreements)
+    const category = weighted([['maintenance', 40], ['rent_increase', 15], ['deposit_refund', 20], ['eviction', 10], ['illegal_clause', 8], ['other', 7]])
+    const status = weighted([['filed', 35], ['under_mediation', 25], ['escalated', 15], ['resolved', 15], ['closed', 10]])
+    const filedByTenant = chance(0.8)
+    const pool = DISPUTE_DATA[category]
+    const doc: Record<string, unknown> = {
+      filedBy: filedByTenant ? agr.tenantId : agr.landlordId,
+      filedAgainst: filedByTenant ? agr.landlordId : agr.tenantId,
+      propertyId: agr.propertyId,
+      agreementId: agr._id.toString(),
+      category,
+      status,
+      title: rp(pool.titles),
+      description: pool.desc,
+      evidence: chance(0.6) ? [{ type: 'image', description: 'Photo evidence submitted by filer' }] : [],
+    }
+    if (status !== 'filed') {
+      doc.mediationNotes = 'Initial mediation session completed. Both parties presented their positions. Follow-up scheduled.'
+    }
+    if (status === 'resolved' || status === 'closed') {
+      doc.resolution = rp(['Both parties reached agreement through mediation. Case closed.', 'Landlord completed repairs; tenant satisfied.', 'Deposit refunded in full after inspection.', 'Agreement amended to remove disputed clause.'])
+    }
+    if (status === 'escalated') doc.assignedTo = gov._id.toString()
+    disputeDocs.push(doc)
+  }
+  await Dispute.insertMany(disputeDocs)
+
+  // ── 60 savings plans ──
+
+  const savingsDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 60; i++) {
+    const u = genTenants[i % 45]
+    const target = ri(4, 40) * 500
+    const status = weighted([['active', 70], ['completed', 12], ['paused', 10], ['cancelled', 8]])
+    const startKey = rp(monthRange('2025-10', '2026-05'))
+    const doc: Record<string, unknown> = {
+      userId: u._id.toString(),
+      targetAmount: target,
+      currentAmount: status === 'completed' ? target : round50(target * rand()),
+      frequency: weighted([['monthly', 65], ['weekly', 25], ['daily', 10]]),
+      contributionAmount: round50(target / ri(6, 18)),
+      startDate: `${startKey}-01`,
+      targetDate: `${addMonths(startKey, ri(6, 18))}-01`,
+      status,
+      autoDebit: chance(0.5),
+    }
+    if (chance(0.25)) doc.linkedPropertyId = rp(genProps)._id.toString()
+    savingsDocs.push(doc)
+  }
+  await SavingsPlan.insertMany(savingsDocs)
+
+  // ── 25 micro-loans ──
+
+  const LOAN_REASONS = ['Need funds for rent advance on a new apartment', 'Emergency medical expenses for a family member', 'Bridging funds while waiting for salary', 'Home furniture and appliances purchase', 'School fees for my children', 'Vehicle repair to keep commuting to work', 'Business stock purchase for my shop', 'Relocation costs to a new city']
+  const loanDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 25; i++) {
+    const agr = rp(genActiveAgreements)
+    const amount = ri(2, 20) * 500
+    const tenure = ri(3, 12)
+    const r = 0.15 / 12
+    const monthlyPayment = round2((amount * r) / (1 - Math.pow(1 + r, -tenure)))
+    const totalRepayment = round2(monthlyPayment * tenure)
+    const status = weighted([['active', 40], ['repaid', 20], ['pending', 10], ['approved', 10], ['defaulted', 10], ['rejected', 10]])
+    const doc: Record<string, unknown> = {
+      userId: agr.tenantId,
+      agreementId: agr._id.toString(),
+      amount, interestRate: 15, tenure, monthlyPayment, totalRepayment,
+      amountPaid: status === 'repaid' ? totalRepayment : status === 'active' ? round2(totalRepayment * rand() * 0.8) : status === 'defaulted' ? round2(totalRepayment * rand() * 0.4) : 0,
+      status,
+      reason: rp(LOAN_REASONS),
+    }
+    if (status === 'active' || status === 'repaid' || status === 'defaulted' || status === 'approved') {
+      doc.creditScoreAtApproval = ri(50, 90)
+    }
+    if (status === 'active' || status === 'repaid' || status === 'defaulted') {
+      doc.disbursedAt = `${rp(monthRange('2025-10', '2026-04'))}-15`
+    }
+    loanDocs.push(doc)
+  }
+  await Loan.insertMany(loanDocs)
+
+  // ── 35 investments ──
+
+  const invDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 35; i++) {
+    const u = rp(genTenants)
+    const isBill = chance(0.65)
+    const tenure = isBill ? rp([91, 91, 182, 365]) : rp([365, 730])
+    const rate = isBill ? ri(26, 30) : ri(20, 25)
+    const amount = ri(2, 60) * 500
+    const start = new Date(`${rp(monthRange('2025-08', '2026-05'))}-${pad2(ri(1, 28))}T00:00:00.000Z`)
+    const maturity = new Date(start.getTime() + tenure * 86400000)
+    const matured = maturity < new Date('2026-07-14')
+    const expectedReturn = round2((amount * rate * tenure) / 36500)
+    const status = matured ? weighted([['matured', 70], ['withdrawn', 30]]) : weighted([['active', 75], ['pending', 25]])
+    const doc: Record<string, unknown> = {
+      userId: u._id.toString(),
+      type: isBill ? 'treasury_bill' : 'government_bond',
+      amount, interestRate: rate, tenure,
+      startDate: start.toISOString().slice(0, 10),
+      maturityDate: maturity.toISOString().slice(0, 10),
+      status,
+      expectedReturn,
+      partnerId: rp(['databank', 'stanbic']),
+    }
+    if (status === 'matured' || status === 'withdrawn') doc.actualReturn = expectedReturn
+    invDocs.push(doc)
+  }
+  await Investment.insertMany(invDocs)
+
+  // ── 80 favorites ──
+
+  const allProps = [...props, ...genProps]
+  const favDocs: Record<string, unknown>[] = []
+  const favPairs = new Set<string>()
+  guard = 0
+  while (favDocs.length < 80 && guard++ < 5000) {
+    const u = rp(genTenants)
+    const p = rp(allProps)
+    const pair = `${u._id}-${p._id}`
+    if (favPairs.has(pair)) continue
+    favPairs.add(pair)
+    favDocs.push({ userId: u._id.toString(), propertyId: p._id.toString() })
+  }
+  await Favorite.insertMany(favDocs)
+
+  // ── Notifications for generated users (3 each) ──
+
+  const TENANT_NOTIFS = [
+    { title: 'Rent Due Soon', message: 'Your rent payment is due on the 1st of next month. Plan ahead with RentGuard.', actionUrl: '/payments' },
+    { title: 'Payment Confirmed', message: 'Your rent payment has been confirmed. Your receipt is available in Payments.', actionUrl: '/payments' },
+    { title: 'Savings Milestone', message: 'You have crossed 50% of your RentGuard savings goal. Keep it up!', actionUrl: '/savings' },
+    { title: 'Welcome to RentOS', message: 'Welcome to RentOS! Complete your tenant profile to boost your credit score.', actionUrl: '/profile' },
+    { title: 'Credit Score Updated', message: 'Your rental credit score has been recalculated. View your score breakdown.', actionUrl: '/profile' },
+    { title: 'New Review Request', message: 'How is your rental experience? Leave a review for your property.', actionUrl: '/reviews' },
+  ]
+  const HOST_NOTIFS = [
+    { title: 'Payment Received', message: 'A tenant rent payment has been received via mobile money.', actionUrl: '/payments' },
+    { title: 'New Application', message: 'A new rental application has been submitted for one of your properties.', actionUrl: '/applications' },
+    { title: 'Property Views', message: 'Your listings received new views this week.', actionUrl: '/properties' },
+    { title: 'New Inquiry', message: 'A prospective tenant sent an inquiry about your property.', actionUrl: '/properties' },
+    { title: 'Maintenance Request', message: 'A tenant has filed a new maintenance request.', actionUrl: '/properties' },
+    { title: 'Rent Collection Summary', message: 'Your monthly rent collection summary is ready.', actionUrl: '/payments' },
+  ]
+  const notifDocs: Record<string, unknown>[] = []
+  for (const u of genUsers) {
+    const pool = u.activeRole === 'tenant' ? TENANT_NOTIFS : HOST_NOTIFS
+    for (let k = 0; k < 3; k++) {
+      const n = rp(pool)
+      notifDocs.push({ userId: u._id.toString(), title: n.title, message: n.message, channel: 'in_app', read: chance(0.5), actionUrl: n.actionUrl })
+    }
+  }
+  await Notification.insertMany(notifDocs)
+
+  // ── 15 conversations with messages ──
+
+  const TENANT_MSGS = ['Good day, I wanted to confirm that my rent payment has gone through.', 'Please the kitchen tap has been leaking since yesterday.', 'Is it possible to schedule a viewing for my cousin this weekend?', 'Thank you for the quick response, I appreciate it.', 'The prepaid meter card needs replacement.', 'Can we discuss the lease renewal terms when convenient?', 'Good evening, the security light at the gate is not working.']
+  const HOST_MSGS = ['Good day, yes I have received it. Thank you.', 'I will send the plumber tomorrow morning.', 'Noted, I will look into it and get back to you.', 'Please give me two days to sort that out.', 'The caretaker will come this weekend to check.', 'Thank you for your patience.', 'I have asked the electrician to pass by tomorrow.']
+  const convoDocs: any[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  const convoMsgs: { senderId: string; text: string; createdAt: Date }[][] = []
+  for (let i = 0; i < 15; i++) {
+    const agr = genActiveAgreements[(i * 5) % genActiveAgreements.length]
+    const tenantId = agr.tenantId
+    const hostId = agr.landlordId
+    const nMsgs = ri(3, 6)
+    let t = new Date(`${rp(monthRange('2026-06', '2026-07'))}-${pad2(ri(1, 20))}T09:00:00.000Z`)
+    const msgs: { senderId: string; text: string; createdAt: Date }[] = []
+    for (let k = 0; k < nMsgs; k++) {
+      const fromTenant = k % 2 === 0
+      msgs.push({ senderId: fromTenant ? tenantId : hostId, text: fromTenant ? rp(TENANT_MSGS) : rp(HOST_MSGS), createdAt: new Date(t) })
+      t = new Date(t.getTime() + ri(1, 36) * 3600000)
+    }
+    const last = msgs[msgs.length - 1]
+    convoDocs.push({
+      participants: [tenantId, hostId],
+      propertyId: agr.propertyId,
+      lastMessage: { text: last.text, senderId: last.senderId, createdAt: last.createdAt },
+      unreadCount: { [tenantId]: last.senderId === hostId ? 1 : 0, [hostId]: last.senderId === tenantId ? 1 : 0 },
+      createdAt: msgs[0].createdAt,
+      updatedAt: last.createdAt,
+    })
+    convoMsgs.push(msgs)
+  }
+  const genConvos = await Conversation.insertMany(convoDocs)
+  for (let i = 0; i < genConvos.length; i++) {
+    const msgs = convoMsgs[i]
+    await Message.insertMany(msgs.map((m, k) => ({
+      conversationId: genConvos[i]._id.toString(),
+      senderId: m.senderId,
+      text: m.text,
+      read: k < msgs.length - 1,
+      createdAt: m.createdAt,
+    })))
+  }
+
+  // ── 20 maintenance requests ──
+
+  const MAINT_DATA: Record<string, { titles: string[]; desc: string }> = {
+    plumbing: { titles: ['Leaking kitchen pipe', 'Blocked toilet', 'Water tank not filling', 'Broken shower head'], desc: 'Water-related issue that needs a plumber. Getting worse and may cause damage if not fixed soon.' },
+    electrical: { titles: ['Power outlet not working', 'Flickering lights', 'Prepaid meter fault', 'Extractor fan dead'], desc: 'Electrical fault in the unit. Requires a qualified electrician to inspect and repair.' },
+    structural: { titles: ['Cracked wall in bedroom', 'Peeling exterior paint', 'Broken window louvres', 'Sagging ceiling board'], desc: 'Structural issue noticed in the property. Requesting inspection and repair.' },
+    pest: { titles: ['Termites in door frames', 'Cockroach infestation', 'Rodents in ceiling'], desc: 'Pest problem that needs fumigation before it spreads further.' },
+    appliance: { titles: ['AC not cooling', 'Water heater not working', 'Washing machine leaking'], desc: 'Appliance provided with the unit has stopped working properly.' },
+    security: { titles: ['Broken gate lock', 'Security light not working', 'Fence damaged'], desc: 'Security concern at the property that needs urgent attention.' },
+    other: { titles: ['General maintenance needed', 'Compound cleaning required'], desc: 'General maintenance request for the property.' },
+  }
+  const maintDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 20; i++) {
+    const agr = rp(genActiveAgreements)
+    const category = weighted([['plumbing', 30], ['electrical', 20], ['structural', 15], ['pest', 12], ['appliance', 12], ['security', 6], ['other', 5]])
+    const status = weighted([['requested', 30], ['acknowledged', 15], ['scheduled', 15], ['in_progress', 15], ['completed', 25]])
+    const pool = MAINT_DATA[category]
+    const created = new Date(`${rp(monthRange('2026-05', '2026-07'))}-${pad2(ri(1, 28))}T11:00:00.000Z`)
+    const doc: Record<string, unknown> = {
+      propertyId: agr.propertyId,
+      agreementId: agr._id.toString(),
+      tenantId: agr.tenantId,
+      landlordId: agr.landlordId,
+      title: rp(pool.titles),
+      description: pool.desc,
+      category,
+      priority: weighted([['low', 20], ['medium', 40], ['high', 30], ['urgent', 10]]),
+      status,
+      images: [],
+      createdAt: created,
+      updatedAt: new Date(created.getTime() + ri(1, 10) * 86400000),
+    }
+    if (status === 'completed') {
+      doc.completedAt = new Date(created.getTime() + ri(2, 14) * 86400000).toISOString()
+      doc.cost = ri(5, 40) * 20
+      doc.vendorName = `${rp(MALE_FIRST)} ${rp(SURNAMES)}`
+    }
+    if (status === 'scheduled' || status === 'in_progress') doc.scheduledDate = _addDays(now, ri(-3, 7))
+    maintDocs.push(doc)
+  }
+  await MaintenanceRequest.insertMany(maintDocs)
+
+  // ── 10 service bookings ──
+
+  const BOOKING_DESCS = ['Fix leaking pipe under the kitchen sink.', 'Repair faulty circuit breaker in the main hall.', 'Deep cleaning of the entire apartment before move-in.', 'Install new water heater in the bathroom.', 'Repaint two bedrooms and fix door frames.', 'Fumigate the whole house against termites.', 'Inspect and service the standby generator.', 'Fix broken window louvres and burglar-proof bars.']
+  const bookingDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 10; i++) {
+    const worker = rp(workers)
+    const fromTenant = chance(0.6)
+    const agr = rp(genActiveAgreements)
+    const status = weighted([['pending', 25], ['confirmed', 20], ['in_progress', 10], ['completed', 35], ['cancelled', 10]])
+    const estimated = ri(5, 30) * 20
+    const doc: Record<string, unknown> = {
+      requesterId: fromTenant ? agr.tenantId : agr.landlordId,
+      requesterRole: fromTenant ? 'tenant' : 'landlord',
+      workerId: worker._id.toString(),
+      type: rp(['repair', 'maintenance', 'cleaning', 'installation', 'inspection']),
+      description: rp(BOOKING_DESCS),
+      status,
+      scheduledDate: _addDays(now, ri(-20, 10)),
+      scheduledTime: `${pad2(ri(8, 16))}:00`,
+      estimatedCost: estimated,
+      paymentStatus: 'pending',
+      notes: [],
+      propertyId: agr.propertyId,
+    }
+    if (status === 'confirmed' || status === 'in_progress' || status === 'completed') {
+      doc.quoteProvided = true
+      doc.quoteAmount = estimated
+      doc.quoteAccepted = true
+    }
+    if (status === 'completed') {
+      doc.finalCost = estimated - ri(0, 4) * 10
+      doc.paymentStatus = 'paid'
+      doc.rating = ri(3, 5)
+      doc.review = rp(['Excellent work, very professional.', 'Job well done and on time.', 'Good service, would book again.', 'Neat work and fair pricing.'])
+    }
+    bookingDocs.push(doc)
+  }
+  await ServiceBooking.insertMany(bookingDocs)
+
+  // ── Move-out records for expired / terminated agreements ──
+
+  const DAMAGE_DESCS = ['Broken window glass', 'Damaged door lock', 'Stained wall requiring repainting', 'Cracked floor tiles', 'Missing light fittings', 'Damaged kitchen cabinet']
+  const moveOutDocs: Record<string, unknown>[] = []
+  const moveOutAgreements = [
+    ...genOtherAgreements.filter((a) => a.status === 'expired').slice(0, 5),
+    ...genOtherAgreements.filter((a) => a.status === 'terminated').slice(0, 3),
+  ]
+  for (const agr of moveOutAgreements) {
+    const status = weighted([['closed', 25], ['refund_paid', 25], ['refund_pending', 20], ['disputed', 15], ['inspection_scheduled', 15]])
+    const deposit = agr.securityDeposit
+    const damages: { description: string; cost: number; photos: string[] }[] = []
+    if (chance(0.6)) {
+      for (let k = 0; k < ri(1, 2); k++) damages.push({ description: rp(DAMAGE_DESCS), cost: ri(2, 12) * 50, photos: [] })
+    }
+    const deductionsTotal = damages.reduce((s, d) => s + d.cost, 0)
+    const refundAmount = Math.max(0, deposit - deductionsTotal)
+    const moveOutDate = agr.endDate
+    const doc: Record<string, unknown> = {
+      agreementId: agr._id.toString(),
+      tenantId: agr.tenantId,
+      landlordId: agr.landlordId,
+      propertyId: agr.propertyId,
+      status,
+      initiatedBy: chance(0.7) ? 'tenant' : 'landlord',
+      moveOutDate,
+      securityDeposit: deposit,
+      damages,
+      deductionsTotal,
+      refundAmount,
+      notes: [{ text: 'Move-out process initiated through RentOS.', by: agr.landlordId, at: `${moveOutDate}T09:00:00.000Z` }],
+    }
+    if (status !== 'inspection_scheduled') {
+      doc.inspectionDate = _addDays(moveOutDate, -2)
+      doc.inspectionNotes = damages.length > 0 ? 'Property inspected. Damages documented and costed.' : 'Property inspected. Good condition, no damages found.'
+    }
+    if (status === 'refund_paid' || status === 'closed') {
+      doc.refundedAt = _addDays(moveOutDate, ri(3, 21))
+      doc.refundReference = `REF-BULK-${agr._id.toString().slice(-6)}`
+      doc.tenantAcknowledgedAt = _addDays(moveOutDate, ri(3, 21))
+      doc.landlordAcknowledgedAt = _addDays(moveOutDate, ri(1, 5))
+    }
+    moveOutDocs.push(doc)
+  }
+  await MoveOut.insertMany(moveOutDocs)
+
+  // ── Achievements for active tenants ──
+
+  const ACHIEVEMENT_CATALOG = [
+    { code: 'first_payment', title: 'First Payment', description: 'Made your first rent payment on RentOS', icon: '💳', tier: 'bronze' },
+    { code: 'streak_3', title: '3-Month Streak', description: 'Paid rent on time 3 months in a row', icon: '🔥', tier: 'bronze' },
+    { code: 'streak_6', title: '6-Month Streak', description: 'Paid rent on time 6 months in a row', icon: '🏅', tier: 'silver' },
+    { code: 'savings_goal', title: 'Savings Champion', description: 'Completed a RentGuard savings goal', icon: '🎯', tier: 'silver' },
+    { code: 'profile_complete', title: 'Verified Profile', description: 'Completed and verified your tenant profile', icon: '✅', tier: 'bronze' },
+    { code: 'loan_repaid', title: 'Loan Repaid', description: 'Fully repaid a RentOS micro-loan', icon: '💰', tier: 'silver' },
+    { code: 'top_reviewer', title: 'Community Reviewer', description: 'Shared helpful property reviews', icon: '⭐', tier: 'bronze' },
+    { code: 'rentguard_pro', title: 'RentGuard Pro', description: 'Saved consistently for 6 months', icon: '🛡️', tier: 'gold' },
+    { code: 'early_adopter', title: 'Early Adopter', description: 'Joined RentOS in its first year', icon: '🚀', tier: 'platinum' },
+  ]
+  const achievementDocs: Record<string, unknown>[] = []
+  for (let i = 0; i < 24; i++) {
+    const u = genTenants[i]
+    const uid = u._id.toString()
+    const streak = streakByTenant.get(uid) ?? 0
+    const codes = ['first_payment']
+    if (i < 20) codes.push('profile_complete')
+    if (streak >= 3) codes.push('streak_3')
+    if (streak >= 6) codes.push('streak_6')
+    codes.push(['savings_goal', 'top_reviewer', 'rentguard_pro', 'loan_repaid'][i % 4])
+    if (i % 8 === 0) codes.push('early_adopter')
+    for (const code of codes) {
+      const def = ACHIEVEMENT_CATALOG.find((a) => a.code === code)!
+      achievementDocs.push({
+        userId: uid,
+        code: def.code,
+        title: def.title,
+        description: def.description,
+        icon: def.icon,
+        tier: def.tier,
+        earnedAt: new Date(`${rp(monthRange('2026-01', '2026-07'))}-${pad2(ri(1, 28))}T12:00:00.000Z`),
+      })
+    }
+  }
+  // Showcase achievements on the primary demo tenant too
+  for (const code of ['first_payment', 'streak_6', 'early_adopter', 'rentguard_pro']) {
+    const def = ACHIEVEMENT_CATALOG.find((a) => a.code === code)!
+    achievementDocs.push({
+      userId: t1, code: def.code, title: def.title, description: def.description, icon: def.icon, tier: def.tier,
+      earnedAt: new Date(`${rp(monthRange('2026-01', '2026-06'))}-15T12:00:00.000Z`),
+    })
+  }
+  await Achievement.insertMany(achievementDocs)
 
   // ════════════════════════════════════════════
 
@@ -1373,10 +2326,13 @@ export async function seedDatabase() {
     FinancingContract.countDocuments(), Employer.countDocuments(),
     Employment.countDocuments(), DeductionMandate.countDocuments(), PayrollRun.countDocuments(),
     Worker.countDocuments(), ServiceBooking.countDocuments(), MaintenanceRequest.countDocuments(),
+    Achievement.countDocuments(), PaymentStreak.countDocuments(), MoveOut.countDocuments(),
   ])
   const total = counts.reduce((a, b) => a + b, 0)
 
-  console.log(`\nSeeded ${total} documents across 31 collections.`)
+  const collectionNames = ['users', 'properties', 'agreements', 'payments', 'savingsplans', 'disputes', 'tenantprofiles', 'creditscores', 'reviews', 'loans', 'investments', 'legalarticles', 'blogposts', 'notifications', 'wallets', 'conversations', 'messages', 'applications', 'favorites', 'profileaccesses', 'invitations', 'documents', 'auditlogs', 'financingoffers', 'financingapplications', 'financingcontracts', 'employers', 'employments', 'deductionmandates', 'payrollruns', 'workers', 'servicebookings', 'maintenancerequests', 'achievements', 'paymentstreaks', 'moveouts']
+  console.log(`\nSeeded ${total} documents across ${counts.length} collections.`)
+  counts.forEach((c, i) => console.log(`  ${(collectionNames[i] ?? `collection_${i}`).padEnd(24)} ${c}`))
   console.log('\nDemo accounts (all passwords: password123):')
   console.log('  Tenant 1:       kwame@rentos.gh      (78 credit, software dev, active loans & investments)')
   console.log('  Tenant 2:       ama@rentos.gh        (65 credit, marketing manager)')
@@ -1397,6 +2353,7 @@ export async function seedDatabase() {
   console.log('  Admin:          admin@rentos.gh       (admin permissions: users, properties, disputes, blog)')
   console.log('  Admin 2:        ofi@rentos.gh         (full admin permissions incl. manage_permissions, system)')
   console.log('  Super Admin:    superadmin@rentos.gh  (super_admin role — bypasses all permission checks)')
+  console.log('  Owner Admin:    hayfordstanley@gmail.com  (super_admin — password: 1945@Berlinbunker)')
   console.log('  Financier 1:    bloom@rentos.gh       (offers rent advance + deposit loans)')
   console.log('  Financier 2:    rentplus@rentos.gh    (payroll-linked, lower rates)')
   console.log('  Employer 1:     mtn-hr@rentos.gh      (MTN Ghana — 3 employees, monthly payroll)')
