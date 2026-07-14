@@ -16,6 +16,8 @@ interface InputProps {
   max?: string
   className?: string
   defaultValue?: string
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  autoComplete?: string
 }
 
 export function Input({ id, label, error, className, min, max, minLength, ...props }: InputProps) {

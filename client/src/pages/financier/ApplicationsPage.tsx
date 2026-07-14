@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { CheckCircle2, X } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const statusVariant = {
   draft: 'muted', submitted: 'warning', under_review: 'warning',
@@ -29,7 +30,7 @@ export function FinancingApplicationsPage() {
       {isLoading ? (
         <ListSkeleton rows={4} />
       ) : items.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-sm text-muted dark:text-gray-500">No applications yet</CardContent></Card>
+        <EmptyState preset="agreements" title="No applications yet" description="Financing applications from tenants will appear here once they apply." />
       ) : (
         <div className="space-y-3">
           {items.map((a) => (

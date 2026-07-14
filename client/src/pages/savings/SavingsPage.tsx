@@ -7,7 +7,8 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { useWallet, useDeposit, useWithdraw, useSavingsPlans, useCreateSavingsPlan, useContributeToSavings } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { PiggyBank, Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { PiggyBank, Plus, ArrowUpRight, ArrowDownRight, FileText } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { Switch } from '@/components/ui/Switch'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
@@ -98,20 +99,8 @@ export function SavingsPage() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent>
-                <p className="text-sm text-muted">Active Plans</p>
-                <p className="text-2xl font-bold text-primary-dark dark:text-white mt-1">{activePlans.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <p className="text-sm text-muted">Total Saved in Plans</p>
-                <p className="text-2xl font-bold text-accent mt-1">
-                  {formatCurrency(plans.reduce((sum, p) => sum + p.currentAmount, 0))}
-                </p>
-              </CardContent>
-            </Card>
+            <DashboardMetricCard label="Active Plans" value={String(activePlans.length)} icon={<FileText size={18} />} accent="#7c3aed" />
+            <DashboardMetricCard label="Total Saved in Plans" value={formatCurrency(plans.reduce((sum, p) => sum + p.currentAmount, 0))} icon={<PiggyBank size={18} />} accent="#059669" />
           </div>
 
           {plans.length > 0 && (

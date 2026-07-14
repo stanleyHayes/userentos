@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { Switch } from '@/components/ui/Switch'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { FormGrid } from '@/components/ui/FormGrid'
 import { useCreateProperty, useUploadPropertyImages, useMySubscription } from '@/hooks/useApi'
@@ -370,16 +371,14 @@ export function AddPropertyPage() {
               </div>
 
               {images.length === 0 && (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-surface dark:bg-[#0c0e1a] flex items-center justify-center mb-3">
-                    <ImagePlus size={28} className="text-muted dark:text-gray-600" />
-                  </div>
-                  <p className="text-sm font-medium text-muted dark:text-gray-400">No images yet</p>
-                  <p className="text-xs text-muted/60 dark:text-gray-600 mt-1">Properties with photos get significantly more views</p>
-                  <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
-                    <Upload size={14} /> Select Photos
-                  </Button>
-                </div>
+                <EmptyState
+                  preset="general"
+                  icon={<ImagePlus size={40} />}
+                  title="No images yet"
+                  description="Add photos to make your listing stand out."
+                  action={{ label: 'Select Photos', onClick: () => fileInputRef.current?.click() }}
+                  compact
+                />
               )}
             </CardContent>
           </Card>

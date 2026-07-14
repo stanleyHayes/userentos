@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { TenantProfile } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState as SharedEmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -634,7 +635,7 @@ function RefCard({ children, onRemove }: { children: React.ReactNode; onRemove: 
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="text-sm text-muted dark:text-gray-500 text-center py-6">{text}</p>
+  return <SharedEmptyState preset="general" title={text} compact />
 }
 
 function VerifyBadge({ label, verified }: { label: string; verified: boolean }) {

@@ -6,7 +6,9 @@ import { StreakRing } from '@/components/badges/StreakRing'
 import { useMyAchievements, useMyStreak, useStreakLeaderboard } from '@/hooks/useApi'
 import { ACHIEVEMENT_CATALOG } from '@/types'
 import type { AchievementTier } from '@/types'
-import { Trophy, TrendingUp } from 'lucide-react'
+import { Trophy, TrendingUp, Medal, Star, Award, Flame } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { WatermarkConstellation } from '@/components/ui/Watermark'
 
 const TIER_ORDER: AchievementTier[] = ['bronze', 'silver', 'gold', 'platinum']
 
@@ -39,14 +41,15 @@ export function AchievementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
+      <div className="relative flex items-center justify-between flex-wrap gap-3 overflow-hidden">
+        <WatermarkConstellation icons={[Trophy, Medal, Star, Award, Flame]} />
+        <div className="relative z-10">
           <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Achievements</h1>
           <p className="text-sm text-muted dark:text-gray-400 mt-1">
             Track your streaks, unlock badges, and stay on top of the leaderboard.
           </p>
         </div>
-        <Badge variant="success" className="text-xs">
+        <Badge variant="success" className="relative z-10 text-xs">
           {earnedCount} of {totalCount} unlocked
         </Badge>
       </div>
@@ -95,10 +98,7 @@ export function AchievementsPage() {
           </CardHeader>
           <CardContent>
             {leaderboard.length === 0 ? (
-              <div className="text-center py-8">
-                <Trophy size={28} className="mx-auto text-muted/40 mb-2" />
-                <p className="text-sm text-muted dark:text-gray-500">No streak data yet. Be the first!</p>
-              </div>
+              <EmptyState preset="general" title="No streak data yet" description="Be the first to start a streak!" icon={<Trophy size={40} />} compact />
             ) : (
               <ol className="space-y-2">
                 {leaderboard.slice(0, 10).map((entry, i) => (

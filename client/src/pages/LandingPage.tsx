@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import type { BlogPost } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Logo } from '@/components/ui/Logo'
+import { LogoWatermark, WatermarkConstellation } from '@/components/ui/Watermark'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Footer } from '@/components/layout/Footer'
 import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
@@ -188,7 +189,7 @@ function Metric({ value, label }: { value: string; label: string }) {
 function SectionHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
     <div className="mx-auto mb-12 max-w-3xl text-center">
-      <span className="inline-flex rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-primary dark:bg-blue-500/15 dark:text-blue-300">
+      <span className="eyebrow is-centered">
         {eyebrow}
       </span>
       <h2 className="mt-5 font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">{title}</h2>
@@ -400,6 +401,7 @@ export function LandingPage() {
         <img src="/og-image.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen" />
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0d12]/68 via-[#14121f]/90 to-[#0a0d12]" />
         <div className="absolute inset-0 opacity-[0.075]" style={{ backgroundImage: 'linear-gradient(rgba(196,181,253,0.9) 1px, transparent 1px), linear-gradient(90deg, rgba(45,212,191,0.7) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+        <LogoWatermark tone="brand" className="right-[-4rem] top-1/2 hidden size-[30rem] -translate-y-1/2 rotate-[-8deg] lg:block" />
         <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col justify-center px-6 py-20">
           <div className="max-w-4xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-semibold text-white/76 backdrop-blur">
@@ -407,7 +409,7 @@ export function LandingPage() {
               Ghana rental infrastructure for every role
             </div>
             <h1 className="font-display text-5xl font-extrabold leading-[0.98] tracking-normal md:text-7xl lg:text-8xl">
-              RentOS Ghana
+              <span className="text-highlight">RentOS</span> Ghana
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/64 md:text-xl">
               The app now connects discovery, tenant passports, legal agreements, rent payments, savings, financing, payroll mandates, insurance, maintenance, worker bookings, AI listing tools, and platform administration.
@@ -428,7 +430,8 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section id="features" className="mx-auto max-w-7xl px-6 py-24 md:py-28">
+      <section id="features" className="relative mx-auto max-w-7xl px-6 py-24 md:py-28">
+        <WatermarkConstellation icons={[Building2, FileSignature, Banknote, ShieldCheck, Scale]} />
         <SectionHeader
           eyebrow="Current app coverage"
           title="More than a listing site"
@@ -457,8 +460,9 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="roles" className="bg-surface py-24 dark:bg-[#0c0e1a] md:py-28">
-        <div className="mx-auto max-w-7xl px-6">
+      <section id="roles" className="relative overflow-hidden bg-surface py-24 dark:bg-[#0c0e1a] md:py-28">
+        <div aria-hidden="true" className="bg-dotgrid animate-thread-drift pointer-events-none absolute inset-0 opacity-60" />
+        <div className="relative mx-auto max-w-7xl px-6">
           <SectionHeader
             eyebrow="Role-aware"
             title="Every participant gets the right workspace"
@@ -663,7 +667,8 @@ export function LandingPage() {
         </section>
       )}
 
-      <section className="px-6 py-24 md:py-28">
+      <section className="relative overflow-hidden px-6 py-24 md:py-28">
+        <LogoWatermark className="animate-parallax-drift -bottom-10 -right-8 hidden size-64 md:block" />
         <div className="mx-auto max-w-4xl text-center">
           <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
             <Star size={24} />

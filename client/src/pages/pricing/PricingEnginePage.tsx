@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { FormGrid } from '@/components/ui/FormGrid'
@@ -134,11 +135,8 @@ function ToggleField({ label, description, checked, onChange }: ToggleFieldProps
 
 function PricingEmptyState({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <Card className="flex min-h-[280px] flex-col items-center justify-center p-10 text-center">
-      <div className="mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary dark:bg-sky-400/10 dark:text-sky-300">
-        {icon}
-      </div>
-      <p className="max-w-sm text-sm leading-relaxed text-muted">{children}</p>
+    <Card className="flex min-h-[280px] flex-col items-center justify-center">
+      <EmptyState preset="search" icon={icon} title={typeof children === 'string' ? children : undefined} compact />
     </Card>
   )
 }

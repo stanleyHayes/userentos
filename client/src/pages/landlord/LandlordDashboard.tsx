@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { DashboardActionItem, DashboardActionPanel, DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { useAuthStore } from '@/stores/authStore'
 import { useMyAnalytics, useProperties, usePayments, useNotifications, useAgreements, useDisputes, useMySubscription, useMaintenanceRequests } from '@/hooks/useApi'
@@ -79,6 +80,7 @@ export function LandlordDashboard() {
         title={`${greeting}, ${user?.firstName ?? 'there'}`}
         description="Your property portfolio overview"
         tone="landlord"
+        watermarkIcon={Building2}
         actions={
           <>
             <div className="hidden gap-2 sm:flex">
@@ -93,7 +95,7 @@ export function LandlordDashboard() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard
           label="Properties"
           value={String(a?.totalProperties ?? 0)}
@@ -241,12 +243,8 @@ export function LandlordDashboard() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-56 flex flex-col items-center justify-center text-center px-5">
-                <div className="w-14 h-14 rounded-2xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center mb-3">
-                  <CreditCard size={24} className="text-primary/40" />
-                </div>
-                <p className="text-sm font-medium text-primary-dark dark:text-white">No revenue data yet</p>
-                <p className="text-xs text-muted dark:text-gray-500 mt-1">Revenue chart will build up as tenants make payments</p>
+              <div className="h-56 flex flex-col items-center justify-center">
+                <EmptyState preset="payments" title="No revenue data yet" description="Revenue will appear here once payments come in." compact />
               </div>
             )}
 
@@ -466,11 +464,7 @@ export function LandlordDashboard() {
                   </Link>
                 )}
                 {properties.length === 0 && (
-                  <div className="text-center py-4">
-                    <Building2 size={20} className="mx-auto text-muted/30 mb-2" />
-                    <p className="text-xs text-muted dark:text-gray-500">No properties yet</p>
-                    <Link to="/properties/new"><Button size="sm" className="mt-2 text-xs">Add your first</Button></Link>
-                  </div>
+                  <EmptyState preset="properties" title="No properties yet" description="List your first property to start receiving applications." action={{ label: 'Add your first', href: '/properties/new' }} compact />
                 )}
               </div>
             </CardContent>

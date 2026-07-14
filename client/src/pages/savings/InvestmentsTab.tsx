@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, AlertTriangle, TrendingUp, BarChart3, Wallet } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -55,25 +56,11 @@ export function InvestmentsTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Total Invested', value: formatCurrency(totalInvested), icon: <TrendingUp size={18} />, color: '#3b82f6' },
-          { label: 'Expected Returns', value: formatCurrency(totalExpected), icon: <BarChart3 size={18} />, color: '#10b981' },
-          { label: 'Active Investments', value: String(active.length), icon: <Wallet size={18} />, color: '#8b5cf6' },
+          { label: 'Total Invested', value: formatCurrency(totalInvested), icon: <TrendingUp size={18} />, color: '#2563eb' },
+          { label: 'Expected Returns', value: formatCurrency(totalExpected), icon: <BarChart3 size={18} />, color: '#059669' },
+          { label: 'Active Investments', value: String(active.length), icon: <Wallet size={18} />, color: '#7c3aed' },
         ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl border border-border/40 dark:border-[#252a3a]/40 bg-white dark:bg-[#161927] p-4 overflow-hidden"
-            style={{ borderLeftWidth: 3, borderLeftColor: s.color, backgroundColor: `${s.color}06` }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${s.color}15` }}>
-                <span style={{ color: s.color }}>{s.icon}</span>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted dark:text-gray-400">{s.label}</p>
-                <p className="text-lg font-extrabold text-primary-dark dark:text-white truncate">{s.value}</p>
-              </div>
-            </div>
-          </div>
+          <DashboardMetricCard key={s.label} label={s.label} value={s.value} icon={s.icon} accent={s.color} />
         ))}
       </div>
 

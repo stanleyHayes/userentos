@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import {
@@ -8,7 +9,7 @@ import {
 } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Building2, Users, FileSignature, Banknote, Plus, ShieldAlert, CheckCircle2, Calendar } from 'lucide-react'
+import { Briefcase, Building2, Users, FileSignature, Banknote, Plus, ShieldAlert, CheckCircle2, Calendar } from 'lucide-react'
 
 export function EmployerDashboard() {
   const user = useAuthStore((s) => s.user)
@@ -38,6 +39,7 @@ export function EmployerDashboard() {
           title={`Welcome, ${user?.firstName ?? 'there'}`}
           description="Set up your company profile to start enrolling employees"
           tone="employer"
+          watermarkIcon={Briefcase}
         />
         <Card>
           <CardContent className="p-8 text-center">
@@ -58,6 +60,7 @@ export function EmployerDashboard() {
         title={`${greeting}, ${user?.firstName ?? 'there'}`}
         description={`${employer.legalName} · ${employer.payrollCycle} payroll`}
         tone="employer"
+        watermarkIcon={Briefcase}
         actions={
           <Badge variant={employer.verificationStatus === 'verified' ? 'success' : 'warning'} className="text-[10px] capitalize">
             {employer.verificationStatus}
@@ -65,7 +68,7 @@ export function EmployerDashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard label="Employees" value={String(employees.length)} sub={`${employees.filter((e) => e.status === 'active').length} active`} accent="#3b82f6" icon={<Users size={18} />} href="/employer/employees" />
         <DashboardMetricCard label="Active Mandates" value={String(activeMandates.length)} sub={`${pendingMandates.length} pending`} accent="#10b981" icon={<FileSignature size={18} />} href="/employer/payroll" />
         <DashboardMetricCard label="Monthly Deductions" value={formatCurrency(totalActiveDeductions)} sub="Across all employees" accent="#f59e0b" icon={<Banknote size={18} />} href="/employer/payroll" />
@@ -121,11 +124,7 @@ export function EmployerDashboard() {
             </CardHeader>
             <CardContent>
               {runs.length === 0 ? (
-                <div className="text-center py-6">
-                  <Calendar size={24} className="mx-auto text-muted/40 mb-2" />
-                  <p className="text-xs text-muted dark:text-gray-500 mb-3">No payroll runs yet</p>
-                  <Link to="/employer/payroll/new"><Button size="sm"><Plus size={12} /> Run Payroll</Button></Link>
-                </div>
+                <EmptyState preset="payments" title="No payroll runs yet" description="Run your first payroll to pay employees." action={{ label: 'Run Payroll', href: '/employer/payroll/new' }} compact />
               ) : (
                 <div className="space-y-1.5">
                   {runs.slice(0, 5).map((r) => (
@@ -166,10 +165,7 @@ export function EmployerDashboard() {
                   </div>
                 ))}
                 {employees.length === 0 && (
-                  <Link to="/employer/employees" className="block text-center py-4">
-                    <Plus size={18} className="mx-auto text-muted/40 mb-1" />
-                    <p className="text-xs text-primary dark:text-blue-400 font-semibold">Add your first employee</p>
-                  </Link>
+                  <EmptyState preset="general" title="No employees yet" description="Add employees to link them to payroll." action={{ label: 'Add your first employee', href: '/employer/employees' }} compact />
                 )}
               </div>
             </CardContent>

@@ -10,6 +10,7 @@ import {
   ShieldCheck, TrendingUp, TrendingDown, Activity, Building2, Users,
   Calculator, BarChart3, AlertTriangle, DollarSign, Clock, Gauge,
 } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { DoodleZigzag } from '@/components/ui/Doodles'
 
 // --- Types ---
@@ -285,20 +286,15 @@ function MarketHealthDashboard() {
       {/* Indicators grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-5">
         {data.indicators.map((indicator, i) => (
-          <div key={i} className="rounded-xl border border-border/40 dark:border-[#252a3a]/40 bg-surface dark:bg-[#0c0e1a] p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-bold text-muted dark:text-gray-500 uppercase tracking-wider">{indicator.label}</span>
-              {indicator.trend === 'up' ? (
-                <TrendingUp size={12} className="text-success" />
-              ) : indicator.trend === 'down' ? (
-                <TrendingDown size={12} className="text-danger" />
-              ) : (
-                <Activity size={12} className="text-muted dark:text-gray-500" />
-              )}
-            </div>
-            <p className="text-lg font-extrabold text-primary-dark dark:text-white">{indicator.value}</p>
-            <p className="text-[10px] text-muted dark:text-gray-500 mt-0.5">{indicator.description}</p>
-          </div>
+          <DashboardMetricCard
+            key={i}
+            label={indicator.label}
+            value={indicator.value}
+            sub={indicator.description}
+            icon={<Activity size={18} />}
+            accent={indicator.trend === 'up' ? '#059669' : indicator.trend === 'down' ? '#dc2626' : '#64748b'}
+            trend={indicator.trend === 'up' ? 1 : indicator.trend === 'down' ? -1 : undefined}
+          />
         ))}
       </div>
 

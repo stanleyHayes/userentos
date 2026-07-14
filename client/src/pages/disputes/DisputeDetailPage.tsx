@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useDispute, useUpdateDisputeStatus, useUploadDisputeEvidence } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { cn, formatDate } from '@/lib/utils'
@@ -330,9 +331,8 @@ export function DisputeDetailPage() {
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border/50 dark:border-[#252a3a]/50 py-6 text-center">
-            <Paperclip size={20} className="mx-auto text-muted dark:text-[#64748b] mb-2" />
-            <p className="text-xs text-muted dark:text-[#64748b]">No evidence uploaded yet</p>
+          <div className="rounded-xl border border-dashed border-border/50 dark:border-[#252a3a]/50">
+            <EmptyState preset="general" icon={<Paperclip size={40} />} title="No evidence uploaded yet" description="Upload files to support this dispute." compact />
           </div>
         )}
       </Section>

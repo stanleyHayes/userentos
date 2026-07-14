@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye } from 'lucide-react'
+import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye, Newspaper } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { GridSkeleton } from '@/components/ui/Skeleton'
@@ -15,6 +15,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/stores/authStore'
 import { DoodleUnderline } from '@/components/ui/Doodles'
+import { IconWatermark } from '@/components/ui/Watermark'
 
 interface BlogPost {
   id: string; title: string; slug: string; excerpt: string; content: string
@@ -221,8 +222,9 @@ export function BlogPage() {
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <div className="relative">
+        <div className="relative overflow-hidden">
           <DoodleUnderline className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
+          <IconWatermark icon={Newspaper} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
           <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Blog</h1>
           <p className="text-sm text-muted dark:text-gray-400 mt-1">News, guides, and updates about renting in Ghana</p>
         </div>

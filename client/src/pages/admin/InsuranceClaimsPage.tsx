@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/Textarea'
 import { useInsuranceClaims, useDecideInsuranceClaim, type InsuranceClaimReview } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import {
   Banknote,
   CalendarDays,
@@ -15,7 +17,6 @@ import {
   Clock3,
   CreditCard,
   FileText,
-  Search,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -43,18 +44,13 @@ function statusVariant(status: InsuranceClaimReview['status']): 'success' | 'dan
 
 function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string; sub: string }) {
   return (
-    <Card className="min-h-[118px] p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
-          <p className="mt-2 font-display text-2xl font-extrabold text-primary-dark dark:text-white">{value}</p>
-          <p className="mt-1 text-xs text-muted">{sub}</p>
-        </div>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary dark:bg-sky-400/10 dark:text-sky-300">
-          {icon}
-        </span>
-      </div>
-    </Card>
+    <DashboardMetricCard
+      label={label}
+      value={value}
+      sub={sub}
+      icon={icon}
+      accent="#2563eb"
+    />
   )
 }
 
@@ -220,12 +216,8 @@ export function InsuranceClaimsPage() {
           Loading claims...
         </Card>
       ) : visibleItems.length === 0 ? (
-        <Card className="flex min-h-[260px] flex-col items-center justify-center p-10 text-center">
-          <div className="mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary dark:bg-sky-400/10 dark:text-sky-300">
-            <Search size={28} />
-          </div>
-          <p className="text-sm font-bold text-primary-dark dark:text-white">No claims found</p>
-          <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">No claims match the selected filter or search term.</p>
+        <Card className="flex min-h-[260px] items-center justify-center p-10 text-center">
+          <EmptyState preset="search" title="No claims found" description="Insurance claims matching your filters will appear here." />
         </Card>
       ) : (
         <div className="space-y-4">

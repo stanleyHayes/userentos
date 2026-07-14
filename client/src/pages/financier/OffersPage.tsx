@@ -6,6 +6,7 @@ import { useMyFinancingOffers, useToggleFinancingOffer } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Power } from 'lucide-react'
 import { GridSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 export function FinancierOffersPage() {
   const { data, isLoading } = useMyFinancingOffers()
@@ -25,11 +26,7 @@ export function FinancierOffersPage() {
       {isLoading ? (
         <GridSkeleton cols={2} count={4} />
       ) : offers.length === 0 ? (
-        <Card><CardContent className="p-12 text-center">
-          <p className="text-sm font-semibold text-primary-dark dark:text-white">No offers yet</p>
-          <p className="text-xs text-muted dark:text-gray-500 mt-1 mb-4">Create your first lending product to start receiving applications</p>
-          <Link to="/financing/offers/new"><Button size="sm"><Plus size={14} /> Create Offer</Button></Link>
-        </CardContent></Card>
+        <EmptyState preset="savings" title="No offers yet" description="Create your first financing offer to attract tenants." action={{ label: 'Create Offer', href: '/financing/offers/new' }} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {offers.map((o) => (

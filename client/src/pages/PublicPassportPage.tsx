@@ -11,9 +11,11 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useSharedPassport } from '@/hooks/useApi'
+import { LogoWatermark } from '@/components/ui/Watermark'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -59,8 +61,9 @@ export function PublicPassportPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       {/* Hero banner */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#1e3a5f] via-[#22467a] to-[#2d5a8e] text-white">
-        <div className="p-6 sm:p-8">
+      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-[#1e3a5f] via-[#22467a] to-[#2d5a8e] text-white">
+        <LogoWatermark tone="brand" className="-bottom-16 -right-6 size-56 rotate-[-8deg]" />
+        <div className="relative z-10 p-6 sm:p-8">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="rounded-xl bg-white/15 p-2.5">
               <Award size={22} className="text-white" />
@@ -130,7 +133,7 @@ export function PublicPassportPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted">No credit score on record yet.</p>
+            <EmptyState preset="general" title="No credit score on record yet" description="This tenant has no credit score on record." compact />
           )}
         </CardContent>
       </Card>

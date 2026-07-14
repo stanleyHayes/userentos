@@ -175,6 +175,7 @@ export interface User {
   permissions: Permission[]
   ghanaCardId?: string
   isVerified: boolean
+  mfaEnabled?: boolean
   profileImage?: string
   invitedBy?: string
   createdAt: string

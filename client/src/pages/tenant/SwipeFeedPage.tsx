@@ -77,10 +77,14 @@ export function SwipeFeedPage() {
   const third = queue[2]
   const topId = top ? pid(top) : null
 
-  useEffect(() => {
+  // Reset drag/exit state when the top card changes (adjust-state-during-render
+  // pattern — avoids cascading renders from setState-in-effect).
+  const prevTopIdRef = useRef(topId)
+  if (prevTopIdRef.current !== topId) {
+    prevTopIdRef.current = topId
     setDrag({ x: 0, y: 0, dragging: false })
     setExit(null)
-  }, [topId])
+  }
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!top || exit) return

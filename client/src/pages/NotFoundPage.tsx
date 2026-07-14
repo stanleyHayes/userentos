@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { Home, ArrowLeft } from 'lucide-react'
 import { DoodleSpiral, DoodleStars } from '@/components/ui/Doodles'
+import { LogoWatermark } from '@/components/ui/Watermark'
 
 export function NotFoundPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0c0e1a] px-4 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0c0e1a] px-4 overflow-hidden">
       {/* Floating background shapes */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[15%] left-[10%] w-20 h-20 rounded-full bg-[#1e3a5f]/10 dark:bg-[#1e3a5f]/20 animate-[float_6s_ease-in-out_infinite]" />
@@ -16,6 +17,8 @@ export function NotFoundPage() {
         <DoodleSpiral className="absolute top-[10%] right-[8%] text-primary/10 dark:text-blue-400/10 w-24 h-24 animate-[float_8s_ease-in-out_infinite]" />
         <DoodleStars className="absolute bottom-[15%] right-[30%] text-[#f59e0b]/10 dark:text-[#f59e0b]/15 w-20 h-20 animate-[float_6s_ease-in-out_1.5s_infinite]" />
       </div>
+
+      <LogoWatermark className="left-1/2 top-1/2 size-[26rem] -translate-x-1/2 -translate-y-1/2" />
 
       <div className="relative text-center max-w-lg mx-auto">
         {/* Animated house SVG illustration */}

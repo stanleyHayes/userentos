@@ -6,6 +6,7 @@ import {
   CheckCircle2, Handshake, Moon, ScanSearch, CircleDashed,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { LogoWatermark } from './Watermark'
 
 type Preset = 'properties' | 'payments' | 'savings' | 'agreements' | 'disputes' | 'notifications' | 'search' | 'general'
 
@@ -16,6 +17,8 @@ interface EmptyStateProps {
   action?: { label: string; href?: string; onClick?: () => void }
   secondaryAction?: { label: string; href?: string; onClick?: () => void }
   icon?: ReactNode
+  /** Compact layout for embedding inside cards, dropdowns, and chart panels. */
+  compact?: boolean
 }
 
 const PRESETS: Record<Preset, { icon: ReactNode; color: string; particles: ReactNode[]; defaultTitle: string; defaultDesc: string }> = {
@@ -35,12 +38,56 @@ const COLOR_MAP: Record<string, { bg: string; ring: string; icon: string; partic
   accent: { bg: 'bg-accent/10 dark:bg-accent/20', ring: 'border-accent/30', icon: 'text-accent', particle: 'bg-accent/10 text-accent dark:bg-accent/15', bar: 'from-accent to-emerald-400' },
 }
 
-export function EmptyState({ preset = 'general', title, description, action, secondaryAction, icon: customIcon }: EmptyStateProps) {
+export function EmptyState({ preset = 'general', title, description, action, secondaryAction, icon: customIcon, compact = false }: EmptyStateProps) {
   const config = PRESETS[preset]
   const colors = COLOR_MAP[config.color] || COLOR_MAP.primary
   const displayTitle = title ?? config.defaultTitle
   const displayDesc = description ?? config.defaultDesc
   const displayIcon = customIcon ?? config.icon
+
+  if (compact) {
+    return (
+      <div className="relative flex flex-col items-center text-center py-8 px-4">
+        {/* Animated icon with pulse ring */}
+        <div className="relative w-16 h-16 mb-4 animate-fade-up">
+          <div className={`absolute -inset-1.5 rounded-full border-2 ${colors.ring} animate-pulse-soft`} />
+          <div className={`w-16 h-16 rounded-full ${colors.bg} flex items-center justify-center animate-float relative [&>div>svg]:w-7 [&>div>svg]:h-7`}>
+            <div className={colors.icon}>{displayIcon}</div>
+          </div>
+        </div>
+
+        <div className="max-w-xs animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <h3 className="text-sm font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
+            {displayTitle}
+          </h3>
+          <p className="text-xs text-muted dark:text-gray-400 mt-1 leading-relaxed">
+            {displayDesc}
+          </p>
+        </div>
+
+        {(action || secondaryAction) && (
+          <div className="flex items-center gap-2 mt-4 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+            {action && (
+              action.href ? (
+                <Link to={action.href}>
+                  <Button size="sm" className="gap-1.5">{action.label} <ArrowRight size={13} /></Button>
+                </Link>
+              ) : (
+                <Button size="sm" onClick={action.onClick} className="gap-1.5">{action.label} <ArrowRight size={13} /></Button>
+              )
+            )}
+            {secondaryAction && (
+              secondaryAction.href ? (
+                <Link to={secondaryAction.href}><Button size="sm" variant="outline">{secondaryAction.label}</Button></Link>
+              ) : (
+                <Button size="sm" variant="outline" onClick={secondaryAction.onClick}>{secondaryAction.label}</Button>
+              )
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="surface-card rounded-2xl border border-dashed overflow-hidden relative">
@@ -48,6 +95,8 @@ export function EmptyState({ preset = 'general', title, description, action, sec
       <div className={`h-1 bg-gradient-to-r ${colors.bar}`} />
 
       <div className="absolute inset-0 opacity-[0.35] pointer-events-none" style={{ backgroundImage: 'linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(180deg, rgba(148,163,184,0.12) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+
+      <LogoWatermark tone="surface" className="left-1/2 top-6 size-[120px] -translate-x-1/2 opacity-50" />
 
       <div className="relative py-12 md:py-16 px-6">
         <div className="flex flex-col items-center text-center">

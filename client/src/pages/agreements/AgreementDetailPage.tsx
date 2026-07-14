@@ -9,10 +9,11 @@ import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
 import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts } from '@/hooks/useApi'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import type { AgreementStatus } from '@/types'
 import {
   ArrowLeft, FileText, CheckCircle, AlertTriangle, PenTool, Shield,
@@ -496,16 +497,11 @@ export function AgreementDetailPage() {
 
 function InfoCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
   return (
-    <Card className="overflow-hidden">
-      <CardContent>
-        <div className="flex items-center gap-3">
-          <div className={`${color}`}>{icon}</div>
-          <div>
-            <p className={`text-sm font-extrabold font-display ${color}`}>{value}</p>
-            <p className="text-[10px] text-muted dark:text-gray-500">{label}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <DashboardMetricCard
+      label={label}
+      value={value}
+      icon={icon}
+      accent={accentFromColorClass(color)}
+    />
   )
 }

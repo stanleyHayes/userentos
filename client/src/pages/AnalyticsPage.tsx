@@ -1,13 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuthStore } from '@/stores/authStore'
 import { useMyAnalytics, usePlatformAnalytics, useRegistryStats } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import {
   BarChart3, TrendingUp, Users, Building2, DollarSign,
-  PiggyBank, AlertTriangle, FileText, Star, ArrowUpRight,
-  ArrowDownRight, CreditCard, Briefcase, Shield, Scale,
+  PiggyBank, AlertTriangle, FileText, Star,
+  CreditCard, Briefcase, Shield, Scale,
   Eye, Globe2,
 } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
@@ -26,31 +28,10 @@ function num(v: unknown) {
   return Number(v ?? 0)
 }
 
-function StatCard({ label, value, icon, sub, trend }: {
-  label: string; value: string; icon: React.ReactNode; sub?: string; trend?: number
+function StatCard({ label, value, icon, sub, trend, accent }: {
+  label: string; value: string; icon: React.ReactNode; sub?: string; trend?: number; accent?: string
 }) {
-  return (
-    <Card>
-      <CardContent className="py-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted truncate">{label}</p>
-            <p className="text-xl sm:text-2xl font-bold text-primary-dark mt-1 truncate">{value}</p>
-            {sub && <p className="text-[10px] text-muted mt-0.5 truncate">{sub}</p>}
-            {trend !== undefined && trend !== 0 && (
-              <div className={`flex items-center gap-0.5 mt-1 text-[10px] font-medium ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {trend > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                {Math.abs(trend)}% vs last month
-              </div>
-            )}
-          </div>
-          <div className="p-2 rounded-lg bg-primary/10 dark:bg-blue-500/10 text-primary dark:text-blue-400 flex-shrink-0">
-            {icon}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
+  return <DashboardMetricCard label={label} value={value} sub={sub} icon={icon} trend={trend} accent={accent ?? '#1e3a5f'} />
 }
 
 function HBar({ label, value, max, color = 'bg-primary dark:bg-blue-400', suffix }: {
@@ -74,7 +55,7 @@ function DonutChart({ segments, size = 120, stroke = 14 }: {
   segments: { label: string; value: number; color: string }[]; size?: number; stroke?: number
 }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0)
-  if (total === 0) return <p className="text-xs text-muted text-center py-6">No data</p>
+  if (total === 0) return <EmptyState preset="general" title="No data" compact />
 
   const r = (size - stroke) / 2
   const circumference = 2 * Math.PI * r
@@ -188,19 +169,19 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
       </div>
 
       {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Properties" value={String(num(a?.totalProperties))} icon={<Building2 size={18} />} sub={`${num(a?.occupiedProperties)} occupied, ${num(a?.availableProperties)} available`} />
-        <StatCard label="Active Tenants" value={String(num(a?.activeTenants))} icon={<Users size={18} />} sub={`${num(a?.newTenantsThisMonth)} new this month`} />
-        <StatCard label="Total Revenue" value={formatCurrency(num(a?.totalRevenue))} icon={<TrendingUp size={18} />} trend={num(a?.revenueChange)} />
-        <StatCard label="This Month" value={formatCurrency(num(a?.thisMonthRevenue))} icon={<DollarSign size={18} />} sub={`Last: ${formatCurrency(num(a?.lastMonthRevenue))}`} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Properties" value={String(num(a?.totalProperties))} icon={<Building2 size={18} />} sub={`${num(a?.occupiedProperties)} occupied, ${num(a?.availableProperties)} available`} accent="#7c3aed" />
+        <StatCard label="Active Tenants" value={String(num(a?.activeTenants))} icon={<Users size={18} />} sub={`${num(a?.newTenantsThisMonth)} new this month`} accent="#2563eb" />
+        <StatCard label="Total Revenue" value={formatCurrency(num(a?.totalRevenue))} icon={<TrendingUp size={18} />} trend={num(a?.revenueChange)} accent="#059669" />
+        <StatCard label="This Month" value={formatCurrency(num(a?.thisMonthRevenue))} icon={<DollarSign size={18} />} sub={`Last: ${formatCurrency(num(a?.lastMonthRevenue))}`} accent="#059669" />
       </div>
 
       {/* Second KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Collection Rate" value={`${num(a?.collectionRate)}%`} icon={<BarChart3 size={18} />} />
-        <StatCard label="Avg. Rent" value={formatCurrency(num(a?.avgRentAmount))} icon={<CreditCard size={18} />} />
-        <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} />
-        <StatCard label="Overdue Payments" value={String(num(a?.overduePayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.overdueAmount))} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Collection Rate" value={`${num(a?.collectionRate)}%`} icon={<BarChart3 size={18} />} accent="#059669" />
+        <StatCard label="Avg. Rent" value={formatCurrency(num(a?.avgRentAmount))} icon={<CreditCard size={18} />} accent="#059669" />
+        <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />
+        <StatCard label="Overdue Payments" value={String(num(a?.overduePayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.overdueAmount))} accent="#dc2626" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -214,7 +195,7 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
                   <HBar key={month} label={month} value={amount} max={maxIncome} suffix={formatCurrency(amount)} />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No revenue data yet</p>}
+            ) : <EmptyState preset="payments" title="No revenue data yet" description="Revenue will appear here once payments come in." compact />}
           </CardContent>
         </Card>
 
@@ -341,18 +322,18 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
         <p className="text-sm text-muted mt-1">Your rental and savings overview</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Paid" value={formatCurrency(num(a?.totalPaid))} icon={<DollarSign size={18} />} />
-        <StatCard label="Payments Made" value={String(num(a?.paymentCount))} icon={<CreditCard size={18} />} />
-        <StatCard label="Wallet Balance" value={formatCurrency(num(a?.walletBalance))} icon={<PiggyBank size={18} />} />
-        <StatCard label="Next Payment" value={formatCurrency(num(a?.nextPaymentAmount))} icon={<TrendingUp size={18} />} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total Paid" value={formatCurrency(num(a?.totalPaid))} icon={<DollarSign size={18} />} accent="#059669" />
+        <StatCard label="Payments Made" value={String(num(a?.paymentCount))} icon={<CreditCard size={18} />} accent="#2563eb" />
+        <StatCard label="Wallet Balance" value={formatCurrency(num(a?.walletBalance))} icon={<PiggyBank size={18} />} accent="#7c3aed" />
+        <StatCard label="Next Payment" value={formatCurrency(num(a?.nextPaymentAmount))} icon={<TrendingUp size={18} />} accent="#d97706" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Saved" value={formatCurrency(num(a?.totalSaved))} icon={<PiggyBank size={18} />} />
-        <StatCard label="Savings Target" value={formatCurrency(num(a?.savingsTarget))} icon={<BarChart3 size={18} />} />
-        <StatCard label="Active Plans" value={String(num(a?.activePlans))} icon={<FileText size={18} />} />
-        <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total Saved" value={formatCurrency(num(a?.totalSaved))} icon={<PiggyBank size={18} />} accent="#059669" />
+        <StatCard label="Savings Target" value={formatCurrency(num(a?.savingsTarget))} icon={<BarChart3 size={18} />} accent="#2563eb" />
+        <StatCard label="Active Plans" value={String(num(a?.activePlans))} icon={<FileText size={18} />} accent="#7c3aed" />
+        <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -366,7 +347,7 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
                   <HBar key={month} label={month} value={amount} max={maxPayment} suffix={formatCurrency(amount)} />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No payment data yet</p>}
+            ) : <EmptyState preset="payments" title="No payment data yet" description="Payment activity will appear here." compact />}
           </CardContent>
         </Card>
 
@@ -433,7 +414,7 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
                   label: s.replace(/_/g, ' '), value: c,
                   color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][i % 5],
                 }))} />
-              ) : <p className="text-xs text-muted text-center py-4">No applications yet</p>}
+              ) : <EmptyState preset="agreements" title="No applications yet" compact />}
             </div>
           </CardContent>
         </Card>
@@ -486,18 +467,18 @@ function PlatformAnalytics() {
       </div>
 
       {/* Top KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Users" value={String(users.total ?? 0)} icon={<Users size={18} />} sub={`${users.verified ?? 0} verified`} />
-        <StatCard label="Properties" value={String(props.total ?? 0)} icon={<Building2 size={18} />} sub={`Avg rent: ${formatCurrency(props.avgRent ?? 0)}`} />
-        <StatCard label="Payment Volume" value={formatCurrency(pay.completedVolume ?? 0)} icon={<TrendingUp size={18} />} sub={`${pay.total ?? 0} transactions`} />
-        <StatCard label="Open Disputes" value={String(dis.open ?? 0)} icon={<AlertTriangle size={18} />} sub={`${dis.resolutionRate ?? 0}% resolved`} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total Users" value={String(users.total ?? 0)} icon={<Users size={18} />} sub={`${users.verified ?? 0} verified`} accent="#2563eb" />
+        <StatCard label="Properties" value={String(props.total ?? 0)} icon={<Building2 size={18} />} sub={`Avg rent: ${formatCurrency(props.avgRent ?? 0)}`} accent="#7c3aed" />
+        <StatCard label="Payment Volume" value={formatCurrency(pay.completedVolume ?? 0)} icon={<TrendingUp size={18} />} sub={`${pay.total ?? 0} transactions`} accent="#059669" />
+        <StatCard label="Open Disputes" value={String(dis.open ?? 0)} icon={<AlertTriangle size={18} />} sub={`${dis.resolutionRate ?? 0}% resolved`} accent="#dc2626" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Active Agreements" value={String(agr.byStatus?.active ?? 0)} icon={<FileText size={18} />} sub={`${agr.total ?? 0} total`} />
-        <StatCard label="Applications" value={String(apps.total ?? 0)} icon={<Briefcase size={18} />} sub={`${apps.approvalRate ?? 0}% approval rate`} />
-        <StatCard label="Avg. Rating" value={`${rev.avgRating ?? 0} / 5`} icon={<Star size={18} />} sub={`${rev.total ?? 0} reviews`} />
-        <StatCard label="Avg. Credit Score" value={String(credit.avgScore ?? 0)} icon={<Shield size={18} />} sub={`${credit.total ?? 0} scored`} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Active Agreements" value={String(agr.byStatus?.active ?? 0)} icon={<FileText size={18} />} sub={`${agr.total ?? 0} total`} accent="#059669" />
+        <StatCard label="Applications" value={String(apps.total ?? 0)} icon={<Briefcase size={18} />} sub={`${apps.approvalRate ?? 0}% approval rate`} accent="#2563eb" />
+        <StatCard label="Avg. Rating" value={`${rev.avgRating ?? 0} / 5`} icon={<Star size={18} />} sub={`${rev.total ?? 0} reviews`} accent="#d97706" />
+        <StatCard label="Avg. Credit Score" value={String(credit.avgScore ?? 0)} icon={<Shield size={18} />} sub={`${credit.total ?? 0} scored`} accent="#4f46e5" />
       </div>
 
       {/* Charts row */}
@@ -526,7 +507,7 @@ function PlatformAnalytics() {
                   <HBar key={type} label={type.replace(/_/g, ' ')} value={avg} max={maxRent} color="bg-secondary/80" suffix={formatCurrency(avg)} />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No data</p>}
+            ) : <EmptyState preset="general" title="No data" compact />}
           </CardContent>
         </Card>
 
@@ -597,11 +578,11 @@ function PlatformAnalytics() {
       </div>
 
       {/* Financial row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Invested" value={formatCurrency(inv.totalInvested ?? 0)} icon={<TrendingUp size={18} />} sub={`${inv.total ?? 0} investments`} />
-        <StatCard label="Expected Returns" value={formatCurrency(inv.totalExpectedReturn ?? 0)} icon={<DollarSign size={18} />} />
-        <StatCard label="Loans Disbursed" value={formatCurrency(lo.totalDisbursed ?? 0)} icon={<Scale size={18} />} sub={`${lo.defaultRate ?? 0}% default rate`} />
-        <StatCard label="Total Saved" value={formatCurrency(sav.totalSaved ?? 0)} icon={<PiggyBank size={18} />} sub={`${sav.activeSavers ?? 0} active savers`} />
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total Invested" value={formatCurrency(inv.totalInvested ?? 0)} icon={<TrendingUp size={18} />} sub={`${inv.total ?? 0} investments`} accent="#059669" />
+        <StatCard label="Expected Returns" value={formatCurrency(inv.totalExpectedReturn ?? 0)} icon={<DollarSign size={18} />} accent="#059669" />
+        <StatCard label="Loans Disbursed" value={formatCurrency(lo.totalDisbursed ?? 0)} icon={<Scale size={18} />} sub={`${lo.defaultRate ?? 0}% default rate`} accent="#7c3aed" />
+        <StatCard label="Total Saved" value={formatCurrency(sav.totalSaved ?? 0)} icon={<PiggyBank size={18} />} sub={`${sav.activeSavers ?? 0} active savers`} accent="#059669" />
       </div>
 
       {/* Bottom gauges */}
@@ -685,24 +666,27 @@ function PublicRegistryAnalytics() {
         <CardTitle>Public Registry — Last 30 Days</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <div className="stagger-3d grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <StatCard
             label="Total Pageviews"
             value={String(data.totalViews ?? 0)}
             icon={<Eye size={18} />}
             sub="Last 30 days"
+            accent="#2563eb"
           />
           <StatCard
             label="Unique Viewers"
             value={String(data.uniqueViewers ?? 0)}
             icon={<Globe2 size={18} />}
             sub="Distinct IP hashes"
+            accent="#7c3aed"
           />
           <StatCard
             label="Top Property"
             value={data.topProperties?.[0]?.title ?? '—'}
             icon={<Building2 size={18} />}
             sub={data.topProperties?.[0] ? `${data.topProperties[0].views} views` : 'No views yet'}
+            accent="#c9a227"
           />
         </div>
 

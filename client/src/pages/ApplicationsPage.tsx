@@ -14,9 +14,10 @@ import { DoodleArrow } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import {
   FileCheck, Calendar, Clock, DollarSign, User, Building2,
-  MessageSquare, Check, X as XIcon, ArrowRight, ArrowUpRight,
+  MessageSquare, Check, X as XIcon, ArrowRight,
   CheckCircle, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 
 interface Application {
   id: string
@@ -113,31 +114,14 @@ export function ApplicationsPage() {
         const rejected = applications.filter((a) => a.status === 'rejected')
         const rate = applications.length > 0 ? Math.round((approved.length / applications.length) * 100) : 0
         return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Total', value: String(applications.length), icon: <FileCheck size={18} />, color: '#3b82f6', gradient: 'from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20' },
-              { label: 'Pending', value: String(pending.length), icon: <Clock size={18} />, color: '#f59e0b', gradient: 'from-amber-500/10 to-yellow-500/10 dark:from-amber-500/20 dark:to-yellow-500/20', sub: pending.length > 0 ? 'Awaiting response' : 'None pending' },
-              { label: 'Approved', value: String(approved.length), icon: <CheckCircle size={18} />, color: '#10b981', gradient: 'from-emerald-500/10 to-teal-500/10 dark:from-emerald-500/20 dark:to-teal-500/20', sub: `${rate}% success rate` },
-              { label: 'Rejected', value: String(rejected.length), icon: <AlertTriangle size={18} />, color: '#ef4444', gradient: 'from-red-500/10 to-rose-500/10 dark:from-red-500/20 dark:to-rose-500/20' },
+              { label: 'Total', value: String(applications.length), icon: <FileCheck size={18} />, color: '#2563eb' },
+              { label: 'Pending', value: String(pending.length), icon: <Clock size={18} />, color: '#d97706', sub: pending.length > 0 ? 'Awaiting response' : 'None pending' },
+              { label: 'Approved', value: String(approved.length), icon: <CheckCircle size={18} />, color: '#059669', sub: `${rate}% success rate` },
+              { label: 'Rejected', value: String(rejected.length), icon: <AlertTriangle size={18} />, color: '#dc2626' },
             ].map((kpi) => (
-              <div
-                key={kpi.label}
-                className={`rounded-2xl bg-gradient-to-br ${kpi.gradient} border border-border/30 dark:border-[#252a3a]/30 p-4 overflow-hidden relative group`}
-                style={{ borderLeftWidth: 3, borderLeftColor: kpi.color }}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
-                    style={{ backgroundColor: kpi.color + '18' }}
-                  >
-                    <div style={{ color: kpi.color }}>{kpi.icon}</div>
-                  </div>
-                  <ArrowUpRight size={12} className="text-muted/30 dark:text-gray-600" />
-                </div>
-                <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white tracking-tight truncate">{kpi.value}</p>
-                <p className="text-[11px] text-muted dark:text-gray-500 mt-0.5">{kpi.label}</p>
-                {kpi.sub && <p className="text-[10px] text-muted/60 dark:text-gray-600 mt-0.5">{kpi.sub}</p>}
-              </div>
+              <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
             ))}
           </div>
         )

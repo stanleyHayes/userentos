@@ -8,7 +8,7 @@ import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import { useDisputes, useCreateDispute, useAgreements } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, accentFromColorClass, formatDate } from '@/lib/utils'
 import {
   AlertTriangle, Plus, Calendar,
   FileText, CheckCircle2, Clock, Shield,
@@ -16,6 +16,7 @@ import {
   Search, TrendingUp,
 } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { DoodleZigzag } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { DisputeStatus } from '@/types'
@@ -337,21 +338,22 @@ export function DisputesPage() {
 function StatCard({ icon, label, value, gradient, alert }: {
   icon: React.ReactNode; label: string; value: number | string; gradient: string; alert?: boolean
 }) {
+  const card = (
+    <DashboardMetricCard
+      label={label}
+      value={String(value)}
+      icon={icon}
+      accent={accentFromColorClass(gradient)}
+    />
+  )
+
+  if (!alert) return card
+
   return (
-    <Card className={cn('overflow-hidden', alert && 'ring-1 ring-red-500/30')}>
-      <CardContent>
-        <div className="flex items-center gap-3">
-          <div className={cn('w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center text-white flex-shrink-0', gradient)}>
-            {icon}
-          </div>
-          <div>
-            <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{value}</p>
-            <p className="text-[10px] text-muted dark:text-gray-500">{label}</p>
-          </div>
-          {alert && <Badge variant="danger" className="ml-auto animate-pulse text-[9px]">!</Badge>}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="relative h-full">
+      {card}
+      <Badge variant="danger" className="absolute right-3 top-3 z-10 animate-pulse text-[9px]">!</Badge>
+    </div>
   )
 }
 

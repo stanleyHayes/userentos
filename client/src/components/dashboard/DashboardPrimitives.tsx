@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react'
+import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { IconWatermark } from '@/components/ui/Watermark'
+import { useParallax } from '@/hooks/useParallax'
 
 const heroTones = {
   tenant: { accent: '#10b981', label: 'text-emerald-200' },
@@ -20,14 +22,22 @@ interface DashboardHeroProps {
   actions?: ReactNode
   children?: ReactNode
   tone?: HeroTone
+  /** Lucide icon representing this page — shown as a faint parallax watermark. */
+  watermarkIcon?: LucideIcon
 }
 
-export function DashboardHero({ eyebrow, title, description, actions, children, tone = 'tenant' }: DashboardHeroProps) {
+export function DashboardHero({ eyebrow, title, description, actions, children, tone = 'tenant', watermarkIcon }: DashboardHeroProps) {
   const config = heroTones[tone]
+  const parallaxRef = useParallax<HTMLSpanElement>(0.12)
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f1f33] p-4 text-white shadow-[0_18px_56px_rgba(15,31,51,0.18)] sm:p-6">
+    <section className="animate-circle-reveal relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f1f33] p-4 text-white shadow-[0_18px_56px_rgba(15,31,51,0.18)] sm:p-6">
       <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+      {watermarkIcon && (
+        <span ref={parallaxRef} className="parallax-layer pointer-events-none absolute -bottom-8 -right-6 hidden select-none sm:block" aria-hidden="true">
+          <IconWatermark icon={watermarkIcon} tone="brand" className="animate-parallax-drift size-44" />
+        </span>
+      )}
       <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${config.accent}, transparent)` }} />
       <div className="absolute inset-x-10 bottom-0 h-px opacity-70" style={{ background: `linear-gradient(90deg, transparent, ${config.accent}, transparent)` }} />
 
@@ -51,7 +61,7 @@ export function DashboardHero({ eyebrow, title, description, actions, children, 
 interface DashboardMetricCardProps {
   label: string
   value: string
-  sub: string
+  sub?: string
   icon: ReactNode
   accent: string
   href?: string
@@ -59,34 +69,50 @@ interface DashboardMetricCardProps {
 }
 
 export function DashboardMetricCard({ label, value, sub, icon, accent, href, trend }: DashboardMetricCardProps) {
+  const watermark = isValidElement(icon)
+    ? cloneElement(icon as ReactElement<{ size?: number; strokeWidth?: number }>, { size: 72, strokeWidth: 1.15 })
+    : null
+
   const metric = (
     <div
-      className="surface-card surface-card-interactive group h-full overflow-hidden rounded-2xl border p-3 sm:p-4"
+      className="hover-tilt surface-card surface-card-interactive group relative h-full overflow-hidden rounded-2xl border p-3 sm:p-4"
       style={{
         borderLeftWidth: 3,
         borderLeftColor: accent,
         background: `linear-gradient(135deg, ${accent}12, var(--rentos-card) 58%)`,
       }}
     >
-      <div className="mb-2 flex items-start justify-between sm:mb-3">
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 sm:h-10 sm:w-10"
-          style={{ backgroundColor: `${accent}18`, color: accent }}
+      {/* Decorative watermark of the card icon */}
+      {watermark && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-3 -right-3 select-none opacity-[0.07] dark:opacity-[0.1]"
+          style={{ color: accent }}
         >
-          {icon}
-        </div>
-        {trend !== undefined && trend !== 0 ? (
-          <div className={cn('flex items-center gap-0.5 text-[10px] font-bold', trend > 0 ? 'text-accent' : 'text-danger')}>
-            {trend > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-            {trend > 0 ? '+' : ''}{trend}%
+          {watermark}
+        </span>
+      )}
+      <div className="relative">
+        <div className="mb-2 flex items-start justify-between sm:mb-3">
+          <div
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 sm:h-10 sm:w-10"
+            style={{ backgroundColor: `${accent}18`, color: accent }}
+          >
+            {icon}
           </div>
-        ) : (
-          <ArrowUpRight size={14} className="flex-shrink-0 text-muted/40 transition-colors group-hover:text-primary dark:text-gray-600 dark:group-hover:text-blue-400" />
-        )}
+          {trend !== undefined && trend !== 0 ? (
+            <div className={cn('flex items-center gap-0.5 text-[10px] font-bold', trend > 0 ? 'text-accent' : 'text-danger')}>
+              {trend > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+              {trend > 0 ? '+' : ''}{trend}%
+            </div>
+          ) : (
+            <ArrowUpRight size={14} className="flex-shrink-0 text-muted/40 transition-colors group-hover:text-primary dark:text-gray-600 dark:group-hover:text-blue-400" />
+          )}
+        </div>
+        <p className="truncate font-display text-sm font-extrabold text-primary-dark dark:text-white sm:text-xl">{value}</p>
+        <p className="mt-0.5 truncate text-[10px] text-muted dark:text-gray-500 sm:text-[11px]">{label}</p>
+        {sub && <p className="mt-1 truncate text-[10px] font-semibold" style={{ color: accent }}>{sub}</p>}
       </div>
-      <p className="truncate font-display text-sm font-extrabold text-primary-dark dark:text-white sm:text-xl">{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-muted dark:text-gray-500 sm:text-[11px]">{label}</p>
-      <p className="mt-1 truncate text-[10px] font-semibold" style={{ color: accent }}>{sub}</p>
     </div>
   )
 
@@ -146,7 +172,7 @@ export function DashboardActionItem({ title, description, icon, href, tone = 'de
     <Link
       to={href}
       className={cn(
-        'group flex min-h-[96px] flex-col justify-between rounded-2xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/20',
+        'hover-tilt group flex min-h-[96px] flex-col justify-between rounded-2xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/20',
         actionToneClasses[tone],
       )}
     >

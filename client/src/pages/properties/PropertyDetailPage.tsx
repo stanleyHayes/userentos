@@ -2,46 +2,36 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { Modal } from '@/components/ui/Modal'
-import { Textarea } from '@/components/ui/Textarea'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuthStore } from '@/stores/authStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { useState, useRef } from 'react'
-import TextField from '@mui/material/TextField'
+import { useState } from 'react'
 import {
   ArrowLeft, MapPin, Trash2, Bed, Bath, Car, Sofa, Ruler, Building2, Eye,
   Heart, MessageSquare, Shield, Check, X as XIcon, AlertTriangle, Star,
-  ChevronLeft, ChevronRight, User, Phone, Mail, Clock, Lock, Share2, Flag,
+  User, Phone, Clock, Lock, Share2, Flag,
   Wifi, Zap, Droplets, ShieldCheck, TreePine, Dumbbell, Wind, Tv, WashingMachine,
-  Cctv, DoorOpen, Waves, ParkingCircle, Fuel, Plus, UserCircle, ThumbsUp, ThumbsDown,
-  EyeOff, CreditCard, FileCheck, Send, CheckCircle2, XCircle, Info,
+  Cctv, DoorOpen, Waves, ParkingCircle, Fuel, CreditCard, CheckCircle2,
   Accessibility, Ear,
 } from 'lucide-react'
-import { DatePicker } from '@/components/ui/DatePicker'
-import { usePropertyReviews, useCreateReview, useDeleteReview } from '@/hooks/useReviews'
-import { useUploadPropertyImages } from '@/hooks/useApi'
-import { Switch } from '@/components/ui/Switch'
-import type { Review } from '@/hooks/useReviews'
 import { DoodleCircle } from '@/components/ui/Doodles'
+import { statusVariant, listingStatusVariant, listingStatusLabel } from './components/propertyStatusMaps'
+import { PropertyGallery } from './components/PropertyGallery'
+import { ContactLandlordModal } from './components/ContactLandlordModal'
+import { RejectListingModal } from './components/RejectListingModal'
+import { ApplyToRentModal } from './components/ApplyToRentModal'
+import { TenantActions } from './components/TenantActions'
+import { OwnerActions } from './components/OwnerActions'
+import { GovReviewActions } from './components/GovReviewActions'
+import { QualificationCard } from './components/QualificationCard'
+import type { PropertyQualification } from './components/QualificationCard'
+import { TenantReviewSection } from './components/TenantReviewSection'
 import type { Property, Application, RentalAgreement, Conversation, PropertyStatus } from '@/types'
 import type { PaginatedResponse } from '@/types'
-
-const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
-  available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
-}
-
-const listingStatusVariant: Record<string, 'default' | 'warning' | 'success' | 'danger'> = {
-  draft: 'default', pending_review: 'warning', approved: 'success', rejected: 'danger',
-}
-
-const listingStatusLabel: Record<string, string> = {
-  draft: 'Draft', pending_review: 'Pending Review', approved: 'Approved', rejected: 'Rejected',
-}
 
 // Map amenity names to icons
 const amenityIcons: Record<string, React.ReactNode> = {
@@ -78,8 +68,6 @@ export function PropertyDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [messagingReviewer, setMessagingReviewer] = useState(false)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const uploadImages = useUploadPropertyImages()
 
   const { data: property, isLoading } = useQuery({ queryKey: ['property', id], queryFn: () => api.get<Property>(`/properties/${id}`), enabled: !!id })
   const { data: agreementsData } = useQuery({ queryKey: ['property-agreements', id], queryFn: () => api.get<PaginatedResponse<RentalAgreement>>('/agreements'), enabled: !!id && !!user })
@@ -91,7 +79,7 @@ export function PropertyDetailPage() {
     queryFn: () => api.get<PaginatedResponse<Application>>('/applications'),
     enabled: !!user && user.activeRole === 'tenant',
   })
-  const { data: qualification } = useQuery<{ qualified: boolean; checks: { requirement: string; met: boolean; detail: string }[]; passedCount: number; totalCount: number }>({
+  const { data: qualification } = useQuery<PropertyQualification>({
     queryKey: ['property-qualify', id],
     queryFn: () => api.get(`/properties/${id}/qualify`),
     enabled: !!id && !!user && user.activeRole === 'tenant',
@@ -184,30 +172,15 @@ export function PropertyDetailPage() {
 
       {/* Hero: Image + Info */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        {/* Gallery */}
-        <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/10 dark:to-accent/10 lg:aspect-auto lg:min-h-[480px]">
-          {images.length > 0 ? (
-            <>
-              <img src={images[activeImage]} alt={p.title} className="w-full h-full object-cover" />
-              {images.length > 1 && (
-                <>
-                  <button onClick={() => setActiveImage((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center"><ChevronLeft size={16} /></button>
-                  <button onClick={() => setActiveImage((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center"><ChevronRight size={16} /></button>
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">{images.map((_: string, i: number) => <button key={i} onClick={() => setActiveImage(i)} className={`h-1.5 rounded-full transition-all ${i === activeImage ? 'bg-white w-5' : 'bg-white/40 w-1.5'}`} />)}</div>
-                </>
-              )}
-            </>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center"><Building2 size={48} className="text-primary/10" /></div>
-          )}
-          <div className="absolute top-3 left-3 flex gap-1.5">
-            <Badge variant={statusVariant[p.status as PropertyStatus]}>{p.status?.replace('_', ' ')}</Badge>
-            {p.listingStatus && (
-              <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'}>{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>
-            )}
-          </div>
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/40 backdrop-blur rounded-full px-2 py-0.5 text-[10px] text-white"><Eye size={10} /> {p.views ?? 0}</div>
-        </div>
+        <PropertyGallery
+          images={images}
+          title={p.title}
+          activeImage={activeImage}
+          setActiveImage={setActiveImage}
+          status={p.status}
+          listingStatus={p.listingStatus}
+          views={p.views}
+        />
 
         {/* Info panel */}
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -261,98 +234,40 @@ export function PropertyDetailPage() {
               )}
 
               {isTenant && p.status === 'available' && (
-                <div className="space-y-2">
-                  {existingApplication ? (
-                    <Badge variant={existingApplication.status === 'approved' ? 'success' : 'warning'} className="w-full justify-center py-2">
-                      <FileCheck size={12} className="mr-1.5" />
-                      {existingApplication.status === 'approved' ? 'Application Approved' : 'Application Pending'}
-                    </Badge>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <Button className="w-full" data-testid="property-apply-button" onClick={() => setShowApply(true)}>
-                        <Send size={14} /> Apply to Rent
-                      </Button>
-                      {qualification && !qualification.qualified && (
-                        <p className="flex items-center justify-center gap-1 text-center text-[10px] text-amber-600 dark:text-amber-400">
-                          <AlertTriangle size={10} /> You don't meet all requirements - you can still apply
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowContact(true)}><MessageSquare size={14} /> Contact</Button>
-                    <Button variant="outline" onClick={() => toggleFavorite(id!)} disabled={isToggling}><Heart size={14} className={isFavorited ? 'fill-danger text-danger' : ''} /></Button>
-                  </div>
-                </div>
+                <TenantActions
+                  existingApplication={existingApplication}
+                  showQualificationWarning={!!qualification && !qualification.qualified}
+                  onApply={() => setShowApply(true)}
+                  onContact={() => setShowContact(true)}
+                  onToggleFavorite={() => toggleFavorite(id!)}
+                  isFavorited={isFavorited}
+                  isToggling={isToggling}
+                />
               )}
 
               {isOwner && (
-                <div className="space-y-2">
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files ?? [])
-                      if (files.length > 0) {
-                        uploadImages.mutate({ id: id!, files }, {
-                          onSuccess: () => qc.invalidateQueries({ queryKey: ['property', id] }),
-                        })
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                  <Button variant="outline" className="w-full" onClick={() => imageInputRef.current?.click()} disabled={uploadImages.isPending}>
-                    {uploadImages.isPending ? 'Uploading...' : 'Upload Images'}
-                  </Button>
-                  <Button variant="outline" className="w-full">Edit Listing</Button>
-                  {p.listingStatus === 'draft' && (
-                    <Button className="w-full" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
-                      <Send size={14} /> {publishMutation.isPending ? 'Publishing...' : 'Publish for Review'}
-                    </Button>
-                  )}
-                  {p.listingStatus === 'rejected' && (
-                    <div className="space-y-2">
-                      <div className="rounded-xl bg-danger/10 p-3 text-sm text-danger">
-                        <p className="font-semibold">Rejection Reason:</p>
-                        <p>{p.rejectionReason || 'No reason provided'}</p>
-                      </div>
-                      <Button className="w-full" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
-                        <Send size={14} /> {publishMutation.isPending ? 'Resubmitting...' : 'Edit & Resubmit'}
-                      </Button>
-                    </div>
-                  )}
-                  {publishErrors.length > 0 && (
-                    <div className="space-y-1 rounded-xl bg-danger/10 p-3 text-xs text-danger">
-                      <p className="font-semibold">Please fix the following before publishing:</p>
-                      {publishErrors.map((e, i) => <p key={i}>- {e.message}</p>)}
-                    </div>
-                  )}
-                  {p.listingStatus === 'pending_review' && (
-                    <Button variant="outline" className="w-full" onClick={handleMessageReviewer} disabled={messagingReviewer}>
-                      <MessageSquare size={14} /> {messagingReviewer ? 'Opening chat...' : 'Message Reviewer'}
-                    </Button>
-                  )}
-                </div>
+                <OwnerActions
+                  propertyId={id!}
+                  listingStatus={p.listingStatus}
+                  rejectionReason={p.rejectionReason}
+                  publishErrors={publishErrors}
+                  onPublish={() => publishMutation.mutate()}
+                  isPublishing={publishMutation.isPending}
+                  onMessageReviewer={handleMessageReviewer}
+                  messagingReviewer={messagingReviewer}
+                />
               )}
 
               {isGovOrAdmin && p.listingStatus === 'pending_review' && (
-                <div className="space-y-2">
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => reviewMutation.mutate({ action: 'approve' })} disabled={reviewMutation.isPending}>
-                    <CheckCircle2 size={14} /> Approve Listing
-                  </Button>
-                  <Button variant="outline" className="w-full border-danger text-danger hover:bg-danger/10" onClick={() => setShowRejectModal(true)} disabled={reviewMutation.isPending}>
-                    <XCircle size={14} /> Reject Listing
-                  </Button>
-                  <Button variant="outline" className="w-full" onClick={handleMessageLandlord} disabled={messagingReviewer}>
-                    <MessageSquare size={14} /> {messagingReviewer ? 'Opening chat...' : 'Message Landlord'}
-                  </Button>
-                  {reviewMutation.isError && (
-                    <p className="text-xs text-danger">{(reviewMutation.error as Error).message}</p>
-                  )}
-                </div>
+                <GovReviewActions
+                  onApprove={() => reviewMutation.mutate({ action: 'approve' })}
+                  onReject={() => setShowRejectModal(true)}
+                  onMessageLandlord={handleMessageLandlord}
+                  isPending={reviewMutation.isPending}
+                  messagingReviewer={messagingReviewer}
+                  isError={reviewMutation.isError}
+                  errorMessage={reviewMutation.error ? (reviewMutation.error as Error).message : undefined}
+                />
               )}
 
               <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-4 dark:border-[#252a3a]/60">
@@ -455,231 +370,48 @@ export function PropertyDetailPage() {
 
           {/* Qualification Status */}
           {isTenant && qualification && qualification.totalCount > 0 && (
-            <Card>
-              <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 mb-3 ${qualification.qualified ? 'bg-emerald-500/10 dark:bg-emerald-500/15' : 'bg-amber-500/10 dark:bg-amber-500/15'}`}>
-                {qualification.qualified ? (
-                  <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />
-                ) : (
-                  <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-bold ${qualification.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                    {qualification.qualified ? 'You qualify for this property!' : "You don't meet all requirements"}
-                  </p>
-                  <p className="text-[10px] text-muted dark:text-gray-500 mt-0.5">
-                    {qualification.passedCount} of {qualification.totalCount} requirements met
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-1.5 rounded-full bg-gray-200 dark:bg-[#252a3a] mb-4 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${qualification.qualified ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                  style={{ width: `${qualification.totalCount > 0 ? (qualification.passedCount / qualification.totalCount) * 100 : 0}%` }}
-                />
-              </div>
-
-              {/* Individual checks */}
-              <div className="space-y-2">
-                {qualification.checks.map((check, i) => (
-                  <div key={i} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 ${check.met ? 'bg-emerald-500/5 dark:bg-emerald-500/10' : 'bg-red-500/5 dark:bg-red-500/10'}`}>
-                    {check.met ? (
-                      <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <XCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                    )}
-                    <div className="min-w-0">
-                      <p className={`text-xs font-semibold ${check.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
-                        {check.requirement}
-                      </p>
-                      <p className="text-[10px] text-muted dark:text-gray-500 mt-0.5">{check.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {!qualification.qualified && (
-                <div className="flex items-start gap-2 mt-3 rounded-lg bg-surface dark:bg-[#0c0e1a] px-3 py-2.5">
-                  <Info size={12} className="text-muted dark:text-gray-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-muted dark:text-gray-500">
-                    You can still apply. The landlord will review your application and make the final decision.
-                  </p>
-                </div>
-              )}
-            </Card>
+            <QualificationCard qualification={qualification} />
           )}
 
           {/* Tenants & Reviews tabs */}
           <TenantReviewSection propertyId={id!} pastAgreements={pastAgreements} />
         </div>
 
-      {/* Contact modal */}
-      <Modal open={showContact} onClose={() => setShowContact(false)} title="Contact Landlord">
-        <div className="flex flex-col gap-5">
-          <p className="text-xs text-muted dark:text-gray-400">Send a message about this property.</p>
-          <TextField label="Message" multiline rows={3} fullWidth placeholder={`Hi, I'm interested in "${p.title}".`} slotProps={{ inputLabel: { shrink: true } }} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowContact(false)}>Cancel</Button>
-            <Button onClick={() => setShowContact(false)}><Mail size={14} /> Send</Button>
-          </div>
-        </div>
-      </Modal>
+      <ContactLandlordModal open={showContact} onClose={() => setShowContact(false)} title={p.title} />
 
-      {/* Reject modal */}
-      <Modal open={showRejectModal} onClose={() => setShowRejectModal(false)} title="Reject Property Listing">
-        <div className="flex flex-col gap-6">
-          <p className="text-sm text-muted dark:text-gray-400">
-            Provide a reason for rejecting <strong className="text-primary-dark dark:text-white">{p.title}</strong>.
-          </p>
-          <Textarea
-            id="reject-reason"
-            label="Rejection Reason"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Explain why this listing is being rejected..."
-            rows={4}
-            aiContext="property listing rejection reason"
-          />
-          {reviewMutation.isError && (
-            <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
-              {(reviewMutation.error as Error).message}
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setShowRejectModal(false)}>Cancel</Button>
-            <Button
-              className="bg-danger hover:bg-danger/90"
-              onClick={() => reviewMutation.mutate({ action: 'reject', reason: rejectReason })}
-              disabled={reviewMutation.isPending}
-            >
-              {reviewMutation.isPending ? 'Rejecting...' : 'Reject Listing'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <RejectListingModal
+        open={showRejectModal}
+        onClose={() => setShowRejectModal(false)}
+        title={p.title}
+        reason={rejectReason}
+        setReason={setRejectReason}
+        onReject={() => reviewMutation.mutate({ action: 'reject', reason: rejectReason })}
+        isPending={reviewMutation.isPending}
+        isError={reviewMutation.isError}
+        errorMessage={reviewMutation.error ? (reviewMutation.error as Error).message : undefined}
+      />
 
-      {/* Apply to Rent modal */}
-      <Modal open={showApply} onClose={() => setShowApply(false)} title="Apply to Rent">
-        <form
-          data-testid="application-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            applyMutation.mutate({
-              propertyId: id,
-              sharedSections: applySharedSections,
-              moveInDate: applyMoveIn,
-              duration: applyDuration,
-              ...(applyMessage ? { message: applyMessage } : {}),
-              ...(applyRent ? { offeredRent: Number(applyRent) } : {}),
-            })
-          }}
-          className="flex flex-col gap-6"
-        >
-          <p className="text-xs text-muted dark:text-gray-400">
-            Apply for <strong className="text-primary-dark dark:text-white">{p.title}</strong> at {formatCurrency(p.rentAmount)}/mo.
-            Select which profile sections to share with the landlord.
-          </p>
-
-          <TextField
-            label="Message to landlord (optional)"
-            value={applyMessage}
-            onChange={(e) => setApplyMessage(e.target.value)}
-            placeholder={`Hi, I'm interested in "${p.title}".`}
-            fullWidth
-            multiline
-            rows={3}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-
-          {/* Profile sections to share */}
-          <div>
-            <p className="text-xs font-semibold text-primary-dark dark:text-white mb-2.5">Share from your profile</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { key: 'personal', label: 'Personal Info', icon: <User size={14} /> },
-                { key: 'professional', label: 'Employment', icon: <CreditCard size={14} /> },
-                { key: 'references', label: 'References', icon: <Phone size={14} /> },
-                { key: 'academic', label: 'Education', icon: <FileCheck size={14} /> },
-                { key: 'family', label: 'Family & Occupants', icon: <User size={14} /> },
-                { key: 'lifestyle', label: 'Lifestyle', icon: <Heart size={14} /> },
-                { key: 'history', label: 'Rental History', icon: <Clock size={14} /> },
-                { key: 'verification', label: 'Verification', icon: <ShieldCheck size={14} /> },
-              ].map((s) => {
-                const selected = applySharedSections.includes(s.key)
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setApplySharedSections((prev) =>
-                      prev.includes(s.key) ? prev.filter((x) => x !== s.key) : [...prev, s.key]
-                    )}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-all ${
-                      selected
-                        ? 'border-primary dark:border-blue-500 bg-primary/5 dark:bg-blue-500/10 text-primary dark:text-blue-400'
-                        : 'border-border/60 dark:border-[#252a3a]/60 text-muted dark:text-gray-400 hover:border-primary/40'
-                    }`}
-                  >
-                    {s.icon}
-                    {s.label}
-                    {selected && <Check size={12} className="ml-auto" />}
-                  </button>
-                )
-              })}
-            </div>
-            {applySharedSections.length === 0 && (
-              <p className="text-[10px] text-danger mt-1.5">Select at least one section</p>
-            )}
-          </div>
-
-          <DatePicker
-            label="Desired Move-in Date"
-            value={applyMoveIn}
-            onChange={setApplyMoveIn}
-            required
-            minDate={new Date().toISOString().slice(0, 10)}
-          />
-
-          <TextField
-            label="Lease Duration"
-            select
-            fullWidth
-            required
-            value={applyDuration}
-            onChange={(e) => setApplyDuration(Number(e.target.value))}
-            slotProps={{ inputLabel: { shrink: true }, select: { native: true } }}
-          >
-            <option value={6}>6 months</option>
-            <option value={12}>12 months</option>
-            <option value={18}>18 months</option>
-            <option value={24}>24 months</option>
-          </TextField>
-
-          <TextField
-            label="Offered Rent (optional)"
-            type="number"
-            fullWidth
-            value={applyRent}
-            onChange={(e) => setApplyRent(e.target.value)}
-            placeholder={String(p.rentAmount)}
-            helperText="Leave blank to accept the listed rent amount"
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-
-          {applyMutation.isError && (
-            <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
-              {(applyMutation.error as Error).message}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => setShowApply(false)}>Cancel</Button>
-            <Button type="submit" data-testid="application-submit" disabled={applyMutation.isPending}>
-              {applyMutation.isPending ? 'Submitting...' : 'Submit Application'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <ApplyToRentModal
+        open={showApply}
+        onClose={() => setShowApply(false)}
+        propertyId={id}
+        title={p.title}
+        rentAmount={p.rentAmount}
+        sharedSections={applySharedSections}
+        setSharedSections={setApplySharedSections}
+        moveIn={applyMoveIn}
+        setMoveIn={setApplyMoveIn}
+        duration={applyDuration}
+        setDuration={setApplyDuration}
+        rent={applyRent}
+        setRent={setApplyRent}
+        message={applyMessage}
+        setMessage={setApplyMessage}
+        onSubmit={(body) => applyMutation.mutate(body)}
+        isPending={applyMutation.isPending}
+        isError={applyMutation.isError}
+        errorMessage={applyMutation.error ? (applyMutation.error as Error).message : undefined}
+      />
     </div>
   )
 }
@@ -762,353 +494,5 @@ function DetailCell({ icon, label, value, highlight }: { icon?: React.ReactNode;
       </div>
       <p className={`text-sm font-bold capitalize ${highlight ? 'text-primary dark:text-blue-400' : 'text-primary-dark dark:text-white'}`}>{value}</p>
     </div>
-  )
-}
-
-function TenantReviewSection({ propertyId, pastAgreements }: { propertyId: string; pastAgreements: RentalAgreement[] }) {
-  const user = useAuthStore((s) => s.user)
-  const qc = useQueryClient()
-  const [tab, setTab] = useState<'tenants' | 'reviews'>('tenants')
-  const [showCreateReview, setShowCreateReview] = useState(false)
-  const { data: reviewsData, isLoading: reviewsLoading } = usePropertyReviews(propertyId)
-  const reviews = reviewsData?.items ?? []
-  const averageRating = reviewsData?.averageRating ?? 0
-
-  const isLandlordOrManager = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager' || user?.activeRole === 'government' || user?.activeRole === 'admin'
-
-  const requestAccessMutation = useMutation({
-    mutationFn: (tenantId: string) => api.post('/profile-access/request', { tenantId, propertyId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['profile-access-check'] }) },
-  })
-
-  return (
-    <Card>
-      <div className="flex border-b border-border/30 dark:border-[#252a3a]/30">
-        <button onClick={() => setTab('tenants')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'tenants' ? 'text-primary dark:text-blue-400 border-b-2 border-primary dark:border-blue-400' : 'text-muted dark:text-gray-400'}`}>
-          <User size={14} className="inline mr-1.5" />Tenants ({pastAgreements.length})
-        </button>
-        <button onClick={() => setTab('reviews')} className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${tab === 'reviews' ? 'text-primary dark:text-blue-400 border-b-2 border-primary dark:border-blue-400' : 'text-muted dark:text-gray-400'}`}>
-          <Star size={14} className="inline mr-1.5" />Reviews ({reviews.length})
-        </button>
-      </div>
-      <div className="p-4">
-        {tab === 'tenants' ? (
-          pastAgreements.length > 0 ? (
-            <div className="space-y-3">
-              {pastAgreements.map((a) => (
-                <div key={a.id} className="rounded-xl border border-border/40 dark:border-[#252a3a]/40 p-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 dark:bg-blue-500/15 flex-shrink-0">
-                        <UserCircle size={16} className="text-primary dark:text-blue-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-primary-dark dark:text-white truncate">{a.tenantName ?? 'Tenant'}</p>
-                        <p className="text-[11px] text-muted dark:text-gray-500">
-                          {formatDate(a.startDate).split(',')[0]} – {a.status === 'active' ? 'Present' : formatDate(a.endDate).split(',')[0]}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant={a.status === 'active' ? 'success' : 'default'}>{a.status}</Badge>
-                  </div>
-
-                  {/* Basic info always visible + full profile access gated */}
-                  <div className="mt-3 pt-3 border-t border-border/30 dark:border-[#252a3a]/30 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 text-[11px] text-muted dark:text-gray-500">
-                      {a.tenantEmail && (
-                        <span className="flex items-center gap-1"><Mail size={11} /> {a.tenantEmail}</span>
-                      )}
-                      {a.tenantPhone && (
-                        <span className="flex items-center gap-1"><Phone size={11} /> {a.tenantPhone}</span>
-                      )}
-                    </div>
-                    {isLandlordOrManager && a.tenantId && (
-                      <TenantAccessButton
-                        tenantId={a.tenantId}
-                        propertyId={propertyId}
-                        onRequest={() => requestAccessMutation.mutate(a.tenantId)}
-                        isRequesting={requestAccessMutation.isPending}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted dark:text-gray-500 text-center py-6">No tenant history yet.</p>
-          )
-        ) : (
-          <div className="space-y-4">
-            {/* Reviews header with avg rating + create button */}
-            <div className="flex items-center justify-between">
-              {reviews.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} size={14} className={s <= Math.round(averageRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-gray-600'} />
-                    ))}
-                  </div>
-                  <span className="text-sm font-bold text-primary-dark dark:text-white">{averageRating.toFixed(1)}</span>
-                  <span className="text-xs text-muted dark:text-gray-400">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</span>
-                </div>
-              )}
-              {user?.activeRole === 'tenant' && (
-                <Button size="sm" onClick={() => setShowCreateReview(true)}>
-                  <Plus size={14} /> Write Review
-                </Button>
-              )}
-            </div>
-
-            {/* Reviews list */}
-            {reviewsLoading ? (
-              <div className="space-y-3">
-                {[1, 2].map((i) => (
-                  <div key={i} className="animate-pulse rounded-lg border border-border/40 dark:border-[#252a3a]/40 p-4 space-y-2">
-                    <div className="h-4 bg-gray-200 dark:bg-[#252a3a] rounded w-1/3" />
-                    <div className="h-3 bg-gray-200 dark:bg-[#252a3a] rounded w-full" />
-                    <div className="h-3 bg-gray-200 dark:bg-[#252a3a] rounded w-2/3" />
-                  </div>
-                ))}
-              </div>
-            ) : reviews.length === 0 ? (
-              <div className="text-center py-6">
-                <Star size={24} className="mx-auto text-muted dark:text-gray-600 mb-2" />
-                <p className="text-sm text-muted dark:text-gray-500">No reviews yet.</p>
-                {user?.activeRole === 'tenant' && (
-                  <p className="text-xs text-muted dark:text-gray-500 mt-1">Be the first to share your experience.</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {reviews.map((review) => (
-                  <ReviewCard key={review.id} review={review} propertyId={propertyId} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {showCreateReview && (
-        <CreateReviewModal propertyId={propertyId} onClose={() => setShowCreateReview(false)} />
-      )}
-    </Card>
-  )
-}
-
-function StarRating({ value, onChange, size = 20 }: { value: number; onChange?: (v: number) => void; size?: number }) {
-  const [hover, setHover] = useState(0)
-  const interactive = !!onChange
-
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <button
-          key={s}
-          type="button"
-          disabled={!interactive}
-          onClick={() => onChange?.(s)}
-          onMouseEnter={() => interactive && setHover(s)}
-          onMouseLeave={() => interactive && setHover(0)}
-          className={interactive ? 'cursor-pointer transition-transform hover:scale-110' : 'cursor-default'}
-        >
-          <Star
-            size={size}
-            className={
-              s <= (hover || value)
-                ? 'text-amber-400 fill-amber-400'
-                : 'text-gray-300 dark:text-gray-600'
-            }
-          />
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function ReviewCard({ review, propertyId }: { review: Review; propertyId: string }) {
-  const user = useAuthStore((s) => s.user)
-  const deleteReview = useDeleteReview()
-  const isOwn = review.userId === user?.id
-
-  return (
-    <div className="rounded-xl border border-border/40 dark:border-[#252a3a]/40 p-4 space-y-2.5">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 dark:bg-blue-500/15">
-            {review.anonymous ? (
-              <EyeOff size={14} className="text-muted dark:text-gray-500" />
-            ) : (
-              <UserCircle size={14} className="text-primary dark:text-blue-400" />
-            )}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-primary-dark dark:text-white">
-              {review.anonymous ? 'Anonymous Tenant' : review.userName ?? 'Tenant'}
-            </p>
-            <p className="text-[10px] text-muted dark:text-gray-500">{formatDate(review.createdAt)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <StarRating value={review.rating} size={12} />
-          {isOwn && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-danger"
-              onClick={() => deleteReview.mutate({ id: review.id, propertyId })}
-              disabled={deleteReview.isPending}
-            >
-              <Trash2 size={12} />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Comment */}
-      <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{review.comment}</p>
-
-      {/* Pros & Cons */}
-      {(review.pros.length > 0 || review.cons.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-          {review.pros.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-success uppercase tracking-wider flex items-center gap-1"><ThumbsUp size={10} /> Pros</span>
-              {review.pros.map((pro, i) => (
-                <p key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-1.5">
-                  <Check size={10} className="text-success flex-shrink-0 mt-0.5" />{pro}
-                </p>
-              ))}
-            </div>
-          )}
-          {review.cons.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-danger uppercase tracking-wider flex items-center gap-1"><ThumbsDown size={10} /> Cons</span>
-              {review.cons.map((con, i) => (
-                <p key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-1.5">
-                  <XIcon size={10} className="text-danger flex-shrink-0 mt-0.5" />{con}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CreateReviewModal({ propertyId, onClose }: { propertyId: string; onClose: () => void }) {
-  const createReview = useCreateReview()
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState('')
-  const [prosText, setProsText] = useState('')
-  const [consText, setConsText] = useState('')
-  const [anonymous, setAnonymous] = useState(false)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (rating === 0) return
-    const pros = prosText.split('\n').map((s) => s.trim()).filter(Boolean)
-    const cons = consText.split('\n').map((s) => s.trim()).filter(Boolean)
-    await createReview.mutateAsync({ propertyId, rating, comment, pros, cons, anonymous })
-    onClose()
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Write a Review" className="max-w-lg">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        {/* Star rating */}
-        <div>
-          <label className="block text-sm font-semibold text-primary-dark dark:text-white mb-2">Rating</label>
-          <StarRating value={rating} onChange={setRating} size={28} />
-          {rating === 0 && <p className="text-xs text-muted dark:text-gray-500 mt-1">Click a star to rate</p>}
-        </div>
-
-        {/* Comment */}
-        <Textarea
-          id="review-comment"
-          label="Your Review"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Share your experience living at this property..."
-          required
-          rows={4}
-          minLength={10}
-          aiContext="property review"
-        />
-
-        {/* Pros */}
-        <Textarea
-          id="review-pros"
-          label="Pros (one per line)"
-          value={prosText}
-          onChange={(e) => setProsText(e.target.value)}
-          placeholder={"Great location\nResponsive landlord\nQuiet neighborhood"}
-          rows={3}
-        />
-
-        {/* Cons */}
-        <Textarea
-          id="review-cons"
-          label="Cons (one per line)"
-          value={consText}
-          onChange={(e) => setConsText(e.target.value)}
-          placeholder={"Parking can be tight\nWater pressure issues"}
-          rows={3}
-        />
-
-        {/* Anonymous toggle */}
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <Switch checked={anonymous} onChange={(v) => setAnonymous(v)} size="sm" />
-          <div className="flex items-center gap-1.5">
-            <EyeOff size={14} className="text-muted dark:text-gray-500" />
-            <span className="text-sm text-gray-600 dark:text-gray-300">Post anonymously</span>
-          </div>
-        </label>
-
-        {createReview.isError && (
-          <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
-            {(createReview.error as Error).message}
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={rating === 0 || createReview.isPending}>
-            {createReview.isPending ? 'Submitting...' : 'Submit Review'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function TenantAccessButton({ tenantId, onRequest, isRequesting }: { tenantId: string; propertyId: string; onRequest: () => void; isRequesting: boolean }) {
-  const { data: accessStatus } = useQuery<{ hasAccess: boolean; status: string }>({
-    queryKey: ['profile-access-check', tenantId],
-    queryFn: () => api.get(`/profile-access/check/${tenantId}`),
-  })
-
-  if (accessStatus?.hasAccess) {
-    return (
-      <Button size="sm" variant="outline" onClick={() => window.location.href = `/tenant-profile/${tenantId}`}>
-        <Eye size={12} /> View Profile
-      </Button>
-    )
-  }
-
-  if (accessStatus?.status === 'pending') {
-    return (
-      <Button size="sm" variant="outline" disabled>
-        <Clock size={12} /> Pending
-      </Button>
-    )
-  }
-
-  return (
-    <Button size="sm" variant="outline" onClick={onRequest} disabled={isRequesting}>
-      <Lock size={12} /> Request Access
-    </Button>
   )
 }

@@ -3,6 +3,7 @@ import { Outlet, Navigate, Link, useLocation } from 'react-router-dom'
 import { useAuthStore, useAuthHydrated } from '@/stores/authStore'
 // AuthLayout only needs cookie hydration (token check), not full user rehydration
 import { Logo } from '@/components/ui/Logo'
+import { LogoWatermark } from '@/components/ui/Watermark'
 import { Shield, CreditCard, PiggyBank, Scale } from 'lucide-react'
 
 export function AuthLayout() {
@@ -55,6 +56,7 @@ export function AuthLayout() {
       <div className="relative hidden flex-1 items-center justify-center overflow-hidden bg-gradient-to-br from-[#0f1f33] via-[#1e3a5f] to-[#0f1f33] lg:flex">
         {/* Grid pattern */}
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
+        <LogoWatermark tone="brand" draw className="-bottom-16 -right-10 size-80" />
         <div className="absolute left-14 right-14 top-20 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         <div className="absolute bottom-20 left-20 right-20 h-px bg-gradient-to-r from-transparent via-secondary/30 to-transparent" />
 

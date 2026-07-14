@@ -10,6 +10,7 @@ import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, ArrowRight } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 export function EmployerPayrollPage() {
   const { data, isLoading } = usePayrollRuns()
@@ -52,11 +53,7 @@ export function EmployerPayrollPage() {
       {isLoading ? (
         <ListSkeleton rows={4} />
       ) : runs.length === 0 ? (
-        <Card><CardContent className="p-12 text-center">
-          <p className="text-sm font-semibold text-primary-dark dark:text-white">No payroll runs yet</p>
-          <p className="text-xs text-muted dark:text-gray-500 mt-1 mb-4">Create a run to compute deductions for the current pay period.</p>
-          <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> Create First Run</Button>
-        </CardContent></Card>
+        <EmptyState preset="payments" title="No payroll runs yet" description="Create your first payroll run to pay employees." action={{ label: 'Create First Run', onClick: () => setOpen(true) }} />
       ) : (
         <div className="space-y-3">
           {runs.map((r) => (

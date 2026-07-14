@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { isValidElement, type ReactNode } from 'react'
+import { Loader2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { IconWatermark } from '@/components/ui/Watermark'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 
 interface AdminPageHeaderProps {
   eyebrow: string
@@ -13,9 +16,16 @@ interface AdminPageHeaderProps {
 }
 
 export function AdminPageHeader({ eyebrow, title, description, icon, accent, meta, children }: AdminPageHeaderProps) {
+  const watermarkIcon = isValidElement(icon) ? (icon.type as LucideIcon) : null
+
   return (
     <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f1f33] p-4 text-white shadow-[0_18px_56px_rgba(15,31,51,0.16)] sm:p-6">
       <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '36px 36px' }} />
+      {watermarkIcon && (
+        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/2 overflow-hidden lg:block">
+          <IconWatermark icon={watermarkIcon} tone="brand" className="-right-8 top-1/2 size-52 -translate-y-1/2 rotate-[-8deg]" />
+        </span>
+      )}
       <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
@@ -45,7 +55,7 @@ interface AdminStatGridProps {
 }
 
 export function AdminStatGrid({ children }: AdminStatGridProps) {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
+  return <div className="stagger-3d grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
 }
 
 interface AdminStatCardProps {
@@ -57,27 +67,7 @@ interface AdminStatCardProps {
 }
 
 export function AdminStatCard({ label, value, description, icon, accent }: AdminStatCardProps) {
-  return (
-    <div
-      className="surface-card min-h-[124px] overflow-hidden rounded-2xl border p-4"
-      style={{
-        borderLeftWidth: 3,
-        borderLeftColor: accent,
-        background: `linear-gradient(135deg, ${accent}12, var(--rentos-card) 62%)`,
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-bold uppercase tracking-wide text-muted dark:text-gray-500">{label}</p>
-          <p className="mt-2 truncate font-display text-2xl font-extrabold text-primary-dark dark:text-white">{value}</p>
-        </div>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}16`, color: accent }}>
-          {icon}
-        </span>
-      </div>
-      <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted dark:text-gray-500">{description}</p>
-    </div>
-  )
+  return <DashboardMetricCard label={label} value={value} sub={description} icon={icon} accent={accent} />
 }
 
 interface AdminToolbarProps {
@@ -144,10 +134,8 @@ export function AdminLoadingState({ title, description }: AdminStateCardProps) {
 
 export function AdminEmptyState({ title, description, icon }: AdminStateCardProps) {
   return (
-    <section className="surface-card rounded-2xl border p-10 text-center">
-      {icon && <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-300">{icon}</div>}
-      <p className="text-sm font-bold text-primary-dark dark:text-white">{title}</p>
-      <p className="mt-1 text-xs leading-relaxed text-muted dark:text-gray-500">{description}</p>
+    <section className="surface-card rounded-2xl border">
+      <EmptyState preset="general" title={title} description={description} icon={icon} compact />
     </section>
   )
 }

@@ -10,6 +10,7 @@ import {
   X, Phone, ChevronDown, ChevronUp, Briefcase, User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface Booking {
   _id: string
@@ -195,10 +196,7 @@ export function MyBookingsPage() {
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-primary" /></div>
       ) : filtered.length === 0 ? (
-        <Card className="p-10 text-center">
-          <Clock className="text-muted mx-auto mb-3" size={40} />
-          <p className="text-muted text-sm">No bookings found.</p>
-        </Card>
+        <EmptyState preset="agreements" title="No bookings found" description="Your worker bookings will appear here." />
       ) : (
         <div className="space-y-3">
           {filtered.map(booking => {

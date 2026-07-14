@@ -44,6 +44,7 @@ export function FinancierDashboard() {
         title={`${greeting}, ${user?.firstName ?? 'there'}`}
         description="Lend with confidence - manage offers, applications, and repayments"
         tone="financier"
+        watermarkIcon={Banknote}
         actions={
           <Link to="/financing/offers/new">
             <Button size="sm" className="bg-white/10 border-0 text-white hover:bg-white/20"><Plus size={14} /> New Offer</Button>
@@ -51,7 +52,7 @@ export function FinancierDashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard label="Disbursed" value={formatCurrency(portfolio?.totalDisbursed ?? 0)} sub={`${portfolio?.contractCount ?? 0} contracts`} accent="#10b981" icon={<Banknote size={18} />} href="/financing/contracts" />
         <DashboardMetricCard label="Outstanding" value={formatCurrency(portfolio?.outstanding ?? 0)} sub={`${portfolio?.activeContracts ?? 0} active`} accent="#3b82f6" icon={<Wallet size={18} />} href="/financing/contracts" />
         <DashboardMetricCard label="Repaid" value={formatCurrency(portfolio?.totalRepaid ?? 0)} sub={`${portfolio?.settledContracts ?? 0} settled`} accent="#8b5cf6" icon={<CheckCircle2 size={18} />} href="/financing/contracts" />

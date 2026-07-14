@@ -9,7 +9,8 @@ import { Modal } from '@/components/ui/Modal'
 import { useAuthStore } from '@/stores/authStore'
 import { useAgreements, useCreateAgreement } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { FileText, Plus, CheckCircle, AlertTriangle, ArrowUpRight, PenTool, Shield, Calendar, Building2, CreditCard, ChevronRight, Search, ChevronLeft } from 'lucide-react'
+import { FileText, Plus, CheckCircle, AlertTriangle, PenTool, Shield, Calendar, Building2, CreditCard, ChevronRight, Search, ChevronLeft } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { DoodleUnderline } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -83,31 +84,14 @@ export function AgreementsPage() {
         const totalRent = active.reduce((sum, a) => sum + a.rentAmount, 0)
         const flagged = agreements.filter((a) => a.complianceFlags.length > 0)
         return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Active', value: String(active.length), icon: <CheckCircle size={18} />, color: '#10b981', gradient: 'from-emerald-500/10 to-teal-500/10 dark:from-emerald-500/20 dark:to-teal-500/20', sub: `of ${agreements.length} total` },
-              { label: 'Pending Signatures', value: String(pending.length), icon: <PenTool size={18} />, color: '#f59e0b', gradient: 'from-amber-500/10 to-yellow-500/10 dark:from-amber-500/20 dark:to-yellow-500/20', sub: pending.length > 0 ? 'Needs attention' : 'All signed' },
-              { label: 'Monthly Rent', value: formatCurrency(totalRent), icon: <FileText size={18} />, color: '#3b82f6', gradient: 'from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20', sub: `${active.length} active contract${active.length !== 1 ? 's' : ''}` },
-              { label: 'Compliance', value: flagged.length > 0 ? `${flagged.length} flagged` : 'All clear', icon: <Shield size={18} />, color: flagged.length > 0 ? '#ef4444' : '#8b5cf6', gradient: flagged.length > 0 ? 'from-red-500/10 to-rose-500/10 dark:from-red-500/20 dark:to-rose-500/20' : 'from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20' },
+              { label: 'Active', value: String(active.length), icon: <CheckCircle size={18} />, color: '#059669', sub: `of ${agreements.length} total` },
+              { label: 'Pending Signatures', value: String(pending.length), icon: <PenTool size={18} />, color: '#d97706', sub: pending.length > 0 ? 'Needs attention' : 'All signed' },
+              { label: 'Monthly Rent', value: formatCurrency(totalRent), icon: <FileText size={18} />, color: '#2563eb', sub: `${active.length} active contract${active.length !== 1 ? 's' : ''}` },
+              { label: 'Compliance', value: flagged.length > 0 ? `${flagged.length} flagged` : 'All clear', icon: <Shield size={18} />, color: flagged.length > 0 ? '#dc2626' : '#7c3aed' },
             ].map((kpi) => (
-              <div
-                key={kpi.label}
-                className={`rounded-2xl bg-gradient-to-br ${kpi.gradient} border border-border/30 dark:border-[#252a3a]/30 p-4 overflow-hidden relative group`}
-                style={{ borderLeftWidth: 3, borderLeftColor: kpi.color }}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
-                    style={{ backgroundColor: kpi.color + '18' }}
-                  >
-                    <div style={{ color: kpi.color }}>{kpi.icon}</div>
-                  </div>
-                  <ArrowUpRight size={12} className="text-muted/30 dark:text-gray-600" />
-                </div>
-                <p className="text-lg font-extrabold font-display text-primary-dark dark:text-[#f1f5f9] tracking-tight truncate">{kpi.value}</p>
-                <p className="text-[11px] text-gray-600 dark:text-[#94a3b8] mt-0.5">{kpi.label}</p>
-                {kpi.sub && <p className="text-[10px] text-gray-500 dark:text-[#64748b] mt-0.5">{kpi.sub}</p>}
-              </div>
+              <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
             ))}
           </div>
         )

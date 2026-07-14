@@ -12,7 +12,8 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import InputAdornment from '@mui/material/InputAdornment'
-import { CreditCard, ArrowUpDown, Search, X, TrendingUp, Clock, CheckCircle, ArrowUpRight } from 'lucide-react'
+import { CreditCard, ArrowUpDown, Search, X, TrendingUp, Clock, CheckCircle } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { DoodleStars } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -118,31 +119,14 @@ export function PaymentsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Paid', value: formatCurrency(totalPaid), icon: <CheckCircle size={18} />, color: '#10b981', gradient: 'from-emerald-500/10 to-teal-500/10 dark:from-emerald-500/20 dark:to-teal-500/20' },
-          { label: 'Pending', value: formatCurrency(pendingAmount), icon: <Clock size={18} />, color: '#f59e0b', gradient: 'from-amber-500/10 to-yellow-500/10 dark:from-amber-500/20 dark:to-yellow-500/20', sub: `${pendingPayments.length} payment${pendingPayments.length !== 1 ? 's' : ''}` },
-          { label: 'Avg Payment', value: formatCurrency(avgPayment), icon: <TrendingUp size={18} />, color: '#3b82f6', gradient: 'from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20' },
-          { label: 'Transactions', value: String(payments.length), icon: <CreditCard size={18} />, color: '#8b5cf6', gradient: 'from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20', sub: failedCount > 0 ? `${failedCount} failed` : `${completedPayments.length} completed` },
+          { label: 'Total Paid', value: formatCurrency(totalPaid), icon: <CheckCircle size={18} />, color: '#059669' },
+          { label: 'Pending', value: formatCurrency(pendingAmount), icon: <Clock size={18} />, color: '#d97706', sub: `${pendingPayments.length} payment${pendingPayments.length !== 1 ? 's' : ''}` },
+          { label: 'Avg Payment', value: formatCurrency(avgPayment), icon: <TrendingUp size={18} />, color: '#2563eb' },
+          { label: 'Transactions', value: String(payments.length), icon: <CreditCard size={18} />, color: '#7c3aed', sub: failedCount > 0 ? `${failedCount} failed` : `${completedPayments.length} completed` },
         ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className={`rounded-2xl bg-gradient-to-br ${kpi.gradient} border border-border/30 dark:border-[#252a3a]/30 p-4 overflow-hidden relative group`}
-            style={{ borderLeftWidth: 3, borderLeftColor: kpi.color }}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
-                style={{ backgroundColor: kpi.color + '18' }}
-              >
-                <div style={{ color: kpi.color }}>{kpi.icon}</div>
-              </div>
-              <ArrowUpRight size={12} className="text-muted/30 dark:text-gray-600" />
-            </div>
-            <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white tracking-tight truncate">{kpi.value}</p>
-            <p className="text-[11px] text-muted dark:text-gray-500 mt-0.5">{kpi.label}</p>
-            {kpi.sub && <p className="text-[10px] text-muted/60 dark:text-gray-600 mt-0.5">{kpi.sub}</p>}
-          </div>
+          <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
         ))}
       </div>
 

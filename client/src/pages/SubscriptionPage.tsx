@@ -6,6 +6,8 @@ import { formatCurrency } from '@/lib/utils'
 import { Check, Crown, Package, Building2, ArrowRight } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { DoodleStars } from '@/components/ui/Doodles'
+import { IconWatermark } from '@/components/ui/Watermark'
+import { EmptyState } from '@/components/ui/EmptyState'
 import toast from 'react-hot-toast'
 
 export function SubscriptionPage() {
@@ -30,8 +32,9 @@ export function SubscriptionPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative">
+      <div className="relative overflow-hidden">
         <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
+        <IconWatermark icon={Crown} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
         <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Subscription Plans</h1>
         <p className="text-sm text-muted mt-1">Choose a plan that fits your property portfolio</p>
       </div>
@@ -143,11 +146,7 @@ export function SubscriptionPage() {
       </div>
 
       {packages.length === 0 && (
-        <div className="text-center py-12">
-          <Package size={48} className="mx-auto text-muted/30 mb-4" />
-          <p className="text-lg font-semibold text-primary-dark dark:text-white">No plans available</p>
-          <p className="text-sm text-muted mt-1">Subscription plans will be available soon.</p>
-        </div>
+        <EmptyState preset="general" title="No plans available" description="Subscription plans will appear here once published." />
       )}
     </div>
   )

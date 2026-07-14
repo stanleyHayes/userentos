@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { FinancingContractStatus } from '@/types'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const statusVariant: Record<FinancingContractStatus, 'success' | 'warning' | 'danger' | 'muted' | 'default'> = {
   pending_disbursement: 'warning',
@@ -33,7 +34,7 @@ export function FinancingContractsPage() {
       {isLoading ? (
         <ListSkeleton rows={4} />
       ) : items.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-sm text-muted dark:text-gray-500">No contracts yet</CardContent></Card>
+        <EmptyState preset="agreements" title="No contracts yet" description="Active financing contracts will appear here." />
       ) : (
         <div className="space-y-3">
           {items.map((c) => {

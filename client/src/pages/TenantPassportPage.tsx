@@ -13,9 +13,11 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { FormSkeleton } from '@/components/ui/Skeleton'
+import { LogoWatermark } from '@/components/ui/Watermark'
 import { useMyPassportPreview, useGenerateShareLink } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -91,8 +93,9 @@ export function TenantPassportPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Hero */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#1e3a5f] via-[#22467a] to-[#2d5a8e] text-white">
-        <div className="p-6 sm:p-8">
+      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-[#1e3a5f] via-[#22467a] to-[#2d5a8e] text-white">
+        <LogoWatermark tone="brand" className="-bottom-16 -right-6 size-56 rotate-[-8deg]" />
+        <div className="relative z-10 p-6 sm:p-8">
           <div className="flex items-start gap-3 mb-3">
             <div className="rounded-xl bg-white/15 p-2.5">
               <Award size={22} className="text-white" />
@@ -189,7 +192,7 @@ export function TenantPassportPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted">No credit score on record yet.</p>
+            <EmptyState preset="general" title="No credit score on record yet" description="Your credit score will appear here once you build rental history." compact />
           )}
         </CardContent>
       </Card>

@@ -11,9 +11,10 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import {
   Users, User, Mail, Phone, Building2, Calendar, CreditCard,
-  ChevronRight, ChevronLeft, CheckCircle, ArrowUpRight,
+  ChevronRight, ChevronLeft, CheckCircle,
   Search, AlertTriangle,
 } from 'lucide-react'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { DoodleUnderline } from '@/components/ui/Doodles'
 
 interface TenantAgreement {
@@ -83,24 +84,14 @@ export function TenantsPage() {
 
       {/* KPI Stats */}
       {!isLoading && tenants.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Active Tenants', value: String(activeTenants.length), icon: <Users size={18} />, color: '#10b981', gradient: 'from-emerald-500/10 to-teal-500/10 dark:from-emerald-500/20 dark:to-teal-500/20', sub: `of ${tenants.length} total` },
-            { label: 'Monthly Rent', value: formatCurrency(totalRent), icon: <CreditCard size={18} />, color: '#3b82f6', gradient: 'from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20', sub: 'from active leases' },
-            { label: 'Total Collected', value: formatCurrency(totalCollected), icon: <CheckCircle size={18} />, color: '#f59e0b', gradient: 'from-amber-500/10 to-yellow-500/10 dark:from-amber-500/20 dark:to-yellow-500/20' },
-            { label: 'Properties Rented', value: String(new Set(tenants.flatMap((t) => t.agreements.filter((a) => a.status === 'active').map((a) => a.propertyId))).size), icon: <Building2 size={18} />, color: '#8b5cf6', gradient: 'from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20' },
+            { label: 'Active Tenants', value: String(activeTenants.length), icon: <Users size={18} />, color: '#059669', sub: `of ${tenants.length} total` },
+            { label: 'Monthly Rent', value: formatCurrency(totalRent), icon: <CreditCard size={18} />, color: '#2563eb', sub: 'from active leases' },
+            { label: 'Total Collected', value: formatCurrency(totalCollected), icon: <CheckCircle size={18} />, color: '#d97706' },
+            { label: 'Properties Rented', value: String(new Set(tenants.flatMap((t) => t.agreements.filter((a) => a.status === 'active').map((a) => a.propertyId))).size), icon: <Building2 size={18} />, color: '#7c3aed' },
           ].map((kpi) => (
-            <div key={kpi.label} className={`rounded-2xl bg-gradient-to-br ${kpi.gradient} border border-border/30 dark:border-[#252a3a]/30 p-4`} style={{ borderLeftWidth: 3, borderLeftColor: kpi.color }}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: kpi.color + '18' }}>
-                  <div style={{ color: kpi.color }}>{kpi.icon}</div>
-                </div>
-                <ArrowUpRight size={12} className="text-muted/30 dark:text-gray-600" />
-              </div>
-              <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white tracking-tight truncate">{kpi.value}</p>
-              <p className="text-[11px] text-muted dark:text-gray-500 mt-0.5">{kpi.label}</p>
-              {kpi.sub && <p className="text-[10px] text-muted/60 dark:text-gray-600 mt-0.5">{kpi.sub}</p>}
-            </div>
+            <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
           ))}
         </div>
       )}

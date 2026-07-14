@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
 import {
   useConversations,
   useMessages,
@@ -17,10 +18,11 @@ import { useSocket } from '@/hooks/useSocket'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import {
-  MessageSquare, Send, ArrowLeft, Plus, Search, Building2,
+  Send, ArrowLeft, Plus, Search, Building2, MessageCircle,
 } from 'lucide-react'
 import type { Conversation, ChatMessage } from '@/types'
 import { DoodleSpiral } from '@/components/ui/Doodles'
+import { IconWatermark } from '@/components/ui/Watermark'
 
 function formatMessageTime(dateStr: string) {
   const d = new Date(dateStr)
@@ -86,8 +88,8 @@ export function ChatPage() {
 
   // Online / typing state
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
-  const [typingUsers, setTypingUsers] = useState<Map<string, NodeJS.Timeout>>(new Map())
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [typingUsers, setTypingUsers] = useState<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isTypingRef = useRef(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -411,19 +413,7 @@ export function ChatPage() {
                 ))}
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-blue-500/15 flex items-center justify-center mb-3">
-                  <MessageSquare size={28} className="text-primary dark:text-blue-400" />
-                </div>
-                <p className="text-sm font-semibold text-primary-dark dark:text-white">
-                  {searchQuery ? 'No conversations found' : 'No messages yet'}
-                </p>
-                <p className="text-xs text-muted dark:text-gray-500 mt-1">
-                  {searchQuery
-                    ? 'Try a different search term'
-                    : 'Start a conversation with a landlord or tenant'}
-                </p>
-              </div>
+              <EmptyState preset="general" title="No conversations yet" description="Start a chat and your conversations will appear here." compact />
             ) : (
               filteredConversations.map((convo: Conversation) => {
                 const isActive = convo.id === activeConversationId
@@ -622,24 +612,15 @@ export function ChatPage() {
             </>
           ) : (
             /* Empty state -- no conversation selected */
-            <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-primary/10 dark:bg-blue-500/15 flex items-center justify-center mb-4">
-                <MessageSquare size={36} className="text-primary dark:text-blue-400" />
-              </div>
-              <h3 className="text-lg font-bold text-primary-dark dark:text-white">
-                Select a conversation
-              </h3>
-              <p className="text-sm text-muted dark:text-gray-400 mt-1 max-w-xs">
-                Choose a conversation from the list or start a new one to begin messaging.
-              </p>
-              <Button
-                onClick={() => setShowNewConversation(true)}
-                variant="outline"
-                className="mt-4 gap-1.5"
-              >
-                <Plus size={16} />
-                New Message
-              </Button>
+            <div className="relative flex-1 flex flex-col items-center justify-center overflow-hidden px-6">
+              <IconWatermark icon={MessageCircle} className="left-1/2 top-1/2 size-40 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg]" />
+              <EmptyState
+                preset="general"
+                title="Select a conversation"
+                description="Choose a chat from the list or start a new message."
+                action={{ label: 'New Message', onClick: () => setShowNewConversation(true) }}
+                compact
+              />
             </div>
           )}
         </div>
@@ -716,9 +697,7 @@ function NewConversationModal({
 
         <div className="max-h-72 overflow-y-auto space-y-1">
           {filteredUsers.length === 0 ? (
-            <p className="text-sm text-muted dark:text-gray-400 text-center py-6">
-              No users found
-            </p>
+            <EmptyState preset="search" compact />
           ) : (
             filteredUsers.map((u) => (
               <button

@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { usePlatformAnalytics } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import {
@@ -54,19 +56,19 @@ export function GovernmentDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <DashboardHero
+      <PageHeader
+        icon={Shield}
         title="Government Dashboard"
         description="National rental market overview · Platform analytics"
-        tone="government"
         actions={
           <Link to="/government">
-            <Button size="sm" className="bg-white/10 border-0 text-white hover:bg-white/20"><Shield size={14} /> <span className="hidden sm:inline">Control Panel</span><span className="sm:hidden">Panel</span></Button>
+            <Button size="sm"><Shield size={14} /> <span className="hidden sm:inline">Control Panel</span><span className="sm:hidden">Panel</span></Button>
           </Link>
         }
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard label="Properties" value={String(properties.total ?? 0)} sub={`${properties.byStatus?.occupied ?? 0} occupied`} icon={<Building2 size={20} />} accent="#3b82f6" href="/properties" />
         <DashboardMetricCard label="Users" value={String(users.total ?? 0)} sub={`${users.byRole?.tenant ?? 0} tenants, ${users.byRole?.landlord ?? 0} landlords`} icon={<Users size={20} />} accent="#10b981" href="/users" />
         <DashboardMetricCard label="Payment Volume" value={formatCurrency(Number(payments.completedVolume ?? 0))} sub={`${agreements.byStatus?.active ?? 0} active agreements`} icon={<TrendingUp size={20} />} accent="#f59e0b" href="/analytics" />
@@ -104,7 +106,7 @@ export function GovernmentDashboard() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-56 flex items-center justify-center text-muted dark:text-gray-500 text-sm">No data</div>
+              <div className="h-56 flex items-center justify-center"><EmptyState preset="payments" title="No data" compact /></div>
             )}
           </CardContent>
         </Card>
@@ -163,7 +165,7 @@ export function GovernmentDashboard() {
                   </div>
                 )
               })}
-              {rentData.length === 0 && <p className="text-xs text-muted text-center py-4">No data</p>}
+              {rentData.length === 0 && <EmptyState preset="general" title="No data" compact />}
             </div>
           </CardContent>
         </Card>

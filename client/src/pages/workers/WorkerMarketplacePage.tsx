@@ -13,6 +13,7 @@ import {
   AlertCircle, CheckCircle, Clock, User, Eye, Briefcase,
 } from 'lucide-react'
 import { BookingModal } from './BookingModal'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface MaintenanceRequest {
   id: string
@@ -155,10 +156,7 @@ export function WorkerMarketplacePage() {
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-primary" /></div>
       ) : workers.length === 0 ? (
-        <Card className="p-10 text-center">
-          <User className="text-muted mx-auto mb-3" size={40} />
-          <p className="text-muted text-sm">No workers found matching your criteria.</p>
-        </Card>
+        <EmptyState preset="search" title="No workers found" description="No workers match your criteria yet — try adjusting your filters." />
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {workers.map(worker => (

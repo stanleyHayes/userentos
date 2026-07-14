@@ -9,6 +9,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { IconWatermark } from '@/components/ui/Watermark'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/utils'
@@ -186,11 +187,12 @@ export function PublicRegistryPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0c0e1a]">
       {/* Hero */}
-      <section className="relative bg-gradient-to-b from-[#0f1f33] via-primary to-[#0f1f33] pt-12 pb-10 md:pt-16 md:pb-14 overflow-hidden">
+      <section className="animate-circle-reveal relative bg-gradient-to-b from-[#0f1f33] via-primary to-[#0f1f33] pt-12 pb-10 md:pt-16 md:pb-14 overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-[120px]" />
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-400/10 rounded-full blur-[100px]" />
           <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+          <IconWatermark icon={Search} tone="brand" className="animate-parallax-drift -bottom-10 -right-6 size-56 hidden md:block" />
         </div>
         <div className="relative max-w-5xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-400/10 backdrop-blur px-4 py-2 text-xs font-semibold text-emerald-300 border border-emerald-400/20 mb-5">

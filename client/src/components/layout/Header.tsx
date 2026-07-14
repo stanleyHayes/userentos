@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Bell, Search, Menu, LogOut, ChevronDown, User, Settings, PanelLeftClose, PanelLeftOpen, Languages, Check } from 'lucide-react'
+import { Bell, Search, Menu, LogOut, ChevronDown, User, Settings, PanelLeftClose, PanelLeftOpen, Languages, Check, ShieldCheck, Map, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useApi'
 import { useSocket } from '@/hooks/useSocket'
 import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
@@ -14,6 +15,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import { usePortal } from '@/hooks/usePortal'
 import { useSidebarStore } from '@/stores/sidebarStore'
 import { api } from '@/lib/api'
+import { useOnboardingStore } from '@/stores/onboardingStore'
 import type { UserRole } from '@/types'
 
 const LANGUAGES: { code: string; label: string }[] = [
@@ -40,6 +42,19 @@ function getGreeting(): string {
   if (hour < 12) return 'Good morning'
   if (hour < 17) return 'Good afternoon'
   return 'Good evening'
+}
+
+/** Two-line dropdown row (Aura user-menu pattern): icon + title + muted description. */
+function MenuRow({ icon: Icon, title, description, danger }: { icon: LucideIcon; title: string; description: string; danger?: boolean }) {
+  return (
+    <>
+      <Icon size={16} className={`mt-0.5 shrink-0 ${danger ? 'text-danger' : 'text-muted dark:text-gray-500'}`} aria-hidden="true" />
+      <span className="flex min-w-0 flex-col">
+        <span className={`text-sm font-semibold ${danger ? 'text-danger' : 'text-primary-dark dark:text-gray-200'}`}>{title}</span>
+        <span className="text-[11px] leading-4 text-muted dark:text-gray-500">{description}</span>
+      </span>
+    </>
+  )
 }
 
 function HeaderLanguageToggle() {
@@ -289,13 +304,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 px-4">
-                        <div className="w-12 h-12 rounded-full bg-surface dark:bg-[#0c0e1a] flex items-center justify-center mb-3">
-                          <Bell size={20} className="text-muted dark:text-gray-600" />
-                        </div>
-                        <p className="text-sm font-medium text-muted dark:text-gray-500">No notifications yet</p>
-                        <p className="text-xs text-muted/60 dark:text-gray-600 mt-0.5">We will notify you when something arrives.</p>
-                      </div>
+                      <EmptyState preset="notifications" title="No notifications yet" description="We will notify you when something arrives." compact />
                     ) : (
                       notifications.slice(0, 10).map((n) => (
                         <div
@@ -351,11 +360,14 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             </button>
 
             {showUserMenu && (
-              <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-full sm:mt-2 z-50 w-56 rounded-2xl border border-border/60 dark:border-[#252a3a]/60 bg-white dark:bg-[#161927] shadow-xl dark:shadow-black/40 overflow-hidden">
+              <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-full sm:mt-2 z-50 w-72 rounded-2xl border border-border/60 dark:border-[#252a3a]/60 bg-white dark:bg-[#161927] shadow-xl dark:shadow-black/40 overflow-hidden">
                 {/* User info header */}
                 <div className="px-4 py-3.5 bg-surface/50 dark:bg-[#0c0e1a]/50 border-b border-border/40 dark:border-[#252a3a]/40">
                   <p className="text-sm font-bold text-primary-dark dark:text-white truncate">{user?.firstName} {user?.lastName}</p>
                   <p className="text-xs text-muted dark:text-gray-500 truncate mt-0.5">{user?.email}</p>
+                  {user?.activeRole && (
+                    <p className="text-[11px] text-muted dark:text-gray-500 mt-1">{roleLabels[user.activeRole] ?? user.activeRole}</p>
+                  )}
                 </div>
 
                 {/* Role switcher for mobile */}
@@ -389,19 +401,37 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   <Link
                     to="/settings"
                     onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary-dark dark:text-gray-300 hover:bg-surface dark:hover:bg-white/5 transition-colors"
+                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-surface dark:hover:bg-white/5 transition-colors"
                   >
-                    <Settings size={15} className="text-muted dark:text-gray-500" />
-                    Settings
+                    <MenuRow icon={User} title="My Profile" description="View your account details" />
+                  </Link>
+                  <Link
+                    to="/settings?tab=security"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-surface dark:hover:bg-white/5 transition-colors"
+                  >
+                    <MenuRow icon={ShieldCheck} title="Security & 2FA" description="Password and two-factor authentication" />
                   </Link>
                   <Link
                     to="/settings"
                     onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary-dark dark:text-gray-300 hover:bg-surface dark:hover:bg-white/5 transition-colors"
+                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-surface dark:hover:bg-white/5 transition-colors"
                   >
-                    <User size={15} className="text-muted dark:text-gray-500" />
-                    My Profile
+                    <MenuRow icon={Settings} title="Settings" description="Preferences, notifications, and appearance" />
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      if (user?.activeRole) {
+                        useOnboardingStore.getState().resetTour(user.activeRole)
+                        useOnboardingStore.getState().startTour(user.activeRole)
+                      }
+                    }}
+                    className="flex items-start gap-3 w-full px-4 py-2.5 text-left hover:bg-surface dark:hover:bg-white/5 transition-colors"
+                  >
+                    <MenuRow icon={Map} title="Replay tour" description="Play the dashboard walkthrough again" />
+                  </button>
                 </div>
 
                 {/* Logout */}
@@ -416,10 +446,9 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                       }
                       logout()
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-danger hover:bg-danger/5 dark:hover:bg-danger/10 transition-colors"
+                    className="flex items-start gap-3 w-full px-4 py-2.5 hover:bg-danger/5 dark:hover:bg-danger/10 transition-colors"
                   >
-                    <LogOut size={15} />
-                    Sign Out
+                    <MenuRow icon={LogOut} title="Sign out" description="End your session on this device" danger />
                   </button>
                 </div>
               </div>

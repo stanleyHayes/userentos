@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, UserMinus, UserCheck, Upload } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const CSV_HEADERS = ['email', 'netMonthlySalary', 'startDate', 'staffNumber', 'jobTitle'] as const
 
@@ -146,11 +147,7 @@ export function EmployerEmployeesPage() {
       {isLoading ? (
         <ListSkeleton rows={5} />
       ) : employees.length === 0 ? (
-        <Card><CardContent className="p-12 text-center">
-          <p className="text-sm font-semibold text-primary-dark dark:text-white">No employees yet</p>
-          <p className="text-xs text-muted dark:text-gray-500 mt-1 mb-4">Add an employee by their RentOS email — they must have an account.</p>
-          <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> Add First Employee</Button>
-        </CardContent></Card>
+        <EmptyState preset="general" title="No employees yet" description="Add employees to link them to payroll and rent deductions." action={{ label: 'Add First Employee', onClick: () => setOpen(true) }} />
       ) : (
         <Card>
           <CardContent className="p-0 overflow-x-auto">

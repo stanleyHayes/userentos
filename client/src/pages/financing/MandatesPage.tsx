@@ -13,6 +13,7 @@ import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, ShieldCheck, ShieldOff, ShieldAlert } from 'lucide-react'
 import { GridSkeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const statusVariant = {
   pending: 'warning', active: 'success', paused: 'muted', revoked: 'danger', expired: 'muted',
@@ -96,7 +97,7 @@ export function MyMandatesPage() {
       {isLoading ? (
         <GridSkeleton cols={2} count={4} />
       ) : mandates.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-sm text-muted dark:text-gray-500">No mandates yet — create one to enable salary-linked payments</CardContent></Card>
+        <EmptyState preset="payments" title="No mandates yet" description="Create one to enable salary-linked payments." />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {mandates.map((m) => (

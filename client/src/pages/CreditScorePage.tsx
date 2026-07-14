@@ -9,9 +9,10 @@ import { api } from '@/lib/api'
 import {
   TrendingUp, Shield, PiggyBank, FileText, Clock, Search,
   AlertTriangle, CheckCircle2, Info, ArrowUpRight, ArrowDownRight,
-  CreditCard, Lightbulb, ChevronRight, Gavel,
+  CreditCard, Lightbulb, ChevronRight, Gavel, Gauge,
 } from 'lucide-react'
 import { FormSkeleton } from '@/components/ui/Skeleton'
+import { IconWatermark } from '@/components/ui/Watermark'
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface CreditScoreData {
@@ -86,10 +87,11 @@ export function CreditScorePage() {
       </div>
 
       {/* Score Hero Card */}
-      <Card className="overflow-hidden">
+      <Card className="relative overflow-hidden">
         <div className={`h-1.5 bg-gradient-to-r ${scoreInfo.gradient}`} />
+        <IconWatermark icon={Gauge} className="-bottom-8 -right-6 size-44 rotate-[-8deg]" />
         <CardContent>
-          <div className="flex flex-col md:flex-row items-center gap-8 py-2">
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 py-2">
             {/* Gauge */}
             <div className="relative flex-shrink-0">
               <svg className="w-44 h-44" viewBox="0 0 120 120">

@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { useAllSubscriptionPackages, useDeleteSubscriptionPackage } from '@/hooks/useApi'
-import { formatCurrency } from '@/lib/utils'
+import { accentFromColorClass, formatCurrency } from '@/lib/utils'
+import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { Plus, Edit2, Trash2, Package, Check, Users, Building2 } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -158,18 +159,11 @@ export function PackagesPage() {
 
 function MiniKPI({ label, value, icon, gradient }: { label: string; value: string; icon: React.ReactNode; gradient: string }) {
   return (
-    <Card className="overflow-hidden">
-      <CardContent>
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white flex-shrink-0`}>
-            {icon}
-          </div>
-          <div>
-            <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{value}</p>
-            <p className="text-[10px] text-muted dark:text-gray-500">{label}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <DashboardMetricCard
+      label={label}
+      value={value}
+      icon={icon}
+      accent={accentFromColorClass(gradient)}
+    />
   )
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Animate } from '@/components/ui/Animate'
+import { IconWatermark } from '@/components/ui/Watermark'
 import {
   Scale, ChevronDown, ChevronUp, Shield, Gavel,
   AlertTriangle, Users, Building2, Handshake, Key,
@@ -289,11 +290,12 @@ export function RentalLawsPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0c0e1a]">
       {/* Hero */}
-      <section className="relative bg-gradient-to-b from-[#0f1f33] via-primary to-[#0f1f33] pt-16 pb-20 md:pt-24 md:pb-28 overflow-hidden">
+      <section className="animate-circle-reveal relative bg-gradient-to-b from-[#0f1f33] via-primary to-[#0f1f33] pt-16 pb-20 md:pt-24 md:pb-28 overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-[120px]" />
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-400/10 rounded-full blur-[100px]" />
           <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+          <IconWatermark icon={Scale} tone="brand" className="animate-parallax-drift -bottom-10 -right-6 size-64 hidden md:block" />
         </div>
         <div className="relative max-w-4xl mx-auto px-6 text-center">
           <Animate animation="fade-down">
