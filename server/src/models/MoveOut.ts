@@ -42,6 +42,8 @@ export interface IMoveOut extends Document {
   refundAmount: number
   refundedAt?: string
   refundReference?: string
+  /** Status the move-out was in before a dispute was raised — enables withdraw/resolve. */
+  preDisputeStatus?: MoveOutStatus
   tenantAcknowledgedAt?: string
   landlordAcknowledgedAt?: string
   notes: MoveOutNote[]
@@ -98,6 +100,18 @@ const moveOutSchema = new Schema<IMoveOut>(
     refundAmount: { type: Number, default: 0 },
     refundedAt: String,
     refundReference: String,
+    preDisputeStatus: {
+      type: String,
+      enum: [
+        'initiated',
+        'inspection_scheduled',
+        'inspected',
+        'disputed',
+        'refund_pending',
+        'refund_paid',
+        'closed',
+      ],
+    },
     tenantAcknowledgedAt: String,
     landlordAcknowledgedAt: String,
     notes: { type: [noteSchema], default: [] },

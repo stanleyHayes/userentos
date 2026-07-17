@@ -9,6 +9,8 @@ import type { WebhookEvent } from '../services/webhooks.js'
 
 const router = Router()
 
+const MAX_SUBSCRIPTIONS_PER_USER = 10
+
 const VALID_EVENTS: WebhookEvent[] = [
   'application.created',
   'application.approved',
@@ -57,6 +59,13 @@ router.post('/subscriptions', authenticate, async (req, res) => {
   const invalid = events.filter((e: string) => e !== '*' && !VALID_EVENTS.includes(e as WebhookEvent))
   if (invalid.length > 0) {
     error(res, `Invalid events: ${invalid.join(', ')}`)
+    return
+  }
+
+  // Cap active subscriptions per user to limit delivery amplification
+  const activeCount = await WebhookSubscription.countDocuments({ userId: req.user!.userId, isActive: true })
+  if (activeCount >= MAX_SUBSCRIPTIONS_PER_USER) {
+    error(res, `Subscription limit reached (max ${MAX_SUBSCRIPTIONS_PER_USER} active subscriptions)`, 409)
     return
   }
 

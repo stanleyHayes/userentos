@@ -21,6 +21,7 @@ import { LogoWatermark } from '@/components/ui/Watermark'
 import { useMyPassportPreview, useGenerateShareLink } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
+import { api } from '@/lib/api'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -32,7 +33,6 @@ interface ShareEntry {
 
 export function TenantPassportPage() {
   const user = useAuthStore((s) => s.user)
-  const token = useAuthStore((s) => s.token)
   const { data, isLoading } = useMyPassportPreview()
   const generate = useGenerateShareLink()
   const [shareHistory, setShareHistory] = useState<ShareEntry[]>([])
@@ -52,7 +52,18 @@ export function TenantPassportPage() {
     )
   }
 
-  const downloadUrl = `${API_BASE}/tenant-passport/me/pdf?token=${encodeURIComponent(token ?? '')}`
+  // Mint a short-lived, download-only token for the PDF — the session JWT must
+  // never appear in a URL (server logs, browser history, referers).
+  const [downloading, setDownloading] = useState(false)
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      const { token: downloadToken } = await api.post<{ token: string }>('/tenant-passport/me/document-link', {})
+      window.open(`${API_BASE}/tenant-passport/me/pdf?token=${encodeURIComponent(downloadToken)}`, '_blank', 'noopener,noreferrer')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const handleGenerateLink = async () => {
     try {
@@ -111,12 +122,10 @@ export function TenantPassportPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-3 mt-5">
-            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download>
-              <Button variant="secondary" size="md">
-                <Download size={16} />
-                Download PDF
-              </Button>
-            </a>
+            <Button variant="secondary" size="md" onClick={handleDownload} disabled={downloading}>
+              <Download size={16} />
+              Download PDF
+            </Button>
             <Button
               variant="outline"
               size="md"

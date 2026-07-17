@@ -14,9 +14,9 @@ export interface IBiometricToken extends Document {
   /** Free-form user-visible label, e.g. "iPhone 15 Pro" */
   deviceLabel?: string
   /** Last time this token was successfully exchanged for a session JWT */
-  lastUsedAt?: string
-  expiresAt: string
-  revokedAt?: string
+  lastUsedAt?: Date
+  expiresAt: Date
+  revokedAt?: Date
   revokedReason?: string
 }
 
@@ -25,12 +25,13 @@ const schema = new Schema<IBiometricToken>({
   tokenHash: { type: String, required: true, unique: true },
   deviceId: { type: String, required: true },
   deviceLabel: { type: String },
-  lastUsedAt: { type: String },
-  expiresAt: { type: String, required: true },
-  revokedAt: { type: String },
+  lastUsedAt: { type: Date },
+  expiresAt: { type: Date, required: true },
+  revokedAt: { type: Date },
   revokedReason: { type: String },
 }, { timestamps: true })
 
 schema.index({ userId: 1, deviceId: 1 })
+schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }) // MongoDB TTL — auto-delete expired tokens
 
 export const BiometricToken = mongoose.model<IBiometricToken>('BiometricToken', schema)

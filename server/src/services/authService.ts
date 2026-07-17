@@ -7,6 +7,7 @@ import type { AuthPayload } from '../middleware/auth.js'
 import { notifyWelcome } from './notify.js'
 import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
+import { BiometricToken } from '../models/BiometricToken.js'
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
 import QRCode from 'qrcode'
 
@@ -19,12 +20,18 @@ interface RegisterData {
   role: string
 }
 
-function nowIso() {
-  return new Date().toISOString()
+function expiresIn(seconds: number) {
+  return new Date(Date.now() + seconds * 1000)
 }
 
-function expiresIn(seconds: number) {
-  return new Date(Date.now() + seconds * 1000).toISOString()
+/** Short-lived download tokens let browser links fetch PDFs without putting a
+ * full-power session JWT into URLs (which end up in logs/history). */
+const DOWNLOAD_TOKEN_TTL_SECONDS = 5 * 60
+
+export function signDownloadToken(userId: string): string {
+  return jwt.sign({ userId, purpose: 'download' }, config.jwtSecret, {
+    expiresIn: DOWNLOAD_TOKEN_TTL_SECONDS,
+  })
 }
 
 export class AuthService {
@@ -48,7 +55,9 @@ export class AuthService {
   }
 
   private signAccessToken(payload: AuthPayload) {
-    return jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtAccessExpiresIn })
+    // 'session' purpose is what `authenticate` requires — without it the token
+    // must not work as a general credential (MFA bypass fix).
+    return jwt.sign({ ...payload, purpose: 'session' }, config.jwtSecret, { expiresIn: config.jwtAccessExpiresIn })
   }
 
   async register(data: RegisterData, deviceLabel?: string, ipAddress?: string) {
@@ -131,7 +140,7 @@ export class AuthService {
       return { error: 'MFA session expired. Please log in again.', status: 401 }
     }
 
-    const user = await this.userRepo.findById(userId)
+    const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user || !user.mfaEnabled || !user.mfaSecret) {
       return { error: 'MFA is not enabled for this account', status: 400 }
     }
@@ -169,7 +178,7 @@ export class AuthService {
 
   /** Confirm MFA enrollment by verifying a code against the pending secret. */
   async mfaEnable(userId: string, code: string) {
-    const user = await this.userRepo.findById(userId)
+    const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (user.mfaEnabled) return { error: 'MFA is already enabled', status: 400 }
     if (!user.mfaSecret) return { error: 'MFA setup has not been started', status: 400 }
@@ -186,7 +195,7 @@ export class AuthService {
 
   /** Disable MFA — requires a valid code from the current secret. */
   async mfaDisable(userId: string, code: string) {
-    const user = await this.userRepo.findById(userId)
+    const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (!user.mfaEnabled || !user.mfaSecret) return { error: 'MFA is not enabled', status: 400 }
 
@@ -203,22 +212,26 @@ export class AuthService {
 
   async refresh(plainRefreshToken: string, deviceLabel?: string, ipAddress?: string) {
     const tokenHash = hashRefreshToken(plainRefreshToken)
-    const record = await RefreshToken.findOne({ tokenHash, revokedAt: { $exists: false } })
+
+    // Rotate atomically: only the first concurrent request can claim the token.
+    const record = await RefreshToken.findOneAndUpdate(
+      { tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
+      { $set: { revokedAt: new Date(), revokedReason: 'rotated', lastUsedAt: new Date() } },
+      { new: true },
+    )
 
     if (!record) {
-      this.logger.warn('Refresh attempt with invalid or revoked token')
+      // Distinguish replay of a revoked/expired token from a genuinely unknown one:
+      // a replay means the token chain may be compromised — nuke all user sessions.
+      const existing = await RefreshToken.findOne({ tokenHash })
+      if (existing?.revokedAt) {
+        await this.revokeAllSessions(existing.userId, 'replay_detected')
+        this.logger.warn(`Refresh-token replay detected for user: ${existing.userId} — all sessions revoked`)
+      } else {
+        this.logger.warn('Refresh attempt with invalid or expired token')
+      }
       return { error: 'Invalid or expired refresh token', status: 401 }
     }
-
-    if (new Date(record.expiresAt) < new Date()) {
-      this.logger.warn(`Refresh attempt with expired token for user: ${record.userId}`)
-      return { error: 'Refresh token expired', status: 401 }
-    }
-
-    // Rotate: revoke old token, issue new one
-    record.revokedAt = nowIso()
-    record.revokedReason = 'rotated'
-    await record.save()
 
     const user = await this.userRepo.findById(record.userId)
     if (!user) {
@@ -229,18 +242,30 @@ export class AuthService {
     const token = this.signAccessToken(payload)
     const newRefreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
 
-    record.lastUsedAt = nowIso()
-    await record.save()
-
     this.logger.info(`Token refreshed for user: ${user._id}`)
     return { data: { token, refreshToken: newRefreshToken } }
+  }
+
+  /** Revoke every session credential the user holds (refresh + biometric). */
+  private async revokeAllSessions(userId: string, reason: string) {
+    const now = new Date()
+    await Promise.all([
+      RefreshToken.updateMany(
+        { userId, revokedAt: { $exists: false } },
+        { $set: { revokedAt: now, revokedReason: reason } },
+      ),
+      BiometricToken.updateMany(
+        { userId, revokedAt: { $exists: false } },
+        { $set: { revokedAt: now, revokedReason: reason } },
+      ),
+    ])
   }
 
   async logout(plainRefreshToken: string) {
     const tokenHash = hashRefreshToken(plainRefreshToken)
     const record = await RefreshToken.findOne({ tokenHash })
     if (record && !record.revokedAt) {
-      record.revokedAt = nowIso()
+      record.revokedAt = new Date()
       record.revokedReason = 'logout'
       await record.save()
       this.logger.info(`Refresh token revoked (logout) for user: ${record.userId}`)
@@ -249,11 +274,8 @@ export class AuthService {
   }
 
   async logoutAll(userId: string) {
-    const result = await RefreshToken.updateMany(
-      { userId, revokedAt: { $exists: false } },
-      { $set: { revokedAt: nowIso(), revokedReason: 'logout_all' } },
-    )
-    this.logger.info(`All refresh tokens revoked for user: ${userId} (${result.modifiedCount} tokens)`)
+    await this.revokeAllSessions(userId, 'logout_all')
+    this.logger.info(`All sessions revoked for user: ${userId}`)
     return { data: null }
   }
 
@@ -270,7 +292,12 @@ export class AuthService {
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds)
+    user.credentialsChangedAt = new Date()
     await user.save()
+
+    // Credential change must kill every existing session, including any an
+    // attacker may hold — this is the classic post-compromise action.
+    await this.revokeAllSessions(userId, 'credentials_changed')
 
     this.logger.info(`Password changed for user: ${userId}`)
     return { data: null, message: 'Password changed successfully' }
@@ -292,18 +319,23 @@ export class AuthService {
 
     this.logger.info(`Password reset token generated for: ${email}`)
 
-    // Send reset email (best-effort)
-    await sendPasswordResetEmail(user.email, resetToken)
+    // Send asynchronously so the response time doesn't reveal whether the
+    // email exists (timing oracle) and SMTP latency can't stall the request.
+    sendPasswordResetEmail(user.email, resetToken).catch((err: unknown) => {
+      this.logger.error(`Failed to send password reset email to ${email}: ${(err as Error).message}`)
+    })
 
     return { data: null, message: 'If that email is registered, a reset link has been sent.' }
   }
 
   async resetPassword(token: string, newPassword: string) {
     let userId: string
+    let tokenIat: number | undefined
     try {
-      const payload = jwt.verify(token, config.jwtSecret) as { purpose?: string; userId?: string }
+      const payload = jwt.verify(token, config.jwtSecret) as { purpose?: string; userId?: string; iat?: number }
       if (payload.purpose !== 'reset') throw new Error('Invalid token purpose')
       userId = payload.userId!
+      tokenIat = payload.iat
     } catch {
       return { error: 'Invalid or expired reset token', status: 401 }
     }
@@ -313,8 +345,18 @@ export class AuthService {
       return { error: 'User not found', status: 404 }
     }
 
+    // Single-use: any credential change (including a previous reset) issued
+    // after this token invalidates it.
+    if (user.credentialsChangedAt && tokenIat && tokenIat * 1000 < user.credentialsChangedAt.getTime()) {
+      return { error: 'Invalid or expired reset token', status: 401 }
+    }
+
     user.passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds)
+    user.credentialsChangedAt = new Date()
     await user.save()
+
+    // Recovery complete — every existing session (attacker's included) dies.
+    await this.revokeAllSessions(userId, 'credentials_changed')
 
     this.logger.info(`Password reset completed for user: ${userId}`)
     return { data: null, message: 'Password reset successfully' }

@@ -23,6 +23,13 @@ const createAgreementSchema = z.object({
   specialConditions: z.array(z.string()).default([]),
 })
 
+const updateAgreementSchema = createAgreementSchema.partial().omit({ propertyId: true, tenantId: true })
+
+const signSchema = z.object({
+  // The typed legal name is the e-signature — required so the record shows WHO signed.
+  signatureName: z.string().trim().min(2).max(100),
+})
+
 function checkCompliance(data: { advanceMonths: number; terms: string[] }) {
   const flags: { type: string; message: string; clause?: string; law?: string }[] = []
   if (data.advanceMonths > 6) {
@@ -46,7 +53,16 @@ export const agreementController = {
     const roles = req.user!.roles
     const User = (await import('../models/User.js')).User
     const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
-    const agreements = await Agreement.find(isAdmin ? {} : { $or: [{ landlordId: userId }, { tenantId: userId }] }).sort({ createdAt: -1 }).lean()
+    const filter = isAdmin ? {} : { $or: [{ landlordId: userId }, { tenantId: userId }] }
+
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const skip = (page - 1) * pageSize
+
+    const [total, agreements] = await Promise.all([
+      Agreement.countDocuments(filter),
+      Agreement.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    ])
 
     // Collect unique user IDs to populate names
     const userIds = new Set<string>()
@@ -69,7 +85,7 @@ export const agreementController = {
         landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
       }
     })
-    success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+    success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
   },
 
   getById: async (req: Request, res: Response) => {
@@ -93,6 +109,23 @@ export const agreementController = {
     const property = await Property.findById(parsed.data.propertyId)
     if (!property) { error(res, 'Property not found', 404); return }
 
+    // IDOR fix: only the property's landlord may create an agreement for it —
+    // previously anyone could fabricate a lease over someone else's property.
+    const roles = req.user!.roles
+    const isAdmin = roles.includes('admin') || roles.includes('super_admin')
+    if (property.landlordId !== req.user!.userId && !isAdmin) {
+      error(res, 'You can only create agreements for your own properties', 403)
+      return
+    }
+
+    // The tenant must be a real user, and never the landlord themselves.
+    if (parsed.data.tenantId === req.user!.userId) {
+      error(res, 'You cannot create an agreement with yourself as tenant')
+      return
+    }
+    const tenant = await User.findById(parsed.data.tenantId).select('_id').lean()
+    if (!tenant) { error(res, 'Tenant not found', 404); return }
+
     const complianceFlags = checkCompliance(parsed.data)
     const agreement = await Agreement.create({
       ...parsed.data,
@@ -105,8 +138,20 @@ export const agreementController = {
   },
 
   sign: async (req: Request, res: Response) => {
+    const parsed = signSchema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const { signatureName } = parsed.data
+
     const agreement = await Agreement.findById(param(req.params.id))
     if (!agreement) { error(res, 'Agreement not found', 404); return }
+
+    // State guard: only an unsigned/partially-signed agreement can be signed.
+    // Without this, a terminated or expired lease can be "re-signed" back to
+    // active, reviving a dead contract and re-occupying the property.
+    if (agreement.status !== 'draft' && agreement.status !== 'pending_signatures') {
+      error(res, `Agreement is ${agreement.status} and cannot be signed`, 409)
+      return
+    }
 
     const userId = req.user!.userId
     const now = new Date().toISOString()
@@ -121,6 +166,7 @@ export const agreementController = {
 
     if (userId === agreement.landlordId) {
       agreement.landlordSignature = now
+      agreement.landlordSignatureName = signatureName
     } else if (userId === agreement.tenantId) {
       // Check tenant profile completion
       const profile = await TenantProfile.findOne({ userId })
@@ -129,6 +175,7 @@ export const agreementController = {
         return
       }
       agreement.tenantSignature = now
+      agreement.tenantSignatureName = signatureName
     } else {
       error(res, 'Not a party to this agreement', 403); return
     }
@@ -140,7 +187,17 @@ export const agreementController = {
 
     if (agreement.landlordSignature && agreement.tenantSignature) {
       agreement.status = 'active'
-      await Property.findByIdAndUpdate(agreement.propertyId, { status: 'occupied' })
+      // Atomic predicate: only flip a non-occupied property. If another fully-signed
+      // agreement already occupies it, that's a double-booking — block it.
+      const occupied = await Property.findOneAndUpdate(
+        { _id: agreement.propertyId, status: { $ne: 'occupied' } },
+        { $set: { status: 'occupied' } },
+        { new: true },
+      )
+      if (!occupied) {
+        error(res, 'This property is already occupied under another agreement', 409)
+        return
+      }
       // Notify both that agreement is now active
       notifyAgreementFullySigned(agreement.tenantId, propertyTitle)
       notifyAgreementFullySigned(agreement.landlordId, propertyTitle)
@@ -166,12 +223,15 @@ export const agreementController = {
     if (agreement.landlordId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
     if (agreement.status === 'active') { error(res, 'Cannot modify active agreement'); return }
 
-    const { rentAmount, terms, specialConditions, startDate, endDate, advanceMonths, securityDeposit } = req.body
-    if (rentAmount) agreement.rentAmount = rentAmount
-    if (terms) agreement.terms = terms
-    if (specialConditions) agreement.specialConditions = specialConditions
-    if (startDate) agreement.startDate = startDate
-    if (endDate) agreement.endDate = endDate
+    const parsed = updateAgreementSchema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const { rentAmount, terms, specialConditions, startDate, endDate, advanceMonths, securityDeposit } = parsed.data
+
+    if (rentAmount !== undefined) agreement.rentAmount = rentAmount
+    if (terms !== undefined) agreement.terms = terms
+    if (specialConditions !== undefined) agreement.specialConditions = specialConditions
+    if (startDate !== undefined) agreement.startDate = startDate
+    if (endDate !== undefined) agreement.endDate = endDate
     if (advanceMonths !== undefined) agreement.advanceMonths = advanceMonths
     if (securityDeposit !== undefined) agreement.securityDeposit = securityDeposit
 
@@ -180,6 +240,8 @@ export const agreementController = {
     // Clear signatures on edit (requires re-signing)
     agreement.landlordSignature = undefined
     agreement.tenantSignature = undefined
+    agreement.landlordSignatureName = undefined
+    agreement.tenantSignatureName = undefined
     agreement.status = 'draft'
 
     await agreement.save()

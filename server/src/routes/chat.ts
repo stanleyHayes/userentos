@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { chatController } from '../controllers/chatController.js'
 import { User } from '../models/User.js'
-import { success } from '../utils/response.js'
+import { success, error } from '../utils/response.js'
 
 const router = Router()
 
@@ -12,32 +12,37 @@ function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Lightweight user search for starting new conversations — any authenticated user can access
+// Lightweight user search for starting new conversations — any authenticated user can access.
+// Requires a ≥2-char search term and never returns emails, so it can't be abused
+// as a user directory / email enumeration endpoint.
 router.get('/users', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId
   const search = (req.query.search as string || '').trim()
 
-  const filter: Record<string, unknown> = { _id: { $ne: userId } }
-  if (search) {
-    const escaped = escapeRegex(search)
-    const regex = new RegExp(escaped, 'i')
-    filter.$or = [
+  if (search.length < 2) {
+    error(res, 'Search query must be at least 2 characters')
+    return
+  }
+
+  const escaped = escapeRegex(search)
+  const regex = new RegExp(escaped, 'i')
+  const filter: Record<string, unknown> = {
+    _id: { $ne: userId },
+    $or: [
       { firstName: regex },
       { lastName: regex },
-      { email: regex },
-    ]
+    ],
   }
 
   const users = await User.find(filter)
-    .select('firstName lastName email activeRole')
-    .limit(30)
+    .select('firstName lastName activeRole')
+    .limit(20)
     .lean()
 
   const items = users.map((u) => ({
     id: (u._id as Types.ObjectId).toString(),
     firstName: u.firstName,
     lastName: u.lastName,
-    email: u.email,
     activeRole: u.activeRole,
   }))
 

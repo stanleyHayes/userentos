@@ -1,15 +1,15 @@
 import { Employment } from '../models/Employment.js'
+import { Employer } from '../models/Employer.js'
 import { DeductionMandate } from '../models/DeductionMandate.js'
 import { PayrollRun, type IPayrollDeductionRecord } from '../models/PayrollRun.js'
-import { Wallet } from '../models/Wallet.js'
 import { Agreement } from '../models/Agreement.js'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { Payment } from '../models/Payment.js'
 import { applyRepayment } from './financing.js'
 import { notify } from './notify.js'
 import { checkAndAward } from './achievements.js'
-
-function round2(n: number) { return Math.round(n * 100) / 100 }
+import { creditWallet, debitWallet } from './payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 
 /**
  * Compute deduction amount per mandate for a given employee's net salary.
@@ -18,7 +18,16 @@ function round2(n: number) { return Math.round(n * 100) / 100 }
  */
 const MAX_DEDUCTION_RATIO = 1 / 3
 
+/** A mandate only deducts when the run's period overlaps its active window. */
+function mandateActiveInPeriod(m: { startDate?: string; endDate?: string }, periodStart: Date, periodEnd: Date): boolean {
+  if (m.startDate && new Date(m.startDate) > periodEnd) return false
+  if (m.endDate && new Date(m.endDate) < periodStart) return false
+  return true
+}
+
 export async function buildPayrollRun(employerId: string, periodLabel: string, periodStart: string, periodEnd: string, scheduledPayDate: string) {
+  const periodStartDate = new Date(periodStart)
+  const periodEndDate = new Date(periodEnd)
   const employments = await Employment.find({ employerId, status: 'active' })
   const deductions: IPayrollDeductionRecord[] = []
   let totalGross = 0
@@ -32,6 +41,9 @@ export async function buildPayrollRun(employerId: string, periodLabel: string, p
     const cap = round2(emp.netMonthlySalary * MAX_DEDUCTION_RATIO)
 
     for (const m of mandates) {
+      // Skip expired / not-yet-started mandates — status:'active' alone is not enough.
+      if (!mandateActiveInPeriod(m, periodStartDate, periodEndDate)) continue
+
       const raw = m.amountType === 'percentage'
         ? round2(emp.netMonthlySalary * (m.amount / 100))
         : m.amount
@@ -100,6 +112,9 @@ export async function approvePayrollRun(runId: string, approvedBy: string) {
 
 /**
  * Process an approved run — disburse each deduction to its target.
+ * The run is FUNDED from the employer's wallet up front: no employer funds,
+ * no disbursement. Previously this credited destination wallets with no
+ * source of funds at all — unbacked money creation.
  */
 export async function processPayrollRun(runId: string) {
   // Atomically claim the run (approved -> processing) so two concurrent process
@@ -113,6 +128,27 @@ export async function processPayrollRun(runId: string) {
     const existing = await PayrollRun.findById(runId)
     if (!existing) throw new Error('Payroll run not found')
     throw new Error(`Run is ${existing.status} — must be approved first`)
+  }
+
+  const employer = await Employer.findById(run.employerId).lean()
+  if (!employer) throw new Error('Employer not found for this run')
+
+  // Fund the deductions from the employer's wallet BEFORE paying anything out.
+  const totalToFund = round2(run.deductions
+    .filter((d) => d.status === 'queued')
+    .reduce((sum, d) => sum + d.amount, 0))
+
+  if (totalToFund > 0) {
+    const funded = await debitWallet(employer.ownerId, totalToFund, {
+      type: 'payroll_funding',
+      reference: `PAYROLL-FUND-${runId.toString().slice(-8)}`,
+      description: `Payroll run ${run.periodLabel} — deduction funding`,
+    })
+    if (!funded) {
+      // Put the run back so the employer can top up and retry.
+      await PayrollRun.updateOne({ _id: runId }, { $set: { status: 'approved' } })
+      throw new Error(`Insufficient employer wallet balance to fund deductions (GHS ${totalToFund.toFixed(2)} required)`)
+    }
   }
 
   for (const ded of run.deductions) {
@@ -134,6 +170,16 @@ export async function processPayrollRun(runId: string) {
     } catch (err) {
       ded.status = 'failed'
       ded.failureReason = (err as Error).message
+      // Refund the failed deduction to the employer immediately.
+      try {
+        await creditWallet(employer.ownerId, ded.amount, {
+          type: 'refund',
+          reference: `PAYROLL-REFUND-${runId.toString().slice(-8)}-${ded.mandateId.slice(-4)}`,
+          description: `Refund: failed ${ded.allocationType} deduction (${run.periodLabel})`,
+        })
+      } catch (refundErr) {
+        console.error(`[payroll/process] CRITICAL: refund of failed deduction ${ded.mandateId} failed: ${(refundErr as Error).message}`)
+      }
     }
   }
 
@@ -157,19 +203,11 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: stri
       const agreement = await Agreement.findById(ded.targetEntityId)
       if (!agreement) throw new Error('Agreement not found')
       const rentRef = `PAYROLL-RENT-${Date.now()}`
-      const landlordWallet = await Wallet.findOneAndUpdate(
-        { userId: agreement.landlordId },
-        { $inc: { balance: ded.amount } },
-        { new: true, upsert: true },
-      )
-      await Wallet.updateOne({ userId: agreement.landlordId }, { $push: { transactions: {
+      await creditWallet(agreement.landlordId!, ded.amount, {
         type: 'deposit',
-        amount: ded.amount,
-        balanceAfter: landlordWallet.balance,
         reference: rentRef,
         description: `Rent (payroll deduction) from ${ded.employeeName ?? ded.employeeId}`,
-        createdAt: new Date().toISOString(),
-      } } })
+      })
 
       // Record as a Payment too
       await Payment.create({
@@ -180,6 +218,7 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: stri
         method: 'bank_transfer',
         status: 'completed',
         reference: `PAYROLL-${Date.now()}`,
+        purpose: 'rent',
         paidAt: new Date().toISOString(),
       })
 
@@ -208,20 +247,11 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: stri
       return
     }
     case 'wallet_topup': {
-      const topupRef = `PAYROLL-WALLET-${Date.now()}`
-      const wallet = await Wallet.findOneAndUpdate(
-        { userId: ded.employeeId },
-        { $inc: { balance: ded.amount } },
-        { new: true, upsert: true },
-      )
-      await Wallet.updateOne({ userId: ded.employeeId }, { $push: { transactions: {
+      await creditWallet(ded.employeeId, ded.amount, {
         type: 'deposit',
-        amount: ded.amount,
-        balanceAfter: wallet.balance,
-        reference: topupRef,
+        reference: `PAYROLL-WALLET-${Date.now()}`,
         description: 'Salary topup via payroll',
-        createdAt: new Date().toISOString(),
-      } } })
+      })
       return
     }
   }

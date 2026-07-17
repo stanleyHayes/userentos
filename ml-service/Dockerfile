@@ -20,6 +20,11 @@ COPY scripts/ ./scripts/
 # is useful on first boot; POST /train can retrain on production data later.
 RUN mkdir -p /app/data && python scripts/train_seed.py --count 2500
 
+# Run as a non-root user (the main API Dockerfile already does this)
+RUN useradd --create-home --uid 10001 appuser \
+  && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

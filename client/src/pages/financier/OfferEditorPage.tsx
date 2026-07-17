@@ -32,7 +32,39 @@ export function OfferEditorPage() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  /** Cross-field validation — NaN/invalid combos must never reach the server. */
+  function validate(): string | null {
+    const minAmount = Number(form.minAmount)
+    const maxAmount = Number(form.maxAmount)
+    const minTenure = Number(form.minTenureMonths)
+    const maxTenure = Number(form.maxTenureMonths)
+    const rate = Number(form.annualInterestRate)
+    const fee = Number(form.processingFeePct)
+    const lateFee = Number(form.lateFeePct)
+    const credit = Number(form.minCreditScore)
+
+    if (!form.name.trim()) return 'Offer name is required'
+    if (!form.description.trim()) return 'Description is required'
+    for (const [label, v] of [['Min amount', minAmount], ['Max amount', maxAmount], ['Min tenure', minTenure], ['Max tenure', maxTenure], ['Interest rate', rate], ['Processing fee', fee], ['Late fee', lateFee], ['Min credit score', credit]] as const) {
+      if (!Number.isFinite(v)) return `${label} must be a valid number`
+    }
+    if (minAmount <= 0) return 'Min amount must be greater than 0'
+    if (minAmount > maxAmount) return 'Min amount cannot exceed max amount'
+    if (minTenure <= 0) return 'Min tenure must be at least 1 month'
+    if (minTenure > maxTenure) return 'Min tenure cannot exceed max tenure'
+    if (rate < 0 || rate > 100) return 'Interest rate must be between 0 and 100%'
+    if (fee < 0 || fee > 100) return 'Processing fee must be between 0 and 100%'
+    if (lateFee < 0 || lateFee > 100) return 'Late fee must be between 0 and 100%'
+    if (credit < 0 || credit > 100) return 'Min credit score must be between 0 and 100'
+    return null
+  }
+
   function submit() {
+    const problem = validate()
+    if (problem) {
+      addToast(problem, 'error')
+      return
+    }
     create.mutate({
       name: form.name,
       productType: form.productType,

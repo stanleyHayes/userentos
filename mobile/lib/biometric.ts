@@ -109,15 +109,18 @@ export function getDeviceLabel(): string {
 }
 
 /**
- * Enroll this device — calls the server with the user's current session JWT
- * (already attached by `api`) and stores the returned refresh token in SecureStore.
+ * Enroll this device — REQUIRES the user's current password (re-auth): the
+ * server refuses enrollment from a bare session token, so a stolen JWT can't
+ * mint a long-lived biometric token. Calls the server with the session JWT
+ * (attached by `api`) and stores the returned refresh token in SecureStore.
  */
-export async function enableBiometricLogin(): Promise<void> {
+export async function enableBiometricLogin(password: string): Promise<void> {
   const deviceId = await getDeviceId()
   const deviceLabel = getDeviceLabel()
   const data = await api.post<{ refreshToken: string; expiresAt: string }>('/auth/biometric/enroll', {
     deviceId,
     deviceLabel,
+    password,
   })
   await SecureStore.setItemAsync(BIOMETRIC_REFRESH_KEY, data.refreshToken)
   await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, '1')

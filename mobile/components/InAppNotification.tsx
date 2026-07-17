@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useNotificationStore, type InAppToast } from '../stores/notificationStore'
 import { useThemeColors } from '../lib/theme'
+import { safeAppRoute } from '../lib/safeRoute'
 
 const TOAST_DURATION = 4000
 const SLIDE_DURATION = 300
@@ -54,8 +55,9 @@ function Toast({ toast }: { toast: InAppToast }) {
 
   function handlePress() {
     dismiss(toast.id)
-    if (toast.route) {
-      router.push(toast.route as string)
+    const route = safeAppRoute(toast.route)
+    if (route) {
+      router.push(route as never)
     }
   }
 

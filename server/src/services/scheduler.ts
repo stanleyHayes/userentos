@@ -12,10 +12,21 @@ import { MoveOut } from '../models/MoveOut.js'
 import { notify, notifyRentReminder } from './notify.js'
 import { getProvider } from './payments/index.js'
 import { finalizePayment } from './payments/finalize.js'
+import { creditWallet, debitWallet } from './payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 import type { ProviderId } from './payments/types.js'
 import { logger } from '../utils/logger.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { RefreshToken } from '../models/RefreshToken.js'
+import { BiometricToken } from '../models/BiometricToken.js'
+import { DeviceToken } from '../models/DeviceToken.js'
+import { Notification } from '../models/Notification.js'
+import { TenantProfile } from '../models/TenantProfile.js'
+import { ProfileAccess } from '../models/ProfileAccess.js'
+import { Favorite } from '../models/Favorite.js'
+import { CreditScore } from '../models/CreditScore.js'
+import { Review } from '../models/Review.js'
+import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
 
 // Ghana timezone (UTC+0, no DST). cron defaults to server time, but we set tz explicitly
@@ -60,13 +71,29 @@ export function startScheduler() {
   cron.schedule('0 8 * * *', async () => {
     if (!(await acquireCronLock('auto-debit', LOCK_TTL_DAILY))) return
     logger.info('[Scheduler] Running auto-debit check...')
-    try {
-      const plans = await SavingsPlan.find({ status: 'active', autoDebit: true })
+    const plans = await SavingsPlan.find({ status: 'active', autoDebit: true })
 
-      for (const plan of plans) {
-        const wallet = await Wallet.findOne({ userId: plan.userId })
-        if (!wallet || wallet.balance < plan.contributionAmount) {
-          // Insufficient funds - send notification
+    // Per-plan error isolation — one bad plan must never skip everyone's debit.
+    for (const plan of plans) {
+      try {
+        const now = new Date()
+
+        // Frequency check FIRST — a monthly plan must not get a daily
+        // "insufficient balance" notification when no debit is even due.
+        if (plan.lastAutoDebitAt) {
+          const diffDays = (now.getTime() - new Date(plan.lastAutoDebitAt).getTime()) / (1000 * 60 * 60 * 24)
+          if (plan.frequency === 'daily' && diffDays < 1) continue
+          if (plan.frequency === 'weekly' && diffDays < 7) continue
+          if (plan.frequency === 'monthly' && diffDays < 28) continue
+        }
+
+        // Atomic guarded debit (no negative balance, no double-spend)
+        const debited = await debitWallet(plan.userId, plan.contributionAmount, {
+          type: 'savings_contribution',
+          reference: `AUTODEBIT-${Date.now()}`,
+          description: `Auto-debit: ${plan.frequency} savings contribution`,
+        })
+        if (!debited) {
           notify({
             userId: plan.userId,
             title: 'Auto-debit Failed',
@@ -76,45 +103,38 @@ export function startScheduler() {
           continue
         }
 
-        // Check frequency
-        const now = new Date()
-        const lastTx = wallet.transactions.filter((t) => t.description.includes('Auto-debit')).pop()
-        if (lastTx) {
-          const lastDate = new Date(lastTx.createdAt)
-          const diffDays = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
-          if (plan.frequency === 'daily' && diffDays < 1) continue
-          if (plan.frequency === 'weekly' && diffDays < 7) continue
-          if (plan.frequency === 'monthly' && diffDays < 28) continue
-        }
-
-        // Execute auto-debit
-        wallet.balance -= plan.contributionAmount
-        plan.currentAmount += plan.contributionAmount
-
-        if (plan.currentAmount >= plan.targetAmount) {
-          plan.status = 'completed'
-          notify({
-            userId: plan.userId,
-            title: 'Savings Goal Reached!',
-            message: `Your savings plan has reached its target of GHS ${plan.targetAmount.toFixed(2)}!`,
-            actionUrl: '/savings',
+        // Credit the plan; on failure refund the debit.
+        try {
+          const updated = await SavingsPlan.findByIdAndUpdate(
+            plan._id,
+            {
+              $inc: { currentAmount: round2(plan.contributionAmount) },
+              $set: { lastAutoDebitAt: now.toISOString() },
+            },
+            { new: true },
+          )
+          if (updated && updated.status !== 'completed' && updated.currentAmount >= updated.targetAmount) {
+            await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })
+            notify({
+              userId: plan.userId,
+              title: 'Savings Goal Reached!',
+              message: `Your savings plan has reached its target of GHS ${plan.targetAmount.toFixed(2)}!`,
+              actionUrl: '/savings',
+            })
+          }
+        } catch (err) {
+          await creditWallet(plan.userId, plan.contributionAmount, {
+            type: 'refund',
+            reference: `AUTODEBIT-REV-${Date.now()}`,
+            description: 'Reversal of failed auto-debit',
           })
+          throw err
         }
 
-        wallet.transactions.push({
-          type: 'savings_contribution',
-          amount: plan.contributionAmount,
-          balanceAfter: wallet.balance,
-          reference: `AUTODEBIT-${Date.now()}`,
-          description: `Auto-debit: ${plan.frequency} savings contribution`,
-          createdAt: now.toISOString(),
-        })
-
-        await Promise.all([wallet.save(), plan.save()])
         logger.info(`[Scheduler] Auto-debited GHS ${plan.contributionAmount} for user ${plan.userId}`)
+      } catch (err) {
+        logger.error(`[Scheduler] Auto-debit failed for plan ${plan._id}:`, err)
       }
-    } catch (err) {
-      logger.error('[Scheduler] Auto-debit error:', err)
     }
   })
 
@@ -306,8 +326,9 @@ export function startScheduler() {
       //   - on due date
       //   - 3 days after due (overdue)
       try {
-        const pendingPayments = await Payment.find({ status: 'pending' }).lean()
-        for (const payment of pendingPayments) {
+        // Cursor-stream pending payments instead of loading the whole collection.
+        const cursor = Payment.find({ status: 'pending' }).lean().cursor()
+        for await (const payment of cursor) {
           // Determine implicit dueDate: 7 days after the payment record was created.
           // (Payment lifecycle in this codebase: tenant initiates, status flips on confirm.)
           const createdAt = new Date((payment as { createdAt?: string | Date }).createdAt ?? Date.now())
@@ -340,7 +361,7 @@ export function startScheduler() {
           }
 
           notify({ userId: payment.tenantId, title, message, actionUrl: '/payments' })
-          if (days === -3) {
+          if (days === -3 && payment.landlordId) {
             notify({
               userId: payment.landlordId,
               title: 'Tenant Payment Overdue',
@@ -359,36 +380,42 @@ export function startScheduler() {
       }
 
       // 3. Maintenance escalation: requests in `requested` status > 48h
+      // NOTE: no .lean() here — hydrated documents are required for .save().
+      // (This job previously called .save() on lean objects and silently never ran.)
       try {
         const cutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000)
         const stale = await MaintenanceRequest.find({
           status: 'requested',
           createdAt: { $lt: cutoff },
-        }).lean()
+        }).limit(500)
 
         const propertyTitleMap = await batchPropertyTitles(stale)
 
         for (const request of stale) {
-          if (!olderThanHours(request.lastReminderAt, 20)) continue
+          try {
+            if (!olderThanHours(request.lastReminderAt, 20)) continue
 
-          // Escalate priority one level
-          const ladder = ['low', 'medium', 'high', 'urgent'] as const
-          const idx = ladder.indexOf(request.priority)
-          const escalated = idx < ladder.length - 1 ? ladder[idx + 1] : 'urgent'
-          const escalatedFlag = escalated !== request.priority
-          request.priority = escalated
-          request.lastReminderAt = now.toISOString()
-          await request.save()
+            // Escalate priority one level
+            const ladder = ['low', 'medium', 'high', 'urgent'] as const
+            const idx = ladder.indexOf(request.priority)
+            const escalated = idx < ladder.length - 1 ? ladder[idx + 1] : 'urgent'
+            const escalatedFlag = escalated !== request.priority
+            request.priority = escalated
+            request.lastReminderAt = now.toISOString()
+            await request.save()
 
-          const propertyTitle = propertyTitleMap.get(request.propertyId) ?? 'a property'
-          notify({
-            userId: request.landlordId,
-            title: escalatedFlag ? 'Maintenance Escalated' : 'Maintenance Awaiting Action',
-            message: escalatedFlag
-              ? `"${request.title}" at "${propertyTitle}" is unanswered for >48h. Priority escalated to ${escalated}.`
-              : `"${request.title}" at "${propertyTitle}" is still awaiting your response.`,
-            actionUrl: '/maintenance',
-          })
+            const propertyTitle = propertyTitleMap.get(request.propertyId) ?? 'a property'
+            notify({
+              userId: request.landlordId,
+              title: escalatedFlag ? 'Maintenance Escalated' : 'Maintenance Awaiting Action',
+              message: escalatedFlag
+                ? `"${request.title}" at "${propertyTitle}" is unanswered for >48h. Priority escalated to ${escalated}.`
+                : `"${request.title}" at "${propertyTitle}" is still awaiting your response.`,
+              actionUrl: '/maintenance',
+            })
+          } catch (itemErr) {
+            logger.error(`[Scheduler] Escalation failed for request ${request._id}:`, itemErr)
+          }
         }
       } catch (err) {
         logger.error('[Scheduler] Maintenance escalation error:', err)
@@ -404,10 +431,12 @@ export function startScheduler() {
       if (!(await acquireCronLock('financing-arrears', LOCK_TTL_DAILY))) return
       logger.info('[Scheduler] Running financing arrears check...')
       try {
-        const contracts = await FinancingContract.find({ status: { $in: ['active', 'in_grace', 'in_arrears'] } })
+        // Cursor-stream contracts (they embed full amortization schedules —
+        // loading the whole collection at once doesn't scale).
+        const cursor = FinancingContract.find({ status: { $in: ['active', 'in_grace', 'in_arrears'] } }).cursor()
         const now = new Date()
         const todayStart = new Date(now); todayStart.setUTCHours(0, 0, 0, 0)
-        for (const c of contracts) {
+        for await (const c of cursor) {
           if (c.lastArrearsCheckAt) {
             const last = new Date(c.lastArrearsCheckAt); last.setUTCHours(0, 0, 0, 0)
             if (last.getTime() === todayStart.getTime()) continue
@@ -517,10 +546,22 @@ export function startScheduler() {
 
       for (const u of users) {
         const uid = (u._id as Types.ObjectId).toString()
-        // Clean up related data
+        // Erase credentials, tokens, and PII-bearing records. Financial records
+        // (payments, agreements, loans) are RETAINED for compliance — they only
+        // reference userId, and with the User doc gone the reference is anonymous.
         await Promise.all([
           RefreshToken.deleteMany({ userId: uid }),
-          // Keep financial records for compliance but anonymize references
+          BiometricToken.deleteMany({ userId: uid }),
+          DeviceToken.deleteMany({ userId: uid }),
+          Notification.deleteMany({ userId: uid }),
+          TenantProfile.deleteMany({ userId: uid }),
+          ProfileAccess.deleteMany({ $or: [{ requesterId: uid }, { tenantId: uid }] }),
+          Favorite.deleteMany({ userId: uid }),
+          CreditScore.deleteMany({ userId: uid }),
+          Message.deleteMany({ senderId: uid }),
+          // Anonymize marketplace content that embeds the user's name
+          Review.updateMany({ userId: uid }, { $set: { userName: 'Deleted User' } }),
+          Conversation.updateMany({ participants: uid }, { $pull: { participants: uid } }),
         ])
         await User.findByIdAndDelete(uid)
         logger.info(`[Scheduler] Hard-deleted user ${uid.slice(0, 8)}... after 30-day grace period`)

@@ -5,6 +5,8 @@
  * to the Python FastAPI service instead of running the model locally.
  */
 
+import { config } from '../config/index.js'
+
 const ML_URL = process.env.ML_SERVICE_URL
 const REQUEST_TIMEOUT_MS = 4000
 const TRAIN_TIMEOUT_MS = 60000
@@ -44,9 +46,15 @@ interface ModelStatus {
 }
 
 function getHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  // Authenticate against the ML service when an API key is configured
+  // (unset = dev mode, no auth header sent).
+  if (config.mlServiceApiKey) {
+    headers['x-api-key'] = config.mlServiceApiKey
+  }
+  return headers
 }
 
 export const mlClient = {

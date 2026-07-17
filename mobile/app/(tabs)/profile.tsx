@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useThemeColors, useIsDark, spacing } from '../../lib/theme'
 import { useAuthStore } from '../../stores/authStore'
 import { useThemeStore } from '../../stores/themeStore'
+import { api } from '../../lib/api'
 
 interface MenuSection {
   title: string
@@ -25,6 +26,12 @@ export default function ProfileScreen() {
         text: 'Logout',
         style: 'destructive',
         onPress: () => {
+          // Revoke the server-side refresh token first — otherwise it stays
+          // valid until natural expiry even after "logout".
+          const refreshToken = useAuthStore.getState().refreshToken
+          if (refreshToken) {
+            api.post('/auth/logout', { refreshToken }).catch(() => {})
+          }
           logout()
           router.replace('/auth/login')
         },

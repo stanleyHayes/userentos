@@ -28,7 +28,14 @@ const applicationSchema = new Schema<IApplication>({
   respondedAt: Date,
 }, { timestamps: true })
 
-// Compound index for fast lookups (uniqueness enforced at route level for pending/approved only)
+// Compound index for fast lookups
 applicationSchema.index({ tenantId: 1, propertyId: 1 })
+
+// One pending application per tenant per property at the DATABASE level —
+// the route-level check alone raced under concurrent submissions.
+applicationSchema.index(
+  { tenantId: 1, propertyId: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending' }, name: 'one_pending_application' },
+)
 
 export const Application = mongoose.model<IApplication>('Application', applicationSchema)

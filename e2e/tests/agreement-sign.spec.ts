@@ -62,8 +62,10 @@ test.describe('agreement signing', () => {
     const agreementId: string = createData.data.id
 
     // ── 5. Landlord signs the agreement → status becomes pending_signatures ──
+    // The server records the typed legal name as the e-signature.
     await request.post(`${API_BASE}/api/agreements/${agreementId}/sign`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
+      data: { signatureName: 'Yaw Osei' },
     })
 
     // ── 6. UI: tenant signs the agreement ──

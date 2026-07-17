@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     seed_count: int = 2500
     seed_rng_seed: int = 20260714
 
+    # Shared secret required on mutating/prediction endpoints when set.
+    # Unset = development mode (no auth, with a startup warning).
+    ml_api_key: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

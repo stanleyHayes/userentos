@@ -13,4 +13,7 @@ export const config = {
   jwtAccessExpiresIn: 60 * 15, // 15 minutes in seconds
   jwtRefreshExpiresIn: 60 * 60 * 24 * 7, // 7 days in seconds
   bcryptRounds: 10,
+  // Shared secret for the ML pricing service. Unset = dev mode (no auth header
+  // sent, and the ML service accepts unauthenticated calls with a warning).
+  mlServiceApiKey: process.env.ML_API_KEY || undefined,
 }

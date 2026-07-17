@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -187,23 +188,52 @@ export function SavingsPage() {
 function WalletActionModal({ open, onClose, action }: { open: boolean; onClose: () => void; action: 'deposit' | 'withdraw' }) {
   const deposit = useDeposit()
   const withdraw = useWithdraw()
+  const qc = useQueryClient()
   const mutation = action === 'deposit' ? deposit : withdraw
-  const [form, setForm] = useState({ amount: '', method: 'mtn_momo' })
+  const [form, setForm] = useState({ amount: '', method: 'mtn_momo', phone: '' })
+  const [instructions, setInstructions] = useState<string | null>(null)
 
   function handleClose() {
     onClose()
-    setForm({ amount: '', method: 'mtn_momo' })
+    setForm({ amount: '', method: 'mtn_momo', phone: '' })
+    setInstructions(null)
     mutation.reset()
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     try {
-      await mutation.mutateAsync({ amount: Number(form.amount), method: form.method })
-      handleClose()
+      if (action === 'deposit') {
+        // Deposit initiates a REAL payment collection — the wallet is credited
+        // only after the provider confirms, so show the payer instructions and
+        // poll for the balance change.
+        const res = await deposit.mutateAsync({ amount: Number(form.amount), method: form.method, phone: form.phone })
+        if (res?.instructions) {
+          setInstructions(res.instructions)
+          setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 3000)
+          setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 7000)
+        } else {
+          handleClose()
+        }
+      } else {
+        await withdraw.mutateAsync({ amount: Number(form.amount), method: form.method })
+        handleClose()
+      }
     } catch {
       // Error is displayed via mutation.isError
     }
+  }
+
+  if (instructions) {
+    return (
+      <Modal open onClose={handleClose} title="Complete your deposit">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">{instructions}</p>
+          <p className="text-xs text-muted">Your wallet is credited automatically once the payment is confirmed.</p>
+          <Button className="w-full" onClick={handleClose}>Got it</Button>
+        </div>
+      </Modal>
+    )
   }
 
   return (
@@ -211,10 +241,13 @@ function WalletActionModal({ open, onClose, action }: { open: boolean; onClose: 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <Input id="amount" label="Amount (GHS)" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required min="1" />
         <Select id="method" label="Method" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} options={methodOptions} />
+        {action === 'deposit' && form.method !== 'bank_transfer' && (
+          <Input id="phone" label="Mobile money number" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="0241234567" required />
+        )}
         {mutation.isError && <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">{(mutation.error as Error).message}</div>}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending} variant={action === 'deposit' ? 'accent' : 'primary'}>
+          <Button type="submit" disabled={mutation.isPending || (action === 'deposit' && form.method !== 'bank_transfer' && form.phone.trim().length < 9)} variant={action === 'deposit' ? 'accent' : 'primary'}>
             {mutation.isPending ? 'Processing...' : action === 'deposit' ? 'Deposit' : 'Withdraw'}
           </Button>
         </div>

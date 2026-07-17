@@ -6,6 +6,8 @@ import { Investment } from '../models/Investment.js'
 import { Wallet } from '../models/Wallet.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 
 const router = Router()
 
@@ -62,13 +64,13 @@ router.post('/', authenticate, async (req, res) => {
   const now = new Date()
   const maturityDate = new Date(now.getTime() + tenure * 24 * 60 * 60 * 1000)
 
-  // Atomic conditional debit — prevents concurrent double-spend / negative balance.
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: req.user!.userId, balance: { $gte: amount } },
-    { $inc: { balance: -amount } },
-    { new: true },
-  )
-  if (!wallet) {
+  // Debit first; the investment create below refunds on failure.
+  const debited = await debitWallet(req.user!.userId, amount, {
+    type: 'withdrawal',
+    reference: `INV-${Date.now()}`,
+    description: `Investment: ${type.replace('_', ' ')} via ${partner.name}`,
+  })
+  if (!debited) {
     const exists = await Wallet.exists({ userId: req.user!.userId })
     error(res, exists ? 'Insufficient wallet balance' : 'Wallet not found', exists ? 400 : 404)
     return
@@ -84,24 +86,21 @@ router.post('/', authenticate, async (req, res) => {
     startDate: now.toISOString(),
     maturityDate: maturityDate.toISOString(),
     status: 'active',
-    expectedReturn: Math.round(expectedReturn * 100) / 100,
+    expectedReturn: round2(expectedReturn),
     partnerId,
   }).catch(async () => {
-    await Wallet.updateOne({ userId: req.user!.userId }, { $inc: { balance: amount } })
+    await creditWallet(req.user!.userId, amount, {
+      type: 'refund',
+      reference: `INV-REV-${Date.now()}`,
+      description: 'Reversal of failed investment',
+    })
     return null
   })
   if (!investment) { error(res, 'Could not create investment; your wallet has been refunded.', 500); return }
 
-  await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: {
-    type: 'withdrawal',
-    amount,
-    balanceAfter: wallet.balance,
-    reference: `INV-${Date.now()}`,
-    description: `Investment: ${type.replace('_', ' ')} via ${partner.name}`,
-    createdAt: now.toISOString(),
-  } } })
+  const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
 
-  success(res, { investment: { ...investment.toObject(), id: investment._id.toString() }, wallet: { balance: wallet.balance } }, 'Investment created', 201)
+  success(res, { investment: { ...investment.toObject(), id: investment._id.toString() }, wallet: { balance: wallet?.balance ?? 0 } }, 'Investment created', 201)
 })
 
 // Withdraw matured investment
@@ -140,24 +139,25 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
   )
   if (!claimed) { error(res, 'Investment already withdrawn'); return }
 
-  const credit = Math.round(returnAmount * 100) / 100
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: req.user!.userId },
-    { $inc: { balance: credit } },
-    { new: true, upsert: true },
-  )
-  await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: {
-    type: 'investment_return',
-    amount: credit,
-    balanceAfter: wallet.balance,
-    reference: `INVRET-${Date.now()}`,
-    description: `${isMatured ? 'Matured' : 'Early withdrawal'}: ${investment.type.replace('_', ' ')}`,
-    createdAt: now.toISOString(),
-  } } })
+  const credit = round2(returnAmount)
+  try {
+    await creditWallet(req.user!.userId, credit, {
+      type: 'investment_return',
+      reference: `INVRET-${Date.now()}`,
+      description: `${isMatured ? 'Matured' : 'Early withdrawal'}: ${investment.type.replace('_', ' ')}`,
+    })
+  } catch (err) {
+    // Credit failed — revert the claim so the payout isn't stranded.
+    await Investment.updateOne({ _id: investment._id }, { $set: { status: investment.status }, $unset: { actualReturn: 1 } })
+    console.error(`[investments/withdraw] credit failed, claim reverted for ${investment._id}: ${(err as Error).message}`)
+    throw err
+  }
+
+  const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
 
   success(res, {
     investment: { ...claimed.toObject(), id: claimed._id.toString() },
-    wallet: { balance: wallet.balance },
+    wallet: { balance: wallet?.balance ?? 0 },
     returnAmount: credit,
     earlyWithdrawal: !isMatured,
   })

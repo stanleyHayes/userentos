@@ -8,8 +8,9 @@ import { MoveOut } from '../models/MoveOut.js'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
-import { Wallet } from '../models/Wallet.js'
 import { notify } from '../services/notify.js'
+import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 
@@ -45,7 +46,7 @@ router.get(
       ? {}
       : { $or: [{ tenantId: userId }, { landlordId: userId }] }
 
-    const items = await MoveOut.find(filter).sort({ createdAt: -1 }).lean()
+    const items = await MoveOut.find(filter).sort({ createdAt: -1 }).limit(200).lean()
 
     // Enrich with property + party names for the list
     const propertyIds = [...new Set(items.map((m) => m.propertyId))]
@@ -92,6 +93,11 @@ router.post(
     if (!agreement) { error(res, 'Agreement not found', 404); return }
     if (userId !== agreement.tenantId && userId !== agreement.landlordId) {
       error(res, 'Not a party to this agreement', 403); return
+    }
+    // Move-outs only make sense on a live lease — not on drafts or pending signatures.
+    if (agreement.status !== 'active') {
+      error(res, `Cannot start a move-out on a ${agreement.status} agreement`, 409)
+      return
     }
 
     // Idempotency: do not create another in-flight move-out for the same agreement
@@ -250,6 +256,7 @@ router.post(
     const parsed = disputeSchema.safeParse(req.body ?? {})
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
+    mo.preDisputeStatus = mo.status
     mo.status = 'disputed'
     if (parsed.data.reason) {
       mo.notes.push({ text: `Tenant disputed: ${parsed.data.reason}`, by: userId, at: new Date().toISOString() })
@@ -279,6 +286,83 @@ router.post(
   })
 )
 
+// ─── POST /api/move-outs/:id/withdraw-dispute (tenant) ──────────
+// Tenant accepts the inspection after all — returns to the pre-dispute status.
+router.post(
+  '/:id/withdraw-dispute',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId
+    const mo = await MoveOut.findById(param(req.params.id))
+    if (!mo) { error(res, 'Move-out not found', 404); return }
+    if (mo.tenantId !== userId) { error(res, 'Only the tenant can withdraw their dispute', 403); return }
+    if (mo.status !== 'disputed') { error(res, 'This move-out is not disputed', 409); return }
+
+    mo.status = mo.preDisputeStatus ?? 'inspected'
+    mo.preDisputeStatus = undefined
+    mo.notes.push({ text: 'Tenant withdrew the dispute', by: userId, at: new Date().toISOString() })
+    await mo.save()
+
+    notify({
+      userId: mo.landlordId,
+      title: 'Dispute Withdrawn',
+      message: 'The tenant has withdrawn their move-out dispute. You can now process the refund.',
+      actionUrl: `/agreements/${mo.agreementId}/move-out`,
+    })
+
+    success(res, idOf(mo.toObject()))
+  })
+)
+
+// ─── POST /api/move-outs/:id/resolve-dispute (admin/mediator) ──────
+// Settles a disputed move-out: optionally adjusts the refund and unblocks the
+// landlord's process-refund. Previously a disputed move-out deadlocked forever.
+const resolveDisputeSchema = z.object({
+  deductionsTotal: z.number().nonnegative().optional(),
+  note: z.string().max(2000).optional(),
+})
+
+router.post(
+  '/:id/resolve-dispute',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId
+    if (!isAdminRole(req.user!.roles)) { error(res, 'Only staff can resolve move-out disputes', 403); return }
+
+    const mo = await MoveOut.findById(param(req.params.id))
+    if (!mo) { error(res, 'Move-out not found', 404); return }
+    if (mo.status !== 'disputed') { error(res, 'This move-out is not disputed', 409); return }
+
+    const parsed = resolveDisputeSchema.safeParse(req.body ?? {})
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+    // Staff may adjust the deduction total (e.g. after reviewing evidence).
+    if (parsed.data.deductionsTotal !== undefined) {
+      mo.deductionsTotal = round2(parsed.data.deductionsTotal)
+      mo.refundAmount = round2(Math.max(0, mo.securityDeposit - mo.deductionsTotal))
+    }
+    mo.status = 'refund_pending'
+    mo.preDisputeStatus = undefined
+    mo.notes.push({
+      text: `Dispute resolved by staff${parsed.data.note ? `: ${parsed.data.note}` : ''}`,
+      by: userId,
+      at: new Date().toISOString(),
+    })
+    await mo.save()
+
+    for (const partyId of [mo.tenantId, mo.landlordId]) {
+      notify({
+        userId: partyId,
+        title: 'Move-out Dispute Resolved',
+        message: `The move-out dispute has been resolved. Refund due: GHS ${mo.refundAmount.toFixed(2)}.`,
+        actionUrl: `/agreements/${mo.agreementId}/move-out`,
+      })
+    }
+
+    success(res, idOf(mo.toObject()))
+  })
+)
+
 // ─── POST /api/move-outs/:id/process-refund (landlord) ──────────
 router.post(
   '/:id/process-refund',
@@ -288,56 +372,62 @@ router.post(
     const mo = await MoveOut.findById(param(req.params.id))
     if (!mo) { error(res, 'Move-out not found', 404); return }
     if (mo.landlordId !== userId) { error(res, 'Only the landlord can process the refund', 403); return }
-    if (mo.status === 'refund_paid' || mo.status === 'closed') {
-      error(res, 'Refund has already been processed'); return
-    }
-    if (mo.status === 'disputed') {
-      error(res, 'Resolve the dispute before processing the refund'); return
-    }
 
-    const refundAmount = Number(mo.refundAmount) || 0
+    const refundAmount = round2(Number(mo.refundAmount) || 0)
+    const ref = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
+
     if (refundAmount > 0) {
-      const landlordWallet = await Wallet.findOne({ userId: mo.landlordId })
-      if (!landlordWallet || landlordWallet.balance < refundAmount) {
-        error(res, `Insufficient landlord wallet balance for refund (need GHS ${refundAmount.toFixed(2)})`); return
-      }
-      let tenantWallet = await Wallet.findOne({ userId: mo.tenantId })
-      if (!tenantWallet) {
-        tenantWallet = await Wallet.create({ userId: mo.tenantId, balance: 0, transactions: [] })
+      // 1. Atomically claim the refund — concurrent/retried calls can't double-pay.
+      const claimed = await MoveOut.findOneAndUpdate(
+        { _id: mo._id, status: { $nin: ['refund_paid', 'closed', 'disputed'] } },
+        { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: ref } },
+        { new: true },
+      )
+      if (!claimed) {
+        const current = await MoveOut.findById(mo._id).select('status').lean()
+        error(res, current?.status === 'disputed' ? 'Resolve the dispute before processing the refund' : 'Refund has already been processed', 409)
+        return
       }
 
-      const ref = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
-      const now = new Date().toISOString()
-
-      landlordWallet.balance -= refundAmount
-      landlordWallet.transactions.push({
+      // 2. Debit the landlord, then credit the tenant. On credit failure the
+      //    debit is reversed and the claim rolled back — money is never stranded.
+      const debited = await debitWallet(mo.landlordId, refundAmount, {
         type: 'withdrawal',
-        amount: refundAmount,
-        balanceAfter: landlordWallet.balance,
         reference: ref,
         description: `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`,
-        createdAt: now,
       })
-      tenantWallet.balance += refundAmount
-      tenantWallet.transactions.push({
-        type: 'deposit',
-        amount: refundAmount,
-        balanceAfter: tenantWallet.balance,
-        reference: ref,
-        description: `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`,
-        createdAt: now,
-      })
-      await landlordWallet.save()
-      await tenantWallet.save()
+      if (!debited) {
+        await MoveOut.updateOne({ _id: mo._id }, { $set: { status: mo.status }, $unset: { refundedAt: 1, refundReference: 1 } })
+        error(res, `Insufficient landlord wallet balance for refund (need GHS ${refundAmount.toFixed(2)})`)
+        return
+      }
+      try {
+        await creditWallet(mo.tenantId, refundAmount, {
+          type: 'deposit',
+          reference: ref,
+          description: `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`,
+        })
+      } catch (err) {
+        await creditWallet(mo.landlordId, refundAmount, {
+          type: 'refund',
+          reference: `${ref}-REV`,
+          description: 'Reversal of failed deposit refund',
+        })
+        await MoveOut.updateOne({ _id: mo._id }, { $set: { status: mo.status }, $unset: { refundedAt: 1, refundReference: 1 } })
+        console.error(`[moveOut/refund] tenant credit failed, landlord reimbursed for ${mo._id}: ${(err as Error).message}`)
+        throw err
+      }
+
+      mo.status = 'refund_paid'
+      mo.refundedAt = new Date().toISOString()
       mo.refundReference = ref
     } else {
       // No refund owed — still issue a reference for traceability
       mo.refundReference = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}-ZERO`
+      mo.refundedAt = new Date().toISOString()
+      mo.status = 'refund_paid'
+      await mo.save()
     }
-
-    mo.refundedAt = new Date().toISOString()
-    mo.status = 'refund_paid'
-    await mo.save()
 
     notify({
       userId: mo.tenantId,

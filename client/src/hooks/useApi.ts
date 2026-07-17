@@ -183,7 +183,9 @@ export function useCreateAgreement() {
 export function useSignAgreement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.post<RentalAgreement>(`/agreements/${id}/sign`, {}),
+    // The typed legal name is recorded as the e-signature.
+    mutationFn: ({ id, signatureName }: { id: string; signatureName: string }) =>
+      api.post<RentalAgreement>(`/agreements/${id}/sign`, { signatureName }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agreements'] }),
   })
 }
@@ -198,10 +200,30 @@ export function useUpdateAgreement() {
 }
 
 // Payments
-export function usePayments() {
+export interface PaymentsQuery {
+  page?: number
+  pageSize?: number
+  status?: string
+  method?: string
+  search?: string
+  sort?: 'date' | 'amount'
+  order?: 'asc' | 'desc'
+}
+
+export function usePayments(params: PaymentsQuery = {}) {
+  const search = new URLSearchParams()
+  if (params.page) search.set('page', String(params.page))
+  if (params.pageSize) search.set('pageSize', String(params.pageSize))
+  if (params.status) search.set('status', params.status)
+  if (params.method) search.set('method', params.method)
+  if (params.search) search.set('search', params.search)
+  if (params.sort) search.set('sort', params.sort)
+  if (params.order) search.set('order', params.order)
+  const qs = search.toString()
   return useQuery({
-    queryKey: ['payments'],
-    queryFn: () => api.get<PaginatedResponse<Payment>>('/payments'),
+    queryKey: ['payments', params],
+    queryFn: () => api.get<PaginatedResponse<Payment>>(`/payments${qs ? `?${qs}` : ''}`),
+    placeholderData: (prev) => prev, // keep previous page visible while fetching the next
   })
 }
 
@@ -233,8 +255,10 @@ export function useWallet() {
 export function useDeposit() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { amount: number; method: string }) =>
-      api.post<{ wallet: Wallet }>('/savings/wallet/deposit', body),
+    // Deposit now initiates a verified payment collection — returns
+    // { payment, instructions }; the wallet is credited on confirmation.
+    mutationFn: (body: { amount: number; method: string; phone?: string }) =>
+      api.post<{ payment?: { reference: string }; instructions?: string }>('/savings/wallet/deposit', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wallet'] }),
   })
 }
@@ -819,11 +843,14 @@ export function useUnreadCount() {
   })
 }
 
-// Chat-specific user search — accessible to all authenticated users (unlike useUsers which requires admin role)
-export function useChatUsers() {
+// Chat-specific user search — server-side, requires a ≥2-char term, and never
+// returns emails (directory-enumeration fix).
+export function useChatUsers(search: string) {
   return useQuery({
-    queryKey: ['chat-users'],
-    queryFn: () => api.get<{ items: { id: string; firstName: string; lastName: string; email: string; activeRole: string }[] }>('/chat/users'),
+    queryKey: ['chat-users', search],
+    queryFn: () => api.get<{ items: { id: string; firstName: string; lastName: string; activeRole: string }[] }>(`/chat/users?search=${encodeURIComponent(search)}`),
+    enabled: search.trim().length >= 2,
+    placeholderData: (prev) => prev,
   })
 }
 
@@ -973,7 +1000,10 @@ export function useMySubscription() {
 export function useSubscribe() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { packageId: string }) => api.post('/subscriptions/subscribe', body),
+    // Paid packages: returns { payment, instructions } — activation happens
+    // server-side once the payment is verified (webhook/simulator finalize).
+    mutationFn: (body: { packageId: string; method?: string; phone?: string }) =>
+      api.post<{ payment?: { reference: string }; instructions?: string }>('/subscriptions/subscribe', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-subscription'] })
     },
@@ -1136,7 +1166,7 @@ export function useMaintenanceRequests(params?: {
   status?: string
   propertyId?: string
   priority?: string
-}) {
+}, options?: { enabled?: boolean }) {
   const query = new URLSearchParams()
   if (params?.status) query.set('status', params.status)
   if (params?.propertyId) query.set('propertyId', params.propertyId)
@@ -1146,6 +1176,7 @@ export function useMaintenanceRequests(params?: {
     queryKey: ['maintenance', params],
     queryFn: () =>
       api.get<{ items: MaintenanceRequest[]; total: number }>(`/maintenance${qs ? `?${qs}` : ''}`),
+    enabled: options?.enabled ?? true,
   })
 }
 

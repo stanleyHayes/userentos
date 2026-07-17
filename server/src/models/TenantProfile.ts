@@ -97,6 +97,8 @@ export interface ITenantProfile extends Document {
   completionScore: number
   profileComplete: boolean
   lastUpdated: string
+  /** Set when the tenant revokes all passport share links (JWTs issued before are rejected). */
+  passportShareRevokedAt?: Date
 }
 
 export function calcScore(p: object): number {
@@ -186,6 +188,7 @@ const tenantProfileSchema = new Schema<ITenantProfile>({
   completionScore: { type: Number, default: 0 },
   profileComplete: { type: Boolean, default: false },
   lastUpdated: String,
+  passportShareRevokedAt: Date,
 }, { timestamps: true })
 
 tenantProfileSchema.pre('save', function () {

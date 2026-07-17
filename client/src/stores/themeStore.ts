@@ -39,8 +39,15 @@ export function applyTheme(theme: Theme) {
 
 // Initialize on load
 if (typeof window !== 'undefined') {
-  const stored = JSON.parse(localStorage.getItem('rentos-theme') || '{}')
-  applyTheme(stored?.state?.theme || 'system')
+  // Corrupted storage must never white-screen the app at import time.
+  let storedTheme: unknown
+  try {
+    storedTheme = JSON.parse(localStorage.getItem('rentos-theme') || '{}')?.state?.theme
+  } catch {
+    localStorage.removeItem('rentos-theme')
+  }
+  const validThemes: Theme[] = ['light', 'dark', 'system']
+  applyTheme(validThemes.includes(storedTheme as Theme) ? (storedTheme as Theme) : 'system')
 
   // Listen for system changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {

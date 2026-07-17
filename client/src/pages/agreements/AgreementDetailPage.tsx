@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
+import { api } from '@/lib/api'
 import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts } from '@/hooks/useApi'
 import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
 import { DatePicker } from '@/components/ui/DatePicker'
@@ -43,7 +44,6 @@ export function AgreementDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const token = useAuthStore((s) => s.token)
   const { data, isLoading } = useAgreements()
   const { data: moveOutsData } = useMoveOuts()
   const signAgreement = useSignAgreement()
@@ -99,9 +99,20 @@ export function AgreementDetailPage() {
     daysUntilEnd <= 30
 
   const apiBase = import.meta.env.VITE_API_URL || '/api'
-  const pdfUrl = canDownloadPdf && token
-    ? `${apiBase}/agreements/${agreement.id}/document.pdf?token=${encodeURIComponent(token)}`
-    : null
+
+  // Mint a short-lived, download-only token and open the PDF with it — the full
+  // session JWT must never appear in a URL (logs, browser history, referers).
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+  async function handleDownloadPdf() {
+    if (!agreement) return
+    setDownloadingPdf(true)
+    try {
+      const { token: downloadToken } = await api.post<{ token: string }>(`/agreements/${agreement.id}/document-link`, {})
+      window.open(`${apiBase}/agreements/${agreement.id}/document.pdf?token=${encodeURIComponent(downloadToken)}`, '_blank', 'noopener,noreferrer')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   function startEditing() {
     setEditForm({
@@ -132,7 +143,7 @@ export function AgreementDetailPage() {
   }
 
   async function handleSign() {
-    await signAgreement.mutateAsync(agreement!.id)
+    await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim() })
     setShowSignModal(false)
     setSignatureName('')
   }
@@ -165,12 +176,10 @@ export function AgreementDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {pdfUrl && (
-            <a href={pdfUrl} target="_blank" rel="noopener noreferrer" download>
-              <Button variant="outline" size="sm">
-                <Download size={14} /> Download Signed Agreement PDF
-              </Button>
-            </a>
+          {canDownloadPdf && (
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
+              <Download size={14} /> Download Signed Agreement PDF
+            </Button>
           )}
           {existingMoveOut && (
             <Link to={`/agreements/${agreement.id}/move-out`}>

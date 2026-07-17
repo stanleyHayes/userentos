@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { Types } from 'mongoose'
-import jwt from 'jsonwebtoken'
 import QRCode from 'qrcode'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, authenticateDownload } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { agreementController } from '../controllers/agreementController.js'
 import { Agreement } from '../models/Agreement.js'
@@ -10,36 +9,12 @@ import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { Payment } from '../models/Payment.js'
 import { TenantProfile } from '../models/TenantProfile.js'
-import { config } from '../config/index.js'
+import { signDownloadToken } from '../services/authService.js'
 import { SimplePdfBuilder } from '../utils/simplePdf.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 
 const router = Router()
-
-// Resolve userId from either an Authorization Bearer header OR a `?token=`
-// query-param. The query-param fallback exists so a plain <a download> link
-// can hit the PDF route without setting custom headers (browsers cannot send
-// Authorization on anchor downloads).
-function resolveUserIdForDownload(req: Request): string | null {
-  const header = req.headers.authorization
-  if (header?.startsWith('Bearer ')) {
-    try {
-      const payload = jwt.verify(header.slice(7), config.jwtSecret) as { userId: string }
-      return payload.userId
-    } catch { /* fall through */ }
-  }
-  const queryToken = param(req.query.token as string | string[] | undefined)
-  if (queryToken) {
-    try {
-      const payload = jwt.verify(queryToken, config.jwtSecret) as { userId: string; purpose?: string }
-      if (!payload.purpose || payload.purpose === 'agreement-download') {
-        return payload.userId
-      }
-    } catch { /* ignore */ }
-  }
-  return null
-}
 
 function formatGhs(n: number): string {
   return `GHS ${(Number(n) || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -96,6 +71,7 @@ router.get('/tenants', authenticate, asyncHandler(async (req: Request, res: Resp
   const paymentsByAgreement = new Map<string, typeof payments>()
   for (const p of payments) {
     const key = p.agreementId
+    if (!key) continue // non-rent payments (wallet deposits, subscriptions)
     if (!paymentsByAgreement.has(key)) paymentsByAgreement.set(key, [])
     paymentsByAgreement.get(key)!.push(p)
   }
@@ -146,11 +122,23 @@ router.get('/tenants', authenticate, asyncHandler(async (req: Request, res: Resp
   success(res, { items, total: items.length })
 }))
 
+// POST /agreements/:id/document-link — mint a short-lived, single-purpose
+// download token for the PDF. The token is only valid for document downloads
+// (5 min), so a leaked URL never grants account access.
+router.post('/:id/document-link', authenticate, asyncHandler(async (req: Request, res: Response) => {
+  const agreement = await Agreement.findById(param(req.params.id)).select('tenantId landlordId').lean()
+  if (!agreement) { error(res, 'Agreement not found', 404); return }
+  const userId = req.user!.userId
+  if (agreement.tenantId !== userId && agreement.landlordId !== userId) {
+    error(res, 'Not a party to this agreement', 403); return
+  }
+  success(res, { token: signDownloadToken(userId) })
+}))
+
 // GET /agreements/:id/document.pdf — downloadable signed Rental Agreement PDF
-// Auth: tenant or landlord on the agreement (via Bearer header OR ?token=).
-router.get('/:id/document.pdf', asyncHandler(async (req: Request, res: Response) => {
-  const userId = resolveUserIdForDownload(req)
-  if (!userId) { error(res, 'Authentication required', 401); return }
+// Auth: short-lived download-purpose token only (Bearer header OR ?token=).
+router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId
 
   const id = param(req.params.id)
   const agreement = await Agreement.findById(id).lean()
@@ -246,8 +234,14 @@ router.get('/:id/document.pdf', asyncHandler(async (req: Request, res: Response)
   pdf.heading('Signatures', 2)
   const tenantSigDate = agreement.tenantSignature ?? (agreement as { updatedAt?: string | Date }).updatedAt
   const landlordSigDate = agreement.landlordSignature ?? (agreement as { updatedAt?: string | Date }).updatedAt
-  pdf.kv('Signed by tenant on', agreement.tenantSignature ? formatDateLong(tenantSigDate) : 'Pending')
-  pdf.kv('Signed by landlord on', agreement.landlordSignature ? formatDateLong(landlordSigDate) : 'Pending')
+  const tenantSig = agreement.tenantSignature
+    ? `${agreement.tenantSignatureName ?? tenantName} — ${formatDateLong(tenantSigDate)}`
+    : 'Pending'
+  const landlordSig = agreement.landlordSignature
+    ? `${agreement.landlordSignatureName ?? landlordName} — ${formatDateLong(landlordSigDate)}`
+    : 'Pending'
+  pdf.kv('Signed by tenant', tenantSig)
+  pdf.kv('Signed by landlord', landlordSig)
   pdf.hr()
 
   // ─── Renewal status footer ───

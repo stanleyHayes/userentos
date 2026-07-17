@@ -3,10 +3,20 @@ import { z } from 'zod'
 import { authService } from '../container.js'
 import { success, error } from '../utils/response.js'
 
+/** Password policy — same rules the client checklist enforces (8+, upper,
+ * lower, digit, special). Applied to register/change/reset. */
+const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password needs one uppercase letter')
+  .regex(/[a-z]/, 'Password needs one lowercase letter')
+  .regex(/\d/, 'Password needs one number')
+  .regex(/[^A-Za-z0-9]/, 'Password needs one special character')
+
 const registerSchema = z.object({
   email: z.string().email(),
   phone: z.string().min(10),
-  password: z.string().min(8),
+  password: passwordSchema,
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   role: z.enum(['tenant', 'landlord', 'property_manager', 'financier', 'employer']),
@@ -73,7 +83,7 @@ export const authController = {
   changePassword: async (req: Request, res: Response) => {
     const userId = req.user!.userId
 
-    const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) })
+    const schema = z.object({ currentPassword: z.string().min(1), newPassword: passwordSchema })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -91,7 +101,7 @@ export const authController = {
   },
 
   resetPassword: async (req: Request, res: Response) => {
-    const schema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) })
+    const schema = z.object({ token: z.string().min(1), newPassword: passwordSchema })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 

@@ -38,30 +38,54 @@ export function UploadModal({ open, onClose }: UploadModalProps) {
     },
   })
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB — matches the server limit
+  const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.xls', '.xlsx']
+
+  const [fileError, setFileError] = useState<string | null>(null)
+
+  /** Client-side mirror of the server's fileFilter — the accept attribute is
+   * cosmetic (drag-drop bypasses it), so validate explicitly. */
+  function validateFile(f: File): string | null {
+    const ext = `.${f.name.split('.').pop()?.toLowerCase() ?? ''}`
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return `File type "${ext}" is not allowed. Accepted: PDF, images, text and Office documents.`
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      return `File is ${(f.size / 1024 / 1024).toFixed(1)}MB — the maximum is 10MB.`
+    }
+    return null
+  }
+
+  function pickFile(f: File | undefined) {
+    if (!f) return
+    const problem = validateFile(f)
+    if (problem) {
+      setFile(null)
+      setFileError(problem)
+      return
+    }
+    setFileError(null)
+    setFile(f)
+    if (!name) setName(f.name)
+  }
+
   function resetAndClose() {
     setFile(null)
     setCategory('other')
     setName('')
     setDragActive(false)
+    setFileError(null)
     onClose()
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (f) {
-      setFile(f)
-      if (!name) setName(f.name)
-    }
+    pickFile(e.target.files?.[0])
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragActive(false)
-    const f = e.dataTransfer.files?.[0]
-    if (f) {
-      setFile(f)
-      if (!name) setName(f.name)
-    }
+    pickFile(e.dataTransfer.files?.[0])
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -80,7 +104,7 @@ export function UploadModal({ open, onClose }: UploadModalProps) {
             type="file"
             className="hidden"
             onChange={handleFileChange}
-            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.xls,.xlsx,.csv,.zip"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.txt,.xls,.xlsx"
           />
           <button
             type="button"
@@ -121,6 +145,9 @@ export function UploadModal({ open, onClose }: UploadModalProps) {
               </>
             )}
           </button>
+          {fileError && (
+            <p className="text-xs text-danger mt-2">{fileError}</p>
+          )}
         </div>
 
         <div className="space-y-4">

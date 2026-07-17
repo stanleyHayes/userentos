@@ -8,6 +8,7 @@ import { notifyNewMessage } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { getIO } from '../services/socket.js'
+import { logger } from '../utils/logger.js'
 
 const createConversationSchema = z.object({
   participantId: z.string().min(1),
@@ -76,6 +77,10 @@ export const chatController = {
 
     if (participantId === userId) { error(res, 'Cannot message yourself'); return }
 
+    // Participant must be an existing user
+    const otherUser = await User.findById(participantId).select('firstName lastName').lean()
+    if (!otherUser) { error(res, 'Participant not found', 404); return }
+
     // Check if conversation already exists between these two users (optionally for same property)
     const query: Record<string, unknown> = {
       participants: { $all: [userId, participantId] },
@@ -95,13 +100,11 @@ export const chatController = {
       isNew = true
     }
 
-    // Populate other user info
-    const otherUser = await User.findById(participantId).select('firstName lastName').lean()
-
+    // Populate other user info (already validated above)
     const result = {
       id: (conversation._id as Types.ObjectId).toString(),
       participants: conversation.participants,
-      otherUser: otherUser ? { id: participantId, firstName: otherUser.firstName, lastName: otherUser.lastName } : undefined,
+      otherUser: { id: participantId, firstName: otherUser.firstName, lastName: otherUser.lastName },
       propertyId: conversation.propertyId,
       lastMessage: conversation.lastMessage ? {
         text: conversation.lastMessage.text,
@@ -126,8 +129,9 @@ export const chatController = {
       error(res, 'Conversation not found', 404); return
     }
 
-    const page = parseInt(req.query.page as string) || 1
-    const pageSize = parseInt(req.query.pageSize as string) || 50
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    // Cap pageSize — unbounded values force massive reads.
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 50)))
     const skip = (page - 1) * pageSize
 
     const [messages, total] = await Promise.all([
@@ -179,16 +183,24 @@ export const chatController = {
       read: false,
     })
 
-    // Update conversation lastMessage and increment unread for the other participant
+    // Update conversation lastMessage and increment unread for the other participant.
+    // Atomic $inc — the previous get→set→save read-modify-write lost increments
+    // under concurrent messages.
     const otherId = conversation.participants.find((p) => p !== userId) ?? conversation.participants[0]
     const currentUnread = conversation.unreadCount.get(otherId) ?? 0
-    conversation.lastMessage = {
-      text: parsed.data.text,
-      senderId: userId,
-      createdAt: new Date(),
-    }
-    conversation.unreadCount.set(otherId, currentUnread + 1)
-    await conversation.save()
+    await Conversation.updateOne(
+      { _id: conversation._id },
+      {
+        $set: {
+          lastMessage: {
+            text: parsed.data.text,
+            senderId: userId,
+            createdAt: new Date(),
+          },
+        },
+        $inc: { [`unreadCount.${otherId}`]: 1 },
+      },
+    )
 
     const sender = await User.findById(userId).select('firstName lastName').lean()
 
@@ -218,6 +230,7 @@ export const chatController = {
     // Persistent notification for offline users
     const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'Someone'
     notifyNewMessage(otherId, senderName, parsed.data.text)
+      .catch((err) => logger.warn('[chat] notifyNewMessage failed:', (err as Error).message))
 
     success(res, messageData, 'Message sent', 201)
   },

@@ -28,26 +28,47 @@ router.post('/rent-cap', authenticate, requireRole('government', 'admin', 'legal
   if (region) filter['address.region'] = region
   if (propertyType) filter.type = propertyType
 
-  const properties = await Property.find(filter).lean()
-  const affected = properties.filter((p) => p.rentAmount > maxRent)
-  const totalReduction = affected.reduce((s, p) => s + (p.rentAmount - maxRent), 0)
+  // Aggregated in Mongo — previously this loaded every property into memory.
+  const [result] = await Property.aggregate([
+    { $match: filter },
+    { $facet: {
+      totals: [{ $group: {
+        _id: null,
+        total: { $sum: 1 },
+        avgRent: { $avg: '$rentAmount' },
+        affected: { $sum: { $cond: [{ $gt: ['$rentAmount', maxRent] }, 1, 0] } },
+        totalReduction: { $sum: { $cond: [{ $gt: ['$rentAmount', maxRent] }, { $subtract: ['$rentAmount', maxRent] }, 0] } },
+        newAvgRent: { $avg: { $min: ['$rentAmount', maxRent] } },
+      } }],
+      topAffected: [
+        { $match: { rentAmount: { $gt: maxRent } } },
+        { $sort: { rentAmount: -1 } },
+        { $limit: 10 },
+        { $project: { title: 1, rentAmount: 1, type: 1, 'address.region': 1 } },
+      ],
+    }},
+  ])
+
+  const totals = result?.totals?.[0] ?? {}
+  const totalProperties = totals.total ?? 0
+  const totalReduction = Math.round((totals.totalReduction ?? 0) * 100) / 100
 
   success(res, {
     policy: { maxRent, region: region || 'All regions', propertyType: propertyType || 'All types' },
-    totalProperties: properties.length,
-    affectedProperties: affected.length,
-    affectedPercentage: properties.length > 0 ? Math.round((affected.length / properties.length) * 100) : 0,
-    currentAvgRent: properties.length > 0 ? Math.round(properties.reduce((s, p) => s + p.rentAmount, 0) / properties.length) : 0,
-    newAvgRent: properties.length > 0 ? Math.round(properties.reduce((s, p) => s + Math.min(p.rentAmount, maxRent), 0) / properties.length) : 0,
+    totalProperties,
+    affectedProperties: totals.affected ?? 0,
+    affectedPercentage: totalProperties > 0 ? Math.round(((totals.affected ?? 0) / totalProperties) * 100) : 0,
+    currentAvgRent: Math.round(totals.avgRent ?? 0),
+    newAvgRent: Math.round(totals.newAvgRent ?? 0),
     totalMonthlyReduction: totalReduction,
-    annualSavingsForTenants: totalReduction * 12,
+    annualSavingsForTenants: Math.round(totalReduction * 12 * 100) / 100,
     estimatedRevenueImpact: -totalReduction,
-    affectedPropertyDetails: affected.slice(0, 10).map((p) => ({
+    affectedPropertyDetails: (result?.topAffected ?? []).map((p: { title: string; rentAmount: number; type: string; address: { region?: string } }) => ({
       title: p.title,
       currentRent: p.rentAmount,
       newRent: maxRent,
-      reduction: p.rentAmount - maxRent,
-      region: p.address.region,
+      reduction: Math.round((p.rentAmount - maxRent) * 100) / 100,
+      region: p.address?.region,
       type: p.type,
     })),
   })
@@ -61,49 +82,78 @@ router.post('/advance-limit', authenticate, requireRole('government', 'admin', '
 
   const { maxMonths } = parsed.data
 
-  const agreements = await Agreement.find().lean()
-  const affected = agreements.filter((a) => a.advanceMonths > maxMonths)
-  const properties = await Property.find().lean()
-  const affectedProps = properties.filter((p) => p.advanceMonths > maxMonths)
+  // Aggregated in Mongo — previously this loaded every agreement + property.
+  const [agreementAgg, affectedProps] = await Promise.all([
+    Agreement.aggregate([
+      { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        affected: { $sum: { $cond: [{ $gt: ['$advanceMonths', maxMonths] }, 1, 0] } },
+        avgAdvance: { $avg: '$advanceMonths' },
+        tenantRelief: { $sum: { $cond: [{ $gt: ['$advanceMonths', maxMonths] }, { $multiply: [{ $subtract: ['$advanceMonths', maxMonths] }, '$rentAmount'] }, 0] } },
+      } },
+    ]),
+    Property.countDocuments({ advanceMonths: { $gt: maxMonths } }),
+  ])
+
+  const totals = agreementAgg[0] ?? {}
+  const totalAgreements = totals.total ?? 0
 
   success(res, {
     policy: { maxAdvanceMonths: maxMonths },
-    totalAgreements: agreements.length,
-    affectedAgreements: affected.length,
-    affectedPercentage: agreements.length > 0 ? Math.round((affected.length / agreements.length) * 100) : 0,
-    totalPropertiesAffected: affectedProps.length,
-    currentAvgAdvance: agreements.length > 0 ? Math.round((agreements.reduce((s, a) => s + a.advanceMonths, 0) / agreements.length) * 10) / 10 : 0,
-    estimatedTenantRelief: affected.reduce((s, a) => s + (a.advanceMonths - maxMonths) * a.rentAmount, 0),
+    totalAgreements,
+    affectedAgreements: totals.affected ?? 0,
+    affectedPercentage: totalAgreements > 0 ? Math.round(((totals.affected ?? 0) / totalAgreements) * 100) : 0,
+    totalPropertiesAffected: affectedProps,
+    currentAvgAdvance: Math.round((totals.avgAdvance ?? 0) * 10) / 10,
+    estimatedTenantRelief: Math.round((totals.tenantRelief ?? 0) * 100) / 100,
   })
 })
 
 // Get market health indicators
 router.get('/market-health', authenticate, requireRole('government', 'admin', 'legal_officer'), async (_req, res) => {
-  const [properties, agreements, payments, disputes] = await Promise.all([
-    Property.find().lean(),
-    Agreement.find().lean(),
-    Payment.find({ status: 'completed' }).lean(),
-    Dispute.find().lean(),
+  // All indicators via aggregation — previously four full-collection scans.
+  const [propertyAgg, agreementAgg, paymentMonthly, disputeAgg] = await Promise.all([
+    Property.aggregate([
+      { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        available: { $sum: { $cond: [{ $eq: ['$status', 'available'] }, 1, 0] } },
+      } },
+    ]),
+    Agreement.aggregate([
+      { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        // $ifNull guards legacy agreements that predate the complianceFlags field
+        compliant: { $sum: { $cond: [{ $eq: [{ $size: { $ifNull: ['$complianceFlags', []] } }, 0] }, 1, 0] } },
+      } },
+    ]),
+    Payment.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: { $substr: ['$paidAt', 0, 7] }, volume: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    Dispute.aggregate([
+      { $group: {
+        _id: null,
+        open: { $sum: { $cond: [{ $and: [{ $ne: ['$status', 'resolved'] }, { $ne: ['$status', 'closed'] }] }, 1, 0] } },
+      } },
+    ]),
   ])
 
-  const totalProps = properties.length || 1
-  const vacancyRate = Math.round((properties.filter((p) => p.status === 'available').length / totalProps) * 100)
-  const disputeRate = Math.round((disputes.filter((d) => d.status !== 'resolved' && d.status !== 'closed').length / totalProps) * 100)
-  const complianceRate = agreements.length > 0
-    ? Math.round((agreements.filter((a) => a.complianceFlags.length === 0).length / agreements.length) * 100)
+  const totalProps = propertyAgg[0]?.total ?? 0
+  const vacancyRate = totalProps > 0 ? Math.round(((propertyAgg[0]?.available ?? 0) / totalProps) * 100) : 0
+  const disputeRate = totalProps > 0 ? Math.round(((disputeAgg[0]?.open ?? 0) / totalProps) * 100) : 0
+  const complianceRate = (agreementAgg[0]?.total ?? 0) > 0
+    ? Math.round(((agreementAgg[0]?.compliant ?? 0) / agreementAgg[0].total) * 100)
     : 100
 
-  // Monthly payment volume trend
-  const monthlyVolumes: Record<string, number> = {}
-  for (const p of payments) {
-    const month = (p.paidAt ?? '').slice(0, 7)
-    if (month) monthlyVolumes[month] = (monthlyVolumes[month] ?? 0) + p.amount
-  }
-
-  const months = Object.entries(monthlyVolumes).sort(([a], [b]) => a.localeCompare(b))
-  const trend = months.length >= 2
-    ? ((months[months.length - 1][1] - months[months.length - 2][1]) / months[months.length - 2][1]) * 100
-    : 0
+  // Monthly payment volume trend (guard against a zero previous month → Infinity)
+  const months = paymentMonthly.filter((m) => m._id)
+  const last = months.length >= 1 ? months[months.length - 1].volume : 0
+  const prev = months.length >= 2 ? months[months.length - 2].volume : 0
+  const trend = prev > 0 ? ((last - prev) / prev) * 100 : 0
 
   const overallScore = Math.round((complianceRate * 0.4 + (100 - vacancyRate) * 0.3 + (100 - disputeRate) * 0.3))
   const paymentTrend = Math.round(trend * 10) / 10

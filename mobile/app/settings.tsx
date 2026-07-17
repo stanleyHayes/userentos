@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
 import { api } from '../lib/api'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore, type User } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
 import {
   authenticateWithBiometric,
@@ -86,7 +86,7 @@ export default function SettingsScreen() {
 
 /* ─── Profile Tab ─── */
 function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
-  const { user, login } = useAuthStore()
+  const { user } = useAuthStore()
   const [firstName, setFirstName] = useState(user?.firstName ?? '')
   const [lastName, setLastName] = useState(user?.lastName ?? '')
   const [phone, setPhone] = useState(user?.phone ?? '')
@@ -101,10 +101,9 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       const body: Record<string, string> = { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() }
       if (ghanaCardId.trim()) body.ghanaCardId = ghanaCardId.trim()
       const updated = await api.patch<Record<string, unknown>>('/users/me', body)
-      // Update auth store so UI reflects changes
-      if (user && useAuthStore.getState().token) {
-        login({ ...user, ...updated }, useAuthStore.getState().token!)
-      }
+      // Update auth store so UI reflects changes (updateUser preserves the
+      // session tokens — login() without refreshToken would wipe them)
+      useAuthStore.getState().updateUser(updated as Partial<User>)
       Alert.alert('Success', 'Profile updated successfully')
     } catch (e) {
       const _err = e as { message?: string }
@@ -200,8 +199,9 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       await api.post('/auth/login', { email: user.email, password: bioPassword })
       const ok = await authenticateWithBiometric(`Enable ${biometricLabel(capability.primary)} login`)
       if (!ok) return
-      // Enroll: server issues a long-lived refresh token; we store the token, never the password
-      await enableBiometricLogin()
+      // Enroll: server issues a long-lived refresh token (requires password re-auth);
+      // we store the token, never the password
+      await enableBiometricLogin(bioPassword)
       setBioEnabled(true)
       setBioPassword('')
       Alert.alert('Enabled', `${biometricLabel(capability.primary)} login is now active. A device-bound refresh token has been issued — your password is not stored on this device.`)

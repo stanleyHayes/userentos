@@ -2,6 +2,8 @@ import { Types } from 'mongoose'
 import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
+import { User } from '../models/User.js'
+import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
 interface CreatePropertyData {
   title: string
@@ -121,6 +123,24 @@ export class PropertyService {
   }
 
   async create(data: CreatePropertyData, userId: string) {
+    // Enforce subscription listing limits. A user WITH a package is capped by it;
+    // an EXPIRED subscription blocks new listings until renewed (previously
+    // subscriptionEndDate was written but never enforced anywhere).
+    const user = await User.findById(userId).lean()
+    if (user?.subscriptionPackageId) {
+      const isExpired = !!user.subscriptionEndDate && new Date(user.subscriptionEndDate) < new Date()
+      if (isExpired) {
+        return { error: 'Your subscription has expired. Renew it to add more properties.', status: 403 }
+      }
+      const pkg = await SubscriptionPackage.findById(user.subscriptionPackageId).lean()
+      if (pkg && pkg.maxProperties !== -1) {
+        const count = await this.propertyRepo.count({ landlordId: userId })
+        if (count >= pkg.maxProperties) {
+          return { error: `Your ${pkg.name} package allows up to ${pkg.maxProperties} propert${pkg.maxProperties === 1 ? 'y' : 'ies'}. Upgrade to add more.`, status: 403 }
+        }
+      }
+    }
+
     const property = await this.propertyRepo.create({
       ...data,
       landlordId: userId,
@@ -142,12 +162,24 @@ export class PropertyService {
       return { error: 'Not authorized', status: 403 }
     }
 
+    // Content changes to an already-approved listing must go back through
+    // moderation — otherwise approval can be bypassed by editing after the fact.
+    const contentChanged =
+      (data.title !== undefined && data.title !== property.title) ||
+      (data.description !== undefined && data.description !== property.description) ||
+      (data.rentAmount !== undefined && data.rentAmount !== property.rentAmount) ||
+      (data.amenities !== undefined && JSON.stringify(data.amenities) !== JSON.stringify(property.amenities))
+
     if (data.title) property.title = data.title
     if (data.description) property.description = data.description
     if (data.rentAmount) property.rentAmount = data.rentAmount
     if (data.status) property.status = data.status
     if (data.rules) property.rules = data.rules
     if (data.amenities) property.amenities = data.amenities
+    if (contentChanged && property.listingStatus === 'approved') {
+      property.listingStatus = 'pending_review'
+      this.logger.info(`Property ${id} content changed — returned to pending_review`)
+    }
     await property.save()
 
     this.logger.info(`Property updated: ${id} by user ${userId}`)

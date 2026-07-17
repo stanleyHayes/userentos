@@ -242,6 +242,8 @@ export interface RentalAgreement {
   specialConditions: string[]
   landlordSignature?: string
   tenantSignature?: string
+  landlordSignatureName?: string
+  tenantSignatureName?: string
   complianceFlags: ComplianceFlag[]
   version: number
   renewalStatus: RenewalStatus
@@ -1070,6 +1072,8 @@ export interface PaginatedResponse<T> {
   page: number
   pageSize: number
   totalPages: number
+  /** Present on endpoints that compute filtered-set aggregates (e.g. payments). */
+  summary?: Record<string, number>
 }
 
 export interface LoginRequest {

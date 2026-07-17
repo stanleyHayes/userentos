@@ -1,13 +1,23 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 
+export type PaymentPurpose = 'rent' | 'wallet_deposit' | 'subscription'
+
 export interface IPayment extends Document {
-  agreementId: string
+  /** Required for rent payments; absent for wallet deposits / subscriptions. */
+  agreementId?: string
   tenantId: string
-  landlordId: string
+  /** Required for rent payments; absent for wallet deposits / subscriptions. */
+  landlordId?: string
   amount: number
   method: string
   status: string
   reference: string
+  /** What this payment funds. Only 'rent' involves an agreement/landlord. */
+  purpose: PaymentPurpose
+  /** Purpose-specific payload, e.g. { packageId } for subscriptions. */
+  purposeMeta?: Record<string, unknown>
+  /** Client-supplied idempotency key — retries return the original payment. */
+  idempotencyKey?: string
   receiptUrl?: string
   paidAt?: string
   /** ISO timestamp of last reminder sent for this payment (idempotency for scheduler) */
@@ -23,13 +33,16 @@ export interface IPayment extends Document {
 }
 
 const paymentSchema = new Schema<IPayment>({
-  agreementId: { type: String, required: true, index: true },
+  agreementId: { type: String, index: true },
   tenantId: { type: String, required: true, index: true },
-  landlordId: { type: String, required: true, index: true },
+  landlordId: { type: String, index: true },
   amount: { type: Number, required: true },
   method: { type: String, required: true, enum: ['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer'] },
   status: { type: String, required: true, enum: ['pending', 'processing', 'completed', 'failed', 'refunded'], default: 'pending' },
   reference: { type: String, required: true, unique: true },
+  purpose: { type: String, required: true, enum: ['rent', 'wallet_deposit', 'subscription'], default: 'rent', index: true },
+  purposeMeta: { type: Schema.Types.Mixed },
+  idempotencyKey: { type: String, unique: true, sparse: true },
   receiptUrl: String,
   paidAt: String,
   lastReminderAt: String,

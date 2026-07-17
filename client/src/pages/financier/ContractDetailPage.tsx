@@ -67,7 +67,10 @@ export function FinancingContractDetailPage() {
             <p className="text-xs text-muted dark:text-gray-400">By signing, you authorize the financier to disburse funds and you agree to repay according to the schedule below. You also confirm the disclosed APR, processing fee, and late fee.</p>
             <Input id="contract-signature" label="Type your full name to sign" value={signature} onChange={(e) => setSignature(e.target.value)} />
             <div className="flex justify-end">
-              <Button disabled={signature.length < 3 || sign.isPending} onClick={() => sign.mutate({ id: contract.id, signature }, { onSuccess: () => addToast('Contract signed', 'success') })}>
+              <Button disabled={signature.length < 3 || sign.isPending} onClick={() => sign.mutate({ id: contract.id, signature }, {
+                onSuccess: () => addToast('Contract signed', 'success'),
+                onError: (e) => addToast((e as Error).message, 'error'),
+              })}>
                 <FileSignature size={14} /> Sign Contract
               </Button>
             </div>
@@ -83,7 +86,10 @@ export function FinancingContractDetailPage() {
                 <p className="text-sm font-bold text-primary-dark dark:text-white">Ready to disburse</p>
                 <p className="text-xs text-muted dark:text-gray-500">Net of processing fee: {formatCurrency(contract.principal - contract.processingFee)}</p>
               </div>
-              <Button onClick={() => disburse.mutate(contract.id, { onSuccess: () => addToast('Disbursed', 'success') })} disabled={disburse.isPending}>
+              <Button onClick={() => disburse.mutate(contract.id, {
+                onSuccess: () => addToast('Disbursed', 'success'),
+                onError: (e) => addToast((e as Error).message, 'error'),
+              })} disabled={disburse.isPending}>
                 <Send size={14} /> Disburse Now
               </Button>
             </div>

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { Types } from 'mongoose'
+import { z } from 'zod'
 import { authenticate } from '../middleware/auth.js'
 import { TenantProfile, calcScore } from '../models/TenantProfile.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
@@ -35,19 +36,113 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 // Update my profile
+// Allowlist-validated: only known profile fields, bounded sizes/types — the
+// previous blocklist approach let callers mass-assign garbage of any size/type.
+const profilePatchSchema = z.object({
+  dateOfBirth: z.string().max(30).optional(),
+  gender: z.string().max(30).optional(),
+  maritalStatus: z.string().max(30).optional(),
+  nationality: z.string().max(60).optional(),
+  religion: z.string().max(60).optional(),
+  ethnicGroup: z.string().max(60).optional(),
+  hometown: z.string().max(120).optional(),
+  languagesSpoken: z.array(z.string().max(40)).max(20).optional(),
+  bio: z.string().max(2000).optional(),
+  highestEducation: z.string().max(60).optional(),
+  institution: z.string().max(120).optional(),
+  fieldOfStudy: z.string().max(120).optional(),
+  graduationYear: z.number().int().min(1950).max(2100).optional(),
+  currentlyStudying: z.boolean().optional(),
+  employmentStatus: z.string().max(40).optional(),
+  occupation: z.string().max(120).optional(),
+  employer: z.string().max(120).optional(),
+  employerAddress: z.string().max(300).optional(),
+  monthlyIncome: z.number().min(0).max(1e9).optional(),
+  employmentDuration: z.string().max(60).optional(),
+  workPhone: z.string().max(20).optional(),
+  linkedinUrl: z.string().url().max(300).optional().or(z.literal('')),
+  professionalLicense: z.string().max(120).optional(),
+  hasSpouse: z.boolean().optional(),
+  spouseName: z.string().max(120).optional(),
+  spouseOccupation: z.string().max(120).optional(),
+  hasChildren: z.boolean().optional(),
+  numberOfChildren: z.number().int().min(0).max(30).optional(),
+  childrenAges: z.string().max(120).optional(),
+  numberOfDependents: z.number().int().min(0).max(50).optional(),
+  numberOfOccupants: z.number().int().min(0).max(50).optional(),
+  occupantDetails: z.string().max(1000).optional(),
+  smoker: z.boolean().optional(),
+  drinker: z.boolean().optional(),
+  pets: z.boolean().optional(),
+  petType: z.string().max(60).optional(),
+  petCount: z.number().int().min(0).max(50).optional(),
+  noiseLevel: z.string().max(40).optional(),
+  workSchedule: z.string().max(60).optional(),
+  hobbies: z.array(z.string().max(60)).max(20).optional(),
+  clubs: z.array(z.string().max(60)).max(20).optional(),
+  dietaryRestrictions: z.string().max(500).optional(),
+  vehicleOwner: z.boolean().optional(),
+  vehicleType: z.string().max(60).optional(),
+  personalReferences: z.array(z.object({
+    name: z.string().max(120),
+    relationship: z.string().max(60),
+    phone: z.string().max(20),
+    email: z.string().email().max(120).optional().or(z.literal('')),
+    occupation: z.string().max(120).optional(),
+    yearsKnown: z.number().int().min(0).max(100).optional(),
+  })).max(10).optional(),
+  professionalReferences: z.array(z.object({
+    name: z.string().max(120),
+    title: z.string().max(120),
+    company: z.string().max(120),
+    phone: z.string().max(20),
+    email: z.string().email().max(120).optional().or(z.literal('')),
+  })).max(10).optional(),
+  previousRentals: z.array(z.object({
+    address: z.string().max(300),
+    city: z.string().max(120),
+    duration: z.string().max(60),
+    monthlyRent: z.number().min(0).max(1e9).optional(),
+    landlordName: z.string().max(120).optional(),
+    landlordPhone: z.string().max(20).optional(),
+    reasonForLeaving: z.string().max(500).optional(),
+    canContact: z.boolean(),
+  })).max(10).optional(),
+  hasBeenEvicted: z.boolean().optional(),
+  evictionDetails: z.string().max(1000).optional(),
+  emergencyContact: z.object({
+    name: z.string().max(120).optional(),
+    relationship: z.string().max(60).optional(),
+    phone: z.string().max(20).optional(),
+    address: z.string().max(300).optional(),
+  }).optional(),
+  idType: z.string().max(60).optional(),
+  idNumber: z.string().max(60).optional(),
+  idDocumentUrl: z.string().max(500).optional(),
+  proofOfIncomeUrl: z.string().max(500).optional(),
+  proofOfAddressUrl: z.string().max(500).optional(),
+  selfieUrl: z.string().max(500).optional(),
+  searchPreferences: z.object({
+    preferredRegions: z.array(z.string().max(60)).max(20).optional(),
+    preferredCities: z.array(z.string().max(60)).max(20).optional(),
+    preferredType: z.array(z.string().max(60)).max(20).optional(),
+    minBudget: z.number().min(0).max(1e9).optional(),
+    maxBudget: z.number().min(0).max(1e9).optional(),
+    minBedrooms: z.number().int().min(0).max(20).optional(),
+    needsFurnished: z.boolean().optional(),
+    needsParking: z.boolean().optional(),
+    preferredAmenities: z.array(z.string().max(60)).max(30).optional(),
+  }).optional(),
+}).strict() // unknown keys are rejected, not silently dropped
+
 router.patch('/me', authenticate, async (req, res) => {
   const profile = await TenantProfile.findOne({ userId: req.user!.userId })
   if (!profile) { error(res, 'Profile not found', 404); return }
 
-  // Accept all profile fields except system fields
-  const blocked = ['_id', 'userId', 'completionScore', 'profileComplete', 'lastUpdated', 'idVerified', 'incomeVerified', 'addressVerified', '__v']
+  const parsed = profilePatchSchema.safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  for (const [key, value] of Object.entries(req.body)) {
-    if (!blocked.includes(key) && value !== undefined) {
-      ;(profile as unknown as Record<string, unknown>)[key] = value
-    }
-  }
-
+  Object.assign(profile, parsed.data)
   await profile.save() // pre-save hook calculates score
 
   success(res, { ...profile.toObject(), id: profile._id.toString() })

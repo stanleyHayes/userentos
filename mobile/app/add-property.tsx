@@ -70,21 +70,18 @@ export default function AddPropertyScreen() {
         rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
       })
 
-      // Upload images
+      // Upload images via the api client (handles base URL, 401-refresh, and
+      // error reporting — the raw fetch here swallowed failures and hardcoded
+      // localhost + image/jpeg for everything).
       if (images.length > 0 && property?.id) {
         const formData = new FormData()
         for (const uri of images) {
           const filename = uri.split('/').pop() ?? 'photo.jpg'
-          formData.append('images', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob)
+          const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg'
+          const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+          formData.append('images', { uri, name: filename, type: mime } as unknown as Blob)
         }
-        await fetch(
-          `${__DEV__ ? 'http://localhost:3002/api' : process.env.EXPO_PUBLIC_API_URL + '/api'}/properties/${property.id}/images`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${(await import('../stores/authStore')).useAuthStore.getState().token}` },
-            body: formData,
-          }
-        )
+        await api.upload<{ images: string[] }>(`/properties/${property.id}/images`, formData)
       }
 
       Alert.alert('Success', 'Property listed successfully!', [

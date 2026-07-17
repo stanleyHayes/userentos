@@ -242,72 +242,76 @@ export const analyticsController = {
     ] = await Promise.all([
       // Users
       User.aggregate<{ _id: string[]; count: number }>([{ $group: { _id: '$roles', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      // Properties
+      // Properties — $facet grouped counts; $push-ing whole collections into one
+      // result doc hits the 16MB BSON cap at modest volume.
       Property.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: { $push: '$status' },
-          byListingStatus: { $push: '$listingStatus' },
-          byType: { $push: '$type' },
-          byStayType: { $push: '$stayType' },
-          furnished: { $sum: { $cond: ['$furnished', 1, 0] } },
-          totalViews: { $sum: '$views' },
-          totalInquiries: { $sum: '$inquiries' },
-          totalFavorites: { $sum: '$favorites' },
-          avgRent: { $avg: '$rentAmount' },
-          regions: { $push: '$address.region' },
-          cities: { $push: '$address.city' },
+        { $facet: {
+          totals: [{ $group: {
+            _id: null,
+            total: { $sum: 1 },
+            furnished: { $sum: { $cond: ['$furnished', 1, 0] } },
+            totalViews: { $sum: '$views' },
+            totalInquiries: { $sum: '$inquiries' },
+            totalFavorites: { $sum: '$favorites' },
+            avgRent: { $avg: '$rentAmount' },
+          } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          byListingStatus: [{ $group: { _id: '$listingStatus', count: { $sum: 1 } } }],
+          byType: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
+          byStayType: [{ $group: { _id: '$stayType', count: { $sum: 1 } } }],
+          regions: [{ $group: { _id: '$address.region', count: { $sum: 1 } } }],
+          cities: [{ $group: { _id: '$address.city', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }],
+          rentByType: [{ $group: { _id: '$type', avgRent: { $avg: '$rentAmount' } } }],
         }},
       ]),
       // Agreements
       Agreement.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: { $push: '$status' },
-          byRenewal: { $push: { $ifNull: ['$renewalStatus', 'none'] } },
-          complianceFlags: { $push: '$complianceFlags' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          byRenewal: [{ $group: { _id: { $ifNull: ['$renewalStatus', 'none'] }, count: { $sum: 1 } } }],
+          compliance: [{ $unwind: '$complianceFlags' }, { $group: { _id: '$complianceFlags.type', count: { $sum: 1 } } }],
         }},
       ]),
       // Payments
       Payment.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          completedVolume: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
-          byStatus: { $push: '$status' },
-          byMethod: { $push: '$method' },
-          completed: { $push: { $cond: [{ $eq: ['$status', 'completed'] }, { month: { $substr: ['$paidAt', 0, 7] }, amount: '$amount' }, null] } },
+        { $facet: {
+          totals: [{ $group: {
+            _id: null,
+            total: { $sum: 1 },
+            completedVolume: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
+            completedCount: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          byMethod: [{ $group: { _id: '$method', count: { $sum: 1 } } }],
+          monthly: [{ $match: { status: 'completed' } }, { $group: { _id: { $substr: ['$paidAt', 0, 7] }, volume: { $sum: '$amount' } } }],
         }},
       ]),
       // Disputes
       Dispute.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          open: { $sum: { $cond: [{ $and: [{ $ne: ['$status', 'closed'] }, { $ne: ['$status', 'resolved'] }] }, 1, 0] } },
-          byCategory: { $push: '$category' },
-          byStatus: { $push: '$status' },
+        { $facet: {
+          totals: [{ $group: {
+            _id: null,
+            total: { $sum: 1 },
+            open: { $sum: { $cond: [{ $and: [{ $ne: ['$status', 'closed'] }, { $ne: ['$status', 'resolved'] }] }, 1, 0] } },
+          } }],
+          byCategory: [{ $group: { _id: '$category', count: { $sum: 1 } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
         }},
       ]),
       // Savings Plans
       SavingsPlan.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: { $push: '$status' },
-          totalSaved: { $sum: '$currentAmount' },
-          totalTargeted: { $sum: '$targetAmount' },
-          activeUserIds: { $addToSet: { $cond: [{ $eq: ['$status', 'active'] }, '$userId', null] } },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 }, totalSaved: { $sum: '$currentAmount' }, totalTargeted: { $sum: '$targetAmount' } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          activeSavers: [{ $match: { status: 'active' } }, { $group: { _id: '$userId' } }, { $count: 'n' }],
         }},
       ]),
       // Applications
       Application.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: { $push: '$status' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
         }},
       ]),
       // Reviews
@@ -338,24 +342,23 @@ export const analyticsController = {
       ]),
       // Investments
       Investment.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          totalInvested: { $sum: '$amount' },
-          totalExpectedReturn: { $sum: '$expectedReturn' },
-          byStatus: { $push: '$status' },
-          byType: { $push: '$type' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 }, totalInvested: { $sum: '$amount' }, totalExpectedReturn: { $sum: '$expectedReturn' } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          byType: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
         }},
       ]),
       // Loans
       Loan.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          totalAmount: { $sum: '$amount' },
-          totalRepaid: { $sum: '$amountPaid' },
-          totalOutstanding: { $sum: { $cond: [{ $in: ['$status', ['active', 'approved']] }, { $subtract: ['$totalRepayment', '$amountPaid'] }, 0] } },
-          byStatus: { $push: '$status' },
+        { $facet: {
+          totals: [{ $group: {
+            _id: null,
+            total: { $sum: 1 },
+            totalAmount: { $sum: '$amount' },
+            totalRepaid: { $sum: '$amountPaid' },
+            totalOutstanding: { $sum: { $cond: [{ $in: ['$status', ['active', 'approved']] }, { $subtract: ['$totalRepayment', '$amountPaid'] }, 0] } },
+          } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
         }},
       ]),
       // Tenant Profiles
@@ -380,11 +383,9 @@ export const analyticsController = {
       ]),
       // Notifications
       Notification.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          unread: { $sum: { $cond: ['$read', 0, 1] } },
-          byChannel: { $push: '$channel' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 }, unread: { $sum: { $cond: ['$read', 0, 1] } } } }],
+          byChannel: [{ $group: { _id: '$channel', count: { $sum: 1 } } }],
         }},
       ]),
       // Conversations
@@ -401,28 +402,24 @@ export const analyticsController = {
       Favorite.countDocuments(),
       // Invitations
       Invitation.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: { $push: '$status' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 } } }],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
         }},
       ]),
       // Documents
       DocumentModel.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byType: { $push: '$type' },
-          totalFileSize: { $sum: { $ifNull: ['$fileSize', 0] } },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 }, totalFileSize: { $sum: { $ifNull: ['$fileSize', 0] } } } }],
+          byType: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
         }},
       ]),
       // Audit Logs
       AuditLog.aggregate([
-        { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byAction: { $push: '$action' },
-          byEntity: { $push: '$entityType' },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: 1 } } }],
+          byAction: [{ $group: { _id: '$action', count: { $sum: 1 } } }],
+          byEntity: [{ $group: { _id: '$entityType', count: { $sum: 1 } } }],
         }},
       ]),
     ]).catch((err) => {
@@ -430,69 +427,59 @@ export const analyticsController = {
       throw err
     })
 
-    // Helper to count occurrences in an array
-    function countOccurrences(arr: (string | null)[]): Record<string, number> {
+    // Turn grouped facet results [{_id, count}] into a count map
+    function groupedToCounts(arr: { _id: string | null; count: number }[] | undefined): Record<string, number> {
       const counts: Record<string, number> = {}
-      for (const item of arr) {
-        if (item == null) continue
-        counts[item] = (counts[item] ?? 0) + 1
+      for (const g of arr ?? []) {
+        if (g._id == null) continue
+        counts[g._id] = (counts[g._id] ?? 0) + g.count
       }
       return counts
     }
 
-    // Helper to count nested arrays
-    function countNested(arr: { type?: string }[][]): Record<string, number> {
-      const counts: Record<string, number> = {}
-      for (const nested of arr) {
-        for (const item of nested ?? []) {
-          if (item?.type) {
-            counts[item.type] = (counts[item.type] ?? 0) + 1
-          }
-        }
-      }
-      return counts
-    }
-
-    const pAgg = propertiesAgg[0] ?? {}
-    const aAgg = agreementsAgg[0] ?? {}
-    const payAgg = paymentsAgg[0] ?? {}
-    const dAgg = disputesAgg[0] ?? {}
-    const appAgg = applicationsAgg[0] ?? {}
+    const pF = propertiesAgg[0] ?? {}
+    const pAgg = pF.totals?.[0] ?? {}
+    const aF = agreementsAgg[0] ?? {}
+    const aAgg = aF.totals?.[0] ?? {}
+    const payF = paymentsAgg[0] ?? {}
+    const payAgg = payF.totals?.[0] ?? {}
+    const dF = disputesAgg[0] ?? {}
+    const dAgg = dF.totals?.[0] ?? {}
+    const appF = applicationsAgg[0] ?? {}
+    const appAgg = appF.totals?.[0] ?? {}
     const rAgg = reviewsAgg[0] ?? {}
     const cAgg = creditScoresAgg[0] ?? {}
-    const iAgg = investmentsAgg[0] ?? {}
-    const lAgg = loansAgg[0] ?? {}
+    const iF = investmentsAgg[0] ?? {}
+    const iAgg = iF.totals?.[0] ?? {}
+    const lF = loansAgg[0] ?? {}
+    const lAgg = lF.totals?.[0] ?? {}
     const tAgg = tenantProfilesAgg[0] ?? {}
     const wAgg = walletsAgg[0] ?? {}
-    const nAgg = notificationsAgg[0] ?? {}
+    const nF = notificationsAgg[0] ?? {}
+    const nAgg = nF.totals?.[0] ?? {}
     const mAgg = messagesAgg[0] ?? {}
-    const invAgg = invitationsAgg[0] ?? {}
-    const docAgg = documentsAgg[0] ?? {}
-    const audAgg = auditLogsAgg[0] ?? {}
-    const sAgg = plansAgg[0] ?? {}
+    const invF = invitationsAgg[0] ?? {}
+    const invAgg = invF.totals?.[0] ?? {}
+    const docF = documentsAgg[0] ?? {}
+    const docAgg = docF.totals?.[0] ?? {}
+    const audF = auditLogsAgg[0] ?? {}
+    const audAgg = audF.totals?.[0] ?? {}
+    const sF = plansAgg[0] ?? {}
+    const sAgg = sF.totals?.[0] ?? {}
 
     // Compute monthly volume from completed payments
     const monthlyVolume: Record<string, number> = {}
-    for (const item of (payAgg.completed ?? []).filter(Boolean)) {
-      if (item.month) {
-        monthlyVolume[item.month] = (monthlyVolume[item.month] ?? 0) + item.amount
-      }
+    for (const m of payF.monthly ?? []) {
+      if (m._id) monthlyVolume[m._id] = Math.round(m.volume * 100) / 100
     }
 
-    // Compute top cities
-    const cities = countOccurrences(pAgg.cities ?? [])
-    const topCities = Object.entries(cities)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([city, count]) => ({ city, count }))
+    // Top cities — already sorted/limited by the pipeline
+    const topCities = (pF.cities ?? []).filter((c: { _id?: string }) => c._id).map((c: { _id: string; count: number }) => ({ city: c._id, count: c.count }))
 
-    // Compute avg rent by type
-    const rentByType: Record<string, { total: number; count: number }> = {}
-    const propertiesList = await Property.find().select('type rentAmount').lean().catch(() => [])
-    for (const p of propertiesList) {
-      if (!rentByType[p.type]) rentByType[p.type] = { total: 0, count: 0 }
-      rentByType[p.type].total += p.rentAmount
-      rentByType[p.type].count++
+    // Avg rent by type — computed in-pipeline (no full-collection scan)
+    const avgRentByType: Record<string, number> = {}
+    for (const r of pF.rentByType ?? []) {
+      if (r._id) avgRentByType[r._id] = Math.round(r.avgRent ?? 0)
     }
 
     const usersByRole: Record<string, number> = {}
@@ -512,17 +499,15 @@ export const analyticsController = {
       // ── PROPERTIES ──
       properties: {
         total: pAgg.total ?? 0,
-        byStatus: countOccurrences(pAgg.byStatus ?? []),
-        byListingStatus: countOccurrences(pAgg.byListingStatus ?? []),
-        byType: countOccurrences(pAgg.byType ?? []),
-        byStayType: countOccurrences(pAgg.byStayType ?? []),
+        byStatus: groupedToCounts(pF.byStatus),
+        byListingStatus: groupedToCounts(pF.byListingStatus),
+        byType: groupedToCounts(pF.byType),
+        byStayType: groupedToCounts(pF.byStayType),
         furnished: pAgg.furnished ?? 0,
         unfurnished: (pAgg.total ?? 0) - (pAgg.furnished ?? 0),
         avgRent: pAgg.avgRent ? Math.round(pAgg.avgRent) : 0,
-        avgRentByType: Object.fromEntries(
-          Object.entries(rentByType).map(([k, v]) => [k, v.count > 0 ? Math.round(v.total / v.count) : 0])
-        ),
-        regions: countOccurrences(pAgg.regions ?? []),
+        avgRentByType,
+        regions: groupedToCounts(pF.regions),
         topCities,
         engagement: { views: pAgg.totalViews ?? 0, inquiries: pAgg.totalInquiries ?? 0, favorites: pAgg.totalFavorites ?? 0 },
       },
@@ -530,11 +515,11 @@ export const analyticsController = {
       // ── AGREEMENTS ──
       agreements: {
         total: aAgg.total ?? 0,
-        byStatus: countOccurrences(aAgg.byStatus ?? []),
-        byRenewalStatus: countOccurrences(aAgg.byRenewal ?? []),
+        byStatus: groupedToCounts(aF.byStatus),
+        byRenewalStatus: groupedToCounts(aF.byRenewal),
         compliance: {
-          violations: countNested(aAgg.complianceFlags ?? []).violation ?? 0,
-          warnings: countNested(aAgg.complianceFlags ?? []).warning ?? 0,
+          violations: groupedToCounts(aF.compliance).violation ?? 0,
+          warnings: groupedToCounts(aF.compliance).warning ?? 0,
         },
       },
 
@@ -542,11 +527,11 @@ export const analyticsController = {
       payments: {
         total: payAgg.total ?? 0,
         completedVolume: payAgg.completedVolume ?? 0,
-        byStatus: countOccurrences(payAgg.byStatus ?? []),
-        byMethod: countOccurrences(payAgg.byMethod ?? []),
+        byStatus: groupedToCounts(payF.byStatus),
+        byMethod: groupedToCounts(payF.byMethod),
         monthlyVolume,
-        avgPaymentAmount: payAgg.completedVolume && payAgg.byStatus
-          ? Math.round(payAgg.completedVolume / Math.max(countOccurrences(payAgg.byStatus ?? []).completed ?? 1, 1))
+        avgPaymentAmount: payAgg.completedCount > 0
+          ? Math.round(payAgg.completedVolume / payAgg.completedCount)
           : 0,
       },
 
@@ -554,19 +539,19 @@ export const analyticsController = {
       disputes: {
         total: dAgg.total ?? 0,
         open: dAgg.open ?? 0,
-        byCategory: countOccurrences(dAgg.byCategory ?? []),
-        byStatus: countOccurrences(dAgg.byStatus ?? []),
+        byCategory: groupedToCounts(dF.byCategory),
+        byStatus: groupedToCounts(dF.byStatus),
         resolutionRate: dAgg.total > 0
-          ? Math.round(((countOccurrences(dAgg.byStatus ?? []).resolved ?? 0) + (countOccurrences(dAgg.byStatus ?? []).closed ?? 0)) / dAgg.total * 100)
+          ? Math.round(((groupedToCounts(dF.byStatus).resolved ?? 0) + (groupedToCounts(dF.byStatus).closed ?? 0)) / dAgg.total * 100)
           : 0,
       },
 
       // ── APPLICATIONS ──
       applications: {
         total: appAgg.total ?? 0,
-        byStatus: countOccurrences(appAgg.byStatus ?? []),
+        byStatus: groupedToCounts(appF.byStatus),
         approvalRate: appAgg.total > 0
-          ? Math.round(((countOccurrences(appAgg.byStatus ?? []).approved ?? 0) / appAgg.total) * 100)
+          ? Math.round(((groupedToCounts(appF.byStatus).approved ?? 0) / appAgg.total) * 100)
           : 0,
       },
 
@@ -601,8 +586,8 @@ export const analyticsController = {
         total: iAgg.total ?? 0,
         totalInvested: iAgg.totalInvested ?? 0,
         totalExpectedReturn: iAgg.totalExpectedReturn ?? 0,
-        byStatus: countOccurrences(iAgg.byStatus ?? []),
-        byType: countOccurrences(iAgg.byType ?? []),
+        byStatus: groupedToCounts(iF.byStatus),
+        byType: groupedToCounts(iF.byType),
       },
 
       // ── LOANS ──
@@ -611,9 +596,9 @@ export const analyticsController = {
         totalDisbursed: lAgg.totalAmount ?? 0,
         totalRepaid: lAgg.totalRepaid ?? 0,
         totalOutstanding: lAgg.totalOutstanding ?? 0,
-        byStatus: countOccurrences(lAgg.byStatus ?? []),
+        byStatus: groupedToCounts(lF.byStatus),
         defaultRate: lAgg.total > 0
-          ? Math.round((countOccurrences(lAgg.byStatus ?? []).defaulted ?? 0) / lAgg.total * 100)
+          ? Math.round((groupedToCounts(lF.byStatus).defaulted ?? 0) / lAgg.total * 100)
           : 0,
       },
 
@@ -636,11 +621,11 @@ export const analyticsController = {
       // ── SAVINGS (RENTGUARD) ──
       savings: {
         totalPlans: sAgg.total ?? 0,
-        byStatus: countOccurrences(sAgg.byStatus ?? []),
-        activeSavers: (sAgg.activeUserIds ?? []).filter(Boolean).length,
+        byStatus: groupedToCounts(sF.byStatus),
+        activeSavers: sF.activeSavers?.[0]?.n ?? 0,
         totalSaved: sAgg.totalSaved ?? 0,
         totalTargeted: sAgg.totalTargeted ?? 0,
-        completionRate: sAgg.total > 0 ? Math.round((countOccurrences(sAgg.byStatus ?? []).completed ?? 0) / sAgg.total * 100) : 0,
+        completionRate: sAgg.total > 0 ? Math.round((groupedToCounts(sF.byStatus).completed ?? 0) / sAgg.total * 100) : 0,
         savingsProgress: (sAgg.totalTargeted ?? 0) > 0 ? Math.round((sAgg.totalSaved ?? 0) / sAgg.totalTargeted * 100) : 0,
       },
 
@@ -648,7 +633,7 @@ export const analyticsController = {
       notifications: {
         total: nAgg.total ?? 0,
         unread: nAgg.unread ?? 0,
-        byChannel: countOccurrences(nAgg.byChannel ?? []),
+        byChannel: groupedToCounts(nF.byChannel),
       },
 
       // ── MESSAGING ──
@@ -666,21 +651,21 @@ export const analyticsController = {
       // ── INVITATIONS ──
       invitations: {
         total: invAgg.total ?? 0,
-        byStatus: countOccurrences(invAgg.byStatus ?? []),
+        byStatus: groupedToCounts(invF.byStatus),
       },
 
       // ── DOCUMENTS ──
       documents: {
         total: docAgg.total ?? 0,
-        byType: countOccurrences(docAgg.byType ?? []),
+        byType: groupedToCounts(docF.byType),
         totalFileSize: docAgg.totalFileSize ?? 0,
       },
 
       // ── AUDIT LOGS ──
       auditLogs: {
         total: audAgg.total ?? 0,
-        byAction: countOccurrences(audAgg.byAction ?? []),
-        byEntity: countOccurrences(audAgg.byEntity ?? []),
+        byAction: groupedToCounts(audF.byAction),
+        byEntity: groupedToCounts(audF.byEntity),
       },
     }
     await cache.set(cacheKey, result, 3600) // 1 hour TTL

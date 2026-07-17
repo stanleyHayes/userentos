@@ -62,8 +62,14 @@ export async function seedDatabase() {
 
   console.log('Seeding comprehensive demo data...')
   const hash = await bcrypt.hash('password123', config.bcryptRounds)
-  // Real owner super-admin — distinct password from the shared demo hash.
-  const ownerHash = await bcrypt.hash('1945@Berlinbunker', config.bcryptRounds)
+  // Optional owner super-admin — ONLY created when explicitly configured via env.
+  // (A real personal email + hardcoded password used to live in this file.)
+  const ownerEmail = process.env.SEED_ADMIN_EMAIL?.toLowerCase()
+  const ownerPassword = process.env.SEED_ADMIN_PASSWORD
+  if (process.env.NODE_ENV === 'production' && ownerEmail && !ownerPassword) {
+    throw new Error('SEED_ADMIN_PASSWORD is required when SEED_ADMIN_EMAIL is set')
+  }
+  const ownerHash = ownerPassword ? await bcrypt.hash(ownerPassword, config.bcryptRounds) : null
   const now = new Date().toISOString()
 
   // ════════════════════════════════════════════
@@ -129,8 +135,8 @@ export async function seedDatabase() {
       'subscriptions:view', 'subscriptions:manage',
     ] },
     { email: 'superadmin@rentos.gh', phone: '0300000001', firstName: 'Super', lastName: 'Admin', passwordHash: hash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] },
-    // Owner super-admin (real account).
-    { email: 'hayfordstanley@gmail.com', phone: '0300000009', firstName: 'Stanley', lastName: 'Hayford', passwordHash: ownerHash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] },
+    // Optional owner super-admin (env-configured only — never hardcoded)
+    ...(ownerEmail && ownerHash ? [{ email: ownerEmail, phone: '0300000009', firstName: 'Owner', lastName: 'Admin', passwordHash: ownerHash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] }] : []),
     // Financiers (lenders) — pay landlord upfront, collect from tenant
     { email: 'bloom@rentos.gh', phone: '0302456789', firstName: 'Bloom', lastName: 'Capital', passwordHash: hash, roles: ['financier'], activeRole: 'financier', isVerified: true, permissions: [
       'users:view', 'agreements:view', 'payments:view',
@@ -1028,6 +1034,7 @@ export async function seedDatabase() {
   // ════════════════════════════════════════════
 
   const crypto = await import('crypto')
+  const { hashInviteToken } = await import('./Invitation.js')
 
   await Invitation.insertMany([
     {
@@ -1036,7 +1043,7 @@ export async function seedDatabase() {
       permissions: ['users:view', 'properties:view', 'properties:review', 'agreements:view', 'disputes:view', 'disputes:manage', 'analytics:view', 'analytics:export', 'simulation:run'],
       invitedBy: superAdmin._id.toString(),
       status: 'pending',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
     },
     {
@@ -1045,7 +1052,7 @@ export async function seedDatabase() {
       permissions: ['users:view', 'properties:view', 'agreements:view', 'disputes:view', 'disputes:manage', 'legal:view', 'legal:create', 'legal:edit'],
       invitedBy: superAdmin._id.toString(),
       status: 'pending',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
     },
     {
@@ -1054,7 +1061,7 @@ export async function seedDatabase() {
       permissions: ['users:view', 'users:create', 'users:edit', 'users:invite', 'properties:view', 'properties:edit', 'properties:review', 'analytics:view', 'blog:view', 'blog:create', 'blog:edit'],
       invitedBy: ofiAdmin._id.toString(),
       status: 'pending',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     },
     {
@@ -1063,7 +1070,7 @@ export async function seedDatabase() {
       permissions: ['users:view', 'properties:view', 'payments:view', 'disputes:view', 'analytics:view'],
       invitedBy: admin._id.toString(),
       status: 'expired',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date('2026-03-10'), // already expired
     },
     {
@@ -1072,7 +1079,7 @@ export async function seedDatabase() {
       permissions: [],
       invitedBy: ofiAdmin._id.toString(),
       status: 'accepted',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date('2026-04-01'),
       acceptedAt: new Date('2026-03-18'),
     },
@@ -1082,7 +1089,7 @@ export async function seedDatabase() {
       permissions: ['properties:view', 'properties:review', 'agreements:view'],
       invitedBy: superAdmin._id.toString(),
       status: 'revoked',
-      token: crypto.randomBytes(32).toString('hex'),
+      token: hashInviteToken(crypto.randomBytes(32).toString('hex')),
       expiresAt: new Date('2026-04-15'),
     },
   ])
@@ -2353,7 +2360,7 @@ export async function seedDatabase() {
   console.log('  Admin:          admin@rentos.gh       (admin permissions: users, properties, disputes, blog)')
   console.log('  Admin 2:        ofi@rentos.gh         (full admin permissions incl. manage_permissions, system)')
   console.log('  Super Admin:    superadmin@rentos.gh  (super_admin role — bypasses all permission checks)')
-  console.log('  Owner Admin:    hayfordstanley@gmail.com  (super_admin — password: 1945@Berlinbunker)')
+  if (ownerEmail) console.log(`  Owner Admin:    ${ownerEmail}  (super_admin — password from SEED_ADMIN_PASSWORD env)`)
   console.log('  Financier 1:    bloom@rentos.gh       (offers rent advance + deposit loans)')
   console.log('  Financier 2:    rentplus@rentos.gh    (payroll-linked, lower rates)')
   console.log('  Employer 1:     mtn-hr@rentos.gh      (MTN Ghana — 3 employees, monthly payroll)')

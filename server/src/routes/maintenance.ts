@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { MaintenanceRequest } from '../models/MaintenanceRequest.js'
 import { Property } from '../models/Property.js'
+import { Agreement } from '../models/Agreement.js'
 import { User } from '../models/User.js'
 import { notify } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
@@ -104,7 +105,7 @@ router.get(
     if (propertyFilter) filter.propertyId = propertyFilter
     if (priorityFilter) filter.priority = priorityFilter
 
-    const items = await MaintenanceRequest.find(filter).sort({ createdAt: -1 }).lean()
+    const items = await MaintenanceRequest.find(filter).sort({ createdAt: -1 }).limit(200).lean()
 
     // enrich with property/tenant
     const propertyIds = [...new Set(items.map((i) => i.propertyId))]
@@ -204,6 +205,24 @@ router.post(
     if (!property) {
       error(res, 'Property not found', 404)
       return
+    }
+
+    // Tenancy check: the requester must live (or have lived) at this property
+    // under an agreement — otherwise any tenant can spam arbitrary landlords.
+    const tenancy = await Agreement.exists({
+      propertyId: data.propertyId,
+      tenantId: userId.toString(),
+    })
+    if (!tenancy) {
+      error(res, 'You can only file maintenance requests for properties you rent', 403)
+      return
+    }
+    if (data.agreementId) {
+      const agreement = await Agreement.findById(data.agreementId).select('propertyId').lean()
+      if (!agreement || agreement.propertyId !== data.propertyId) {
+        error(res, 'agreementId does not belong to this property')
+        return
+      }
     }
 
     const request = await MaintenanceRequest.create({

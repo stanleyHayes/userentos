@@ -18,8 +18,8 @@ interface Agreement {
 
 const paymentMethods = [
   { value: 'mtn_momo', label: 'MTN MoMo', icon: 'phone-portrait-outline' as const },
-  { value: 'telecel', label: 'Telecel', icon: 'phone-portrait-outline' as const },
-  { value: 'airteltigo', label: 'AirtelTigo', icon: 'phone-portrait-outline' as const },
+  { value: 'telecel_cash', label: 'Telecel Cash', icon: 'phone-portrait-outline' as const },
+  { value: 'airteltigo_money', label: 'AirtelTigo Money', icon: 'phone-portrait-outline' as const },
   { value: 'bank_transfer', label: 'Bank Transfer', icon: 'business-outline' as const },
 ]
 
@@ -43,6 +43,7 @@ export default function PaymentsScreen() {
   const [selectedAgreement, setSelectedAgreement] = useState('')
   const [amount, setAmount] = useState('')
   const [selectedMethod, setSelectedMethod] = useState('')
+  const [phone, setPhone] = useState(user?.phone ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [loadingAgreements, setLoadingAgreements] = useState(false)
 
@@ -79,16 +80,20 @@ export default function PaymentsScreen() {
     if (!selectedAgreement) { Alert.alert('Error', 'Please select an agreement'); return }
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { Alert.alert('Error', 'Please enter a valid amount'); return }
     if (!selectedMethod) { Alert.alert('Error', 'Please select a payment method'); return }
+    if (selectedMethod !== 'bank_transfer' && phone.trim().length < 9) {
+      Alert.alert('Error', 'Please enter the mobile money number to charge'); return
+    }
 
     setSubmitting(true)
     try {
-      await api.post('/payments', {
+      await api.post<{ instructions?: string }>('/payments', {
         agreementId: selectedAgreement,
         amount: Number(amount),
         method: selectedMethod,
+        phone: phone.trim() || undefined,
       })
       resetModal()
-      Alert.alert('Success', 'Payment submitted successfully')
+      Alert.alert('Payment initiated', 'Approve the payment on your phone — it completes once confirmed.')
       await load()
     } catch (e) {
       const _err = e as { message?: string }
@@ -240,6 +245,21 @@ export default function PaymentsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Mobile money number (required for MoMo rails) */}
+              {selectedMethod && selectedMethod !== 'bank_transfer' && (
+                <>
+                  <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
+                  <TextInput
+                    style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                    placeholder="0241234567"
+                    placeholderTextColor={c.muted}
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                  />
+                </>
+              )}
 
               {/* Submit Button */}
               <TouchableOpacity

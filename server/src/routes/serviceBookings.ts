@@ -8,6 +8,12 @@ import { emitBookingCreated, emitBookingUpdated } from '../services/bookingEvent
 
 const router = Router()
 
+/** Admin override — super_admin included (requireRole bypasses for it, so
+ * in-route checks must too, or the highest-privileged role gets 403s). */
+function isAdminUser(roles?: string[]): boolean {
+  return !!roles && (roles.includes('admin') || roles.includes('super_admin'))
+}
+
 /* ================================================================
    GET /api/service-bookings — list bookings for current user
    ================================================================ */
@@ -75,6 +81,13 @@ router.post('/', authenticate, async (req, res) => {
   const worker = await Worker.findById(parsed.data.workerId)
   if (!worker) { error(res, 'Worker not found', 404); return }
 
+  // No self-dealing: booking your own worker profile lets you self-confirm →
+  // self-complete → self-rate, inflating the marketplace ranking stats.
+  if (worker.userId === req.user!.userId) {
+    error(res, 'You cannot book yourself', 403)
+    return
+  }
+
   const booking = await ServiceBooking.create({
     ...parsed.data,
     // Round the budget estimate to 2 dp (GHS pesewas) so float noise can't persist.
@@ -102,7 +115,7 @@ router.get('/:id', authenticate, async (req, res) => {
   if (!booking) { error(res, 'Booking not found', 404); return }
 
   // Check access (worker matched by their USER id, not the Worker doc id).
-  if (booking.requesterId !== req.user?.userId && booking.workerUserId !== req.user?.userId && !req.user?.roles?.includes('admin')) {
+  if (booking.requesterId !== req.user?.userId && booking.workerUserId !== req.user?.userId && !isAdminUser(req.user?.roles)) {
     error(res, 'Unauthorized', 403); return
   }
 
@@ -136,7 +149,7 @@ router.patch('/:id', authenticate, async (req, res) => {
 
   const isRequester = booking.requesterId === req.user?.userId
   const isWorker = !!booking.workerUserId && booking.workerUserId === req.user?.userId
-  const isAdmin = req.user?.roles?.includes('admin')
+  const isAdmin = isAdminUser(req.user?.roles)
 
   if (!isRequester && !isWorker && !isAdmin) {
     error(res, 'Unauthorized', 403); return
@@ -189,9 +202,26 @@ router.patch('/:id', authenticate, async (req, res) => {
     booking.quoteProvided = true
   }
 
-  // Rating/review only by requester after completion
+  // Cost/payment fields: the final price is the worker's to set, and only the
+  // worker (payee) can confirm money arrived — a requester must never mark
+  // their own booking 'paid' without paying.
+  if (parsed.data.finalCost !== undefined && !isWorker && !isAdmin) {
+    error(res, 'Only the worker can set the final cost', 403); return
+  }
+  if (parsed.data.paymentStatus !== undefined && !isWorker && !isAdmin) {
+    error(res, 'Only the worker can update payment status', 403); return
+  }
+  if (parsed.data.paymentAmount !== undefined && parsed.data.paymentAmount > (booking.finalCost ?? booking.quoteAmount ?? Infinity) + 0.009) {
+    error(res, 'paymentAmount exceeds the agreed cost'); return
+  }
+
+  // Rating/review only by requester, and only once the job is actually completed
+  // — ratings on pending bookings would let anyone farm the marketplace ranking.
   if ((parsed.data.rating !== undefined || parsed.data.review !== undefined) && !isRequester) {
     error(res, 'Only the requester can rate', 403); return
+  }
+  if ((parsed.data.rating !== undefined || parsed.data.review !== undefined) && booking.status !== 'completed') {
+    error(res, 'You can only rate a completed booking', 409); return
   }
 
   // Apply updates
@@ -240,7 +270,7 @@ router.get('/:id/notes', authenticate, async (req, res) => {
   const booking = await ServiceBooking.findById(req.params.id).lean()
   if (!booking) { error(res, 'Booking not found', 404); return }
 
-  if (booking.requesterId !== req.user?.userId && booking.workerUserId !== req.user?.userId && !req.user?.roles?.includes('admin')) {
+  if (booking.requesterId !== req.user?.userId && booking.workerUserId !== req.user?.userId && !isAdminUser(req.user?.roles)) {
     error(res, 'Unauthorized', 403); return
   }
 

@@ -45,7 +45,9 @@ export const useAuthStore = create<AuthState>()(
 
       switchRole: (role) =>
         set((state) => ({
-          user: state.user ? { ...state.user, activeRole: role } : null,
+          // Only allow switching to a role the user actually holds — a spoofed
+          // activeRole otherwise reveals nav links that bounce off RequireRole.
+          user: state.user && state.user.roles.includes(role) ? { ...state.user, activeRole: role } : state.user,
         })),
 
       setLoading: (isLoading) => set({ isLoading }),
@@ -80,9 +82,37 @@ export function useAuthHydrated(): boolean {
 }
 
 /**
+ * Silently rotate the session via the refresh token. Returns the new access
+ * token on success, null otherwise. Mirrors the refresh flow in lib/api.ts —
+ * duplicated here to avoid a circular import between the store and the client.
+ */
+async function tryRefreshSession(): Promise<string | null> {
+  const { refreshToken } = useAuthStore.getState()
+  if (!refreshToken) return null
+  try {
+    const base = import.meta.env.VITE_API_URL || '/api'
+    const res = await fetch(`${base}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const { token, refreshToken: newRefreshToken } = data.data ?? {}
+    if (!token) return null
+    useAuthStore.setState({ token, refreshToken: newRefreshToken ?? refreshToken })
+    return token as string
+  } catch {
+    return null
+  }
+}
+
+/**
  * After localStorage hydration restores `token`, verify it with the server
- * and fetch the full user. Only redirects to login if the token is truly
- * expired or invalid. Survives page refreshes and HMR reloads.
+ * and fetch the full user. An expired 15-minute access token is silently
+ * refreshed via the 7-day refresh token — previously this force-logged-out
+ * the user on every reload, defeating the whole point of refresh tokens.
+ * Only redirects to login if the session is truly dead.
  */
 export function useAuthRehydrate(): boolean {
   const { token, isAuthenticated, user, login, logout } = useAuthStore()
@@ -108,36 +138,48 @@ export function useAuthRehydrate(): boolean {
     // Verify token with server and fetch user
     let cancelled = false
     const base = import.meta.env.VITE_API_URL || '/api'
-    fetch(`${base}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        if (cancelled) return
-        if (!res.ok) {
-          // Token is expired or invalid — clear and redirect
-          logout()
-          setReady(true)
+    const fetchMe = (bearer: string) =>
+      fetch(`${base}/users/me`, { headers: { Authorization: `Bearer ${bearer}` } })
+
+    ;(async () => {
+      let res = await fetchMe(token)
+      // Expired access token — rotate via the refresh token and retry once.
+      if (res.status === 401) {
+        const newToken = await tryRefreshSession()
+        if (newToken) {
+          res = await fetchMe(newToken)
+        } else {
+          // Refresh token also dead — session is over.
+          if (!cancelled) {
+            logout()
+            setReady(true)
+          }
           return
         }
-        const data = await res.json()
-        if (cancelled) return
-        const fetchedUser = data.data as User
-        // Apply portal role override
-        if (portal !== 'www') {
-          const bestRole = getBestRoleForPortal(fetchedUser.roles, portal)
-          if (bestRole) fetchedUser.activeRole = bestRole
-        }
-        // Re-login with fetched user to restore full state
-        useAuthStore.setState({ user: fetchedUser })
+      }
+      if (cancelled) return
+      if (!res.ok) {
+        logout()
         setReady(true)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          // Network error — don't logout, keep token for retry
-          // Just mark as ready so the app can render
-          setReady(true)
-        }
-      })
+        return
+      }
+      const data = await res.json()
+      if (cancelled) return
+      const fetchedUser = data.data as User
+      // Apply portal role override
+      if (portal !== 'www') {
+        const bestRole = getBestRoleForPortal(fetchedUser.roles, portal)
+        if (bestRole) fetchedUser.activeRole = bestRole
+      }
+      // Re-login with fetched user to restore full state
+      useAuthStore.setState({ user: fetchedUser })
+      setReady(true)
+    })().catch(() => {
+      // Network error — keep the session and mark ready; React Query surfaces
+      // its own error states. Never log out a possibly-valid session on a
+      // flaky connection.
+      if (!cancelled) setReady(true)
+    })
 
     return () => { cancelled = true }
   }, [hasHydrated, token, isAuthenticated, user, login, logout])

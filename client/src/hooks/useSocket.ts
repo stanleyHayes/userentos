@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 
 let socket: Socket | null = null
+let connecting = false
 let connectionCount = 0
 
 function getServerUrl(): string {
@@ -16,7 +17,10 @@ function getServerUrl(): string {
 }
 
 function connectSocket(token: string): Socket {
-  if (socket?.connected) return socket
+  // Guard against a mid-connect race: two consumers mounting while the first
+  // socket is still connecting must not create a second, orphaned connection.
+  if (socket?.connected || connecting) return socket!
+  connecting = true
 
   socket = io(getServerUrl(), {
     auth: { token },
@@ -28,6 +32,7 @@ function connectSocket(token: string): Socket {
   })
 
   socket.on('connect', () => {
+    connecting = false
     console.log('[Socket] Connected:', socket?.id)
   })
 
@@ -48,6 +53,7 @@ function disconnectSocket(): void {
     socket.disconnect()
     socket = null
   }
+  connecting = false
   connectionCount = 0
 }
 

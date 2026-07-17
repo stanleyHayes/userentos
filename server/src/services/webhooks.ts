@@ -83,8 +83,16 @@ async function deliver(sub: IWebhookSubscription, event: WebhookEvent, data: unk
         'User-Agent': 'RentOS-Webhook/1.0',
       },
       body: payload,
+      // Never follow redirects: a 3xx Location could point at an internal host,
+      // bypassing assertSafeWebhookUrl (SSRF). Any 3xx is a failed delivery.
+      redirect: 'manual',
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
     })
+
+    if (res.status >= 300 && res.status < 400) {
+      logger.warn(`[Webhook] ${sub.url} responded with redirect (${res.status}) — treating as failed delivery`)
+      return false
+    }
 
     const ok = res.status >= 200 && res.status < 300
     if (ok) {

@@ -39,8 +39,10 @@ export async function registerDeviceToken(
   )
 }
 
-export async function unregisterDeviceToken(_userId: string, token: string): Promise<void> {
-  await DeviceToken.deleteOne({ token })
+export async function unregisterDeviceToken(userId: string, token: string): Promise<void> {
+  // Scope deletion to the owner — an attacker must not be able to unregister
+  // another user's device by guessing/knowing their push token.
+  await DeviceToken.deleteOne({ token, userId })
 }
 
 interface ExpoPushTicket {

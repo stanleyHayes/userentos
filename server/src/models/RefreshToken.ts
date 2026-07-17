@@ -14,9 +14,9 @@ export interface IRefreshToken extends Document {
   deviceLabel?: string
   /** IP address that created the token */
   ipAddress?: string
-  lastUsedAt?: string
-  expiresAt: string
-  revokedAt?: string
+  lastUsedAt?: Date
+  expiresAt: Date
+  revokedAt?: Date
   revokedReason?: string
 }
 
@@ -25,9 +25,11 @@ const schema = new Schema<IRefreshToken>({
   tokenHash: { type: String, required: true, unique: true },
   deviceLabel: { type: String },
   ipAddress: { type: String },
-  lastUsedAt: { type: String },
-  expiresAt: { type: String, required: true },
-  revokedAt: { type: String },
+  lastUsedAt: { type: Date },
+  // Date — MUST stay a BSON Date or the TTL index below silently never fires
+  // (it previously was String, so expired tokens were never auto-deleted).
+  expiresAt: { type: Date, required: true },
+  revokedAt: { type: Date },
   revokedReason: { type: String },
 }, { timestamps: true })
 

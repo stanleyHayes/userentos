@@ -10,27 +10,53 @@ import { param } from '../utils/params.js'
 
 const router = Router()
 
-// Get reviews for a property + summary
+// Get reviews for a property + summary (paginated; summary computed in Mongo)
 router.get('/property/:propertyId', async (req, res) => {
   const propertyId = param(req.params.propertyId)
-  const reviews = await Review.find({ propertyId }).sort({ createdAt: -1 }).lean()
-  const items = reviews.map((r) => ({ ...r, id: (r._id as Types.ObjectId).toString() }))
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 10)))
+  const skip = (page - 1) * pageSize
 
-  // Calculate summary
-  const count = items.length
-  const avgRating = count > 0 ? Math.round((items.reduce((s, r) => s + r.rating, 0) / count) * 10) / 10 : 0
-  const distribution = [0, 0, 0, 0, 0] // index 0 = 1 star, index 4 = 5 stars
-  items.forEach((r) => { if (r.rating >= 1 && r.rating <= 5) distribution[r.rating - 1]++ })
-  const avgLandlord = count > 0 ? Math.round((items.reduce((s, r) => s + (r.landlordResponsive ?? 3), 0) / count) * 10) / 10 : 0
-  const avgMaintenance = count > 0 ? Math.round((items.reduce((s, r) => s + (r.maintenance ?? 3), 0) / count) * 10) / 10 : 0
-  const avgValue = count > 0 ? Math.round((items.reduce((s, r) => s + (r.valueForMoney ?? 3), 0) / count) * 10) / 10 : 0
-  const avgNeighborhood = count > 0 ? Math.round((items.reduce((s, r) => s + (r.neighborhood ?? 3), 0) / count) * 10) / 10 : 0
-  const recommendPct = count > 0 ? Math.round((items.filter((r) => r.wouldRecommend).length / count) * 100) : 0
+  const [reviews, summaryAgg] = await Promise.all([
+    Review.find({ propertyId }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    Review.aggregate([
+      { $match: { propertyId } },
+      { $group: {
+        _id: null,
+        count: { $sum: 1 },
+        avgRating: { $avg: '$rating' },
+        avgLandlord: { $avg: { $ifNull: ['$landlordResponsive', 3] } },
+        avgMaintenance: { $avg: { $ifNull: ['$maintenance', 3] } },
+        avgValue: { $avg: { $ifNull: ['$valueForMoney', 3] } },
+        avgNeighborhood: { $avg: { $ifNull: ['$neighborhood', 3] } },
+        recommend: { $sum: { $cond: ['$wouldRecommend', 1, 0] } },
+        one: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+        two: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+        three: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+        four: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+        five: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+      } },
+    ]),
+  ])
+
+  const s = summaryAgg[0] ?? {}
+  const count = s.count ?? 0
+  const items = reviews.map((r) => ({ ...r, id: (r._id as Types.ObjectId).toString() }))
 
   success(res, {
     reviews: items,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(count / pageSize)),
     summary: {
-      count, avgRating, distribution, avgLandlord, avgMaintenance, avgValue, avgNeighborhood, recommendPct,
+      count,
+      avgRating: count > 0 ? Math.round((s.avgRating ?? 0) * 10) / 10 : 0,
+      distribution: [s.one ?? 0, s.two ?? 0, s.three ?? 0, s.four ?? 0, s.five ?? 0],
+      avgLandlord: count > 0 ? Math.round((s.avgLandlord ?? 3) * 10) / 10 : 0,
+      avgMaintenance: count > 0 ? Math.round((s.avgMaintenance ?? 3) * 10) / 10 : 0,
+      avgValue: count > 0 ? Math.round((s.avgValue ?? 3) * 10) / 10 : 0,
+      avgNeighborhood: count > 0 ? Math.round((s.avgNeighborhood ?? 3) * 10) / 10 : 0,
+      recommendPct: count > 0 ? Math.round(((s.recommend ?? 0) / count) * 100) : 0,
     },
   })
 })

@@ -10,7 +10,28 @@ import { uploadToCloudinary } from '../utils/cloudinary.js'
 
 const router = Router()
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
+// Only document-safe types — arbitrary executables/HTML must never be uploaded
+// and shared through document URLs.
+const ALLOWED_MIMES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/pdf', 'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+])
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIMES.has(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Only images, PDF, text and Office documents are allowed'))
+    }
+  },
+})
 
 // List documents for current user
 router.get('/', authenticate, async (req, res) => {

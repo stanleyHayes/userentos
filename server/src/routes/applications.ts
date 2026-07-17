@@ -105,17 +105,27 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
   }
   // Short-stay properties: always allow applications regardless of existing leases
 
-  const application = await Application.create({
-    tenantId: userId,
-    propertyId,
-    landlordId: property.landlordId,
-    message,
-    sharedSections,
-    moveInDate: new Date(moveInDate),
-    duration,
-    offeredRent,
-    status: 'pending',
-  })
+  let application
+  try {
+    application = await Application.create({
+      tenantId: userId,
+      propertyId,
+      landlordId: property.landlordId,
+      message,
+      sharedSections,
+      moveInDate: new Date(moveInDate),
+      duration,
+      offeredRent,
+      status: 'pending',
+    })
+  } catch (err) {
+    // Unique partial index — concurrent double-submission
+    if ((err as { code?: number }).code === 11000) {
+      error(res, 'You already have an active application for this property', 409)
+      return
+    }
+    throw err
+  }
 
   // Notify landlord (in_app + email + push)
   const tenant = await User.findById(userId).lean()
@@ -143,7 +153,14 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
   }
   if (statusFilter) filter.status = statusFilter
 
-  const applications = await Application.find(filter).sort({ createdAt: -1 }).lean()
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+  const skip = (page - 1) * pageSize
+
+  const [total, applications] = await Promise.all([
+    Application.countDocuments(filter),
+    Application.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+  ])
 
   // Enrich with property titles and tenant names
   const propertyIds = [...new Set(applications.map((a) => a.propertyId))]
@@ -170,7 +187,7 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
     }
   })
 
-  success(res, { items, total: items.length })
+  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
 }))
 
 // ─── GET /applications/:id — single application ───
@@ -225,10 +242,35 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
   const property = await Property.findById(application.propertyId)
 
   if (action === 'approve') {
+    // Double-booking guards: one approved application per property, and never
+    // approve into an already-occupied property. The sign-time occupied
+    // predicate in agreementController is the atomic backstop.
+    const [alreadyApproved, prop] = await Promise.all([
+      Application.findOne({ propertyId: application.propertyId, status: 'approved', _id: { $ne: application._id } }).lean(),
+      Property.findById(application.propertyId).select('status').lean(),
+    ])
+    if (alreadyApproved) {
+      error(res, 'Another application for this property has already been approved', 409)
+      return
+    }
+    if (prop?.status === 'occupied') {
+      error(res, 'This property is already occupied', 409)
+      return
+    }
+
+    // Atomic claim so two concurrent responses can't both flip a pending application.
+    const claimed = await Application.findOneAndUpdate(
+      { _id: application._id, status: 'pending' },
+      { $set: { status: 'approved', landlordNotes: notes, respondedAt: new Date() } },
+      { new: true },
+    )
+    if (!claimed) {
+      error(res, `Cannot respond to an application with status "${application.status}"`, 409)
+      return
+    }
     application.status = 'approved'
     application.landlordNotes = notes
     application.respondedAt = new Date()
-    await application.save()
 
     // Compute end date
     const startDate = new Date(application.moveInDate)
@@ -237,22 +279,29 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
 
     const rentAmount = application.offeredRent ?? property?.rentAmount ?? 0
 
-    // Auto-create draft agreement
-    const agreement = await Agreement.create({
-      propertyId: application.propertyId,
-      landlordId: application.landlordId,
-      tenantId: application.tenantId,
-      status: 'pending_signatures',
-      startDate: startDate.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
-      rentAmount,
-      securityDeposit: 0,
-      advanceMonths: property?.advanceMonths ?? 0,
-      terms: [],
-      specialConditions: [],
-      complianceFlags: [],
-      version: 1,
-    })
+    // Auto-create draft agreement. If this fails, roll the application back to
+    // pending so it isn't stranded in "approved" with no agreement.
+    let agreement
+    try {
+      agreement = await Agreement.create({
+        propertyId: application.propertyId,
+        landlordId: application.landlordId,
+        tenantId: application.tenantId,
+        status: 'pending_signatures',
+        startDate: startDate.toISOString().slice(0, 10),
+        endDate: endDate.toISOString().slice(0, 10),
+        rentAmount,
+        securityDeposit: 0,
+        advanceMonths: property?.advanceMonths ?? 0,
+        terms: [],
+        specialConditions: [],
+        complianceFlags: [],
+        version: 1,
+      })
+    } catch (err) {
+      await Application.updateOne({ _id: application._id }, { $set: { status: 'pending' }, $unset: { respondedAt: 1 } })
+      throw err
+    }
 
     notifyApplicationApproved(application.tenantId, property?.title ?? 'a property')
     dispatchWebhook('application.approved', { applicationId: application._id.toString(), agreementId: agreement._id.toString() }, { userId: application.tenantId })

@@ -5,6 +5,8 @@ const REDIS_URL = process.env.REDIS_URL
 
 class MemoryCache {
   private store = new Map<string, { value: string; expiresAt: number }>()
+  /** Hard cap — without it the fallback cache grows unboundedly. */
+  private static MAX_ENTRIES = 5000
 
   async get(key: string): Promise<string | null> {
     const item = this.store.get(key)
@@ -17,6 +19,18 @@ class MemoryCache {
   }
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
+    // Evict expired entries, then oldest-first if still over capacity.
+    if (this.store.size >= MemoryCache.MAX_ENTRIES && !this.store.has(key)) {
+      const now = Date.now()
+      for (const [k, v] of this.store) {
+        if (now > v.expiresAt) this.store.delete(k)
+      }
+      while (this.store.size >= MemoryCache.MAX_ENTRIES) {
+        const oldest = this.store.keys().next().value
+        if (oldest === undefined) break
+        this.store.delete(oldest)
+      }
+    }
     this.store.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 })
   }
 
@@ -94,12 +108,23 @@ class CacheService {
 
   async invalidatePattern(pattern: string): Promise<void> {
     try {
-      const keys = await this.backend.keys(pattern)
-      for (const key of keys) {
-        await this.backend.del(key)
-      }
-      if (keys.length > 0) {
-        logger.debug(`[Cache] Invalidated ${keys.length} keys matching ${pattern}`)
+      if (this.useRedis && this.redis) {
+        // SCAN, not KEYS — KEYS blocks the whole Redis instance while it walks
+        // the keyspace; SCAN iterates incrementally.
+        const stream = this.redis.scanStream({ match: pattern, count: 200 })
+        for await (const keys of stream) {
+          if ((keys as string[]).length > 0) {
+            await this.redis.del(...(keys as string[]))
+          }
+        }
+      } else {
+        const keys = await this.memory.keys(pattern)
+        for (const key of keys) {
+          await this.memory.del(key)
+        }
+        if (keys.length > 0) {
+          logger.debug(`[Cache] Invalidated ${keys.length} keys matching ${pattern}`)
+        }
       }
     } catch (err) {
       logger.warn(`[Cache] invalidatePattern failed for ${pattern}:`, (err as Error).message)

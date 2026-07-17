@@ -47,7 +47,9 @@ router.get('/me/export', authenticate, async (req, res) => {
     savingsPlans,
     auditLogs,
   ] = await Promise.all([
-    User.findById(userId).select('-passwordHash -__v').lean(),
+    // Never export credential material — mfaSecret also carries schema-level
+    // select:false, this is defense-in-depth.
+    User.findById(userId).select('-passwordHash -mfaSecret -__v').lean(),
     TenantProfile.findOne({ userId }).lean(),
     Agreement.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
     Payment.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
@@ -137,7 +139,9 @@ router.post('/me/photo', authenticate, upload.single('photo'), async (req, res) 
   success(res, { profileImage: uploaded.url }, 'Profile photo updated')
 })
 
-router.get('/government', authenticate, async (_req, res) => {
+// Staff directory — privileged roles only; previously any authenticated user
+// could enumerate government/admin/legal accounts.
+router.get('/government', authenticate, requireRole('government', 'admin', 'super_admin', 'legal_officer'), async (_req, res) => {
   const users = await User.find({ roles: { $in: ['government', 'admin', 'super_admin', 'legal_officer'] } })
     .select('firstName lastName')
     .lean()
@@ -159,11 +163,18 @@ router.get('/:id', authenticate, async (req, res) => {
   success(res, { ...user, id: (user._id as Types.ObjectId).toString() })
 })
 
-// List all users (admin panel)
-router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 'legal_officer'), async (_req, res) => {
-  const users = await User.find().select('-passwordHash -__v').lean()
+// List all users (admin panel) — paginated
+router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 'legal_officer'), async (req, res) => {
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+  const skip = (page - 1) * pageSize
+
+  const [total, users] = await Promise.all([
+    User.countDocuments({}),
+    User.find({}).select('-passwordHash -__v').sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+  ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))
-  success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
 })
 
 // Create a new user (admin action)
@@ -185,6 +196,30 @@ router.post('/', authenticate, requirePermission('users:create'), async (req, re
   if (roles.includes('super_admin') && !req.user!.roles.includes('super_admin')) {
     error(res, 'Only a super admin can create another super admin', 403)
     return
+  }
+
+  // Delegation guard (same rule as PATCH /:id/permissions): a non-super_admin
+  // may only grant roles they themselves hold — never super_admin/admin — and
+  // may never grant permissions they do not hold. Blocks vertical privilege
+  // escalation via user creation.
+  if (!isSuperAdmin(req)) {
+    const callerRoles = req.user!.roles ?? []
+    const callerPerms = req.user!.permissions ?? []
+
+    if (!Array.isArray(roles)) { error(res, 'roles must be an array'); return }
+    const forbiddenRoles = roles.filter((r: string) => r === 'super_admin' || r === 'admin' || !callerRoles.includes(r))
+    if (forbiddenRoles.length) {
+      error(res, `You cannot grant the following role(s): ${forbiddenRoles.join(', ')}`, 403)
+      return
+    }
+    if (permissions !== undefined) {
+      if (!Array.isArray(permissions)) { error(res, 'permissions must be an array'); return }
+      const forbiddenPerms = permissions.filter((p: string) => !callerPerms.includes(p))
+      if (forbiddenPerms.length) {
+        error(res, `You cannot grant permission(s) you do not hold: ${forbiddenPerms.join(', ')}`, 403)
+        return
+      }
+    }
   }
 
   const passwordHash = await bcrypt.hash(password, config.bcryptRounds)

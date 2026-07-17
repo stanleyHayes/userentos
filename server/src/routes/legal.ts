@@ -19,9 +19,16 @@ router.get('/', async (req, res) => {
     ]
   }
 
-  const articles = await LegalArticle.find(filter).lean()
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+  const skip = (page - 1) * pageSize
+
+  const [total, articles] = await Promise.all([
+    LegalArticle.countDocuments(filter),
+    LegalArticle.find(filter).sort({ title: 1 }).skip(skip).limit(pageSize).lean(),
+  ])
   const items = articles.map((a) => ({ ...a, id: (a._id as Types.ObjectId).toString() }))
-  success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
 })
 
 router.get('/:id', async (req, res) => {

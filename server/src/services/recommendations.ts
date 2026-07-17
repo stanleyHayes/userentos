@@ -6,7 +6,7 @@ import { Favorite } from '../models/Favorite.js'
 import { Application } from '../models/Application.js'
 import type { ITenantProfile } from '../models/TenantProfile.js'
 import type { IProperty } from '../models/Property.js'
-import { embed, cosineSimilarity } from './embeddings.js'
+import { embed, embedBatch, cosineSimilarity } from './embeddings.js'
 import { logger } from '../utils/logger.js'
 
 export interface ScoredProperty {
@@ -123,6 +123,33 @@ export async function getSmartRecommendations(userId: string, limit: number = 10
   // appliedIds reserved for future filtering
   void applications
 
+  // Resolve property embeddings WITHOUT a serial per-property OpenAI round-trip:
+  // use the stored Property.embedding when present, and batch-embed the misses
+  // in one call instead of ~200 sequential requests.
+  const embeddingById = new Map<string, number[]>()
+  const missing: typeof properties = []
+  for (const p of properties) {
+    const stored = (p as { embedding?: number[] }).embedding
+    if (Array.isArray(stored) && stored.length > 0) {
+      embeddingById.set((p._id as Types.ObjectId).toString(), stored)
+    } else {
+      missing.push(p)
+    }
+  }
+  if (missing.length > 0) {
+    try {
+      const batched = await embedBatch(missing.map((p) => buildPropertyText(p)))
+      missing.forEach((p, i) => {
+        const emb = batched[i]?.embedding
+        if (Array.isArray(emb) && emb.length > 0) {
+          embeddingById.set((p._id as Types.ObjectId).toString(), emb)
+        }
+      })
+    } catch (err) {
+      console.warn('[recommendations] batch embedding failed, similarity scores default to 0:', (err as Error).message)
+    }
+  }
+
   // Score each property
   const scored: ScoredProperty[] = []
 
@@ -142,12 +169,13 @@ export async function getSmartRecommendations(userId: string, limit: number = 10
     let score = 50 // base
 
     // 1. Embedding similarity (0-30 points)
-    const propertyText = buildPropertyText(p)
-    const { embedding: propertyEmbedding } = await embed(propertyText)
-    const similarity = cosineSimilarity(userEmbedding, propertyEmbedding)
-    const embeddingScore = Math.round(similarity * 30)
-    score += embeddingScore
-    if (embeddingScore > 20) matchReasons.push('Strong preference match')
+    const propertyEmbedding = embeddingById.get((p._id as Types.ObjectId).toString())
+    if (propertyEmbedding) {
+      const similarity = cosineSimilarity(userEmbedding, propertyEmbedding)
+      const embeddingScore = Math.round(similarity * 30)
+      score += embeddingScore
+      if (embeddingScore > 20) matchReasons.push('Strong preference match')
+    }
 
     // 2. City match (0-15 points)
     if (prefs?.preferredCities?.some((c: string) => (p.address.city ?? '').toLowerCase().includes(c.toLowerCase()))) {

@@ -4,11 +4,12 @@ import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import type { UserRole, User as UserType } from '@/types'
-import { User, Mail, Phone, ArrowRight, Loader2, Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench } from 'lucide-react'
+import { User, Mail, Phone, ArrowRight, Loader2, Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench, Check } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { PasswordInput } from '@/components/ui/PasswordInput'
 import { DoodleSpiral } from '@/components/ui/Doodles'
+import { passwordRequirements } from '@/pages/settings/passwordStrength'
 
 // 'essential_worker' is a registration-only choice, not an auth role: it signs the
 // user up with a tenant base account and routes them to the worker-profile setup.
@@ -123,11 +124,26 @@ export function RegisterPage() {
         {/* Password */}
         <div className="animate-fade-up" style={{ animationDelay: '0.25s' }}>
           <PasswordInput id="password" label="Password" value={form.password} onChange={(e) => update('password', e.target.value)} required minLength={8} placeholder="Min 8 characters" />
+          {/* Same checklist the security settings enforce — weak passwords must
+              not be creatable here and rejected there later. */}
+          {form.password.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {passwordRequirements.map((req) => {
+                const met = req.test(form.password)
+                return (
+                  <li key={req.key} className={`flex items-center gap-1.5 text-xs ${met ? 'text-emerald-500' : 'text-muted dark:text-gray-500'}`}>
+                    <Check size={12} className={met ? 'opacity-100' : 'opacity-30'} />
+                    {req.label}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
 
         {/* Submit */}
         <div className="animate-fade-up" style={{ animationDelay: '0.3s' }}>
-          <Button type="submit" disabled={loading} size="lg" className="w-full">
+          <Button type="submit" disabled={loading || !passwordRequirements.every((r) => r.test(form.password))} size="lg" className="w-full">
             {loading ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (

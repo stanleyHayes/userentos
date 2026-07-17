@@ -15,6 +15,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 const router = Router()
 
+/** Escape user input before interpolating into a Mongo $regex (ReDoS guard). */
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 router.get('/', optionalAuth, asyncHandler(propertyController.list))
 router.get('/favorites/me', authenticate, asyncHandler(propertyController.getFavoritesMe))
 router.get('/recommendations/for-me', authenticate, asyncHandler(propertyController.recommendations))
@@ -62,8 +67,8 @@ router.post('/search/semantic', asyncHandler(async (req, res) => {
 
   // 2. Build MongoDB filter (hybrid: semantic + structured)
   const filter: Record<string, unknown> = { listingStatus: 'approved', isActive: { $ne: false } }
-  if (city) filter['address.city'] = { $regex: city, $options: 'i' }
-  if (region) filter['address.region'] = { $regex: region, $options: 'i' }
+  if (city) filter['address.city'] = { $regex: escapeRegex(city), $options: 'i' }
+  if (region) filter['address.region'] = { $regex: escapeRegex(region), $options: 'i' }
   if (type) filter.type = type
   if (minRent !== undefined || maxRent !== undefined) {
     const rentFilter: Record<string, number> = {}

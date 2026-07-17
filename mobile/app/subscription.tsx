@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, type ViewStyle } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Modal, TextInput, type ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
 import { api } from '../lib/api'
@@ -29,6 +29,12 @@ export default function SubscriptionScreen() {
   const [loading, setLoading] = useState(true)
   const [subscribing, setSubscribing] = useState<string | null>(null)
 
+  // Payment modal for paid packages
+  const [payPkg, setPayPkg] = useState<Package | null>(null)
+  const [payMethod, setPayMethod] = useState('mtn_momo')
+  const [payPhone, setPayPhone] = useState('')
+  const [paying, setPaying] = useState(false)
+
   async function load() {
     try {
       const [pkgRes, subRes] = await Promise.all([
@@ -42,16 +48,45 @@ export default function SubscriptionScreen() {
 
   useEffect(() => { load() }, [])
 
-  async function handleSubscribe(packageId: string) {
-    setSubscribing(packageId)
+  async function handleSubscribe(pkg: Package) {
+    if (pkg.price > 0) {
+      // Paid plan — collect mobile-money details first
+      setPayPkg(pkg)
+      return
+    }
+    setSubscribing(pkg.id)
     try {
-      await api.post('/subscriptions/subscribe', { packageId })
+      await api.post('/subscriptions/subscribe', { packageId: pkg.id })
       Alert.alert('Success', 'Subscription activated!')
       load()
     } catch (e) {
-      const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to subscribe')
     } finally { setSubscribing(null) }
+  }
+
+  async function handlePayAndSubscribe() {
+    if (!payPkg) return
+    if (payMethod !== 'bank_transfer' && payPhone.trim().length < 9) {
+      Alert.alert('Error', 'Please enter the mobile money number to charge'); return
+    }
+    setPaying(true)
+    try {
+      const res = await api.post<{ instructions?: string }>('/subscriptions/subscribe', {
+        packageId: payPkg.id,
+        method: payMethod,
+        phone: payPhone.trim(),
+      })
+      setPayPkg(null)
+      setPayPhone('')
+      Alert.alert(
+        'Payment initiated',
+        res.instructions ?? 'Approve the payment on your phone — your plan activates once it is confirmed.',
+      )
+      setTimeout(() => void load(), 3500)
+      setTimeout(() => void load(), 8000)
+    } catch (e) {
+      Alert.alert('Error', (e as { message?: string }).message || 'Failed to subscribe')
+    } finally { setPaying(false) }
   }
 
   if (loading) {
@@ -82,7 +117,7 @@ export default function SubscriptionScreen() {
           {sub.maxProperties !== -1 && (
             <View style={s.progressBar}>
               <View style={[s.progressTrack, { backgroundColor: c.white }]}>
-                <View style={[s.progressFill, { backgroundColor: c.primary, width: `\${Math.min(100, (sub.propertyCount / sub.maxProperties) * 100)}%` as unknown as ViewStyle['width'] }]} />
+                <View style={[s.progressFill, { backgroundColor: c.primary, width: `${Math.min(100, (sub.propertyCount / sub.maxProperties) * 100)}%` as unknown as ViewStyle['width'] }]} />
               </View>
             </View>
           )}
@@ -125,7 +160,7 @@ export default function SubscriptionScreen() {
             ) : (
               <TouchableOpacity
                 style={[s.subscribeBtn, { backgroundColor: c.primary }]}
-                onPress={() => handleSubscribe(pkg.id)}
+                onPress={() => handleSubscribe(pkg)}
                 disabled={subscribing === pkg.id}
                 activeOpacity={0.85}
               >
@@ -142,6 +177,65 @@ export default function SubscriptionScreen() {
           </View>
         )
       })}
+
+      {/* Payment modal for paid plans */}
+      <Modal visible={!!payPkg} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.white }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Pay for {payPkg?.name}</Text>
+              <TouchableOpacity onPress={() => setPayPkg(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={c.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.fieldLabel, { color: c.text }]}>Payment Method</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
+              {[
+                { value: 'mtn_momo', label: 'MTN MoMo' },
+                { value: 'telecel_cash', label: 'Telecel Cash' },
+                { value: 'airteltigo_money', label: 'AirtelTigo' },
+                { value: 'bank_transfer', label: 'Bank Transfer' },
+              ].map((m) => (
+                <TouchableOpacity
+                  key={m.value}
+                  style={[s.methodBtn, { backgroundColor: c.surface, borderColor: payMethod === m.value ? c.primary : c.border }]}
+                  onPress={() => setPayMethod(m.value)}
+                >
+                  <Text style={{ fontSize: 12, color: payMethod === m.value ? c.primary : c.text, fontFamily: 'Manrope_600SemiBold' }}>{m.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {payMethod !== 'bank_transfer' && (
+              <>
+                <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                  placeholder="0241234567"
+                  placeholderTextColor={c.muted}
+                  keyboardType="phone-pad"
+                  value={payPhone}
+                  onChangeText={setPayPhone}
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[s.submitBtn, { backgroundColor: c.primary }, paying && s.submitBtnDisabled]}
+              onPress={handlePayAndSubscribe}
+              disabled={paying}
+              activeOpacity={0.85}
+            >
+              {paying ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={s.submitBtnText}>Pay {payPkg ? formatCurrency(payPkg.price) : ''} & Subscribe</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -172,4 +266,14 @@ const s = StyleSheet.create({
   currentBtnText: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
   subscribeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 14 },
   subscribeBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6 },
+  methodBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: spacing.md },
+  submitBtn: { marginTop: spacing.md, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
 })

@@ -83,16 +83,16 @@ app.use(requestId)
 app.use(securityHeaders)
 
 // ─── CORS lockdown ───
-// Always allow common dev origins. Production origins come from
+// Dev origins are only allowed outside production. Production origins come from
 // CORS_ALLOWED_ORIGINS (comma-separated). In production, if unset,
 // we reject requests rather than falling back to permissive mode.
-const ALWAYS_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000']
+const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000']
+const isProduction = process.env.NODE_ENV === 'production'
 const envOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean)
-const allowedOrigins = new Set<string>([...ALWAYS_ALLOWED_ORIGINS, ...envOrigins])
-const isProduction = process.env.NODE_ENV === 'production'
+const allowedOrigins = new Set<string>([...(isProduction ? [] : DEV_ORIGINS), ...envOrigins])
 const corsPermissive = !isProduction && envOrigins.length === 0
 
 if (envOrigins.length === 0 && isProduction) {
@@ -154,7 +154,20 @@ app.use((req, res, next) => {
 // Pricing endpoints run heavy DB scans / model work.
 app.use('/api/pricing', writeLimiter)
 
-const writePathPrefixes = ['/api/financing', '/api/employers', '/api/insurance', '/api/maintenance', '/api/achievements']
+// Public legal-document search triggers a paid OpenAI embedding per request.
+app.use('/api/legal-documents/search', publicLimiter)
+
+const writePathPrefixes = [
+  '/api/financing',
+  '/api/employers',
+  '/api/insurance',
+  '/api/maintenance',
+  '/api/achievements',
+  '/api/payments',
+  '/api/savings',
+  '/api/loans',
+  '/api/investments',
+]
 app.use((req, res, next) => {
   if (
     (req.method === 'POST' || req.method === 'PATCH') &&
@@ -165,18 +178,34 @@ app.use((req, res, next) => {
   next()
 })
 
-// Request logging middleware
+// Request logging middleware. Query strings are stripped: they can carry
+// credentials (e.g. ?token= on download links) and must never hit log files.
 app.use((req, res, next) => {
   const start = Date.now()
   res.on('finish', () => {
     const duration = Date.now() - start
-    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`)
+    logger.info(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`)
   })
   next()
 })
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
+// Serve uploaded files. Files are user-supplied, so:
+// - nosniff always, to stop MIME confusion.
+// - only known-safe inline types (images/pdf) may render in the browser;
+//   everything else is forced to download, which kills stored-XSS via .html/.svg.
+const INLINE_SAFE_UPLOADS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf'])
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, '..', 'uploads'), {
+    setHeaders: (res, filePath) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      const ext = path.extname(filePath).toLowerCase()
+      if (!INLINE_SAFE_UPLOADS.has(ext)) {
+        res.setHeader('Content-Disposition', 'attachment')
+      }
+    },
+  }),
+)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'RentOS API', version: '0.2.0', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' })
@@ -228,13 +257,15 @@ app.use('/api/move-outs', moveOutRoutes)
 app.use('/api/legal-documents', legalDocumentRoutes)
 app.use('/api/webhooks', webhookRoutes)
 
-// OpenAPI docs
-const openApiDoc = generateOpenAPIDoc()
-app.get('/api/docs/openapi.json', (_req, res) => res.json(openApiDoc))
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiDoc, {
-  explorer: true,
-  customSiteTitle: 'RentOS API Docs',
-}))
+// OpenAPI docs — disabled in production unless explicitly enabled.
+if (!isProduction || process.env.ENABLE_API_DOCS === 'true') {
+  const openApiDoc = generateOpenAPIDoc()
+  app.get('/api/docs/openapi.json', (_req, res) => res.json(openApiDoc))
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiDoc, {
+    explorer: true,
+    customSiteTitle: 'RentOS API Docs',
+  }))
+}
 
 // Admin error log dashboard endpoint (super_admin only)
 app.get('/api/admin/errors', authenticate, requireRole('super_admin'), (_req, res) => {

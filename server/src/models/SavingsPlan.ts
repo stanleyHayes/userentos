@@ -12,6 +12,9 @@ export interface ISavingsPlan extends Document {
   linkedPropertyId?: string
   linkedAgreementId?: string
   autoDebit: boolean
+  /** Last successful auto-debit — drives the frequency check (replaces scanning
+   * the wallet's embedded transactions array). */
+  lastAutoDebitAt?: string
 }
 
 const savingsPlanSchema = new Schema<ISavingsPlan>({
@@ -26,6 +29,7 @@ const savingsPlanSchema = new Schema<ISavingsPlan>({
   linkedPropertyId: String,
   linkedAgreementId: String,
   autoDebit: { type: Boolean, default: false },
+  lastAutoDebitAt: String,
 }, { timestamps: true })
 
 export const SavingsPlan = mongoose.model<ISavingsPlan>('SavingsPlan', savingsPlanSchema)

@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.api.deps import get_model
+from app.api.deps import guarded_model
 from app.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.ml.model import RentPriceModel
@@ -48,13 +48,14 @@ def _train_and_persist(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Training failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Training failed") from exc
 
 
 @router.post("/train", response_model=StatusResponse)
 def train(
     req: TrainRequest,
-    model: RentPriceModel = Depends(get_model),
+    model: RentPriceModel = Depends(guarded_model),
     settings: Settings = Depends(get_settings),
 ) -> StatusResponse:
     """Train on caller-supplied properties (used by the Node server)."""
@@ -75,7 +76,7 @@ def train(
 @router.post("/train/seed", response_model=SeedTrainResponse)
 def train_seed(
     req: SeedTrainRequest,
-    model: RentPriceModel = Depends(get_model),
+    model: RentPriceModel = Depends(guarded_model),
     settings: Settings = Depends(get_settings),
 ) -> SeedTrainResponse:
     """Generate a fresh deterministic Ghanaian dataset and train on it."""
@@ -100,7 +101,7 @@ def train_seed(
 @router.post("/reload", response_model=ReloadResponse)
 def reload(
     request: Request,
-    model: RentPriceModel = Depends(get_model),
+    model: RentPriceModel = Depends(guarded_model),
     settings: Settings = Depends(get_settings),
 ) -> ReloadResponse:
     loaded = model.load(settings.model_path)

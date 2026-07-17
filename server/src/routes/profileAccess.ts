@@ -35,6 +35,31 @@ router.post('/request', authenticate, asyncHandler(async (req, res) => {
   })
   if (existing) { error(res, 'You already have a pending request for this tenant'); return }
 
+  // A denied/revoked request can be re-asked by flipping it back to pending —
+  // prevents notification-spam via unlimited fresh requests.
+  const prior = await ProfileAccess.findOne({
+    requesterId: req.user!.userId,
+    tenantId,
+    status: { $in: ['denied', 'revoked'] },
+  })
+  if (prior) {
+    prior.status = 'pending'
+    prior.requestedAt = new Date()
+    prior.respondedAt = undefined
+    if (message) prior.message = message
+    await prior.save()
+
+    notify({
+      userId: tenantId,
+      title: 'Profile Access Request',
+      message: `Someone has re-requested access to view your tenant profile.${message ? ` Message: "${message}"` : ''}`,
+      actionUrl: '/profile-access',
+    }).catch((err) => console.warn('[profileAccess] notify failed:', (err as Error).message))
+
+    success(res, { ...prior.toObject(), id: prior._id.toString() }, 'Access request sent', 201)
+    return
+  }
+
   const access = await ProfileAccess.create({
     requesterId: req.user!.userId,
     tenantId,
@@ -54,7 +79,7 @@ router.post('/request', authenticate, asyncHandler(async (req, res) => {
     title: 'Profile Access Request',
     message: `${requesterName} has requested access to view your tenant profile.${message ? ` Message: "${message}"` : ''}`,
     actionUrl: '/profile-access',
-  })
+  }).catch((err) => console.warn('[profileAccess] notify failed:', (err as Error).message))
 
   success(res, { ...access.toObject(), id: access._id.toString() }, 'Access request sent', 201)
 }))
@@ -134,7 +159,7 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req, res) => {
       ? `${tenantName} has approved your request to view their profile.`
       : `${tenantName} has denied your request to view their profile.`,
     actionUrl: '/profile-access',
-  })
+  }).catch((err) => console.warn('[profileAccess] notify failed:', (err as Error).message))
 
   success(res, { ...access.toObject(), id: access._id.toString() })
 }))
@@ -167,7 +192,7 @@ router.post('/:id/revoke', authenticate, asyncHandler(async (req, res) => {
     title: 'Profile Access Revoked',
     message: `${tenantName} has revoked your access to view their profile.`,
     actionUrl: '/profile-access',
-  })
+  }).catch((err) => console.warn('[profileAccess] notify failed:', (err as Error).message))
 
   success(res, { ...access.toObject(), id: access._id.toString() })
 }))

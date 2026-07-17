@@ -30,25 +30,26 @@ class PropertyInput(BaseModel):
 class TrainRequest(BaseModel):
     """Train on an explicit property array (nested Mongo-style documents)."""
 
-    properties: list[dict[str, Any]]
-    maxEpochs: int | None = 10000
-    learningRate: float | None = 0.01
-    lrDecay: float | None = 0.9995
-    l2Lambda: float | None = 0.001
-    patience: int | None = 500
+    # Bounded — an unbounded payload + huge maxEpochs is a CPU/memory DoS.
+    properties: list[dict[str, Any]] = Field(..., max_length=5000)
+    maxEpochs: int | None = Field(10000, le=10000)
+    learningRate: float | None = Field(0.01, gt=0, le=1)
+    lrDecay: float | None = Field(0.9995, gt=0, le=1)
+    l2Lambda: float | None = Field(0.001, ge=0, le=1)
+    patience: int | None = Field(500, le=1000)
     verbose: bool | None = False
 
 
 class SeedTrainRequest(BaseModel):
     """Train on freshly generated Ghanaian seed data."""
 
-    count: int = Field(2500, ge=20, le=100000)
+    count: int = Field(2500, ge=20, le=10000)
     seed: int = 20260714
-    maxEpochs: int | None = 10000
-    learningRate: float | None = 0.01
-    lrDecay: float | None = 0.9995
-    l2Lambda: float | None = 0.001
-    patience: int | None = 500
+    maxEpochs: int | None = Field(10000, le=10000)
+    learningRate: float | None = Field(0.01, gt=0, le=1)
+    lrDecay: float | None = Field(0.9995, gt=0, le=1)
+    l2Lambda: float | None = Field(0.001, ge=0, le=1)
+    patience: int | None = Field(500, le=1000)
     verbose: bool | None = False
 
 

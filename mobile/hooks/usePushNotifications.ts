@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '../stores/authStore'
 import { registerForPushNotifications, unregisterPushToken } from '../lib/push'
+import { safeAppRoute } from '../lib/safeRoute'
 
 export function usePushNotifications() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -29,8 +30,9 @@ export function usePushNotifications() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const url = response.notification.request.content.data?.url
-      if (typeof url === 'string' && url.length > 0) {
-        router.push(url as never)
+      const route = safeAppRoute(url)
+      if (route) {
+        router.push(route as never)
       }
     })
     return () => sub.remove()

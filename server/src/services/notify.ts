@@ -20,6 +20,16 @@ interface NotifyOptions {
   skipPush?: boolean
 }
 
+/** Escape user-controlled values before interpolating into email HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 /**
  * Send notification across all channels:
  * 1. Always creates in_app notification
@@ -58,11 +68,17 @@ export async function notify(opts: NotifyOptions) {
   if (!skipEmail) {
     User.findById(userId).select('email firstName').lean().then((user) => {
       if (user?.email) {
+        // title/message/actionUrl can contain user-generated content (e.g. chat
+        // messages) — escape before HTML interpolation. subject/text are
+        // plain-text contexts and stay unescaped.
+        const safeTitle = escapeHtml(title)
+        const safeMessage = escapeHtml(message)
+        const safeActionUrl = actionUrl ? escapeHtml(actionUrl) : undefined
         sendEmail({
           to: user.email,
           subject: title,
           text: message,
-          html: `<h3>${title}</h3><p>${message}</p>${actionUrl ? `<p><a href="https://rentos.gh${actionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}`,
+          html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="https://rentos.gh${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}`,
         }).catch((err) => console.warn('[Notify] Email failed:', err.message))
       }
     }).catch((err) => console.warn('[Notify] User lookup failed:', err.message))

@@ -390,8 +390,18 @@ router.post('/payroll/runs', authenticate, requireRole('employer'), requirePermi
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const employer = await loadMyEmployer(req.user!.userId)
   if (!employer) { error(res, 'Create employer profile first'); return }
-  const run = await buildPayrollRun(employer._id.toString(), parsed.data.periodLabel, parsed.data.periodStart, parsed.data.periodEnd, parsed.data.scheduledPayDate)
-  success(res, idOf(run.toObject()), 'Payroll run created', 201)
+  try {
+    const run = await buildPayrollRun(employer._id.toString(), parsed.data.periodLabel, parsed.data.periodStart, parsed.data.periodEnd, parsed.data.scheduledPayDate)
+    success(res, idOf(run.toObject()), 'Payroll run created', 201)
+  } catch (e) {
+    // Unique index on (employerId, periodLabel) — rerunning a period would
+    // deduct every mandate twice.
+    if ((e as { code?: number }).code === 11000) {
+      error(res, `A payroll run for period "${parsed.data.periodLabel}" already exists`, 409)
+      return
+    }
+    throw e
+  }
 })
 
 router.get('/payroll/runs/:id', authenticate, async (req, res) => {
@@ -406,9 +416,12 @@ router.get('/payroll/runs/:id', authenticate, async (req, res) => {
 
 router.post('/payroll/runs/:id/approve', authenticate, requireRole('employer'), requirePermission('employer:run_payroll'), async (req, res) => {
   try {
-    const run = await approvePayrollRun(param(req.params.id), req.user!.userId)
+    // Ownership check BEFORE any mutation — approving someone else's run must
+    // fail without side effects (previously the approve persisted first).
     const employer = await loadMyEmployer(req.user!.userId)
-    if (!employer || run.employerId !== employer._id.toString()) { error(res, 'Not authorized', 403); return }
+    const existing = await PayrollRun.findById(param(req.params.id))
+    if (!existing || !employer || existing.employerId !== employer._id.toString()) { error(res, 'Not authorized', 403); return }
+    const run = await approvePayrollRun(param(req.params.id), req.user!.userId)
     success(res, idOf(run.toObject()), 'Payroll approved')
   } catch (e) {
     error(res, (e as Error).message)

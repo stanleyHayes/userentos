@@ -4,8 +4,12 @@ import { z } from 'zod'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
+import { Payment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { getProvider } from '../services/payments/index.js'
+import type { ProviderId } from '../services/payments/types.js'
+import { round2 } from '../utils/money.js'
 
 const packageSchema = z.object({
   name: z.string().min(1),
@@ -96,8 +100,10 @@ export const subscriptionController = {
     const user = await User.findById(req.user!.userId).lean()
     if (!user) { error(res, 'User not found', 404); return }
 
+    const isExpired = !!user.subscriptionEndDate && new Date(user.subscriptionEndDate) < new Date()
+
     let pkg = null
-    if (user.subscriptionPackageId) {
+    if (user.subscriptionPackageId && !isExpired) {
       pkg = await SubscriptionPackage.findById(user.subscriptionPackageId).lean()
       if (pkg) pkg = { ...pkg, id: (pkg._id as Types.ObjectId).toString() }
     }
@@ -108,6 +114,7 @@ export const subscriptionController = {
       package: pkg,
       subscriptionStartDate: user.subscriptionStartDate,
       subscriptionEndDate: user.subscriptionEndDate,
+      isExpired,
       propertyCount,
       maxProperties: pkg?.maxProperties ?? 0,
       canAddProperty: pkg ? (pkg.maxProperties === -1 || propertyCount < pkg.maxProperties) : false,
@@ -115,9 +122,18 @@ export const subscriptionController = {
   },
 
   // Subscribe to a package (landlord/manager)
+  // Paid packages initiate a REAL payment collection; the subscription is only
+  // activated in the verified finalize path (see services/payments/finalize.ts).
+  // Previously this activated any package instantly, for free.
   subscribe: async (req: Request, res: Response) => {
-    const { packageId } = req.body
-    if (!packageId) { error(res, 'Package ID is required'); return }
+    const schema = z.object({
+      packageId: z.string().min(1),
+      method: z.enum(['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer']).optional(),
+      phone: z.string().min(9).max(15).optional(),
+    })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const { packageId, method, phone } = parsed.data
 
     const pkg = await SubscriptionPackage.findById(packageId)
     if (!pkg || !pkg.isActive) { error(res, 'Package not found or inactive', 404); return }
@@ -125,24 +141,65 @@ export const subscriptionController = {
     const user = await User.findById(req.user!.userId)
     if (!user) { error(res, 'User not found', 404); return }
 
-    const now = new Date()
-    const endDate = new Date(now)
-    if (pkg.billingCycle === 'yearly') {
-      endDate.setFullYear(endDate.getFullYear() + 1)
-    } else {
-      endDate.setMonth(endDate.getMonth() + 1)
+    // Free packages need no payment — activate immediately.
+    if (pkg.price <= 0) {
+      const now = new Date()
+      const endDate = new Date(now)
+      if (pkg.billingCycle === 'yearly') {
+        endDate.setFullYear(endDate.getFullYear() + 1)
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1)
+      }
+
+      user.subscriptionPackageId = pkg._id.toString()
+      user.subscriptionStartDate = now
+      user.subscriptionEndDate = endDate
+      await user.save()
+
+      success(res, {
+        package: { ...pkg.toObject(), id: pkg._id.toString() },
+        subscriptionStartDate: now,
+        subscriptionEndDate: endDate,
+      }, 'Subscription activated')
+      return
     }
 
-    user.subscriptionPackageId = pkg._id.toString()
-    user.subscriptionStartDate = now
-    user.subscriptionEndDate = endDate
-    await user.save()
+    // Paid package — collect payment first.
+    if (!method) { error(res, 'method is required for paid packages'); return }
+    if (method !== 'bank_transfer' && !phone) { error(res, 'phone is required for mobile money payments'); return }
 
-    success(res, {
-      package: { ...pkg.toObject(), id: pkg._id.toString() },
-      subscriptionStartDate: now,
-      subscriptionEndDate: endDate,
-    }, 'Subscription activated')
+    const reference = `SUB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const payment = await Payment.create({
+      tenantId: req.user!.userId,
+      amount: round2(pkg.price),
+      method,
+      status: 'pending',
+      reference,
+      purpose: 'subscription',
+      purposeMeta: { packageId: pkg._id.toString() },
+    })
+
+    const provider = getProvider(method as ProviderId)
+    const result = await provider.initiateCollection({
+      amount: round2(pkg.price),
+      phone: phone ?? '',
+      reference,
+      narration: `RentOS subscription: ${pkg.name}`,
+    })
+
+    payment.providerRef = result.providerRef
+    payment.providerStatus = result.status
+    await payment.save()
+
+    success(
+      res,
+      {
+        payment: { ...payment.toObject(), id: payment._id.toString() },
+        instructions: result.instructions,
+      },
+      'Payment initiated — your subscription activates once the payment is confirmed',
+      201,
+    )
   },
 
   // Admin: assign package to a user

@@ -3,7 +3,7 @@ import type { Types } from 'mongoose'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { authenticate, requirePermission, isSuperAdmin } from '../middleware/auth.js'
-import { Invitation } from '../models/Invitation.js'
+import { Invitation, hashInviteToken } from '../models/Invitation.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
 import { success, error } from '../utils/response.js'
@@ -14,11 +14,37 @@ import { checkAndAward } from '../services/achievements.js'
 
 const router = Router()
 
+/** Delegation guard: you may only hand out access you hold yourself. */
+function canDelegate(req: Parameters<typeof isSuperAdmin>[0], roles: string[], permissions: string[]): string | null {
+  if (isSuperAdmin(req)) return null
+  if (roles.includes('super_admin') || roles.includes('admin')) {
+    return 'Only a super admin can delegate admin roles'
+  }
+  const held = new Set(req.user!.permissions)
+  const escalated = permissions.filter((p) => !held.has(p))
+  if (escalated.length) {
+    return `You cannot grant permissions you do not hold: ${escalated.join(', ')}`
+  }
+  return null
+}
+
+/** Response shape — never leaks the stored token hash. */
+function inviteView(invitation: { _id: unknown; email: string; roles: string[]; permissions: string[]; status: string; expiresAt: Date; createdAt?: Date }) {
+  return {
+    id: (invitation._id as Types.ObjectId).toString(),
+    email: invitation.email,
+    roles: invitation.roles,
+    permissions: invitation.permissions,
+    status: invitation.status,
+    expiresAt: invitation.expiresAt,
+    createdAt: invitation.createdAt,
+  }
+}
+
 // List all invitations
 router.get('/', authenticate, requirePermission('users:invite'), async (_req, res) => {
   const invitations = await Invitation.find().sort({ createdAt: -1 }).lean()
-  const items = invitations.map((inv) => ({ ...inv, id: (inv._id as Types.ObjectId).toString() }))
-  success(res, items)
+  success(res, invitations.map((inv) => inviteView(inv as unknown as Parameters<typeof inviteView>[0])))
 })
 
 // Send an invitation
@@ -30,9 +56,9 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
     return
   }
 
-  // Cannot invite as super_admin unless you are one
-  if (roles.includes('super_admin') && !isSuperAdmin(req)) {
-    error(res, 'Only a super admin can invite another super admin', 403)
+  const delegationError = canDelegate(req, roles, permissions || [])
+  if (delegationError) {
+    error(res, delegationError, 403)
     return
   }
 
@@ -50,7 +76,7 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
     return
   }
 
-  const token = crypto.randomBytes(32).toString('hex')
+  const rawToken = crypto.randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
   const invitation = await Invitation.create({
@@ -58,16 +84,16 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
     roles,
     permissions: permissions || [],
     invitedBy: req.user!.userId,
-    token,
+    token: hashInviteToken(rawToken),
     expiresAt,
   })
 
-  // In production, send an email with the invitation link
-  // For now, return the token directly
+  // Invitation emails are not wired up yet, so the raw token is returned to
+  // the inviter for manual sharing — safe to do so because the delegation
+  // guard above means it can only grant access the inviter already holds.
   success(res, {
-    ...(invitation as unknown as { toObject(): Record<string, unknown> }).toObject(),
-    id: invitation._id.toString(),
-    inviteUrl: `/register?invite=${token}`,
+    ...inviteView(invitation),
+    inviteUrl: `/register?invite=${rawToken}`,
   }, 'Invitation sent', 201)
 })
 
@@ -80,7 +106,19 @@ router.post('/accept', async (req, res) => {
     return
   }
 
-  const invitation = await Invitation.findOne({ token, status: 'pending' })
+  // Same password policy as registration
+  if (
+    password.length < 8 ||
+    !/[A-Z]/.test(password) ||
+    !/[a-z]/.test(password) ||
+    !/\d/.test(password) ||
+    !/[^A-Za-z0-9]/.test(password)
+  ) {
+    error(res, 'Password must be 8+ characters with upper, lower, number and special character')
+    return
+  }
+
+  const invitation = await Invitation.findOne({ token: hashInviteToken(token), status: 'pending' })
   if (!invitation) {
     error(res, 'Invalid or expired invitation', 404)
     return
@@ -156,15 +194,15 @@ router.post('/:id/resend', authenticate, requirePermission('users:invite'), asyn
     return
   }
 
-  invitation.token = crypto.randomBytes(32).toString('hex')
+  const rawToken = crypto.randomBytes(32).toString('hex')
+  invitation.token = hashInviteToken(rawToken)
   invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   invitation.status = 'pending'
   await invitation.save()
 
   success(res, {
-    ...(invitation as unknown as { toObject(): Record<string, unknown> }).toObject(),
-    id: invitation._id.toString(),
-    inviteUrl: `/register?invite=${invitation.token}`,
+    ...inviteView(invitation),
+    inviteUrl: `/register?invite=${rawToken}`,
   }, 'Invitation resent')
 })
 

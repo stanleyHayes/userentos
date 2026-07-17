@@ -8,6 +8,7 @@ import { CreditScore } from '../models/CreditScore.js'
 import { Wallet } from '../models/Wallet.js'
 import { notify } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
+import { creditWallet } from '../services/payments/walletLedger.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 
@@ -96,27 +97,29 @@ router.post('/:id/disburse', authenticate, async (req, res) => {
   const loan = await Loan.findById(param(req.params.id))
   if (!loan) { error(res, 'Loan not found', 404); return }
   if (loan.userId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
-  if (loan.status !== 'approved') { error(res, 'Loan is not approved'); return }
 
-  const wallet = await Wallet.findOne({ userId: req.user!.userId })
-  if (!wallet) { error(res, 'Wallet not found', 404); return }
+  // Atomic status claim — concurrent/retried disburse calls can't double-pay.
+  const claimed = await Loan.findOneAndUpdate(
+    { _id: loan._id, status: 'approved' },
+    { $set: { status: 'active', disbursedAt: new Date().toISOString() } },
+    { new: true },
+  )
+  if (!claimed) { error(res, 'Loan is not approved'); return }
 
-  wallet.balance += loan.amount
-  wallet.transactions.push({
-    type: 'deposit',
-    amount: loan.amount,
-    balanceAfter: wallet.balance,
-    reference: `LOAN-${Date.now()}`,
-    description: `Micro-loan disbursement`,
-    createdAt: new Date().toISOString(),
-  })
+  try {
+    await creditWallet(req.user!.userId, loan.amount, {
+      type: 'deposit',
+      reference: `LOAN-${Date.now()}`,
+      description: 'Micro-loan disbursement',
+    })
+  } catch (err) {
+    // Credit failed — revert the claim so the loan isn't active-but-unfunded.
+    await Loan.updateOne({ _id: loan._id }, { $set: { status: 'approved' }, $unset: { disbursedAt: 1 } })
+    throw err
+  }
 
-  loan.status = 'active'
-  loan.disbursedAt = new Date().toISOString()
-
-  await Promise.all([wallet.save(), loan.save()])
-
-  success(res, { loan: { ...loan.toObject(), id: loan._id.toString() }, wallet: { balance: wallet.balance } })
+  const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
+  success(res, { loan: { ...claimed.toObject(), id: claimed._id.toString() }, wallet: { balance: wallet?.balance ?? 0 } })
 })
 
 // Make loan repayment

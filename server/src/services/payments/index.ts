@@ -20,7 +20,21 @@ import { makeSimulator } from './simulator.js'
 export type PaymentMode = 'live' | 'simulated'
 
 export function getMode(): PaymentMode {
-  return process.env.PAYMENTS_PROVIDER_MODE === 'live' ? 'live' : 'simulated'
+  const raw = process.env.PAYMENTS_PROVIDER_MODE
+  if (raw === 'live') return 'live'
+  if (raw === 'simulated') {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[Payments] WARNING: PAYMENTS_PROVIDER_MODE=simulated in production — no real funds will move!')
+    }
+    return 'simulated'
+  }
+  // Unset/invalid: refuse to guess in production — a deploy missing this env var
+  // must fail loudly, not silently auto-complete every payment.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error("PAYMENTS_PROVIDER_MODE must be explicitly set to 'live' or 'simulated' in production")
+  }
+  console.warn('[Payments] PAYMENTS_PROVIDER_MODE unset — defaulting to simulated (dev mode)')
+  return 'simulated'
 }
 
 const liveProviders: Record<ProviderId, PaymentProvider> = {

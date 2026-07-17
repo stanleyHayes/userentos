@@ -112,7 +112,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const unreadCount = unreadData?.count ?? 0
   const { data: badgeData } = useBadgeCounts()
   const isLandlordRole = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager' || user?.activeRole === 'admin'
-  const { data: maintenanceData } = useMaintenanceRequests(isLandlordRole ? undefined : { status: '__skip__' })
+  // Only landlords/managers need the open-maintenance badge — previously every
+  // other role still fired a real (junk-filtered) request on each mount.
+  const { data: maintenanceData } = useMaintenanceRequests(undefined, { enabled: isLandlordRole })
   const openMaintenanceCount = isLandlordRole
     ? (maintenanceData?.items ?? []).filter((m) => m.status !== 'completed' && m.status !== 'cancelled').length
     : 0

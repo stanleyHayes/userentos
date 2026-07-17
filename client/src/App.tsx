@@ -170,13 +170,13 @@ export default function App() {
             <Route path="/government/reviews" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PropertyReviewPage /></RequireRole>} />
             <Route path="/credit-score" element={<CreditScorePage />} />
             <Route path="/my-profile" element={<TenantProfilePage />} />
-            <Route path="/blog/new" element={<BlogEditorPage />} />
-            <Route path="/blog/edit/:id" element={<BlogEditorPage />} />
+            <Route path="/blog/new" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><BlogEditorPage /></RequireRole>} />
+            <Route path="/blog/edit/:id" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><BlogEditorPage /></RequireRole>} />
             <Route path="/blog/:slug" element={<BlogDetailPage />} />
             <Route path="/messages" element={<ChatPage />} />
             <Route path="/saved" element={<SavedPropertiesPage />} />
             <Route path="/tenants" element={<TenantsPage />} />
-            <Route path="/tenant-profile/:userId" element={<TenantProfileViewPage />} />
+            <Route path="/tenant-profile/:userId" element={<RequireRole roles={['landlord', 'property_manager', 'government', 'legal_officer', 'admin']}><TenantProfileViewPage /></RequireRole>} />
             <Route path="/applications" element={<ApplicationsPage />} />
             <Route path="/profile-access" element={<ProfileAccessPage />} />
             <Route path="/settings" element={<SettingsPage />} />
@@ -191,7 +191,7 @@ export default function App() {
             <Route path="/financing/offers/new" element={<RequireRole roles={['financier']}><OfferEditorPage /></RequireRole>} />
             <Route path="/financing/applications" element={<RequireRole roles={['financier']}><FinancingApplicationsPage /></RequireRole>} />
             <Route path="/financing/contracts" element={<RequireRole roles={['financier']}><FinancingContractsPage /></RequireRole>} />
-            <Route path="/financing/contracts/:id" element={<FinancingContractDetailPage />} />
+            <Route path="/financing/contracts/:id" element={<RequireRole roles={['financier', 'tenant', 'landlord']}><FinancingContractDetailPage /></RequireRole>} />
             <Route path="/financing/collections" element={<RequireRole roles={['financier']}><CollectionsPage /></RequireRole>} />
             <Route path="/admin/feature-flags" element={<RequireRole roles={['admin']}><FeatureFlagsPage /></RequireRole>} />
             <Route path="/financing/mandates" element={<MyMandatesPage />} />

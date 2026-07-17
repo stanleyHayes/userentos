@@ -4,6 +4,10 @@ dist
 */dist
 .env
 */.env
+.env.e2e
+*/.env.e2e
+credentials.txt
+*/credentials.txt
 .git
 .gitignore
 .github

@@ -332,12 +332,15 @@ export const propertyController = {
     const propertyId = param(req.params.id)
     const userId = req.user!.userId
 
+    const propertyExists = await Property.exists({ _id: propertyId })
+    if (!propertyExists) { error(res, 'Property not found', 404); return }
+
     const { Favorite } = await import('../models/Favorite.js')
     const existing = await Favorite.findOne({ userId, propertyId })
 
     if (existing) {
       await existing.deleteOne()
-      await Property.updateOne({ _id: propertyId }, { $inc: { favorites: -1 } })
+      await Property.updateOne({ _id: propertyId, favorites: { $gt: 0 } }, { $inc: { favorites: -1 } })
       success(res, { favorited: false })
     } else {
       await Favorite.create({ userId, propertyId })
@@ -350,7 +353,8 @@ export const propertyController = {
     const { Favorite } = await import('../models/Favorite.js')
     const favorites = await Favorite.find({ userId: req.user!.userId }).lean()
     const propertyIds = favorites.map((f) => f.propertyId)
-    const properties = await Property.find({ _id: { $in: propertyIds } }).lean()
+    // Only published listings — a draft/pending property must not be readable via favorites.
+    const properties = await Property.find({ _id: { $in: propertyIds }, listingStatus: 'approved' }).lean()
 
     success(res, {
       items: properties.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() })),

@@ -40,8 +40,8 @@ router.get('/comparables', authenticate, async (req, res) => {
     )
     success(res, result)
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'Failed to analyze pricing', 500)
+    console.error('[pricing] Failed to analyze pricing:', (err as Error).message)
+    error(res, 'Failed to analyze pricing', 500)
   }
 })
 
@@ -68,8 +68,8 @@ router.get('/trends', authenticate, async (req, res) => {
     )
     success(res, { trends: result })
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'Failed to get trends', 500)
+    console.error('[pricing] Failed to get trends:', (err as Error).message)
+    error(res, 'Failed to get trends', 500)
   }
 })
 
@@ -104,8 +104,8 @@ router.post('/fair-price', authenticate, async (req, res) => {
     )
     success(res, result)
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'Failed to check fair price', 500)
+    console.error('[pricing] Failed to check fair price:', (err as Error).message)
+    error(res, 'Failed to check fair price', 500)
   }
 })
 
@@ -123,8 +123,8 @@ router.get('/model-status', authenticate, async (_req, res) => {
     const status = rentPriceModel.getStatus()
     success(res, status)
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'Failed to get model status', 500)
+    console.error('[pricing] Failed to get model status:', (err as Error).message)
+    error(res, 'Failed to get model status', 500)
   }
 })
 
@@ -171,8 +171,8 @@ router.post('/predict-ml', authenticate, async (req, res) => {
     const result = rentPriceModel.predict(parsed.data)
     success(res, result)
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'ML prediction failed', 500)
+    console.error('[pricing] ML prediction failed:', (err as Error).message)
+    error(res, 'ML prediction failed', 500)
   }
 })
 
@@ -195,8 +195,8 @@ router.post('/train-ml', authenticate, requireRole('admin', 'super_admin'), asyn
     const status = rentPriceModel.getStatus()
     success(res, { message: 'Model trained successfully', ...status })
   } catch (err) {
-    const e = err as { message?: string }
-    error(res, e.message || 'Training failed', 500)
+    console.error('[pricing] Training failed:', (err as Error).message)
+    error(res, 'Training failed', 500)
   }
 })
 

@@ -10,6 +10,7 @@ linear-in-price model still load (targetTransform defaults to "linear").
 
 import json
 import os
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -49,10 +50,13 @@ class RentPriceModel:
         self.residual_variance: float = 0.0
         self._target_mean: float = 0.0
         self._target_std: float = 1.0
+        # Guards train/reload vs predict/status — the singleton is shared across
+        # FastAPI's threadpool, so unsynchronized mutation raced with reads.
+        self._lock = threading.RLock()
 
     # ── Training ────────────────────────────────────────────────────────
 
-    def train(
+    def _train_unlocked(
         self,
         properties: list[dict[str, Any]],
         max_epochs: int = 10000,
@@ -155,7 +159,7 @@ class RentPriceModel:
 
     # ── Prediction ──────────────────────────────────────────────────────
 
-    def predict(self, input_data: dict[str, Any]) -> dict[str, Any]:
+    def _predict_unlocked(self, input_data: dict[str, Any]) -> dict[str, Any]:
         if not self.is_trained or self.weights is None:
             raise RuntimeError("Model not trained")
 
@@ -190,7 +194,7 @@ class RentPriceModel:
 
     # ── Persistence ─────────────────────────────────────────────────────
 
-    def save(self, file_path: str) -> None:
+    def _save_unlocked(self, file_path: str) -> None:
         if not self.is_trained or self.weights is None:
             raise RuntimeError("Cannot save untrained model")
 
@@ -213,7 +217,7 @@ class RentPriceModel:
         with open(file_path, "w") as f:
             json.dump(state, f, indent=2)
 
-    def load(self, file_path: str) -> bool:
+    def _load_unlocked(self, file_path: str) -> bool:
         if not os.path.exists(file_path):
             return False
         try:
@@ -237,7 +241,7 @@ class RentPriceModel:
             logger.warning("Failed to load model from %s: %s", file_path, exc)
             return False
 
-    def get_status(self) -> dict[str, Any]:
+    def _get_status_unlocked(self) -> dict[str, Any]:
         return {
             "isTrained": self.is_trained,
             "trainedAt": self.trained_at,
@@ -246,6 +250,29 @@ class RentPriceModel:
             "epochs": self.epochs,
             "finalLoss": round(self.final_loss, 6),
         }
+
+    # ── Locked public API ────────────────────────────────────────────────
+    # All state-mutating/reading entry points serialize on self._lock.
+
+    def train(self, *args: Any, **kwargs: Any) -> None:
+        with self._lock:
+            self._train_unlocked(*args, **kwargs)
+
+    def predict(self, input_data: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            return self._predict_unlocked(input_data)
+
+    def save(self, file_path: str) -> None:
+        with self._lock:
+            self._save_unlocked(file_path)
+
+    def load(self, file_path: str) -> bool:
+        with self._lock:
+            return self._load_unlocked(file_path)
+
+    def get_status(self) -> dict[str, Any]:
+        with self._lock:
+            return self._get_status_unlocked()
 
 
 # Process-wide singleton — the API layer accesses it through app.api.deps.

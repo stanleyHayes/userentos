@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import crypto from 'crypto'
 
 export interface IInvitation extends Document {
   email: string
@@ -6,6 +7,8 @@ export interface IInvitation extends Document {
   permissions: string[]
   invitedBy: string
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
+  /** SHA-256 hex digest of the bearer token — the raw token only ever lives
+   * in the invite link, so a read-only DB leak yields no usable tokens. */
   token: string
   expiresAt: Date
   acceptedAt?: Date
@@ -23,5 +26,11 @@ const invitationSchema = new Schema<IInvitation>({
 }, { timestamps: true })
 
 invitationSchema.index({ email: 1, status: 1 })
+invitationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 
 export const Invitation = mongoose.model<IInvitation>('Invitation', invitationSchema)
+
+/** Hash an invitation bearer token for storage/lookup. */
+export function hashInviteToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}

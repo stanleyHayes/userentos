@@ -14,6 +14,8 @@ export interface IDispute extends Document {
   mediationNotes?: string
   resolution?: string
   assignedTo?: string
+  /** Property status before it was set under_dispute — restored on resolve/close. */
+  previousPropertyStatus?: string
 }
 
 const disputeSchema = new Schema<IDispute>({
@@ -34,6 +36,7 @@ const disputeSchema = new Schema<IDispute>({
   mediationNotes: String,
   resolution: String,
   assignedTo: String,
+  previousPropertyStatus: String,
 }, { timestamps: true })
 
 export const Dispute = mongoose.model<IDispute>('Dispute', disputeSchema)

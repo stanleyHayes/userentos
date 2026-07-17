@@ -44,15 +44,14 @@ export interface ErrorLogEntry {
 }
 
 /**
- * Append-only JSONL writer for error events. Best-effort — never throws.
+ * Append-only JSONL writer for error events. Best-effort — never throws,
+ * never blocks the request path on disk I/O.
  */
 export function appendErrorLog(entry: ErrorLogEntry): void {
   ensureLogDir()
-  try {
-    fs.appendFileSync(LOG_FILE, JSON.stringify(entry) + '\n', { encoding: 'utf8' })
-  } catch (err) {
-    logger.warn(`[errorTracking] could not append error log: ${(err as Error).message}`)
-  }
+  fs.promises
+    .appendFile(LOG_FILE, JSON.stringify(entry) + '\n', { encoding: 'utf8' })
+    .catch((err) => logger.warn(`[errorTracking] could not append error log: ${(err as Error).message}`))
 }
 
 /**
@@ -102,7 +101,9 @@ export function errorTrackingHandler(
   const entry: ErrorLogEntry = {
     timestamp: new Date().toISOString(),
     method: req.method,
-    path: req.originalUrl,
+    // req.path only — originalUrl carries query strings, which can contain
+    // credentials (reset/invite/download tokens) and must never hit disk.
+    path: req.path,
     statusCode,
     errorMessage: err.message ?? 'Unknown error',
     stack: sanitizeStack(err.stack),
@@ -119,7 +120,7 @@ export function errorTrackingHandler(
     if (userId) scope.setUser({ id: userId })
     scope.setTag('http.method', req.method)
     scope.setTag('http.status', String(statusCode))
-    scope.setContext('request', { method: req.method, path: req.originalUrl })
+    scope.setContext('request', { method: req.method, path: req.path })
   }
 
   // Continue to the original error handler

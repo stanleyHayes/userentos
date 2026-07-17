@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 // import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { useSubscriptionPackages, useMySubscription, useSubscribe } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import { Check, Crown, Package, Building2, ArrowRight } from 'lucide-react'
@@ -10,17 +14,49 @@ import { IconWatermark } from '@/components/ui/Watermark'
 import { EmptyState } from '@/components/ui/EmptyState'
 import toast from 'react-hot-toast'
 
+const PAYMENT_METHODS = [
+  { value: 'mtn_momo', label: 'MTN Mobile Money' },
+  { value: 'telecel_cash', label: 'Telecel Cash' },
+  { value: 'airteltigo_money', label: 'AirtelTigo Money' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+]
+
 export function SubscriptionPage() {
   const { data: packagesData, isLoading: pkgLoading } = useSubscriptionPackages()
-  const { data: sub, isLoading: subLoading } = useMySubscription()
+  const { data: sub, isLoading: subLoading, refetch } = useMySubscription()
   const subscribe = useSubscribe()
+
+  const [payingPkg, setPayingPkg] = useState<string | null>(null)
+  const [payMethod, setPayMethod] = useState('mtn_momo')
+  const [payPhone, setPayPhone] = useState('')
+  const [pendingInstructions, setPendingInstructions] = useState<string | null>(null)
 
   const packages = packagesData?.items ?? []
 
-  async function handleSubscribe(packageId: string) {
+  function handleSubscribe(packageId: string, price: number) {
+    if (price > 0) {
+      // Paid plan — collect mobile-money details first
+      setPayingPkg(packageId)
+      return
+    }
+    void completeSubscribe(packageId)
+  }
+
+  async function completeSubscribe(packageId: string, withPayment = false) {
     try {
-      await subscribe.mutateAsync({ packageId })
-      toast.success('Subscription activated!')
+      const res = await subscribe.mutateAsync(
+        withPayment ? { packageId, method: payMethod, phone: payPhone } : { packageId },
+      )
+      if (res?.instructions) {
+        // Payment initiated — activation lands when the provider confirms.
+        setPendingInstructions(res.instructions)
+        setPayingPkg(null)
+        // Poll briefly for activation (simulator completes in ~2s)
+        setTimeout(() => void refetch(), 3000)
+        setTimeout(() => void refetch(), 7000)
+      } else {
+        toast.success('Subscription activated!')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to subscribe')
     }
@@ -133,7 +169,7 @@ export function SubscriptionPage() {
                   className="w-full"
                   variant={isCurrent ? 'outline' : 'primary'}
                   disabled={isCurrent || subscribe.isPending}
-                  onClick={() => handleSubscribe(pkg.id)}
+                  onClick={() => handleSubscribe(pkg.id, pkg.price)}
                 >
                   {isCurrent ? 'Current Plan' : isUpgrade ? (
                     <>Upgrade <ArrowRight size={14} /></>
@@ -148,6 +184,46 @@ export function SubscriptionPage() {
       {packages.length === 0 && (
         <EmptyState preset="general" title="No plans available" description="Subscription plans will appear here once published." />
       )}
+
+      {/* Payment details modal for paid plans */}
+      <Modal open={!!payingPkg} onClose={() => setPayingPkg(null)} title="Pay for subscription">
+        <div className="space-y-4">
+          <Select
+            id="sub-pay-method"
+            label="Payment method"
+            value={payMethod}
+            onChange={(e) => setPayMethod(e.target.value)}
+            options={PAYMENT_METHODS}
+          />
+          {payMethod !== 'bank_transfer' && (
+            <Input
+              id="sub-pay-phone"
+              label="Mobile money number"
+              value={payPhone}
+              onChange={(e) => setPayPhone(e.target.value)}
+              placeholder="0241234567"
+              required
+            />
+          )}
+          <Button
+            className="w-full"
+            disabled={subscribe.isPending || (payMethod !== 'bank_transfer' && payPhone.trim().length < 9)}
+            onClick={() => payingPkg && void completeSubscribe(payingPkg, true)}
+            
+          >
+            Pay & Subscribe
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Provider instructions after initiating payment */}
+      <Modal open={!!pendingInstructions} onClose={() => setPendingInstructions(null)} title="Complete your payment">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">{pendingInstructions}</p>
+          <p className="text-xs text-muted">Your plan activates automatically once the payment is confirmed.</p>
+          <Button className="w-full" onClick={() => setPendingInstructions(null)}>Got it</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { FinancingContract, type IRepaymentScheduleItem } from '../models/FinancingContract.js'
 import { FinancingApplication } from '../models/FinancingApplication.js'
 import { FinancingOffer } from '../models/FinancingOffer.js'
-import { Wallet } from '../models/Wallet.js'
+import { creditWallet } from './payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 import { notify } from './notify.js'
 
 export interface AmortizationParams {
@@ -64,7 +65,6 @@ export function buildAmortizationSchedule({ principal, annualInterestRate, tenur
   return { monthlyPayment: round2(monthlyPayment), totalRepayable, schedule }
 }
 
-function round2(n: number) { return Math.round(n * 100) / 100 }
 function addMonths(d: Date, m: number) {
   const out = new Date(d)
   out.setMonth(out.getMonth() + m)
@@ -151,20 +151,22 @@ export async function disburseContract(contractId: string) {
 
   // Disburse to landlord if linked to agreement; else to applicant wallet
   const recipientUserId = contract.landlordId ?? contract.applicantId
-  const netAmount = contract.principal - contract.processingFee
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: recipientUserId },
-    { $inc: { balance: netAmount } },
-    { new: true, upsert: true },
-  )
-  await Wallet.updateOne({ userId: recipientUserId }, { $push: { transactions: {
-    type: 'deposit',
-    amount: netAmount,
-    balanceAfter: wallet.balance,
-    reference: ref,
-    description: `Financing disbursement (${contract.productType.replace('_', ' ')})`,
-    createdAt: new Date().toISOString(),
-  } } })
+  const netAmount = round2(contract.principal - contract.processingFee)
+  try {
+    await creditWallet(recipientUserId, netAmount, {
+      type: 'deposit',
+      reference: ref,
+      description: `Financing disbursement (${contract.productType.replace('_', ' ')})`,
+    })
+  } catch (err) {
+    // Credit failed — revert the claim so the contract isn't active-but-unfunded.
+    await FinancingContract.updateOne(
+      { _id: contractId },
+      { $set: { status: 'pending_disbursement' }, $unset: { disbursedAt: 1, disbursementReference: 1 } },
+    )
+    console.error(`[financing/disburse] credit failed, claim reverted for ${contractId}: ${(err as Error).message}`)
+    throw err
+  }
 
   notify({
     userId: contract.applicantId,

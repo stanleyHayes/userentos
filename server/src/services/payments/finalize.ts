@@ -15,14 +15,36 @@
 
 import { Payment } from '../../models/Payment.js'
 import { User } from '../../models/User.js'
+import { SubscriptionPackage } from '../../models/SubscriptionPackage.js'
 import { notifyPaymentConfirmed, notifyPaymentReceived } from '../notify.js'
 import { checkAndAward } from '../achievements.js'
 import { dispatchWebhook } from '../webhooks.js'
+import { creditWallet } from './walletLedger.js'
 import type { WebhookEvent } from './types.js'
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'refunded'])
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Activate a paid subscription after its payment is verified. */
+async function activateSubscription(userId: string, packageId?: string): Promise<void> {
+  if (!packageId) throw new Error('subscription payment missing purposeMeta.packageId')
+  const pkg = await SubscriptionPackage.findById(packageId).lean()
+  if (!pkg) throw new Error(`package ${packageId} not found`)
+
+  const now = new Date()
+  const endDate = new Date(now)
+  if (pkg.billingCycle === 'yearly') {
+    endDate.setFullYear(endDate.getFullYear() + 1)
+  } else {
+    endDate.setMonth(endDate.getMonth() + 1)
+  }
+
+  await User.updateOne(
+    { _id: userId },
+    { $set: { subscriptionPackageId: packageId, subscriptionStartDate: now, subscriptionEndDate: endDate } },
+  )
+}
 
 export interface FinalizeOptions {
   /** Where this finalize call originated, for logging only. */
@@ -107,12 +129,40 @@ export async function finalizePayment(
   )
   if (!completed) return false // lost the race — another worker already finalized
 
+  // Funds are verified — apply what the payment was FOR.
+  if (completed.purpose === 'wallet_deposit') {
+    try {
+      await creditWallet(completed.tenantId, completed.amount, {
+        type: 'deposit',
+        reference: completed.reference,
+        description: 'Wallet deposit',
+      })
+      console.log(`[Payments:${opts.source}] wallet credited for deposit ${completed.reference}`)
+    } catch (err) {
+      // Payment is terminal but the wallet wasn't credited — needs reconciliation.
+      console.error(`[Payments:${opts.source}] CRITICAL: deposit ${completed.reference} completed but wallet credit failed: ${(err as Error).message}`)
+    }
+  } else if (completed.purpose === 'subscription') {
+    try {
+      await activateSubscription(completed.tenantId, (completed.purposeMeta as { packageId?: string } | undefined)?.packageId)
+      console.log(`[Payments:${opts.source}] subscription activated for payment ${completed.reference}`)
+    } catch (err) {
+      console.error(`[Payments:${opts.source}] CRITICAL: subscription payment ${completed.reference} completed but activation failed: ${(err as Error).message}`)
+    }
+  }
+
   // Notifications (best-effort)
   try {
-    const tenant = await User.findById(completed.tenantId).select('firstName lastName').lean()
-    const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'A tenant'
-    await notifyPaymentConfirmed(completed.tenantId, completed.amount, completed.reference)
-    await notifyPaymentReceived(completed.landlordId, tenantName, completed.amount, completed.reference)
+    if (completed.purpose === 'rent') {
+      const tenant = await User.findById(completed.tenantId).select('firstName lastName').lean()
+      const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'A tenant'
+      await notifyPaymentConfirmed(completed.tenantId, completed.amount, completed.reference)
+      if (completed.landlordId) {
+        await notifyPaymentReceived(completed.landlordId, tenantName, completed.amount, completed.reference)
+      }
+    } else {
+      await notifyPaymentConfirmed(completed.tenantId, completed.amount, completed.reference)
+    }
   } catch (err) {
     console.warn('[Payments] notify failed:', (err as Error).message)
   }

@@ -34,6 +34,7 @@ export default function LoansScreen() {
 
   const [showApply, setShowApply] = useState(false)
   const [agreementId, setAgreementId] = useState('')
+  const [agreements, setAgreements] = useState<{ id: string; status: string; rentAmount: number }[]>([])
   const [amount, setAmount] = useState('')
   const [tenure, setTenure] = useState('3')
   const [reason, setReason] = useState('')
@@ -42,7 +43,16 @@ export default function LoansScreen() {
   const [repayingId, setRepayingId] = useState<string | null>(null)
 
   async function load() {
-    try { const data = await api.get<{ items: Loan[] }>('/loans'); setLoans(data.items) } catch { /* no-op */ } finally { setLoading(false) }
+    try {
+      const data = await api.get<{ items: Loan[] }>('/loans')
+      setLoans(data.items)
+    } catch { /* no-op */ } finally { setLoading(false) }
+    // Load the user's agreements for the loan application picker — nobody can
+    // be expected to hand-type an agreement ID.
+    try {
+      const ag = await api.get<{ items: { id: string; status: string; rentAmount: number }[] }>('/agreements')
+      setAgreements(ag.items ?? [])
+    } catch { /* picker stays empty */ }
   }
   useEffect(() => { load() }, [])
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
@@ -58,7 +68,7 @@ export default function LoansScreen() {
   function resetApplyModal() { setShowApply(false); setAgreementId(''); setAmount(''); setTenure('3'); setReason('') }
 
   async function handleApply() {
-    if (!agreementId) { Alert.alert('Error', 'Please enter your agreement ID'); return }
+    if (!agreementId) { Alert.alert('Error', 'Please select an agreement'); return }
     if (!amount || amountNum < 50 || amountNum > 10000) { Alert.alert('Error', 'Amount must be between GHS 50 and GHS 10,000'); return }
     if (!reason || reason.length < 10) { Alert.alert('Error', 'Please provide a reason (min 10 characters)'); return }
     setSubmitting(true)
@@ -203,8 +213,24 @@ export default function LoansScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Agreement ID</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} placeholder="Your active agreement ID" placeholderTextColor={c.muted} value={agreementId} onChangeText={setAgreementId} />
+              <Text style={[s.fieldLabel, { color: c.text }]}>Agreement</Text>
+              {agreements.length === 0 ? (
+                <Text style={{ color: c.muted, fontSize: 13, marginBottom: spacing.sm }}>No agreements found on your account.</Text>
+              ) : (
+                <View style={[s.optionsGroup, { marginBottom: spacing.sm }]}>
+                  {agreements.map((a) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, agreementId === a.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
+                      onPress={() => setAgreementId(a.id)}
+                    >
+                      <Text style={[s.optionText, { color: c.text }, agreementId === a.id && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                        {a.status} · {formatCurrency(a.rentAmount)}/mo · #{a.id.slice(-6)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
               <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
               <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} placeholder="50 - 10,000" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
               <Text style={[s.fieldLabel, { color: c.text }]}>Repayment Period</Text>

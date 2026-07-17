@@ -121,8 +121,15 @@ router.get('/financing/contracts', adminAuth, adminRole, adminPerm, async (req, 
 // 2. ADMIN — All employers
 // ────────────────────────────────────────
 
-router.get('/employers', adminAuth, adminRole, adminPerm, async (_req, res) => {
-  const employers = await Employer.find({}).sort({ createdAt: -1 }).lean()
+router.get('/employers', adminAuth, adminRole, adminPerm, async (req, res) => {
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+  const skip = (page - 1) * pageSize
+
+  const [total, employers] = await Promise.all([
+    Employer.countDocuments({}),
+    Employer.find({}).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+  ])
 
   const employerIds = employers.map((e) => (e._id as Types.ObjectId).toString())
 
@@ -152,7 +159,7 @@ router.get('/employers', adminAuth, adminRole, adminPerm, async (_req, res) => {
     }
   })
 
-  success(res, { items, total: items.length })
+  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
 })
 
 // ────────────────────────────────────────

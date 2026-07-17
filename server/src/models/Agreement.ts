@@ -14,6 +14,9 @@ export interface IAgreement extends Document {
   specialConditions: string[]
   landlordSignature?: string
   tenantSignature?: string
+  /** Typed legal names captured at signing time — the actual e-signature record. */
+  landlordSignatureName?: string
+  tenantSignatureName?: string
   complianceFlags: { type: string; message: string; clause?: string; law?: string }[]
   version: number
   // Renewal tracking
@@ -38,6 +41,8 @@ const agreementSchema = new Schema<IAgreement>({
   specialConditions: [String],
   landlordSignature: String,
   tenantSignature: String,
+  landlordSignatureName: String,
+  tenantSignatureName: String,
   complianceFlags: [{
     type: { type: String },
     message: String,

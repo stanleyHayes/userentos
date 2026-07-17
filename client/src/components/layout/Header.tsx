@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Bell, Search, Menu, LogOut, ChevronDown, User, Settings, PanelLeftClose, PanelLeftOpen, Languages, Check, ShieldCheck, Map, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useApi'
 import { useSocket } from '@/hooks/useSocket'
@@ -445,6 +447,11 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                         try { await api.post('/auth/logout', { refreshToken }) } catch { /* best effort */ }
                       }
                       logout()
+                      // Wipe all per-user cached state — otherwise the next login
+                      // on a shared browser sees the previous user's data.
+                      qc.clear()
+                      useFavoritesStore.getState().clear()
+                      useNotificationStore.getState().reset()
                     }}
                     className="flex items-start gap-3 w-full px-4 py-2.5 hover:bg-danger/5 dark:hover:bg-danger/10 transition-colors"
                   >

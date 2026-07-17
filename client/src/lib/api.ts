@@ -34,6 +34,18 @@ class ApiClient {
     return useAuthStore.getState().token
   }
 
+  /** Parse a response body as JSON, tolerating non-JSON infrastructure error
+   * pages (proxy 502/504 HTML) and empty bodies. */
+  private async parseBody(res: Response): Promise<{ error?: string; data?: unknown }> {
+    const text = await res.text()
+    if (!text) return {}
+    try {
+      return JSON.parse(text) as { error?: string; data?: unknown }
+    } catch {
+      return {}
+    }
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken()
     const headers: Record<string, string> = {
@@ -76,13 +88,13 @@ class ApiClient {
       }
     }
 
-    const data = await res.json()
+    const data = await this.parseBody(res)
 
     if (!res.ok) {
-      throw new Error(data.error || 'Request failed')
+      throw new Error(data.error || `Request failed (${res.status})`)
     }
 
-    return data.data
+    return data.data as T
   }
 
   get<T>(path: string): Promise<T> {
@@ -133,13 +145,13 @@ class ApiClient {
       }
     }
 
-    const data = await res.json()
+    const data = await this.parseBody(res)
 
     if (!res.ok) {
-      throw new Error(data.error || 'Upload failed')
+      throw new Error(data.error || `Upload failed (${res.status})`)
     }
 
-    return data.data
+    return data.data as T
   }
 }
 

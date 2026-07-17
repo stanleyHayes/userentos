@@ -103,7 +103,7 @@ router.delete('/:id', authenticate, requireRole('admin', 'super_admin', 'legal_o
 // Public: semantic search over legal documents
 router.post('/search', async (req, res) => {
   const schema = z.object({
-    query: z.string().min(1),
+    query: z.string().min(1).max(500),
     topK: z.number().int().min(1).max(20).default(5),
   })
 

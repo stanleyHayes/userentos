@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react'
+import { useState, useMemo, useEffect, type FormEvent } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -40,22 +40,42 @@ type SortDir = 'asc' | 'desc'
 export function PaymentsPage() {
   const user = useAuthStore((s) => s.user)
   const isTenant = user?.activeRole === 'tenant'
-  const { data, isLoading } = usePayments()
-  const payments = useMemo(() => data?.items ?? [], [data?.items])
-  const [showPay, setShowPay] = useState(false)
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
-  const [pendingInstructions, setPendingInstructions] = useState<string | null>(null)
 
-  // Filters
+  // Filters — applied SERVER-side (the list endpoint is paginated)
   const [statusFilter, setStatusFilter] = useState('')
   const [methodFilter, setMethodFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(1)
   const perPage = 10
 
+  // Debounce the reference search so each keystroke doesn't fire a query
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  const { data, isLoading, isFetching } = usePayments({
+    page,
+    pageSize: perPage,
+    status: statusFilter || undefined,
+    method: methodFilter || undefined,
+    search: debouncedSearch || undefined,
+    sort: sortField,
+    order: sortDir,
+  })
+  const payments = useMemo(() => data?.items ?? [], [data?.items])
+  const [showPay, setShowPay] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+  const [pendingInstructions, setPendingInstructions] = useState<string | null>(null)
+
   const toggleSort = (field: SortField) => {
+    setPage(1)
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -64,35 +84,17 @@ export function PaymentsPage() {
     }
   }
 
-  const filtered = useMemo(() => {
-    let result = [...payments]
-    if (statusFilter) result = result.filter((p) => p.status === statusFilter)
-    if (methodFilter) result = result.filter((p) => p.method === methodFilter)
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      result = result.filter((p) => p.reference.toLowerCase().includes(q))
-    }
-    result.sort((a, b) => {
-      if (sortField === 'date') {
-        const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        return sortDir === 'asc' ? diff : -diff
-      }
-      const diff = a.amount - b.amount
-      return sortDir === 'asc' ? diff : -diff
-    })
-    return result
-  }, [payments, statusFilter, methodFilter, searchQuery, sortField, sortDir])
-
-  const completedPayments = payments.filter((p) => p.status === 'completed')
-  const totalPaid = completedPayments.reduce((sum, p) => sum + p.amount, 0)
-  const pendingPayments = payments.filter((p) => p.status === 'pending')
-  const pendingAmount = pendingPayments.reduce((sum, p) => sum + p.amount, 0)
-  const failedCount = payments.filter((p) => p.status === 'failed').length
-  const avgPayment = completedPayments.length > 0 ? totalPaid / completedPayments.length : 0
+  // Summary aggregates come from the server (computed over the full filtered set)
+  const summary = data?.summary
+  const totalPaid = summary?.totalPaid ?? 0
+  const pendingAmount = summary?.pendingAmount ?? 0
+  const pendingCount = summary?.pendingCount ?? 0
+  const failedCount = summary?.failedCount ?? 0
+  const avgPayment = summary?.avgPayment ?? 0
+  const completedCount = summary?.completedCount ?? 0
   const hasActiveFilters = statusFilter || methodFilter || searchQuery
 
-  const totalPages = Math.ceil(filtered.length / perPage)
-  const paginated = filtered.slice((page - 1) * perPage, page * perPage)
+  const totalPages = data?.totalPages ?? 1
 
   function clearFilters() {
     setStatusFilter('')
@@ -122,9 +124,9 @@ export function PaymentsPage() {
       <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Paid', value: formatCurrency(totalPaid), icon: <CheckCircle size={18} />, color: '#059669' },
-          { label: 'Pending', value: formatCurrency(pendingAmount), icon: <Clock size={18} />, color: '#d97706', sub: `${pendingPayments.length} payment${pendingPayments.length !== 1 ? 's' : ''}` },
+          { label: 'Pending', value: formatCurrency(pendingAmount), icon: <Clock size={18} />, color: '#d97706', sub: `${pendingCount} payment${pendingCount !== 1 ? 's' : ''}` },
           { label: 'Avg Payment', value: formatCurrency(avgPayment), icon: <TrendingUp size={18} />, color: '#2563eb' },
-          { label: 'Transactions', value: String(payments.length), icon: <CreditCard size={18} />, color: '#7c3aed', sub: failedCount > 0 ? `${failedCount} failed` : `${completedPayments.length} completed` },
+          { label: 'Transactions', value: String(data?.total ?? 0), icon: <CreditCard size={18} />, color: '#7c3aed', sub: failedCount > 0 ? `${failedCount} failed` : `${completedCount} completed` },
         ].map((kpi) => (
           <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
         ))}
@@ -192,14 +194,16 @@ export function PaymentsPage() {
           {isLoading ? (
             <ListSkeleton rows={4} />
           ) : payments.length === 0 ? (
-            <EmptyState preset="payments" action={{ label: 'Make payment', onClick: () => setShowPay(true) }} />
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted dark:text-gray-400">No payments match your filters.</p>
-              <button onClick={clearFilters} className="text-sm text-primary dark:text-blue-400 hover:underline mt-2">Clear filters</button>
-            </div>
+            hasActiveFilters ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted dark:text-gray-400">No payments match your filters.</p>
+                <button onClick={clearFilters} className="text-sm text-primary dark:text-blue-400 hover:underline mt-2">Clear filters</button>
+              </div>
+            ) : (
+              <EmptyState preset="payments" action={{ label: 'Make payment', onClick: () => setShowPay(true) }} />
+            )
           ) : (
-            <div className="overflow-x-auto">
+            <div className={`overflow-x-auto ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border dark:border-[#252a3a]">
@@ -221,7 +225,7 @@ export function PaymentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.map((payment) => (
+                  {payments.map((payment) => (
                     <tr key={payment.id} className="border-b border-border dark:border-[#252a3a] last:border-0 hover:bg-surface dark:hover:bg-[#0c0e1a]/50 transition-colors cursor-pointer" onClick={() => setSelectedPayment(payment)}>
                       <td className="py-3 px-2 font-mono text-xs text-primary-dark dark:text-gray-200">{payment.reference}</td>
                       <td className="py-3 px-2 text-muted dark:text-gray-400">{formatDate(payment.createdAt)}</td>
@@ -239,7 +243,7 @@ export function PaymentsPage() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-border dark:border-[#252a3a]">
                   <p className="text-xs text-muted dark:text-gray-400">
-                    Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} of {filtered.length}
+                    Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, data?.total ?? 0)} of {data?.total ?? 0}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
@@ -360,10 +364,11 @@ function MakePaymentModal({
 }) {
   const createPayment = useCreatePayment()
   const celebrate = useCelebrationStore((s) => s.celebrate)
+  const user = useAuthStore((s) => s.user)
   const { data: agreementData } = useAgreements()
   const agreements = (agreementData?.items ?? []).filter((a) => a.status === 'active')
   const defaultAgreementId = agreements[0]?.id ?? ''
-  const [form, setForm] = useState({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo' })
+  const [form, setForm] = useState({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo', phone: user?.phone ?? '' })
 
   // Default to the first active agreement once it becomes available.
   if (form.agreementId === '' && defaultAgreementId !== '') {
@@ -381,10 +386,11 @@ function MakePaymentModal({
         agreementId: form.agreementId,
         amount: Number(form.amount),
         method: form.method,
+        phone: form.phone.trim() || undefined,
       })
       celebrate('payment', 'Payment initiated!')
       onClose()
-      setForm({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo' })
+      setForm({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo', phone: user?.phone ?? '' })
       if (result?.instructions) {
         onInstructions(result.instructions)
       }
@@ -452,6 +458,23 @@ function MakePaymentModal({
             <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
           ))}
         </TextField>
+
+        {form.method !== 'bank_transfer' && (
+          <TextField
+            id="phone"
+            label="Mobile Money Number"
+            type="tel"
+            value={form.phone}
+            onChange={(e) => update('phone', e.target.value)}
+            required
+            fullWidth
+            placeholder="0241234567"
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: { 'data-testid': 'payment-phone-input' },
+            }}
+          />
+        )}
 
         {createPayment.isError && (
           <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">{(createPayment.error as Error).message}</div>

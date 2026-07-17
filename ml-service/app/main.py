@@ -27,6 +27,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("No saved model at %s — train via POST /train or POST /train/seed", settings.model_path)
 
+    if not settings.ml_api_key:
+        logger.warning(
+            "ML_API_KEY is not set — all endpoints are UNAUTHENTICATED (dev mode). "
+            "Set ML_API_KEY in any exposed deployment."
+        )
+
     yield
 
     if rent_price_model.is_trained:

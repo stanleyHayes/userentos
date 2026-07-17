@@ -5,10 +5,11 @@ import jwt from 'jsonwebtoken'
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 import { config } from '../config/index.js'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, authenticateDownload } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { signDownloadToken } from '../services/authService.js'
 import { User } from '../models/User.js'
 import { CreditScore } from '../models/CreditScore.js'
 import { Payment } from '../models/Payment.js'
@@ -459,38 +460,6 @@ function formatDate(iso: string | Date): string {
 
 // ───────────────────────────── ROUTES ─────────────────────────────
 
-// Resolve user from either a Bearer header OR a ?token= query parameter.
-// Used by the authenticated PDF route so a plain <a download> link works
-// from the browser (which can't attach an Authorization header).
-function resolveUserIdFromRequest(req: Request): string | null {
-  const header = req.headers.authorization
-  if (header?.startsWith('Bearer ')) {
-    try {
-      const payload = jwt.verify(header.slice(7), config.jwtSecret) as {
-        userId: string
-      }
-      return payload.userId
-    } catch {
-      // fall through
-    }
-  }
-  const queryToken = param(req.query.token as string | string[] | undefined)
-  if (queryToken) {
-    try {
-      const payload = jwt.verify(queryToken, config.jwtSecret) as {
-        userId: string
-        purpose?: string
-      }
-      if (!payload.purpose || payload.purpose === 'passport-download') {
-        return payload.userId
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return null
-}
-
 async function streamPassportPdfResponse(
   res: Response,
   userId: string,
@@ -504,15 +473,15 @@ async function streamPassportPdfResponse(
   await renderPassportPdf(res, data, shareUrl)
 }
 
-// Authenticated PDF — accepts bearer header OR ?token= query param so that
-// browser <a download> links can hit the endpoint without a custom header.
+// Mint a short-lived, download-only token for the PDF. This replaces putting
+// the full session JWT in ?token= URLs (which leaked into logs/history).
+const documentLinkHandler = asyncHandler(async (req: Request, res: Response) => {
+  success(res, { token: signDownloadToken(req.user!.userId) })
+})
+
+// Authenticated PDF — accepts a download-purpose token only (Bearer or ?token=).
 const myPdfHandler = asyncHandler(async (req: Request, res: Response) => {
-  const userId = resolveUserIdFromRequest(req)
-  if (!userId) {
-    error(res, 'Authentication required', 401)
-    return
-  }
-  await streamPassportPdfResponse(res, userId)
+  await streamPassportPdfResponse(res, req.user!.userId)
 })
 
 // Authenticated JSON preview
@@ -549,7 +518,7 @@ const shareHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload) {
+  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -561,7 +530,7 @@ const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload) {
+  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -569,16 +538,37 @@ const sharedPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   await streamPassportPdfResponse(res, payload.userId, shareUrl)
 })
 
+// Revoke ALL outstanding share links — previously a shared passport (email,
+// credit score, salary band, eviction history) could never be un-shared.
+const revokeShareHandler = asyncHandler(async (req: Request, res: Response) => {
+  await TenantProfile.updateOne(
+    { userId: req.user!.userId },
+    { $set: { passportShareRevokedAt: new Date() } },
+    { upsert: true },
+  )
+  success(res, null, 'All passport share links have been revoked')
+})
+
+/** Share tokens issued before the tenant's revocation timestamp are dead. */
+async function isShareRevoked(userId: string, iat?: number): Promise<boolean> {
+  if (!iat) return false
+  const profile = await TenantProfile.findOne({ userId }).select('passportShareRevokedAt').lean()
+  const revokedAt = profile?.passportShareRevokedAt
+  return !!revokedAt && iat * 1000 < new Date(revokedAt).getTime()
+}
+
 // ── Route bindings ──
 // We use slash-separated paths (`/me/pdf`) instead of dot-extensions
 // (`/me.pdf`) because Express 5's path-to-regexp v8 no longer treats a
 // literal `.ext` after a `:param` as a literal. The client uses these
 // canonical paths.
-router.get('/me/pdf', myPdfHandler)
+router.get('/me/pdf', authenticateDownload, myPdfHandler)
+router.post('/me/document-link', authenticate, documentLinkHandler)
 router.get('/me/json', authenticate, myJsonHandler)
 router.get('/me', authenticate, myJsonHandler)
 
 router.post('/share', authenticate, shareHandler)
+router.delete('/share', authenticate, revokeShareHandler)
 
 router.get('/shared/:token/json', sharedJsonHandler)
 router.get('/shared/:token/pdf', sharedPdfHandler)

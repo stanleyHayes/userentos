@@ -168,6 +168,12 @@ router.post('/applications/:id/approve', authenticate, requireRole('financier'),
 router.post('/applications/:id/reject', authenticate, requireRole('financier'), requirePermission('financing:approve'), async (req, res) => {
   const app = await FinancingApplication.findById(param(req.params.id))
   if (!app || app.financierId !== req.user!.userId) { error(res, 'Application not found', 404); return }
+  // State guard: only an undecided application can be rejected — "rejecting" an
+  // already-approved application would orphan its live contract.
+  if (app.status === 'approved' || app.status === 'rejected' || app.status === 'withdrawn') {
+    error(res, `Application is already ${app.status}`, 409)
+    return
+  }
   app.status = 'rejected'
   app.decidedBy = req.user!.userId
   app.decidedAt = new Date().toISOString()
@@ -381,6 +387,12 @@ router.post('/contracts/:id/remind', authenticate, requireRole('financier'), req
 router.post('/contracts/:id/mark-defaulted', authenticate, requireRole('financier'), requirePermission('financing:default_manage'), async (req, res) => {
   const c = await FinancingContract.findById(param(req.params.id))
   if (!c || c.financierId !== req.user!.userId) { error(res, 'Contract not found', 404); return }
+  // State guard: only an active contract can default — flipping a settled or
+  // pending contract to 'defaulted' corrupts the state machine.
+  if (c.status !== 'active') {
+    error(res, `Contract is ${c.status} — only active contracts can be marked defaulted`, 409)
+    return
+  }
   c.status = 'defaulted'
   c.notes = c.notes ?? []
   if (req.body.reason) c.notes.push({ text: `Marked defaulted: ${req.body.reason}`, by: req.user!.userId, at: new Date().toISOString() })

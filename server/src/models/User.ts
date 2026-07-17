@@ -19,6 +19,8 @@ export interface IUser extends Document {
   deletedAt?: Date
   mfaEnabled: boolean
   mfaSecret?: string
+  /** Set whenever the password changes — invalidates reset tokens issued before. */
+  credentialsChangedAt?: Date
   settings?: {
     theme: string
     language: string
@@ -50,7 +52,11 @@ const userSchema = new Schema<IUser>({
   invitedBy: { type: String },
   deletedAt: { type: Date, index: true },
   mfaEnabled: { type: Boolean, default: false },
-  mfaSecret: { type: String },
+  // select:false — the TOTP seed must never ride along in general queries
+  // (the admin user list previously leaked every user's seed). Code that
+  // verifies codes opts in explicitly with .select('+mfaSecret').
+  mfaSecret: { type: String, select: false },
+  credentialsChangedAt: { type: Date },
   settings: {
     theme: { type: String, default: 'system' },
     language: { type: String, default: 'en' },
@@ -80,5 +86,17 @@ userSchema.methods.toSafe = function () {
   delete obj.__v
   return obj
 }
+
+// Belt-and-braces: any res.json(userDoc) path that forgets toSafe() still
+// never serializes credentials or the TOTP seed.
+userSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    const obj = ret as unknown as Record<string, unknown>
+    delete obj.passwordHash
+    delete obj.mfaSecret
+    delete obj.__v
+    return obj
+  },
+})
 
 export const User = mongoose.model<IUser>('User', userSchema)

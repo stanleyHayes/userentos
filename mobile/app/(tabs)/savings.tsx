@@ -56,6 +56,7 @@ export default function SavingsScreen() {
   const [walletAction, setWalletAction] = useState<'deposit' | 'withdraw'>('deposit')
   const [walletAmount, setWalletAmount] = useState('')
   const [walletMethod, setWalletMethod] = useState('')
+  const [walletPhone, setWalletPhone] = useState('')
   const [submittingWallet, setSubmittingWallet] = useState(false)
 
   async function load() {
@@ -117,15 +118,35 @@ export default function SavingsScreen() {
     if (!walletMethod) {
       Alert.alert('Error', 'Please select a payment method'); return
     }
+    if (walletAction === 'deposit' && walletMethod !== 'bank_transfer' && walletPhone.trim().length < 9) {
+      Alert.alert('Error', 'Please enter the mobile money number to debit'); return
+    }
 
     setSubmittingWallet(true)
     try {
-      const endpoint = walletAction === 'deposit' ? '/savings/wallet/deposit' : '/savings/wallet/withdraw'
-      await api.post(endpoint, { amount: Number(walletAmount), method: walletMethod })
-      setShowWalletModal(false)
-      setWalletMethod('')
-      Alert.alert('Success', `${walletAction === 'deposit' ? 'Deposit' : 'Withdrawal'} successful`)
-      await load()
+      if (walletAction === 'deposit') {
+        // Deposit initiates a real payment collection — the wallet is credited
+        // only after the provider confirms, so show the payer instructions.
+        const res = await api.post<{ instructions?: string }>('/savings/wallet/deposit', {
+          amount: Number(walletAmount), method: walletMethod, phone: walletPhone.trim(),
+        })
+        setShowWalletModal(false)
+        setWalletMethod('')
+        setWalletPhone('')
+        Alert.alert(
+          'Deposit initiated',
+          res.instructions ?? 'Approve the payment on your phone — your wallet is credited once it is confirmed.',
+        )
+        // Poll for the balance change (simulator completes in ~2s)
+        setTimeout(() => void load(), 3500)
+        setTimeout(() => void load(), 8000)
+      } else {
+        await api.post('/savings/wallet/withdraw', { amount: Number(walletAmount), method: walletMethod })
+        setShowWalletModal(false)
+        setWalletMethod('')
+        Alert.alert('Success', 'Withdrawal successful')
+        await load()
+      }
     } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', _err.message || `Failed to ${walletAction
@@ -418,6 +439,20 @@ export default function SavingsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {walletAction === 'deposit' && walletMethod && walletMethod !== 'bank_transfer' && (
+              <>
+                <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                  placeholder="0241234567"
+                  placeholderTextColor={c.muted}
+                  keyboardType="phone-pad"
+                  value={walletPhone}
+                  onChangeText={setWalletPhone}
+                />
+              </>
+            )}
 
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: walletAction === 'withdraw' ? c.danger : c.primary }, submittingWallet && s.submitBtnDisabled]}

@@ -16,6 +16,18 @@ export const loginLimiter = rateLimit({
 })
 
 /**
+ * Registration limiter — strict in production: account creation is free of
+ * credential checks, so without this it enables email enumeration and spam.
+ */
+export const registerLimiter = rateLimit({
+  windowMs: isProd ? 60 * 60 * 1000 : 60 * 1000,
+  limit: isProd ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many accounts created. Please try again later.' },
+})
+
+/**
  * Public endpoint limiter — 60 requests per 1 minute per IP in production.
  * Relaxed in dev/test so page refreshes and E2E suites don't get blocked.
  */

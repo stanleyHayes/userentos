@@ -3,9 +3,14 @@ import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { Wallet } from '../models/Wallet.js'
+import { Payment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAndAward } from '../services/achievements.js'
+import { getProvider } from '../services/payments/index.js'
+import type { ProviderId } from '../services/payments/types.js'
+import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 
 const createPlanSchema = z.object({
   targetAmount: z.number().positive(),
@@ -22,6 +27,13 @@ const amountMethodSchema = z.object({
   method: z.enum(['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer']),
 })
 
+const depositSchema = amountMethodSchema.extend({
+  // Payer MSISDN — required for mobile-money rails, unused for bank_transfer.
+  phone: z.string().min(9).max(15).optional(),
+})
+
+const MOBILE_MONEY_METHODS = new Set(['mtn_momo', 'telecel_cash', 'airteltigo_money'])
+
 export const savingsController = {
   getWallet: async (req: Request, res: Response) => {
     const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
@@ -34,62 +46,72 @@ export const savingsController = {
     success(res, mapped)
   },
 
+  /**
+   * Deposit = a real payment collection. The wallet is credited ONLY in the
+   * verified finalize path (provider webhook / simulator bridge) — never here.
+   * This endpoint previously credited any requested amount immediately, which
+   * let anyone mint unbacked balance.
+   */
   deposit: async (req: Request, res: Response) => {
-    const parsed = amountMethodSchema.safeParse(req.body)
+    const parsed = depositSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const { amount, method, phone } = parsed.data
 
-    // Atomic credit so concurrent deposits can't lose updates.
-    const wallet = await Wallet.findOneAndUpdate(
-      { userId: req.user!.userId },
-      { $inc: { balance: parsed.data.amount } },
-      { new: true },
-    )
-    if (!wallet) { error(res, 'Wallet not found', 404); return }
-
-    const tx = {
-      type: 'deposit',
-      amount: parsed.data.amount,
-      balanceAfter: wallet.balance,
-      reference: `DEP-${Date.now()}`,
-      description: `Deposit via ${parsed.data.method.replace('_', ' ')}`,
-      createdAt: new Date().toISOString(),
+    if (MOBILE_MONEY_METHODS.has(method) && !phone) {
+      error(res, 'phone is required for mobile money deposits')
+      return
     }
-    await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: tx } })
-    wallet.transactions.push(tx)
 
-    success(res, { wallet: { ...wallet.toObject(), id: wallet._id.toString() }, transaction: tx })
+    const reference = `DEP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const payment = await Payment.create({
+      tenantId: req.user!.userId,
+      amount: round2(amount),
+      method,
+      status: 'pending',
+      reference,
+      purpose: 'wallet_deposit',
+    })
+
+    const provider = getProvider(method as ProviderId)
+    const result = await provider.initiateCollection({
+      amount: round2(amount),
+      phone: phone ?? '',
+      reference,
+      narration: 'RentOS wallet deposit',
+    })
+
+    payment.providerRef = result.providerRef
+    payment.providerStatus = result.status
+    await payment.save()
+
+    success(
+      res,
+      {
+        payment: { ...payment.toObject(), id: payment._id.toString() },
+        instructions: result.instructions,
+      },
+      'Deposit initiated — your wallet is credited once the payment is confirmed',
+      201,
+    )
   },
 
   withdraw: async (req: Request, res: Response) => {
     const parsed = amountMethodSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const tx = {
+    const debited = await debitWallet(req.user!.userId, parsed.data.amount, {
       type: 'withdrawal',
-      amount: parsed.data.amount,
-      balanceAfter: 0,
       reference: `WTH-${Date.now()}`,
       description: `Withdrawal to ${parsed.data.method.replace('_', ' ')}`,
-      createdAt: new Date().toISOString(),
-    }
-
-    // Atomic conditional debit — only succeeds if the balance covers the amount,
-    // preventing concurrent double-withdrawal / negative balance.
-    const wallet = await Wallet.findOneAndUpdate(
-      { userId: req.user!.userId, balance: { $gte: parsed.data.amount } },
-      { $inc: { balance: -parsed.data.amount } },
-      { new: true },
-    )
-    if (!wallet) {
+    })
+    if (!debited) {
       const exists = await Wallet.exists({ userId: req.user!.userId })
       error(res, exists ? 'Insufficient balance' : 'Wallet not found', exists ? 400 : 404)
       return
     }
-    tx.balanceAfter = wallet.balance
-    await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: tx } })
-    wallet.transactions.push(tx)
 
-    success(res, { wallet: { ...wallet.toObject(), id: wallet._id.toString() }, transaction: tx })
+    const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
+    success(res, { wallet: { ...wallet, id: (wallet!._id as Types.ObjectId).toString() } })
   },
 
   listPlans: async (req: Request, res: Response) => {
@@ -125,27 +147,26 @@ export const savingsController = {
     const amount = Number(req.body.amount)
     if (!Number.isFinite(amount) || amount <= 0) { error(res, 'Invalid amount'); return }
 
-    // Atomic conditional debit prevents concurrent double-spend / negative balance.
-    const wallet = await Wallet.findOneAndUpdate(
-      { userId: req.user!.userId, balance: { $gte: amount } },
-      { $inc: { balance: -amount } },
-      { new: true },
-    )
-    if (!wallet) { error(res, 'Insufficient wallet balance'); return }
-
-    const tx = {
+    // Debit first; if the plan update fails the debit is compensated below.
+    const debited = await debitWallet(req.user!.userId, amount, {
       type: 'rent_payment',
-      amount,
-      balanceAfter: wallet.balance,
       reference: `SAV-${Date.now()}`,
       description: 'Savings contribution to plan',
-      createdAt: new Date().toISOString(),
-    }
-    await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: tx } })
-    wallet.transactions.push(tx)
+    })
+    if (!debited) { error(res, 'Insufficient wallet balance'); return }
 
-    // Atomic plan increment, then compute completion from the updated total.
-    const updatedPlan = await SavingsPlan.findByIdAndUpdate(plan._id, { $inc: { currentAmount: amount } }, { new: true }) ?? plan
+    let updatedPlan
+    try {
+      updatedPlan = await SavingsPlan.findByIdAndUpdate(plan._id, { $inc: { currentAmount: round2(amount) } }, { new: true }) ?? plan
+    } catch (err) {
+      // Plan write failed — refund the debit so the user's money isn't burned.
+      await creditWallet(req.user!.userId, amount, {
+        type: 'refund',
+        reference: `SAV-REV-${Date.now()}`,
+        description: 'Reversal of failed savings contribution',
+      })
+      throw err
+    }
     const justCompleted = updatedPlan.status !== 'completed' && updatedPlan.currentAmount >= updatedPlan.targetAmount
     if (justCompleted) {
       await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })
@@ -154,6 +175,7 @@ export const savingsController = {
         .catch((err) => console.warn('[savings/contribute] achievement award failed:', err))
     }
 
-    success(res, { plan: { ...updatedPlan.toObject(), id: updatedPlan._id.toString() }, wallet: { ...wallet.toObject(), id: wallet._id.toString() } })
+    const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
+    success(res, { plan: { ...updatedPlan.toObject(), id: updatedPlan._id.toString() }, wallet: wallet ? { ...wallet, id: (wallet._id as Types.ObjectId).toString() } : undefined })
   },
 }

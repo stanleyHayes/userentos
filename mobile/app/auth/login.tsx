@@ -75,7 +75,7 @@ export default function LoginScreen() {
                 const ok = await authenticateWithBiometric(`Enable ${biometricLabel(capability.primary)} login`)
                 if (!ok) return
                 try {
-                  await enableBiometricLogin()
+                  await enableBiometricLogin(password)
                   setBioEnabled(true)
                 } catch (err) {
       const _err = err as { message?: string }
@@ -111,7 +111,10 @@ export default function LoginScreen() {
         return
       }
       const result = await exchangeRefreshToken(refreshToken)
-      login(result.user as unknown as User, result.token)
+      // Biometric sessions must mark biometricSession so the 401 auto-refresh
+      // uses the biometric exchange path — and the rotated token must be passed
+      // along, or refresh fails the moment the access token expires.
+      login(result.user as unknown as User, result.token, result.refreshToken, { biometricSession: true })
       router.replace('/(tabs)')
     } catch (e) {
       const _err = e as { message?: string }

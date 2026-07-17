@@ -172,25 +172,17 @@ async function upsertScore(userId: string) {
   const now = new Date().toISOString()
   const dateKey = now.slice(0, 10) // YYYY-MM-DD
 
-  // Get existing doc to append history
-  const existing = await CreditScore.findOne({ userId }).lean()
-  const history = existing?.history ?? []
-
-  // Only add to history if last entry is from a different day
-  const lastEntry = history[history.length - 1]
-  if (!lastEntry || lastEntry.date !== dateKey) {
-    history.push({ score: calculated.score, date: dateKey })
-  } else {
-    history[history.length - 1].score = calculated.score
-  }
-
-  // Keep last 90 days of history
-  const trimmed = history.slice(-90)
-
+  // Atomic two-step: set the calculated fields + drop today's history entry,
+  // then re-push it bounded — no read-modify-write race on the history array.
+  await CreditScore.updateOne(
+    { userId },
+    { $set: { ...calculated, calculatedAt: now }, $pull: { history: { date: dateKey } } },
+    { upsert: true },
+  )
   const creditScore = await CreditScore.findOneAndUpdate(
     { userId },
-    { ...calculated, history: trimmed, calculatedAt: now },
-    { upsert: true, returnDocument: 'after' }
+    { $push: { history: { $each: [{ score: calculated.score, date: dateKey }], $slice: -90 } } },
+    { returnDocument: 'after' },
   ).lean()
 
   return { ...creditScore, id: (creditScore!._id as Types.ObjectId).toString() }

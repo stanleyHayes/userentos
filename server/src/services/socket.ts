@@ -9,7 +9,7 @@ let io: Server | null = null
 // userId → Set of socket IDs (one user can have multiple tabs/devices)
 const onlineUsers = new Map<string, Set<string>>()
 
-const ALWAYS_ALLOWED_ORIGINS = new Set([
+const DEV_ORIGINS = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
@@ -21,7 +21,21 @@ function getAllowedOrigins(): string[] {
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean)
-  return [...ALWAYS_ALLOWED_ORIGINS, ...envOrigins]
+  // Dev origins only outside production — same policy as the HTTP CORS setup.
+  return process.env.NODE_ENV === 'production' ? envOrigins : [...DEV_ORIGINS, ...envOrigins]
+}
+
+/** User ids sharing at least one conversation with `userId` — presence is
+ * only ever disclosed to these users, never broadcast platform-wide. */
+async function getContacts(userId: string): Promise<Set<string>> {
+  const convos = await Conversation.find({ participants: userId }).select('participants').lean()
+  const contacts = new Set<string>()
+  for (const convo of convos) {
+    for (const participant of convo.participants as string[]) {
+      if (participant !== userId) contacts.add(participant)
+    }
+  }
+  return contacts
 }
 
 export function initSocket(httpServer: HttpServer): Server {
@@ -36,13 +50,16 @@ export function initSocket(httpServer: HttpServer): Server {
     transports: ['websocket', 'polling'],
   })
 
-  // Auth middleware — verify JWT on connection
+  // Auth middleware — verify JWT on connection. Only full session tokens may
+  // connect (pre-MFA / reset / download tokens are signed with the same secret
+  // but must never open a realtime channel).
   io.use((socket, next) => {
     const token = socket.handshake.auth.token
     if (!token) return next(new Error('Authentication required'))
 
     try {
-      const decoded = jwt.verify(token, config.jwtSecret) as { userId: string }
+      const decoded = jwt.verify(token, config.jwtSecret) as { userId: string; purpose?: string }
+      if (decoded.purpose !== 'session') return next(new Error('Invalid token'))
       ;(socket as unknown as { userId: string }).userId = decoded.userId
       next()
     } catch {
@@ -61,8 +78,15 @@ export function initSocket(httpServer: HttpServer): Server {
     // Join personal room for direct events
     socket.join(`user:${userId}`)
 
-    // Broadcast online status
-    io!.emit('user:online', { userId })
+    // Tell only this user's chat contacts that they came online — presence is
+    // not broadcast platform-wide.
+    getContacts(userId)
+      .then((contacts) => {
+        for (const contactId of contacts) {
+          io!.to(`user:${contactId}`).emit('user:online', { userId })
+        }
+      })
+      .catch(() => { /* presence is best-effort */ })
 
     // Conversation rooms — only a participant may join, otherwise any client could
     // join any chat:<id> room and receive every message (eavesdropping / IDOR).
@@ -93,10 +117,14 @@ export function initSocket(httpServer: HttpServer): Server {
       socket.to(`chat:${conversationId}`).emit('typing:stop', { userId, conversationId })
     })
 
-    // Get online users
+    // Online status — only for users the requester actually chats with.
     socket.on('get:online', () => {
-      const online = [...onlineUsers.keys()]
-      socket.emit('online:list', online)
+      getContacts(userId)
+        .then((contacts) => {
+          const online = [...contacts].filter((id) => onlineUsers.has(id))
+          socket.emit('online:list', online)
+        })
+        .catch(() => socket.emit('online:list', []))
     })
 
     socket.on('disconnect', () => {
@@ -105,7 +133,13 @@ export function initSocket(httpServer: HttpServer): Server {
         sockets.delete(socket.id)
         if (sockets.size === 0) {
           onlineUsers.delete(userId)
-          io!.emit('user:offline', { userId })
+          getContacts(userId)
+            .then((contacts) => {
+              for (const contactId of contacts) {
+                io!.to(`user:${contactId}`).emit('user:offline', { userId })
+              }
+            })
+            .catch(() => { /* presence is best-effort */ })
         }
       }
       console.log(`[Socket] User ${userId} disconnected (${socket.id})`)

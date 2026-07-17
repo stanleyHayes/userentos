@@ -655,17 +655,17 @@ function NewConversationModal({
   currentUserId: string
 }) {
   const [search, setSearch] = useState('')
-  const { data: usersData } = useChatUsers()
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const { data: usersData, isFetching } = useChatUsers(debouncedSearch)
   const createConversation = useCreateConversation()
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const allUsers = usersData?.items ?? []
-  const filteredUsers = allUsers.filter((u) => {
-    if (u.id === currentUserId) return false
-    if (!search) return true
-    const name = `${u.firstName} ${u.lastName}`.toLowerCase()
-    const email = u.email.toLowerCase()
-    return name.includes(search.toLowerCase()) || email.includes(search.toLowerCase())
-  })
+  const filteredUsers = allUsers.filter((u) => u.id !== currentUserId)
 
   const handleSelectUser = (participantId: string) => {
     createConversation.mutate(
@@ -688,7 +688,7 @@ function NewConversationModal({
           />
           <input
             type="text"
-            placeholder="Search users by name or email..."
+            placeholder="Search users by name (min 2 characters)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm bg-surface dark:bg-[#0c0e1a] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
@@ -696,7 +696,9 @@ function NewConversationModal({
         </div>
 
         <div className="max-h-72 overflow-y-auto space-y-1">
-          {filteredUsers.length === 0 ? (
+          {search.trim().length < 2 ? (
+            <p className="text-center text-sm text-muted dark:text-gray-500 py-6">Type at least 2 characters to search for users.</p>
+          ) : filteredUsers.length === 0 && !isFetching ? (
             <EmptyState preset="search" compact />
           ) : (
             filteredUsers.map((u) => (
@@ -714,9 +716,6 @@ function NewConversationModal({
                     {u.firstName} {u.lastName}
                   </p>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-muted dark:text-gray-500 truncate">
-                      {u.email}
-                    </span>
                     <Badge variant="muted" className="text-[10px]">
                       {u.activeRole.replace('_', ' ')}
                     </Badge>

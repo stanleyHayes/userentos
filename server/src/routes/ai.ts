@@ -21,8 +21,8 @@ const router = Router()
 const chatSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
-    content: z.string().min(1),
-  })),
+    content: z.string().min(1).max(4000),
+  })).min(1).max(50),
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 

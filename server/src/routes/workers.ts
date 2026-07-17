@@ -135,7 +135,7 @@ router.patch('/:id', authenticate, async (req, res) => {
   if (!worker) { error(res, 'Worker not found', 404); return }
 
   // Only allow updating own profile or admin
-  if (worker.userId !== req.user?.userId && !req.user?.roles?.includes('admin')) {
+  if (worker.userId !== req.user?.userId && !req.user?.roles?.includes('admin') && !req.user?.roles?.includes('super_admin')) {
     error(res, 'Unauthorized', 403); return
   }
 

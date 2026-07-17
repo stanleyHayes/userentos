@@ -19,6 +19,25 @@ const createDisputeSchema = z.object({
   description: z.string().min(10),
 })
 
+const updateStatusSchema = z.object({
+  status: z.enum(['filed', 'under_mediation', 'escalated', 'resolved', 'closed']).optional(),
+  mediationNotes: z.string().max(5000).optional(),
+  resolution: z.string().max(5000).optional(),
+  assignedTo: z.string().optional(),
+})
+
+// Allowed forward transitions — a dispute can't jump filed→closed, and a
+// closed/resolved dispute is terminal.
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  filed: ['under_mediation', 'escalated', 'resolved'],
+  under_mediation: ['escalated', 'resolved', 'closed'],
+  escalated: ['under_mediation', 'resolved', 'closed'],
+  resolved: ['closed'],
+  closed: [],
+}
+
+const MEDIATOR_ROLES = ['government', 'admin', 'super_admin', 'legal_officer']
+
 export const disputeController = {
   list: async (req: Request, res: Response) => {
     const userId = req.user!.userId
@@ -26,9 +45,16 @@ export const disputeController = {
     const isGov = roles.includes('government') || roles.includes('admin') || roles.includes('super_admin') || roles.includes('legal_officer')
 
     const filter = isGov ? {} : { $or: [{ filedBy: userId }, { filedAgainst: userId }] }
-    const disputes = await Dispute.find(filter).sort({ createdAt: -1 }).lean()
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const skip = (page - 1) * pageSize
+
+    const [total, disputes] = await Promise.all([
+      Dispute.countDocuments(filter),
+      Dispute.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    ])
     const items = disputes.map((d) => ({ ...d, id: (d._id as Types.ObjectId).toString() }))
-    success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+    success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
   },
 
   getById: async (req: Request, res: Response) => {
@@ -73,6 +99,7 @@ export const disputeController = {
       filedBy: userId,
       status: 'filed',
       evidence: [],
+      previousPropertyStatus: property.status,
     })
 
     await Property.findByIdAndUpdate(parsed.data.propertyId, { status: 'under_dispute' })
@@ -90,11 +117,30 @@ export const disputeController = {
     const dispute = await Dispute.findById(param(req.params.id))
     if (!dispute) { error(res, 'Dispute not found', 404); return }
 
-    const { status, mediationNotes, resolution, assignedTo } = req.body
-    if (status) dispute.status = status
+    const parsed = updateStatusSchema.safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+    const { status, mediationNotes, resolution, assignedTo } = parsed.data
+
+    if (status) {
+      const allowed = ALLOWED_TRANSITIONS[dispute.status] ?? []
+      if (dispute.status !== status && !allowed.includes(status)) {
+        error(res, `Cannot move a ${dispute.status} dispute to ${status}`, 409)
+        return
+      }
+      dispute.status = status
+    }
     if (mediationNotes) dispute.mediationNotes = mediationNotes
     if (resolution) dispute.resolution = resolution
-    if (assignedTo) dispute.assignedTo = assignedTo
+    if (assignedTo) {
+      // The assignee must be a real user who can actually mediate.
+      const assignee = await User.findById(assignedTo).select('roles').lean()
+      if (!assignee || !(assignee.roles ?? []).some((r) => MEDIATOR_ROLES.includes(r))) {
+        error(res, 'assignedTo must be a government, legal, or admin user')
+        return
+      }
+      dispute.assignedTo = assignedTo
+    }
     await dispute.save()
 
     // Notify both parties of status change
@@ -102,6 +148,14 @@ export const disputeController = {
       notifyDisputeUpdate(dispute.filedBy, dispute.title, status)
       notifyDisputeUpdate(dispute.filedAgainst, dispute.title, status)
       if (status === 'resolved' || status === 'closed') {
+        // Restore the property's market status — previously a resolved dispute
+        // left the property stuck at under_dispute forever.
+        const activeAgreement = await Agreement.exists({ propertyId: dispute.propertyId, status: 'active' })
+        const restoreTo = activeAgreement ? 'occupied' : (dispute.previousPropertyStatus === 'under_dispute' ? 'available' : (dispute.previousPropertyStatus ?? 'available'))
+        await Property.updateOne(
+          { _id: dispute.propertyId, status: 'under_dispute' },
+          { $set: { status: restoreTo } },
+        )
         dispatchWebhook('dispute.resolved', { disputeId: dispute._id.toString(), title: dispute.title, status }, { userId: dispute.filedBy })
       }
     }

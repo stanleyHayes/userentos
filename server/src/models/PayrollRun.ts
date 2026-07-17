@@ -62,4 +62,8 @@ const payrollRunSchema = new Schema<IPayrollRun>({
   failureReason: String,
 }, { timestamps: true })
 
+// One run per employer per period — without this, two runs for the same period
+// deduct every mandate twice.
+payrollRunSchema.index({ employerId: 1, periodLabel: 1 }, { unique: true })
+
 export const PayrollRun = mongoose.model<IPayrollRun>('PayrollRun', payrollRunSchema)

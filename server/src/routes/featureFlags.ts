@@ -61,7 +61,7 @@ router.patch('/:key', authenticate, requireRole('super_admin'), async (req, res)
     enabled: z.boolean().optional(),
     rolloutPct: z.number().min(0).max(100).optional(),
     enabledForUserIds: z.array(z.string()).optional(),
-    enabledForRoles: z.array(z.string()).optional(),
+    enabledForRoles: z.array(roleEnum).optional(),
     disabledForUserIds: z.array(z.string()).optional(),
   })
 
