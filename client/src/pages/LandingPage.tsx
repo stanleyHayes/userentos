@@ -10,6 +10,18 @@ import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
+  AuroraBackground,
+  CountUp,
+  CursorGlow,
+  GradientText,
+  Magnetic,
+  Marquee,
+  Parallax,
+  SplitText,
+  TiltCard,
+} from '@/components/landing/LandingEffects'
+import { Animate } from '@/components/ui/Animate'
+import {
   ArrowRight,
   Banknote,
   BarChart3,
@@ -178,10 +190,12 @@ const workflow = [
 
 const LANDING_SECTION_IDS = ['features', 'roles', 'operations', 'rights'] as const
 
-function Metric({ value, label }: { value: string; label: string }) {
+function Metric({ value, label, numeric, suffix = '' }: { value: string; label: string; numeric?: number; suffix?: string }) {
   return (
     <div>
-      <p className="font-display text-3xl font-extrabold text-white md:text-4xl">{value}</p>
+      <p className="font-display text-3xl font-extrabold text-white md:text-4xl">
+        {numeric !== undefined ? <CountUp value={numeric} suffix={suffix} /> : value}
+      </p>
       <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/45">{label}</p>
     </div>
   )
@@ -454,8 +468,12 @@ export function LandingPage() {
       <header className="relative min-h-[92vh] overflow-hidden bg-[#0a0d12] pt-16 text-white">
         <img src="/og-image.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen" />
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0d12]/68 via-[#14121f]/90 to-[#0a0d12]" />
+        <AuroraBackground />
         <div className="absolute inset-0 opacity-[0.075]" style={{ backgroundImage: 'linear-gradient(rgba(196,181,253,0.9) 1px, transparent 1px), linear-gradient(90deg, rgba(45,212,191,0.7) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
-        <LogoWatermark tone="brand" className="right-[-4rem] top-1/2 hidden size-[30rem] -translate-y-1/2 rotate-[-8deg] lg:block" />
+        <CursorGlow />
+        <Parallax speed={0.12} className="absolute right-[-4rem] top-1/2 hidden -translate-y-1/2 lg:block">
+          <LogoWatermark tone="brand" className="size-[30rem] rotate-[-8deg]" />
+        </Parallax>
         <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col justify-center px-6 py-20">
           <div className="max-w-4xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-semibold text-white/76 backdrop-blur">
@@ -463,26 +481,44 @@ export function LandingPage() {
               Ghana rental infrastructure for every role
             </div>
             <h1 className="font-display text-5xl font-extrabold leading-[0.98] tracking-normal md:text-7xl lg:text-8xl">
-              <span className="text-highlight">RentOS</span> Ghana
+              <GradientText><SplitText text="RentOS" immediate charDelay={70} /></GradientText>{' '}
+              <SplitText text="Ghana" immediate charDelay={70} startDelay={420} />
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/64 md:text-xl">
               The app now connects discovery, tenant passports, legal agreements, rent payments, savings, financing, payroll mandates, insurance, maintenance, worker bookings, AI listing tools, and platform administration.
             </p>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Link to="/register"><Button size="lg" className="w-full bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33] sm:w-auto">Create account <ArrowRight size={18} /></Button></Link>
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33] sm:w-auto">Create account <ArrowRight size={18} /></Button></Link></Magnetic>
               <Link to="/registry"><Button variant="outline" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">Search registry <Search size={18} /></Button></Link>
               <a href="#features"><Button variant="ghost" size="lg" className="w-full text-white/80 hover:bg-white/10 hover:text-white sm:w-auto">Explore features</Button></a>
             </div>
           </div>
 
           <div className="mt-14 grid max-w-5xl gap-4 border-t border-white/10 pt-8 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric value="9+" label="Product modules live" />
-            <Metric value="9" label="Role workspaces" />
-            <Metric value="4" label="Local language flows" />
+            <Metric value="9+" numeric={9} suffix="+" label="Product modules live" />
+            <Metric value="9" numeric={9} label="Role workspaces" />
+            <Metric value="4" numeric={4} label="Local language flows" />
             <Metric value="1" label="Shared rental record" />
           </div>
         </div>
       </header>
+
+      {/* Capability ticker — infinite marquee */}
+      <div className="border-y border-white/8 bg-[#0a0d12] py-4 text-white/55">
+        <Marquee
+          duration={36}
+          items={[
+            'Verified listings', 'Digital leases', 'Mobile-money rent', 'Tenant passport',
+            'RentGuard savings', 'Payroll mandates', 'Financing contracts', 'Insurance marketplace',
+            'Worker bookings', 'AI listing writer', 'Dispute mediation', 'Public registry',
+          ].map((label) => (
+            <span key={label} className="inline-flex items-center gap-2.5 text-xs font-bold uppercase tracking-[0.18em]">
+              <span className="h-1.5 w-1.5 rounded-full bg-secondary shadow-[0_0_10px_rgba(245,158,11,0.8)]" />
+              {label}
+            </span>
+          ))}
+        />
+      </div>
 
       <section id="features" className="relative mx-auto max-w-7xl px-6 py-24 md:py-28">
         <WatermarkConstellation icons={[Building2, FileSignature, Banknote, ShieldCheck, Scale]} />
@@ -492,24 +528,27 @@ export function LandingPage() {
           description="RentOS is operating as a connected rental system. The public page now points to the same surfaces available inside the app."
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {platformModules.map((item) => (
-            <Link
-              key={item.title}
-              to={item.href}
-              className="group surface-card surface-card-interactive flex min-h-[210px] flex-col justify-between rounded-2xl border p-5"
-              style={{ borderTopWidth: 3, borderTopColor: item.accent, background: `linear-gradient(135deg, ${item.accent}10, var(--rentos-card) 58%)` }}
-            >
-              <div>
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: `${item.accent}18`, color: item.accent }}>
-                  {item.icon}
-                </span>
-                <h3 className="mt-5 font-display text-lg font-extrabold text-[#0f1f33] dark:text-white">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted dark:text-gray-400">{item.description}</p>
-              </div>
-              <span className="mt-5 inline-flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-300">
-                View surface <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </Link>
+          {platformModules.map((item, i) => (
+            <Animate key={item.title} animation="fade-up" delay={(i % 3) * 100}>
+              <TiltCard maxTilt={5} className="h-full">
+                <Link
+                  to={item.href}
+                  className="group surface-card surface-card-interactive flex h-full min-h-[210px] flex-col justify-between rounded-2xl border p-5"
+                  style={{ borderTopWidth: 3, borderTopColor: item.accent, background: `linear-gradient(135deg, ${item.accent}10, var(--rentos-card) 58%)` }}
+                >
+                  <div>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: `${item.accent}18`, color: item.accent }}>
+                      {item.icon}
+                    </span>
+                    <h3 className="mt-5 font-display text-lg font-extrabold text-[#0f1f33] dark:text-white">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted dark:text-gray-400">{item.description}</p>
+                  </div>
+                  <span className="mt-5 inline-flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-300">
+                    View surface <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              </TiltCard>
+            </Animate>
           ))}
         </div>
       </section>
@@ -523,17 +562,19 @@ export function LandingPage() {
             description="The product is organized around tenant, landlord, financier, employer, essential worker, government, and platform-admin workflows."
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {roleRoutes.map((role) => (
-              <article key={role.title} className="surface-card flex h-full flex-col rounded-2xl border p-5">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-300">{role.icon}</span>
-                <h3 className="mt-5 font-display text-base font-extrabold text-[#0f1f33] dark:text-white">{role.title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-muted dark:text-gray-400">{role.description}</p>
-                <div className="mt-5 flex flex-wrap gap-1.5">
-                  {role.checks.map((check) => (
-                    <span key={check} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary shadow-sm dark:bg-white/[0.06] dark:text-blue-300">{check}</span>
-                  ))}
-                </div>
-              </article>
+            {roleRoutes.map((role, i) => (
+              <Animate key={role.title} animation="fade-up" delay={(i % 3) * 100}>
+                <article className="surface-card flex h-full flex-col rounded-2xl border p-5">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-300">{role.icon}</span>
+                  <h3 className="mt-5 font-display text-base font-extrabold text-[#0f1f33] dark:text-white">{role.title}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-muted dark:text-gray-400">{role.description}</p>
+                  <div className="mt-5 flex flex-wrap gap-1.5">
+                    {role.checks.map((check) => (
+                      <span key={check} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary shadow-sm dark:bg-white/[0.06] dark:text-blue-300">{check}</span>
+                    ))}
+                  </div>
+                </article>
+              </Animate>
             ))}
           </div>
         </div>
@@ -564,14 +605,16 @@ export function LandingPage() {
           <div className="rounded-3xl bg-[#0f1f33] p-5 text-white shadow-2xl shadow-primary/20">
             <div className="grid gap-3 sm:grid-cols-2">
               {workflow.map((step, index) => (
-                <div key={step.title} className="rounded-2xl border border-white/10 bg-white/[0.07] p-5">
-                  <div className="mb-5 flex items-center justify-between">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-secondary">{step.icon}</span>
-                    <span className="font-mono text-xs font-bold text-white/34">0{index + 1}</span>
+                <Animate key={step.title} animation="scale-in" delay={index * 100}>
+                  <div className="h-full rounded-2xl border border-white/10 bg-white/[0.07] p-5">
+                    <div className="mb-5 flex items-center justify-between">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-secondary">{step.icon}</span>
+                      <span className="font-mono text-xs font-bold text-white/34">0{index + 1}</span>
+                    </div>
+                    <h3 className="font-display text-lg font-extrabold">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-white/54">{step.description}</p>
                   </div>
-                  <h3 className="font-display text-lg font-extrabold">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/54">{step.description}</p>
-                </div>
+                </Animate>
               ))}
             </div>
           </div>

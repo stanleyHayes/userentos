@@ -615,3 +615,125 @@ h1.font-display, h2.font-display {
 .prose-rentos th { font-weight: 700; background: #f8fafc; }
 .dark .prose-rentos th, .dark .prose-rentos td { border-color: #252a3a; }
 .dark .prose-rentos th { background: #161927; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Landing premium effects (see components/landing/LandingEffects)
+   All motion collapses globally under prefers-reduced-motion above.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Aurora background — drifting blurred color fields */
+.aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.4;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.aurora-blob-1 {
+  width: 44rem; height: 44rem; top: -18rem; left: -10rem;
+  background: radial-gradient(circle at center, rgba(45, 90, 142, 0.85), transparent 65%);
+  animation: aurora-drift-1 26s ease-in-out infinite alternate;
+}
+.aurora-blob-2 {
+  width: 36rem; height: 36rem; top: 10%; right: -12rem;
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.55), transparent 65%);
+  animation: aurora-drift-2 32s ease-in-out infinite alternate;
+}
+.aurora-blob-3 {
+  width: 30rem; height: 30rem; bottom: -14rem; left: 30%;
+  background: radial-gradient(circle at center, rgba(20, 184, 166, 0.45), transparent 65%);
+  animation: aurora-drift-3 38s ease-in-out infinite alternate;
+}
+.aurora-blob-4 {
+  width: 24rem; height: 24rem; top: 35%; left: 55%;
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.32), transparent 65%);
+  animation: aurora-drift-2 30s ease-in-out infinite alternate-reverse;
+}
+@keyframes aurora-drift-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(9rem, 6rem) scale(1.15); }
+}
+@keyframes aurora-drift-2 {
+  from { transform: translate(0, 0) scale(1.1); }
+  to { transform: translate(-8rem, 5rem) scale(0.95); }
+}
+@keyframes aurora-drift-3 {
+  from { transform: translate(0, 0) scale(0.95); }
+  to { transform: translate(6rem, -7rem) scale(1.12); }
+}
+
+/* Gradient animated text */
+.gradient-text {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24, #60a5fa, #2dd4bf, #f59e0b);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-text-pan 9s linear infinite;
+}
+@keyframes gradient-text-pan {
+  from { background-position: 0% 50%; }
+  to { background-position: 300% 50%; }
+}
+
+/* Split-text staggered character reveal */
+.split-text { display: inline; }
+.split-text-word { display: inline-block; white-space: nowrap; }
+.split-text-char {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.55em) rotate(4deg) scale(0.94);
+}
+.split-text-space { width: 0.28em; }
+.split-text-visible .split-text-char {
+  animation: split-char-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+/* After the reveal completes, chars return to plain rendering — required for
+   background-clip:text (gradient text) to paint on the parent. */
+.split-text-settled .split-text-char {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+@keyframes split-char-in {
+  /* End at `none`, not identity functions: a lingering transform on the chars
+     breaks background-clip:text on the parent (gradient text goes dark). */
+  to { opacity: 1; transform: none; }
+}
+
+/* Magnetic wrapper */
+.magnetic { display: inline-block; will-change: transform; }
+
+/* Marquee */
+.marquee { display: flex; overflow: hidden; user-select: none; }
+.marquee-row {
+  display: flex; flex-shrink: 0; align-items: center; gap: 2.5rem;
+  padding-right: 2.5rem;
+  animation: marquee-scroll linear infinite;
+  will-change: transform;
+}
+.marquee-item { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.6rem; }
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+/* Cursor glow (spotlight) */
+.cursor-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  opacity: var(--glow-opacity, 0);
+  transition: opacity 0.5s ease;
+  background: radial-gradient(
+    480px circle at var(--glow-x, 50%) var(--glow-y, 40%),
+    rgba(96, 165, 250, 0.14),
+    rgba(245, 158, 11, 0.05) 42%,
+    transparent 68%
+  );
+}
+
+/* Parallax + tilt */
+.parallax { will-change: transform; }
+.tilt-card { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease; transform-style: preserve-3d; will-change: transform; }
