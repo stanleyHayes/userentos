@@ -12,28 +12,6 @@ const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /* ────────────────────────────────────────────────
-   Aurora — Vercel/Linear-style animated mesh-gradient background.
-   Slow drifting blurred color fields behind the hero.
-──────────────────────────────────────────────── */
-export function AuroraBackground({ className }: { className?: string }) {
-  return (
-    <div aria-hidden="true" className={cn('aurora', className)}>
-      <span className="aurora-blob aurora-blob-1" />
-      <span className="aurora-blob aurora-blob-2" />
-      <span className="aurora-blob aurora-blob-3" />
-      <span className="aurora-blob aurora-blob-4" />
-    </div>
-  )
-}
-
-/* ────────────────────────────────────────────────
-   GradientText — animated gradient sweep across text.
-──────────────────────────────────────────────── */
-export function GradientText({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('gradient-text', className)}>{children}</span>
-}
-
-/* ────────────────────────────────────────────────
    SplitText — staggered character reveal (rise + fade per char,
    words kept unbroken). Fires when scrolled into view (or immediately).
 ──────────────────────────────────────────────── */
@@ -136,70 +114,7 @@ export function Magnetic({
   )
 }
 
-/* ────────────────────────────────────────────────
-   Marquee — infinite ticker; content duplicated for a seamless loop.
-──────────────────────────────────────────────── */
-export function Marquee({
-  items,
-  className,
-  duration = 32,
-  reverse = false,
-}: {
-  items: ReactNode[]
-  className?: string
-  duration?: number
-  reverse?: boolean
-}) {
-  const row = (key: string) => (
-    <div key={key} aria-hidden={key === 'b'} className="marquee-row" style={{ animationDuration: `${duration}s`, animationDirection: reverse ? 'reverse' : undefined }}>
-      {items.map((item, i) => (
-        <span key={i} className="marquee-item">{item}</span>
-      ))}
-    </div>
-  )
-  return (
-    <div className={cn('marquee', className)}>
-      {row('a')}
-      {row('b')}
-    </div>
-  )
-}
 
-/* ────────────────────────────────────────────────
-   CursorGlow — a soft radial highlight that follows the pointer over
-   the hero (spotlight effect). Pointer-events-none, cheap to run.
-──────────────────────────────────────────────── */
-export function CursorGlow({ className }: { className?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const frame = useRef(0)
-
-  useEffect(() => {
-    if (reducedMotion()) return
-    const parent = ref.current?.parentElement
-    if (!parent) return
-
-    const onMove = (e: PointerEvent) => {
-      cancelAnimationFrame(frame.current)
-      frame.current = requestAnimationFrame(() => {
-        const rect = parent.getBoundingClientRect()
-        ref.current?.style.setProperty('--glow-x', `${e.clientX - rect.left}px`)
-        ref.current?.style.setProperty('--glow-y', `${e.clientY - rect.top}px`)
-        ref.current?.style.setProperty('--glow-opacity', '1')
-      })
-    }
-    const onLeave = () => ref.current?.style.setProperty('--glow-opacity', '0')
-
-    parent.addEventListener('pointermove', onMove, { passive: true })
-    parent.addEventListener('pointerleave', onLeave)
-    return () => {
-      parent.removeEventListener('pointermove', onMove)
-      parent.removeEventListener('pointerleave', onLeave)
-      cancelAnimationFrame(frame.current)
-    }
-  }, [])
-
-  return <div ref={ref} aria-hidden="true" className={cn('cursor-glow', className)} />
-}
 
 /* ────────────────────────────────────────────────
    Parallax — translates children at a fraction of scroll position.

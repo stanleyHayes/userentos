@@ -3,19 +3,15 @@ import { Link, useLocation } from 'react-router-dom'
 import type { BlogPost } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Logo } from '@/components/ui/Logo'
-import { LogoWatermark, WatermarkConstellation } from '@/components/ui/Watermark'
+import { LogoWatermark } from '@/components/ui/Watermark'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Footer } from '@/components/layout/Footer'
 import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
-  AuroraBackground,
   CountUp,
-  CursorGlow,
-  GradientText,
   Magnetic,
-  Marquee,
   Parallax,
   SplitText,
   TiltCard,
@@ -38,8 +34,7 @@ import {
   Hammer,
   Landmark,
   Loader2,
-  LockKeyhole,
-  MapPin,
+    MapPin,
   Menu,
   Phone,
   PiggyBank,
@@ -50,7 +45,6 @@ import {
   ShieldCheck,
   ShieldPlus,
   Sparkles,
-  Star,
   Users,
   Wand2,
   X,
@@ -82,63 +76,54 @@ const platformModules = [
     description: 'Search public property records, browse listings, save homes, and review property details before applying.',
     icon: <Search size={22} />,
     href: '/registry',
-    accent: '#60a5fa',
   },
   {
     title: 'Tenant passport and credit',
     description: 'Build a verified tenant profile with documents, references, rent history, achievements, and credit scoring.',
     icon: <ShieldCheck size={22} />,
     href: '/register',
-    accent: '#10b981',
   },
   {
     title: 'Agreements, payments, and documents',
     description: 'Run digital leases, payment records, receipts, document vaults, applications, and disputes in one flow.',
     icon: <FileSignature size={22} />,
     href: '/register',
-    accent: '#f59e0b',
   },
   {
     title: 'RentGuard savings',
     description: 'Help tenants plan ahead with rent goals, savings progress, streaks, and payment readiness signals.',
     icon: <PiggyBank size={22} />,
     href: '/register',
-    accent: '#14b8a6',
   },
   {
     title: 'Financing and collections',
     description: 'Support rent advances, deposit loans, offers, applications, contracts, mandates, and collections reviews.',
     icon: <Banknote size={22} />,
     href: '/register',
-    accent: '#22c55e',
   },
   {
     title: 'Employer payroll mandates',
     description: 'Connect employers to employee records, payroll runs, salary deductions, and mandate approvals.',
     icon: <BriefcaseBusiness size={22} />,
     href: '/register',
-    accent: '#8b5cf6',
   },
   {
     title: 'Insurance marketplace',
     description: 'Compare renter, landlord, rent guarantee, property damage, and tenant default cover with claims tracking.',
     icon: <ShieldPlus size={22} />,
     href: '/register',
-    accent: '#a78bfa',
   },
   {
     title: 'Maintenance and service work',
     description: 'Track maintenance requests, vendors, repair schedules, worker marketplace bookings, and job history.',
     icon: <Hammer size={22} />,
     href: '/register',
-    accent: '#f97316',
   },
   {
     title: 'AI writing assistant',
     description: 'Generate, polish, translate, and score property copy so listings launch with stronger information quality.',
     icon: <Wand2 size={22} />,
     href: '/login',
-    accent: '#ec4899',
   },
 ]
 
@@ -201,13 +186,10 @@ function Metric({ value, label, numeric, suffix = '' }: { value: string; label: 
   )
 }
 
-function SectionHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+function SectionHeader({ title, description }: { title: string; description: string }) {
   return (
     <div className="mx-auto mb-12 max-w-3xl text-center">
-      <span className="eyebrow is-centered">
-        {eyebrow}
-      </span>
-      <h2 className="mt-5 font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">{title}</h2>
+      <h2 className="font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">{title}</h2>
       <p className="mt-4 text-base leading-relaxed text-muted dark:text-gray-400 md:text-lg">{description}</p>
     </div>
   )
@@ -367,11 +349,11 @@ export function LandingPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle className="hidden rounded-full text-white hover:bg-white/10 sm:block" />
             {showDashboard ? (
-              <Link to="/dashboard"><Button size="sm" className="bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33]">Dashboard <ArrowRight size={14} /></Button></Link>
+              <Link to="/dashboard"><Button size="sm" className="bg-secondary hover:bg-amber-400 text-[#0f1f33]">Dashboard <ArrowRight size={14} /></Button></Link>
             ) : (
               <>
                 <Link to="/login" className="hidden sm:block"><Button variant="ghost" size="sm" className="text-white/80 hover:bg-white/10 hover:text-white">Sign In</Button></Link>
-                <Link to="/register"><Button size="sm" className="bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33]">Get Started</Button></Link>
+                <Link to="/register"><Button size="sm" className="bg-secondary hover:bg-amber-400 text-[#0f1f33]">Get Started</Button></Link>
               </>
             )}
             <button
@@ -389,10 +371,8 @@ export function LandingPage() {
       <div className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity md:hidden ${menuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`} onClick={() => setMenuOpen(false)} />
       <aside
         className={`fixed right-0 top-0 z-[70] flex h-full w-80 flex-col overflow-hidden transition-transform duration-300 md:hidden ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ background: 'linear-gradient(160deg, #0a0d12 0%, #171122 52%, #10231f 100%)' }}
+        style={{ background: '#0a0d12' }}
       >
-        <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-
         <div className="relative flex items-center justify-between border-b border-white/10 px-6 py-5">
           <Logo size={28} theme="light" />
           <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-xl bg-white/10 p-2 text-white transition-colors hover:bg-white/20"><X size={18} /></button>
@@ -449,12 +429,12 @@ export function LandingPage() {
             <ThemeToggle className="rounded-full text-white hover:bg-white/10" />
           </div>
           {showDashboard ? (
-            <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-secondary to-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
+            <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-secondary hover:bg-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
               Go to Dashboard <ArrowRight size={15} />
             </Link>
           ) : (
             <div className="space-y-2">
-              <Link to="/register" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-secondary to-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
+              <Link to="/register" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-secondary hover:bg-amber-400 py-3 text-sm font-bold text-[#0f1f33] transition-opacity hover:opacity-90">
                 Get Started Free <ArrowRight size={15} />
               </Link>
               <Link to="/login" onClick={() => setMenuOpen(false)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] py-3 text-sm font-bold text-white transition-colors hover:bg-white/10">
@@ -466,29 +446,20 @@ export function LandingPage() {
       </aside>
 
       <header className="relative min-h-[92vh] overflow-hidden bg-[#0a0d12] pt-16 text-white">
-        <img src="/og-image.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0d12]/68 via-[#14121f]/90 to-[#0a0d12]" />
-        <AuroraBackground />
-        <div className="absolute inset-0 opacity-[0.075]" style={{ backgroundImage: 'linear-gradient(rgba(196,181,253,0.9) 1px, transparent 1px), linear-gradient(90deg, rgba(45,212,191,0.7) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
-        <CursorGlow />
-        <Parallax speed={0.12} className="absolute right-[-4rem] top-1/2 hidden -translate-y-1/2 lg:block">
+        <Parallax speed={0.12} className="absolute right-[-4rem] top-1/2 hidden -translate-y-1/2 opacity-60 lg:block">
           <LogoWatermark tone="brand" className="size-[30rem] rotate-[-8deg]" />
         </Parallax>
         <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col justify-center px-6 py-20">
           <div className="max-w-4xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-semibold text-white/76 backdrop-blur">
-              <Sparkles size={15} className="text-secondary" />
-              Ghana rental infrastructure for every role
-            </div>
             <h1 className="font-display text-5xl font-extrabold leading-[0.98] tracking-normal md:text-7xl lg:text-8xl">
-              <GradientText><SplitText text="RentOS" immediate charDelay={70} /></GradientText>{' '}
-              <SplitText text="Ghana" immediate charDelay={70} startDelay={420} />
+              <SplitText text="RentOS" immediate charDelay={70} />{' '}
+              <span className="text-secondary"><SplitText text="Ghana" immediate charDelay={70} startDelay={420} /></span>
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/64 md:text-xl">
-              The app now connects discovery, tenant passports, legal agreements, rent payments, savings, financing, payroll mandates, insurance, maintenance, worker bookings, AI listing tools, and platform administration.
+              One platform for renting in Ghana: verified listings, digital leases, mobile-money rent, tenant passports, savings, financing, payroll, insurance, and maintenance.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33] sm:w-auto">Create account <ArrowRight size={18} /></Button></Link></Magnetic>
+              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Create account <ArrowRight size={18} /></Button></Link></Magnetic>
               <Link to="/registry"><Button variant="outline" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">Search registry <Search size={18} /></Button></Link>
               <a href="#features"><Button variant="ghost" size="lg" className="w-full text-white/80 hover:bg-white/10 hover:text-white sm:w-auto">Explore features</Button></a>
             </div>
@@ -503,27 +474,8 @@ export function LandingPage() {
         </div>
       </header>
 
-      {/* Capability ticker — infinite marquee */}
-      <div className="border-y border-white/8 bg-[#0a0d12] py-4 text-white/55">
-        <Marquee
-          duration={36}
-          items={[
-            'Verified listings', 'Digital leases', 'Mobile-money rent', 'Tenant passport',
-            'RentGuard savings', 'Payroll mandates', 'Financing contracts', 'Insurance marketplace',
-            'Worker bookings', 'AI listing writer', 'Dispute mediation', 'Public registry',
-          ].map((label) => (
-            <span key={label} className="inline-flex items-center gap-2.5 text-xs font-bold uppercase tracking-[0.18em]">
-              <span className="h-1.5 w-1.5 rounded-full bg-secondary shadow-[0_0_10px_rgba(245,158,11,0.8)]" />
-              {label}
-            </span>
-          ))}
-        />
-      </div>
-
       <section id="features" className="relative mx-auto max-w-7xl px-6 py-24 md:py-28">
-        <WatermarkConstellation icons={[Building2, FileSignature, Banknote, ShieldCheck, Scale]} />
         <SectionHeader
-          eyebrow="Current app coverage"
           title="More than a listing site"
           description="RentOS is operating as a connected rental system. The public page now points to the same surfaces available inside the app."
         />
@@ -534,10 +486,9 @@ export function LandingPage() {
                 <Link
                   to={item.href}
                   className="group surface-card surface-card-interactive flex h-full min-h-[210px] flex-col justify-between rounded-2xl border p-5"
-                  style={{ borderTopWidth: 3, borderTopColor: item.accent, background: `linear-gradient(135deg, ${item.accent}10, var(--rentos-card) 58%)` }}
                 >
                   <div>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: `${item.accent}18`, color: item.accent }}>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f1f33]/[0.06] text-[#0f1f33] dark:bg-white/[0.08] dark:text-white/85">
                       {item.icon}
                     </span>
                     <h3 className="mt-5 font-display text-lg font-extrabold text-[#0f1f33] dark:text-white">{item.title}</h3>
@@ -554,10 +505,8 @@ export function LandingPage() {
       </section>
 
       <section id="roles" className="relative overflow-hidden bg-surface py-24 dark:bg-[#0c0e1a] md:py-28">
-        <div aria-hidden="true" className="bg-dotgrid animate-thread-drift pointer-events-none absolute inset-0 opacity-60" />
         <div className="relative mx-auto max-w-7xl px-6">
           <SectionHeader
-            eyebrow="Role-aware"
             title="Every participant gets the right workspace"
             description="The product is organized around tenant, landlord, financier, employer, essential worker, government, and platform-admin workflows."
           />
@@ -565,7 +514,7 @@ export function LandingPage() {
             {roleRoutes.map((role, i) => (
               <Animate key={role.title} animation="fade-up" delay={(i % 3) * 100}>
                 <article className="surface-card flex h-full flex-col rounded-2xl border p-5">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-300">{role.icon}</span>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0f1f33]/[0.06] text-[#0f1f33] dark:bg-white/[0.08] dark:text-white/85">{role.icon}</span>
                   <h3 className="mt-5 font-display text-base font-extrabold text-[#0f1f33] dark:text-white">{role.title}</h3>
                   <p className="mt-2 flex-1 text-sm leading-relaxed text-muted dark:text-gray-400">{role.description}</p>
                   <div className="mt-5 flex flex-wrap gap-1.5">
@@ -583,8 +532,7 @@ export function LandingPage() {
       <section id="operations" className="mx-auto max-w-7xl px-6 py-24 md:py-28">
         <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
-            <span className="inline-flex rounded-full bg-accent/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent">Operating model</span>
-            <h2 className="mt-5 font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">A shared rental record from search to service.</h2>
+            <h2 className="font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">A shared rental record from search to service.</h2>
             <p className="mt-5 text-base leading-relaxed text-muted dark:text-gray-400 md:text-lg">
               The strongest redesign opportunity was presenting RentOS as one workflow, not many isolated features. The app already supports the record, transaction, service, and compliance layers needed for a modern rental platform.
             </p>
@@ -624,7 +572,6 @@ export function LandingPage() {
       <section id="rights" className="bg-surface py-24 dark:bg-[#0c0e1a] md:py-28">
         <div className="mx-auto max-w-5xl px-6">
           <SectionHeader
-            eyebrow="Know your rights"
             title="Ask if a rental situation looks abusive"
             description="The home page still exposes the AI rights checker so renters can test a situation against Ghanaian rental-law guidance."
           />
@@ -716,8 +663,7 @@ export function LandingPage() {
         <div className="rounded-3xl bg-[#0f1f33] p-6 text-white md:p-10">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white/60"><LockKeyhole size={14} /> Trust layer</span>
-              <h2 className="mt-5 font-display text-3xl font-extrabold leading-tight md:text-5xl">Compliance, finance, and service records in one admin view.</h2>
+              <h2 className="font-display text-3xl font-extrabold leading-tight md:text-5xl">Compliance, finance, and service records in one admin view.</h2>
               <p className="mt-5 text-base leading-relaxed text-white/60">
                 Platform admins now have dedicated pages for financing operations, employer networks, maintenance command, and policy portfolios, plus packages, claims, feature flags, users, government reviews, and analytics.
               </p>
@@ -745,7 +691,6 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-primary dark:bg-blue-500/15 dark:text-blue-300"><BookOpen size={13} /> Blog</span>
                 <h2 className="mt-5 font-display text-3xl font-extrabold text-[#0f1f33] dark:text-white md:text-5xl">Rental insights and product updates</h2>
               </div>
               <Link to="/blog"><Button variant="outline">View all articles <ArrowRight size={14} /></Button></Link>
@@ -767,9 +712,6 @@ export function LandingPage() {
       <section className="relative overflow-hidden px-6 py-24 md:py-28">
         <LogoWatermark className="animate-parallax-drift -bottom-10 -right-8 hidden size-64 md:block" />
         <div className="mx-auto max-w-4xl text-center">
-          <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-            <Star size={24} />
-          </div>
           <h2 className="font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">Bring the whole rental workflow into RentOS.</h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted dark:text-gray-400">
             Start with a listing, a tenant passport, a payment record, or a policy review. The platform is built to connect the rest.
