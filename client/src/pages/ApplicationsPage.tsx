@@ -136,7 +136,7 @@ export function ApplicationsPage() {
           <button
             key={s || 'all'}
             data-tab-key={s || 'all'}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => { setStatusFilter(s); setPage(1) }}
             className={`relative z-10 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize ${
               statusFilter === s
                 ? 'text-primary dark:text-blue-400'

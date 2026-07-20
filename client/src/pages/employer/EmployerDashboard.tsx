@@ -29,7 +29,13 @@ export function EmployerDashboard() {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-  const totalActiveDeductions = activeMandates.reduce((sum, m) => sum + (m.amountType === 'fixed' ? m.amount : 0), 0)
+  // Percentage mandates are computed against the employee's net salary, mirroring server payroll math
+  const salaryByEmployeeId = new Map(employees.map((e) => [e.userId, e.netMonthlySalary]))
+  const totalActiveDeductions = activeMandates.reduce((sum, m) => {
+    if (m.amountType === 'fixed') return sum + m.amount
+    const salary = salaryByEmployeeId.get(m.employeeId)
+    return salary != null ? sum + (salary * m.amount) / 100 : sum
+  }, 0)
 
   if (!employer) {
     return (
@@ -124,7 +130,7 @@ export function EmployerDashboard() {
             </CardHeader>
             <CardContent>
               {runs.length === 0 ? (
-                <EmptyState preset="payments" title="No payroll runs yet" description="Run your first payroll to pay employees." action={{ label: 'Run Payroll', href: '/employer/payroll/new' }} compact />
+                <EmptyState preset="payments" title="No payroll runs yet" description="Run your first payroll to pay employees." action={{ label: 'Run Payroll', href: '/employer/payroll' }} compact />
               ) : (
                 <div className="space-y-1.5">
                   {runs.slice(0, 5).map((r) => (

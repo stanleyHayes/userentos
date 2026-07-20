@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useFinancingApplications, useDecideFinancingApplication } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
+import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { CheckCircle2, X } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
@@ -16,6 +17,7 @@ const statusVariant = {
 export function FinancingApplicationsPage() {
   const { data, isLoading } = useFinancingApplications()
   const decide = useDecideFinancingApplication()
+  const addToast = useToastStore((s) => s.addToast)
   const user = useAuthStore((s) => s.user)
   const isFinancier = user?.activeRole === 'financier'
   const items = data?.items ?? []
@@ -65,10 +67,10 @@ export function FinancingApplicationsPage() {
                 )}
                 {isFinancier && (a.status === 'submitted' || a.status === 'under_review') && (
                   <div className="flex items-center justify-end gap-2 mt-3">
-                    <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'reject', notes: 'Declined' })}>
+                    <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'reject', notes: 'Declined' }, { onError: (e) => addToast((e as Error).message, 'error') })}>
                       <X size={12} /> Reject
                     </Button>
-                    <Button size="sm" variant="accent" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'approve' })}>
+                    <Button size="sm" variant="accent" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'approve' }, { onError: (e) => addToast((e as Error).message, 'error') })}>
                       <CheckCircle2 size={12} /> Approve & generate contract
                     </Button>
                   </div>

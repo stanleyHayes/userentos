@@ -3,10 +3,15 @@ import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 
 let registered = false
+let generation = 0
 
 /** Reset on logout so the NEXT user on the same tab registers their own push. */
 useAuthStore.subscribe((state, prev) => {
-  if (prev.isAuthenticated && !state.isAuthenticated) registered = false
+  if (prev.isAuthenticated && !state.isAuthenticated) {
+    registered = false
+    // Invalidate any in-flight registration from the previous user
+    generation++
+  }
 })
 
 export function usePushNotifications() {
@@ -28,6 +33,9 @@ export function usePushNotifications() {
       return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)))
     }
 
+    // Snapshot the generation so a stale resolution can't set `registered`
+    const gen = generation
+
     async function registerPush() {
       try {
         const permission = await Notification.requestPermission()
@@ -45,7 +53,9 @@ export function usePushNotifications() {
             token: subscriptionJSON.endpoint,
             platform: 'web',
           })
-          registered = true
+          // A logout during the awaits above bumps the generation — don't let
+          // this stale resolution block the next user's registration.
+          if (generation === gen) registered = true
         }
       } catch {
         // Push not supported or permission denied — fail silently

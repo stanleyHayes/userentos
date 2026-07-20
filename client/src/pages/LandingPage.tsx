@@ -206,8 +206,8 @@ export function LandingPage() {
   const abuseResultRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const { isAuthenticated } = useAuthStore()
-  const hasHydrated = useAuthRehydrate()
-  const showDashboard = hasHydrated && isAuthenticated
+  const authReady = useAuthRehydrate()
+  const showDashboard = authReady && isAuthenticated
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''

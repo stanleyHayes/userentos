@@ -40,6 +40,9 @@ export function AddPropertyPage() {
   const [step, setStep] = useState(0)
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  // Set once the property row exists — a submit retry after an image-upload
+  // failure must not create a duplicate property.
+  const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
@@ -104,49 +107,56 @@ export function AddPropertyPage() {
     e.preventDefault()
 
     try {
-      const property = await createProperty.mutateAsync({
-        title: form.title,
-        description: form.description,
-        type: form.type as PropertyType,
-        address: {
-          street: form.street,
-          city: form.city,
-          region: form.region,
-          neighborhood: form.neighborhood || undefined,
-          digitalAddress: form.digitalAddress || undefined,
-        },
-        rentAmount: Number(form.rentAmount),
-        rentDurationMonths: Number(form.rentDurationMonths),
-        advanceMonths: Number(form.advanceMonths),
-        bedrooms: Number(form.bedrooms),
-        bathrooms: Number(form.bathrooms),
-        furnished: form.furnished,
-        parkingSpaces: Number(form.parkingSpaces),
-        floorArea: form.floorArea ? Number(form.floorArea) : undefined,
-        yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : undefined,
-        floor: form.floor ? Number(form.floor) : undefined,
-        availableFrom: form.availableFrom || undefined,
-        rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
-        amenities: form.amenities,
-        preferences: {
-          maxOccupants: Number(form.maxOccupants),
-          allowPets: form.allowPets,
-          allowSmokers: form.allowSmokers,
-          allowChildren: form.allowChildren,
-          preferredGender: form.preferredGender,
-          minAge: Number(form.minAge),
-          maxAge: Number(form.maxAge),
-          requireReferences: form.requireReferences,
-          requireEmploymentProof: form.requireEmploymentProof,
-        },
-      } as unknown as Partial<Property>)
-
-      // Upload images if any were selected
-      if (images.length > 0 && property && property.id) {
-        await uploadImages.mutateAsync({ id: property.id, files: images })
+      // Skip creation if a previous attempt already created the property —
+      // only the image upload is retried to avoid duplicate listings.
+      let propertyId = createdPropertyId
+      if (!propertyId) {
+        const property = await createProperty.mutateAsync({
+          title: form.title,
+          description: form.description,
+          type: form.type as PropertyType,
+          address: {
+            street: form.street,
+            city: form.city,
+            region: form.region,
+            neighborhood: form.neighborhood || undefined,
+            digitalAddress: form.digitalAddress || undefined,
+          },
+          rentAmount: Number(form.rentAmount),
+          rentDurationMonths: Number(form.rentDurationMonths),
+          advanceMonths: Number(form.advanceMonths),
+          bedrooms: Number(form.bedrooms),
+          bathrooms: Number(form.bathrooms),
+          furnished: form.furnished,
+          parkingSpaces: Number(form.parkingSpaces),
+          floorArea: form.floorArea ? Number(form.floorArea) : undefined,
+          yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : undefined,
+          floor: form.floor ? Number(form.floor) : undefined,
+          availableFrom: form.availableFrom || undefined,
+          rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
+          amenities: form.amenities,
+          preferences: {
+            maxOccupants: Number(form.maxOccupants),
+            allowPets: form.allowPets,
+            allowSmokers: form.allowSmokers,
+            allowChildren: form.allowChildren,
+            preferredGender: form.preferredGender,
+            minAge: Number(form.minAge),
+            maxAge: Number(form.maxAge),
+            requireReferences: form.requireReferences,
+            requireEmploymentProof: form.requireEmploymentProof,
+          },
+        } as unknown as Partial<Property>)
+        propertyId = property.id
+        setCreatedPropertyId(propertyId)
       }
 
-      navigate(`/properties/${property.id}`)
+      // Upload images if any were selected
+      if (images.length > 0) {
+        await uploadImages.mutateAsync({ id: propertyId, files: images })
+      }
+
+      navigate(`/properties/${propertyId}`)
     } catch {
       // Error is handled by mutation state
     }

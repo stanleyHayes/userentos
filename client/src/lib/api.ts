@@ -13,6 +13,8 @@ async function attemptRefresh(): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
+      // Bound the wait — a hung connection would otherwise leave callers spinning forever.
+      signal: AbortSignal.timeout(10_000),
     })
 
     if (!res.ok) return false

@@ -52,10 +52,22 @@ export function TenantHeroSection({ greeting, firstName, profileComplete, profil
       {/* === KPI strip === */}
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard icon={<FileText size={18} />} label="Agreements" value={String(a?.activeAgreements ?? 0)} sub="Active" accent="#3b82f6" href="/agreements" />
-        <DashboardMetricCard icon={<CreditCard size={18} />} label="Next Payment" value={formatCurrency(a?.nextPaymentAmount ?? 0)} sub={activeAgreement ? `Due ${formatDate(activeAgreement.endDate).split(' ').slice(0,2).join(' ')}` : 'No active lease'} accent="#f59e0b" href="/payments" />
+        <DashboardMetricCard icon={<CreditCard size={18} />} label="Next Payment" value={formatCurrency(a?.nextPaymentAmount ?? 0)} sub={activeAgreement ? `Due ${formatDate(nextPaymentDueDate(activeAgreement.startDate)).split(' ').slice(0,2).join(' ')}` : 'No active lease'} accent="#f59e0b" href="/payments" />
         <DashboardMetricCard icon={<PiggyBank size={18} />} label="Total Saved" value={formatCurrency(a?.totalSaved ?? 0)} sub={`${a?.savingsProgress ?? 0}% of target`} accent="#10b981" href="/savings" />
         <DashboardMetricCard icon={<Wallet size={18} />} label="Wallet" value={formatCurrency(a?.walletBalance ?? 0)} sub="Available balance" accent="#8b5cf6" href="/savings" />
       </div>
     </>
   )
+}
+
+// Next rent due date on the agreement's monthly cycle: the startDate day-of-month,
+// this month if that occurrence hasn't passed yet, otherwise next month.
+// Mirrors the rent-reminder math in the server-side scheduler.
+function nextPaymentDueDate(startDate: string): Date {
+  const dueDay = new Date(startDate).getDate()
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), dueDay)
+  if (thisMonth >= today) return thisMonth
+  return new Date(now.getFullYear(), now.getMonth() + 1, dueDay)
 }

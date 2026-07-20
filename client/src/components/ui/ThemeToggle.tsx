@@ -53,7 +53,8 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
           pseudoElement: '::view-transition-new(root)',
         },
       )
-    })
+      // `ready` rejects with AbortError when the transition is skipped (rapid re-toggle or hidden tab) — swallow it.
+    }).catch(() => {})
   }
 
   return (

@@ -33,7 +33,10 @@ export function LoginPage() {
         setMfaToken(data.mfaToken)
         return
       }
-      login(data.user!, data.token!, data.refreshToken!)
+      if (!data.user || !data.token) {
+        throw new Error('Unexpected server response — please try again')
+      }
+      login(data.user, data.token, data.refreshToken)
       navigate('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')

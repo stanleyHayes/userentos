@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useToastStore } from '@/stores/toastStore'
 import type {
   PaginatedResponse,
   Property,
@@ -151,7 +152,7 @@ export function useUploadProfilePhoto() {
       return api.upload<{ profileImage: string }>('/users/me/photo', formData)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user-me'] })
+      qc.invalidateQueries({ queryKey: ['me'] })
     },
   })
 }
@@ -378,10 +379,13 @@ export function useRepayLoan() {
 }
 
 // Disputes
-export function useDisputes() {
+// Server defaults to pageSize 20 — callers that render the full list plus stats
+// must pass a larger pageSize or they'd silently see (and compute on) a subset.
+export function useDisputes(params?: { pageSize?: number }) {
+  const qs = params?.pageSize ? `?pageSize=${params.pageSize}` : ''
   return useQuery({
-    queryKey: ['disputes'],
-    queryFn: () => api.get<PaginatedResponse<Dispute>>('/disputes'),
+    queryKey: ['disputes', params?.pageSize],
+    queryFn: () => api.get<PaginatedResponse<Dispute>>(`/disputes${qs}`),
   })
 }
 
@@ -1270,10 +1274,12 @@ export interface TenantPassportData {
   generatedAt: string
 }
 
-export function useMyPassportPreview() {
+export function useMyPassportPreview(enabled = true) {
   return useQuery({
     queryKey: ['tenant-passport', 'me'],
     queryFn: () => api.get<TenantPassportData>('/tenant-passport/me/json'),
+    // Non-tenants get a guaranteed 403 — let callers opt out instead of firing it.
+    enabled,
   })
 }
 
@@ -1473,6 +1479,11 @@ export function useAIGenerate() {
   return useMutation({
     mutationFn: (body: { prompt: string; context: string; language?: string }) =>
       api.post<{ text: string }>('/ai/generate', body),
+    // Consumers (MarkdownEditor, Textarea) catch-and-ignore; surface failures here
+    // so a failed generation isn't silent.
+    onError: (err) => {
+      useToastStore.getState().addToast(err instanceof Error ? err.message : 'AI generation failed', 'error')
+    },
   })
 }
 
@@ -1623,6 +1634,7 @@ export function useMarkContractDefaulted() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['financing-collections'] })
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
+      qc.invalidateQueries({ queryKey: ['financing-portfolio'] })
     },
   })
 }
@@ -1642,7 +1654,11 @@ export function useDisburseFinancingContract() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.post<FinancingContract>(`/financing/contracts/${id}/disburse`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['financing-contracts'] }),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ['financing-contracts'] })
+      qc.invalidateQueries({ queryKey: ['financing-contract', id] })
+      qc.invalidateQueries({ queryKey: ['financing-portfolio'] })
+    },
   })
 }
 
@@ -1651,8 +1667,10 @@ export function useRepayFinancingContract() {
   return useMutation({
     mutationFn: ({ id, amount }: { id: string; amount: number }) =>
       api.post(`/financing/contracts/${id}/repay`, { amount }),
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
+      qc.invalidateQueries({ queryKey: ['financing-contract', vars.id] })
+      qc.invalidateQueries({ queryKey: ['financing-portfolio'] })
       qc.invalidateQueries({ queryKey: ['wallet'] })
     },
   })
@@ -1896,8 +1914,9 @@ export function useAdminMaintenance(params?: { status?: string; page?: number })
   })
 }
 
-export function useAdminInsurancePolicies(params?: { page?: number }) {
+export function useAdminInsurancePolicies(params?: { status?: string; page?: number }) {
   const query = new URLSearchParams()
+  if (params?.status) query.set('status', params.status)
   if (params?.page) query.set('page', String(params.page))
   const qs = query.toString()
   return useQuery({

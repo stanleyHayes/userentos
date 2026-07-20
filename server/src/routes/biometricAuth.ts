@@ -129,6 +129,7 @@ router.post('/exchange', loginLimiter, async (req, res) => {
     email: user.email,
     roles: user.roles,
     permissions: user.permissions || [],
+    activeRole: user.activeRole,
   }
   const sessionToken = jwt.sign({ ...payload, purpose: 'session' }, config.jwtSecret, { expiresIn: config.jwtAccessExpiresIn })
   const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()

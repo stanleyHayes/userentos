@@ -38,7 +38,6 @@ export function SavingsPage() {
   const { data: plansData, isLoading: plansLoading } = useSavingsPlans()
   const plans = plansData?.items ?? []
   const [showDeposit, setShowDeposit] = useState(false)
-  const [showWithdraw, setShowWithdraw] = useState(false)
   const [showNewPlan, setShowNewPlan] = useState(false)
   const [showContribute, setShowContribute] = useState<string | null>(null)
 
@@ -100,12 +99,14 @@ export function SavingsPage() {
                     <ArrowDownRight size={14} /> Deposit
                   </button>
                   <button
-                    onClick={() => setShowWithdraw(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium h-8 px-4 border border-white/30 text-white hover:bg-white/10 transition-all hover:-translate-y-[1px] cursor-pointer"
+                    disabled
+                    title="Withdrawals are temporarily unavailable"
+                    className="inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium h-8 px-4 border border-white/30 text-white/70 opacity-60 cursor-not-allowed"
                   >
                     <ArrowUpRight size={14} /> Withdraw
                   </button>
                 </div>
+                <p className="text-[11px] text-white/70 mt-2">Withdrawals are temporarily unavailable.</p>
               </CardContent>
             </Card>
             <DashboardMetricCard label="Active Plans" value={String(activePlans.length)} icon={<FileText size={18} />} accent="#7c3aed" />
@@ -178,7 +179,6 @@ export function SavingsPage() {
       )}
 
       <WalletActionModal open={showDeposit} onClose={() => setShowDeposit(false)} action="deposit" />
-      <WalletActionModal open={showWithdraw} onClose={() => setShowWithdraw(false)} action="withdraw" />
       <CreatePlanModal open={showNewPlan} onClose={() => setShowNewPlan(false)} />
       <ContributeModal planId={showContribute} onClose={() => setShowContribute(null)} />
     </div>
@@ -266,15 +266,19 @@ function CreatePlanModal({ open, onClose }: { open: boolean; onClose: () => void
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await createPlan.mutateAsync({
-      targetAmount: Number(form.targetAmount),
-      frequency: form.frequency as 'daily' | 'weekly' | 'monthly',
-      contributionAmount: Number(form.contributionAmount),
-      targetDate: form.targetDate,
-      autoDebit: form.autoDebit,
-    })
-    onClose()
-    setForm({ targetAmount: '', frequency: 'monthly', contributionAmount: '', targetDate: '', autoDebit: false })
+    try {
+      await createPlan.mutateAsync({
+        targetAmount: Number(form.targetAmount),
+        frequency: form.frequency as 'daily' | 'weekly' | 'monthly',
+        contributionAmount: Number(form.contributionAmount),
+        targetDate: form.targetDate,
+        autoDebit: form.autoDebit,
+      })
+      onClose()
+      setForm({ targetAmount: '', frequency: 'monthly', contributionAmount: '', targetDate: '', autoDebit: false })
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   return (
@@ -305,9 +309,13 @@ function ContributeModal({ planId, onClose }: { planId: string | null; onClose: 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!planId) return
-    await contribute.mutateAsync({ planId, amount: Number(amount) })
-    onClose()
-    setAmount('')
+    try {
+      await contribute.mutateAsync({ planId, amount: Number(amount) })
+      onClose()
+      setAmount('')
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   return (

@@ -104,7 +104,7 @@ export function TenantsPage() {
             type="text"
             placeholder="Search tenants..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm bg-white dark:bg-[#161927] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>

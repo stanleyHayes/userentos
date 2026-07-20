@@ -107,9 +107,13 @@ export function EmployerEmployeesPage() {
   }
 
   async function handleFileUpload(file: File) {
-    const text = await file.text()
-    setCsvText(text)
-    setBulkResult(null)
+    try {
+      const text = await file.text()
+      setCsvText(text)
+      setBulkResult(null)
+    } catch {
+      addToast('Could not read the selected file', 'error')
+    }
   }
 
   function submitBulk() {

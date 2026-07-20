@@ -44,6 +44,8 @@ interface ListFilters {
   search?: string
   sort?: string
   landlordId?: string
+  page?: number
+  pageSize?: number
 }
 
 function escapeRegex(input: string): string {
@@ -107,11 +109,20 @@ export class PropertyService {
     else if (filters.sort === 'popular') sort = { views: -1 }
 
     const properties = await this.propertyRepo.search(filter, sort)
-    const items = properties.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
 
-    this.logger.debug(`Listed ${items.length} properties with filters: ${JSON.stringify(filters)}`)
+    // repo.search has no skip/limit support — paginate the result set here so
+    // the metadata is honest (previously hardcoded to page 1 of 1, which hid
+    // results past the first 50 from paginating clients).
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.max(1, filters.pageSize ?? 50)
+    const total = properties.length
+    const items = properties
+      .slice((page - 1) * pageSize, page * pageSize)
+      .map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
 
-    return { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 }
+    this.logger.debug(`Listed ${items.length} of ${total} properties with filters: ${JSON.stringify(filters)}`)
+
+    return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
   }
 
   async getById(id: string) {

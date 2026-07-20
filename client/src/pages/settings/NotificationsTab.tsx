@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { useSettings, useUpdateSettings } from '@/hooks/useApi'
 import { Bell, Mail, Phone, CreditCard, ChevronRight } from 'lucide-react'
@@ -14,20 +13,17 @@ const notificationPrefs = [
 export function NotificationsTab() {
   const { data: settings } = useSettings()
   const updateSettings = useUpdateSettings()
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(
-    Object.fromEntries(notificationPrefs.map((p) => [p.key, true]))
-  )
 
-  // Sync from server
-  useState(() => {
-    if (settings?.notifications) {
-      setPrefs(settings.notifications as unknown as Record<string, boolean>)
-    }
-  })
+  // Derive from the server (defaults fill keys the server has never stored) so
+  // toggles start from the user's real saved prefs; the update invalidates the
+  // settings query, re-rendering with the new values.
+  const prefs: Record<string, boolean> = {
+    ...Object.fromEntries(notificationPrefs.map((p) => [p.key, true])),
+    ...((settings?.notifications ?? {}) as Record<string, boolean>),
+  }
 
   function toggle(key: string) {
     const updated = { ...prefs, [key]: !prefs[key] }
-    setPrefs(updated)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updateSettings.mutate({ notifications: updated as any })
   }

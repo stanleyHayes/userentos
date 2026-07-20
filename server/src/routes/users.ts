@@ -170,7 +170,8 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
   const skip = (page - 1) * pageSize
 
   const [total, users] = await Promise.all([
-    User.countDocuments({}),
+    // countDocuments doesn't fire the pre(/^find/) soft-delete hook — filter explicitly
+    User.countDocuments({ deletedAt: { $exists: false } }),
     User.find({}).select('-passwordHash -__v').sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))

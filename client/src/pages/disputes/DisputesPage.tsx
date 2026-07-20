@@ -68,8 +68,8 @@ type FilterTab = 'all' | DisputeStatus
 
 export function DisputesPage() {
   const user = useAuthStore((s) => s.user)
-  const isGov = user?.activeRole === 'government' || user?.activeRole === 'admin' || user?.activeRole === 'legal_officer'
-  const { data, isLoading } = useDisputes()
+  const isGov = user?.activeRole === 'government' || user?.activeRole === 'admin' || user?.activeRole === 'super_admin' || user?.activeRole === 'legal_officer'
+  const { data, isLoading } = useDisputes({ pageSize: 200 })
   const { data: agreementsData } = useAgreements()
   const disputes = useMemo(() => data?.items ?? [], [data?.items])
   const agreements = agreementsData?.items ?? []

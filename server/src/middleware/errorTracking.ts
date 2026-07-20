@@ -95,7 +95,12 @@ export function errorTrackingHandler(
   if (err.name === 'ValidationError') statusCode = 400
   else if (err.name === 'CastError') statusCode = 400
   else if (err.code === 11000) statusCode = 409
+  else if (err.name === 'MulterError') statusCode = 400
   else if (typeof err.status === 'number') statusCode = err.status
+
+  // 4xx are client faults, not server faults — keep errors.json (and the Sentry
+  // context below) for genuine 5xx failures only.
+  if (statusCode < 500) return next(err)
 
   const userId = (req as unknown as { user?: { userId?: string } }).user?.userId
   const entry: ErrorLogEntry = {

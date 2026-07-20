@@ -16,7 +16,7 @@ interface PasswordInputProps {
   className?: string
 }
 
-export function PasswordInput({ id, label, error, className, ...props }: PasswordInputProps) {
+export function PasswordInput({ id, label, error, className, minLength, ...props }: PasswordInputProps) {
   const [visible, setVisible] = useState(false)
 
   return (
@@ -30,6 +30,7 @@ export function PasswordInput({ id, label, error, className, ...props }: Passwor
       className={className}
       slotProps={{
         inputLabel: { shrink: true },
+        htmlInput: { minLength },
         input: {
           startAdornment: (
             <InputAdornment position="start">

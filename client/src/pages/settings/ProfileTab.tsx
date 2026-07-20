@@ -30,14 +30,18 @@ export function ProfileTab() {
 
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault()
-    const updated = await updateProfile.mutateAsync({
-      firstName: form.firstName,
-      lastName: form.lastName,
-      phone: form.phone,
-      ghanaCardId: form.ghanaCardId || undefined,
-    })
-    updateUser(updated)
-    setSaved(true)
+    try {
+      const updated = await updateProfile.mutateAsync({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: form.phone,
+        ghanaCardId: form.ghanaCardId || undefined,
+      })
+      updateUser(updated)
+      setSaved(true)
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   function copyId() {

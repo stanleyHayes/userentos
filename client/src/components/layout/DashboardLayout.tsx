@@ -13,11 +13,16 @@ import { getBestRoleForPortal } from '@/lib/subdomain'
 import { api } from '@/lib/api'
 import { ShieldAlert } from 'lucide-react'
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour'
+import { SplashScreen } from '@/components/ui/SplashScreen'
+
+// SplashScreen expects an onFinished callback; here it unmounts as soon as auth
+// rehydration flips `ready`, so the timer never fires user-visibly.
+const noop = () => {}
 
 export function DashboardLayout() {
   usePushNotifications()
   const { user, isAuthenticated, switchRole, logout } = useAuthStore()
-  const hasHydrated = useAuthRehydrate()
+  const authReady = useAuthRehydrate()
   const { collapsed } = useSidebarStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
@@ -36,7 +41,7 @@ export function DashboardLayout() {
   // for that role if it hasn't been completed yet. Runs once per role per
   // browser (persisted to localStorage by the onboarding store).
   useEffect(() => {
-    if (!hasHydrated) return
+    if (!authReady) return
     if (!isAuthenticated) return
     const role = user?.activeRole
     if (!role) return
@@ -46,7 +51,7 @@ export function DashboardLayout() {
     // when the tour is already running, and we only want to react to the role
     // becoming known (e.g. after rehydration or a role switch).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasHydrated, isAuthenticated, user?.activeRole, startTour])
+  }, [authReady, isAuthenticated, user?.activeRole, startTour])
 
   // On portal subdomains, auto-switch to the best matching role if current role doesn't fit
   useEffect(() => {
@@ -57,9 +62,12 @@ export function DashboardLayout() {
     }
   }, [isPortal, portal, user, switchRole])
 
-  // Wait for zustand to hydrate from storage before deciding to redirect
-  if (!hasHydrated) {
-    return null
+  // Wait for auth to rehydrate before deciding to redirect. A persisted session
+  // with no `user` triggers a server round-trip (/users/me, possibly a token
+  // refresh first) — show the branded splash instead of a blank page, which
+  // read as a crash on slow networks.
+  if (!authReady) {
+    return <SplashScreen onFinished={noop} />
   }
 
   if (!isAuthenticated) {

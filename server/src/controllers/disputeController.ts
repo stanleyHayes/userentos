@@ -90,6 +90,20 @@ export const disputeController = {
     const isParty = property.landlordId === userId || !!onAgreement
     if (!isParty) { error(res, 'You can only file a dispute on a property you own or rent', 403); return }
 
+    // The accused must be the filer's counterparty on this property — the tenant
+    // when the filer is the landlord/manager, the landlord when the filer is the
+    // tenant. Otherwise anyone could stack open disputes on an arbitrary victim
+    // and tank their credit score (each open dispute subtracts points).
+    const asLandlordOnAgreement = await Agreement.exists({ propertyId: parsed.data.propertyId, landlordId: userId })
+    const filerIsLandlordSide = property.landlordId === userId || !!asLandlordOnAgreement
+    const isCounterparty = filerIsLandlordSide
+      ? !!(await Agreement.exists({ propertyId: parsed.data.propertyId, tenantId: parsed.data.filedAgainst }))
+      : parsed.data.filedAgainst === property.landlordId
+    if (!isCounterparty) {
+      error(res, 'You can only file a dispute against your own landlord or tenant on this property')
+      return
+    }
+
     // The accused must be a real user.
     const accused = await User.findById(parsed.data.filedAgainst).select('_id').lean()
     if (!accused) { error(res, 'The user this dispute is filed against does not exist', 404); return }

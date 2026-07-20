@@ -37,10 +37,12 @@ export function PublicLayout() {
     return location.pathname === to || location.pathname.startsWith(`${to}/`)
   }
 
-  // Lock body scroll when drawer open
+  // Lock body scroll when drawer open, restoring whatever value was there before
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    if (!open) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
   }, [open])
 
   const activeTo = NAV_LINKS.find((l) => isNavActive(l.to))?.to ?? null
@@ -162,6 +164,7 @@ export function PublicLayout() {
               <Link
                 key={to}
                 to={to}
+                onClick={() => setOpen(false)}
                 aria-current={active ? 'page' : undefined}
                 style={{ animationDelay: `${i * 40}ms` }}
                 className={`group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${

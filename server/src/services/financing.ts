@@ -123,7 +123,7 @@ export async function approveApplication(applicationId: string, decidedBy: strin
     title: 'Financing Approved',
     message: `Your ${offer.name} application for GHS ${application.amountRequested.toFixed(2)} has been approved. Sign the contract to proceed with disbursement.`,
     actionUrl: `/financing/contracts/${contract._id}`,
-  })
+  }).catch((err) => console.warn('[financing] notify failed:', err))
 
   return { application, contract }
 }
@@ -173,7 +173,7 @@ export async function disburseContract(contractId: string) {
     title: 'Financing Disbursed',
     message: `GHS ${netAmount.toFixed(2)} has been disbursed. Repayment begins on ${contract.schedule[0]?.dueDate ?? 'your first installment date'}.`,
     actionUrl: `/financing/contracts/${contract._id}`,
-  })
+  }).catch((err) => console.warn('[financing] notify failed:', err))
 
   return contract
 }
@@ -213,7 +213,7 @@ export async function applyRepayment(contractId: string, amount: number, referen
       title: 'Financing Settled',
       message: 'Congratulations! Your financing contract has been fully repaid.',
       actionUrl: `/financing/contracts/${contract._id}`,
-    })
+    }).catch((err) => console.warn('[financing] notify failed:', err))
   }
 
   await contract.save()

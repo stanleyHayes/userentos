@@ -2,7 +2,9 @@
  * Central wallet ledger — the ONLY place wallet balances may change.
  *
  * Guarantees:
- *  - atomic balance mutation (findOneAndUpdate + $inc, no read-modify-write)
+ *  - atomic balance mutation (one findOneAndUpdate per op, no read-modify-write)
+ *  - the ledger entry lands in the SAME write as the balance move, so money
+ *    never moves without a record
  *  - debits are guarded: balance can never go negative, concurrent debits
  *    can't double-spend
  *  - every amount rounds through utils/money (no float drift)
@@ -38,31 +40,39 @@ export async function creditWallet(userId: string, amount: number, meta: WalletT
   const value = assertValidAmount(amount, 'credit')
   const reference = meta.reference ?? `CR-${Date.now()}`
 
+  // Single atomic update: the balance move and its ledger entry land together
+  // (a separate $push after the balance write could fail, moving money with no
+  // record). Pipeline form so balanceAfter can reference the new balance.
   const wallet = await Wallet.findOneAndUpdate(
     { userId },
-    { $inc: { balance: value }, $setOnInsert: { userId } },
+    [
+      { $set: { balance: { $add: [{ $ifNull: ['$balance', 0] }, value] } } },
+      {
+        $set: {
+          transactions: {
+            $slice: [
+              {
+                $concatArrays: [
+                  { $ifNull: ['$transactions', []] },
+                  [{
+                    type: meta.type,
+                    amount: value,
+                    balanceAfter: '$balance',
+                    reference,
+                    description: meta.description ?? meta.type,
+                    createdAt: new Date().toISOString(),
+                  }],
+                ],
+              },
+              -MAX_EMBEDDED_TX,
+            ],
+          },
+        },
+      },
+    ],
     { new: true, upsert: true },
   )
   if (!wallet) throw new Error(`Failed to credit wallet for user ${userId}`)
-
-  await Wallet.updateOne(
-    { userId },
-    {
-      $push: {
-        transactions: {
-          $each: [{
-            type: meta.type,
-            amount: value,
-            balanceAfter: wallet.balance,
-            reference,
-            description: meta.description ?? meta.type,
-            createdAt: new Date().toISOString(),
-          }],
-          $slice: -MAX_EMBEDDED_TX,
-        },
-      },
-    },
-  )
 }
 
 /**
@@ -74,30 +84,37 @@ export async function debitWallet(userId: string, amount: number, meta: WalletTx
   const value = assertValidAmount(amount, 'debit')
   const reference = meta.reference ?? `DR-${Date.now()}`
 
+  // Same single-write shape as creditWallet. The $gte filter keeps the balance
+  // guard atomic — no match means insufficient funds and nothing was written.
   const wallet = await Wallet.findOneAndUpdate(
     { userId, balance: { $gte: value } },
-    { $inc: { balance: -value } },
+    [
+      { $set: { balance: { $add: ['$balance', -value] } } },
+      {
+        $set: {
+          transactions: {
+            $slice: [
+              {
+                $concatArrays: [
+                  { $ifNull: ['$transactions', []] },
+                  [{
+                    type: meta.type,
+                    amount: -value,
+                    balanceAfter: '$balance',
+                    reference,
+                    description: meta.description ?? meta.type,
+                    createdAt: new Date().toISOString(),
+                  }],
+                ],
+              },
+              -MAX_EMBEDDED_TX,
+            ],
+          },
+        },
+      },
+    ],
     { new: true },
   )
   if (!wallet) return false // insufficient funds (or no wallet — same outcome)
-
-  await Wallet.updateOne(
-    { userId },
-    {
-      $push: {
-        transactions: {
-          $each: [{
-            type: meta.type,
-            amount: -value,
-            balanceAfter: wallet.balance,
-            reference,
-            description: meta.description ?? meta.type,
-            createdAt: new Date().toISOString(),
-          }],
-          $slice: -MAX_EMBEDDED_TX,
-        },
-      },
-    },
-  )
   return true
 }

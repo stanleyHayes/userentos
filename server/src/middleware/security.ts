@@ -6,7 +6,11 @@ import { randomUUID } from 'crypto'
  * Useful for tracing logs across distributed services.
  */
 export function requestId(req: Request, res: Response, next: NextFunction) {
-  const id = (req.headers['x-request-id'] as string) || randomUUID()
+  // Honor a client-supplied id only after sanitizing — CR/LF or other invalid
+  // chars make res.setHeader throw. Otherwise trace with a fresh id.
+  const supplied = req.headers['x-request-id'] as string | undefined
+  const sanitized = supplied?.replace(/[^A-Za-z0-9-_]/g, '').slice(0, 64)
+  const id = sanitized || randomUUID()
   ;(req as unknown as { id: string }).id = id
   res.setHeader('X-Request-Id', id)
   next()

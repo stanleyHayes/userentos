@@ -218,14 +218,30 @@ router.get('/maintenance', adminAuth, adminRole, adminPerm, async (req, res) => 
 // 4. ADMIN — All insurance policies
 // ────────────────────────────────────────
 
+const INSURANCE_POLICY_STATUSES = [
+  'pending',
+  'active',
+  'lapsed',
+  'cancelled',
+  'claimed',
+] as const
+
 router.get('/insurance/policies', adminAuth, adminRole, adminPerm, async (req, res) => {
+  const status = (req.query.status as string | undefined)?.trim()
+  const filter: Record<string, unknown> = {}
+  if (status) {
+    if (!INSURANCE_POLICY_STATUSES.includes(status as typeof INSURANCE_POLICY_STATUSES[number])) {
+      error(res, `Invalid status. Allowed: ${INSURANCE_POLICY_STATUSES.join(', ')}`); return
+    }
+    filter.status = status
+  }
   const page = parsePage(req.query.page ?? 1)
   const pageSize = parsePageSize(req.query.pageSize ?? 50)
   const skip = (page - 1) * pageSize
 
   const [total, policies] = await Promise.all([
-    InsurancePolicy.countDocuments({}),
-    InsurancePolicy.find({})
+    InsurancePolicy.countDocuments(filter),
+    InsurancePolicy.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize)

@@ -130,71 +130,84 @@ export async function processPayrollRun(runId: string) {
     throw new Error(`Run is ${existing.status} — must be approved first`)
   }
 
-  const employer = await Employer.findById(run.employerId).lean()
-  if (!employer) throw new Error('Employer not found for this run')
+  try {
+    const employer = await Employer.findById(run.employerId).lean()
+    if (!employer) throw new Error('Employer not found for this run')
 
-  // Fund the deductions from the employer's wallet BEFORE paying anything out.
-  const totalToFund = round2(run.deductions
-    .filter((d) => d.status === 'queued')
-    .reduce((sum, d) => sum + d.amount, 0))
+    // Fund the deductions from the employer's wallet BEFORE paying anything out.
+    const totalToFund = round2(run.deductions
+      .filter((d) => d.status === 'queued')
+      .reduce((sum, d) => sum + d.amount, 0))
 
-  if (totalToFund > 0) {
-    const funded = await debitWallet(employer.ownerId, totalToFund, {
-      type: 'payroll_funding',
-      reference: `PAYROLL-FUND-${runId.toString().slice(-8)}`,
-      description: `Payroll run ${run.periodLabel} — deduction funding`,
-    })
-    if (!funded) {
-      // Put the run back so the employer can top up and retry.
-      await PayrollRun.updateOne({ _id: runId }, { $set: { status: 'approved' } })
-      throw new Error(`Insufficient employer wallet balance to fund deductions (GHS ${totalToFund.toFixed(2)} required)`)
-    }
-  }
-
-  for (const ded of run.deductions) {
-    if (ded.status !== 'queued') continue
-    try {
-      await disburseDeduction(ded, run.employerId)
-      ded.status = 'disbursed'
-      ded.disbursementReference = `PAY-${runId.toString().slice(-6)}-${ded.employeeId.slice(-4)}-${ded.allocationType.slice(0, 3)}`
-
-      // Achievements: rent paid via payroll
-      if (ded.allocationType === 'rent') {
-        checkAndAward(ded.employeeId, 'payroll_payment', {
-          payrollRunId: runId,
-          amount: ded.amount,
-        }).catch((err) =>
-          console.warn('[payroll/process] achievement award failed:', err),
-        )
+    if (totalToFund > 0) {
+      const funded = await debitWallet(employer.ownerId, totalToFund, {
+        type: 'payroll_funding',
+        reference: `PAYROLL-FUND-${runId.toString().slice(-8)}`,
+        description: `Payroll run ${run.periodLabel} — deduction funding`,
+      })
+      if (!funded) {
+        // The outer catch puts the run back so the employer can top up and retry.
+        throw new Error(`Insufficient employer wallet balance to fund deductions (GHS ${totalToFund.toFixed(2)} required)`)
       }
-    } catch (err) {
-      ded.status = 'failed'
-      ded.failureReason = (err as Error).message
-      // Refund the failed deduction to the employer immediately.
+    }
+
+    for (const ded of run.deductions) {
+      if (ded.status !== 'queued') continue
       try {
-        await creditWallet(employer.ownerId, ded.amount, {
-          type: 'refund',
-          reference: `PAYROLL-REFUND-${runId.toString().slice(-8)}-${ded.mandateId.slice(-4)}`,
-          description: `Refund: failed ${ded.allocationType} deduction (${run.periodLabel})`,
-        })
-      } catch (refundErr) {
-        console.error(`[payroll/process] CRITICAL: refund of failed deduction ${ded.mandateId} failed: ${(refundErr as Error).message}`)
+        await disburseDeduction(ded, employer.ownerId)
+        ded.status = 'disbursed'
+        ded.disbursementReference = `PAY-${runId.toString().slice(-6)}-${ded.employeeId.slice(-4)}-${ded.allocationType.slice(0, 3)}`
+
+        // Achievements: rent paid via payroll
+        if (ded.allocationType === 'rent') {
+          checkAndAward(ded.employeeId, 'payroll_payment', {
+            payrollRunId: runId,
+            amount: ded.amount,
+          }).catch((err) =>
+            console.warn('[payroll/process] achievement award failed:', err),
+          )
+        }
+      } catch (err) {
+        ded.status = 'failed'
+        ded.failureReason = (err as Error).message
+        // Refund the failed deduction to the employer immediately.
+        try {
+          await creditWallet(employer.ownerId, ded.amount, {
+            type: 'refund',
+            reference: `PAYROLL-REFUND-${runId.toString().slice(-8)}-${ded.mandateId.slice(-4)}`,
+            description: `Refund: failed ${ded.allocationType} deduction (${run.periodLabel})`,
+          })
+        } catch (refundErr) {
+          console.error(`[payroll/process] CRITICAL: refund of failed deduction ${ded.mandateId} failed: ${(refundErr as Error).message}`)
+        }
       }
     }
-  }
 
-  run.status = run.deductions.some((d) => d.status === 'failed')
-    ? 'failed'
-    : 'processed'
-  run.processedAt = new Date().toISOString()
-  if (run.status === 'failed') {
-    run.failureReason = 'One or more deductions failed — see deduction list'
+    run.status = run.deductions.some((d) => d.status === 'failed')
+      ? 'failed'
+      : 'processed'
+    run.processedAt = new Date().toISOString()
+    if (run.status === 'failed') {
+      run.failureReason = 'One or more deductions failed — see deduction list'
+    }
+    await run.save()
+    return run
+  } catch (err) {
+    // Any failure after the atomic claim must not wedge the run in 'processing'
+    // (re-processing requires 'approved') — reset it so the run stays retryable.
+    try {
+      await PayrollRun.updateOne(
+        { _id: runId },
+        { $set: { status: 'approved', failureReason: (err as Error).message } },
+      )
+    } catch (resetErr) {
+      console.error(`[payroll/process] CRITICAL: could not reset run ${runId} to approved: ${(resetErr as Error).message}`)
+    }
+    throw err
   }
-  await run.save()
-  return run
 }
 
-async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: string) {
+async function disburseDeduction(ded: IPayrollDeductionRecord, employerOwnerId: string) {
   if (ded.amount <= 0) return
 
   switch (ded.allocationType) {
@@ -209,25 +222,41 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: stri
         description: `Rent (payroll deduction) from ${ded.employeeName ?? ded.employeeId}`,
       })
 
-      // Record as a Payment too
-      await Payment.create({
-        agreementId: agreement._id.toString(),
-        tenantId: ded.employeeId,
-        landlordId: agreement.landlordId,
-        amount: ded.amount,
-        method: 'bank_transfer',
-        status: 'completed',
-        reference: `PAYROLL-${Date.now()}`,
-        purpose: 'rent',
-        paidAt: new Date().toISOString(),
-      })
+      // Record as a Payment too. If this fails after the credit, roll the credit
+      // back — the outer catch refunds the employer, so keeping the landlord
+      // credit as well would leave unbacked money on both sides.
+      try {
+        await Payment.create({
+          agreementId: agreement._id.toString(),
+          tenantId: ded.employeeId,
+          landlordId: agreement.landlordId,
+          amount: ded.amount,
+          method: 'bank_transfer',
+          status: 'completed',
+          reference: `PAYROLL-${Date.now()}`,
+          purpose: 'rent',
+          paidAt: new Date().toISOString(),
+        })
+      } catch (err) {
+        try {
+          const reversed = await debitWallet(agreement.landlordId!, ded.amount, {
+            type: 'reversal',
+            reference: `${rentRef}-REV`,
+            description: 'Rollback: rent payment record failed after wallet credit',
+          })
+          if (!reversed) throw new Error('landlord wallet rollback returned false', { cause: err })
+        } catch (rollbackErr) {
+          console.error(`[payroll/rent] CRITICAL: landlord credit ${rentRef} not rolled back: ${(rollbackErr as Error).message}`)
+        }
+        throw err
+      }
 
       notify({
         userId: ded.employeeId,
         title: 'Rent Paid via Payroll',
         message: `GHS ${ded.amount.toFixed(2)} rent has been paid from your salary.`,
         actionUrl: '/payments',
-      })
+      }).catch((err) => console.warn('[payroll/rent] notify failed:', err))
       return
     }
     case 'savings': {
@@ -243,7 +272,22 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, _employerId: stri
     }
     case 'loan_repayment': {
       if (!ded.targetEntityId) throw new Error('Missing financing contract target')
-      await applyRepayment(ded.targetEntityId, ded.amount, `PAYROLL-${Date.now()}`)
+      const { applied } = await applyRepayment(ded.targetEntityId, ded.amount, `PAYROLL-${Date.now()}`)
+      // The employer funded the full mandate amount — refund whatever the
+      // contract couldn't absorb (mandate exceeds the remaining balance),
+      // otherwise the overpayment vanishes.
+      const excess = round2(ded.amount - applied)
+      if (excess > 0) {
+        try {
+          await creditWallet(employerOwnerId, excess, {
+            type: 'refund',
+            reference: `PAYROLL-LOAN-EXCESS-${Date.now()}`,
+            description: 'Refund: payroll loan repayment exceeded remaining balance',
+          })
+        } catch (refundErr) {
+          console.error(`[payroll/loan] CRITICAL: excess refund of GHS ${excess} to employer failed: ${(refundErr as Error).message}`)
+        }
+      }
       return
     }
     case 'wallet_topup': {

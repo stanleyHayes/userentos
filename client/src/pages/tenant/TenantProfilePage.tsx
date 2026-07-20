@@ -52,19 +52,24 @@ export function TenantProfilePage() {
   const [activeTab, setActiveTab] = useState('personal')
   const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
-  // Hydrate form once when the profile is fetched (compares to previous reference,
-  // not an effect — see https://react.dev/learn/you-might-not-need-an-effect).
+  // Hydrate form from the fetched profile (compares to previous reference, not an
+  // effect — see https://react.dev/learn/you-might-not-need-an-effect), but skip
+  // while the form is dirty: every refetch (e.g. refetchOnWindowFocus) returns a
+  // new object reference, which would otherwise wipe unsaved edits. Dirty clears
+  // on save so the post-save refetch re-hydrates with server data.
+  const [dirty, setDirty] = useState(false)
   const [hydratedProfile, setHydratedProfile] = useState<Profile | null>(null)
-  if (profile && hydratedProfile !== profile) {
+  if (profile && !dirty && hydratedProfile !== profile) {
     setHydratedProfile(profile)
     setForm(profile)
   }
 
-  function u(field: string, value: unknown) { setForm((f) => ({ ...f, [field]: value })); setSaved(false) }
+  function u(field: string, value: unknown) { setForm((f) => ({ ...f, [field]: value })); setDirty(true); setSaved(false) }
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
     await updateMutation.mutateAsync(form)
+    setDirty(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }

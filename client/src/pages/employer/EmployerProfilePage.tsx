@@ -19,10 +19,10 @@ export function EmployerProfilePage() {
     paydayDayOfMonth: '28',
   })
 
-  // Hydrate form from server data once it loads (compare-by-reference pattern)
-  const [hydratedFrom, setHydratedFrom] = useState<typeof employer | null>(null)
-  if (employer && hydratedFrom !== employer) {
-    setHydratedFrom(employer)
+  // Hydrate form from server data exactly once — later refetches must not clobber unsaved edits
+  const [hydrated, setHydrated] = useState(false)
+  if (employer && !hydrated) {
+    setHydrated(true)
     setForm({
       legalName: employer.legalName ?? '',
       tradingName: employer.tradingName ?? '',

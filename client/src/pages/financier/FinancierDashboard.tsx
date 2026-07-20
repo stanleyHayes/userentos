@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { useAuthStore } from '@/stores/authStore'
+import { useToastStore } from '@/stores/toastStore'
 import {
   useFinancingPortfolio,
   useFinancingApplications,
@@ -26,6 +27,7 @@ export function FinancierDashboard() {
   const { data: offersData } = useMyFinancingOffers()
   const decide = useDecideFinancingApplication()
   const disburse = useDisburseFinancingContract()
+  const addToast = useToastStore((s) => s.addToast)
 
   const applications = applicationsData?.items ?? []
   const pendingApps = applications.filter((a) => a.status === 'submitted' || a.status === 'under_review')
@@ -97,7 +99,7 @@ export function FinancierDashboard() {
                           size="sm"
                           variant="accent"
                           disabled={decide.isPending}
-                          onClick={() => decide.mutate({ id: a.id, action: 'approve' })}
+                          onClick={() => decide.mutate({ id: a.id, action: 'approve' }, { onError: (e) => addToast((e as Error).message, 'error') })}
                         >
                           <CheckCircle2 size={12} /> Approve
                         </Button>
@@ -105,7 +107,7 @@ export function FinancierDashboard() {
                           size="sm"
                           variant="outline"
                           disabled={decide.isPending}
-                          onClick={() => decide.mutate({ id: a.id, action: 'reject', notes: 'Declined' })}
+                          onClick={() => decide.mutate({ id: a.id, action: 'reject', notes: 'Declined' }, { onError: (e) => addToast((e as Error).message, 'error') })}
                         >
                           Reject
                         </Button>
@@ -146,7 +148,7 @@ export function FinancierDashboard() {
                           <Badge variant="success" className="text-[9px]">Signed</Badge>
                         </div>
                       </div>
-                      <Button size="sm" variant="primary" disabled={disburse.isPending} onClick={() => disburse.mutate(c.id)}>
+                      <Button size="sm" variant="primary" disabled={disburse.isPending} onClick={() => disburse.mutate(c.id, { onError: (e) => addToast((e as Error).message, 'error') })}>
                         <Send size={12} /> Disburse
                       </Button>
                     </div>

@@ -7,6 +7,7 @@ export function useCountUp(target: number, duration = 2000, active = true) {
     if (!active) return
 
     const startTime = performance.now()
+    let rafId: number
 
     function tick(now: number) {
       const elapsed = now - startTime
@@ -14,10 +15,11 @@ export function useCountUp(target: number, duration = 2000, active = true) {
       // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3)
       setCount(Math.round(eased * target))
-      if (progress < 1) requestAnimationFrame(tick)
+      if (progress < 1) rafId = requestAnimationFrame(tick)
     }
 
-    requestAnimationFrame(tick)
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
   }, [target, duration, active])
 
   return count

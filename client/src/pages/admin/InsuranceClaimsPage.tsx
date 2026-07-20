@@ -85,7 +85,7 @@ export function InsuranceClaimsPage() {
   const approvedCount = allClaims.filter((c) => c.status === 'approved').length
   const paidCount = allClaims.filter((c) => c.status === 'paid').length
   const totalClaimed = allClaims.reduce((sum, claim) => sum + claim.amount, 0)
-  const paidTotal = allClaims.reduce((sum, claim) => sum + (claim.payoutAmount ?? 0), 0)
+  const paidTotal = allClaims.filter((claim) => claim.status === 'paid').reduce((sum, claim) => sum + (claim.payoutAmount ?? 0), 0)
 
   const searchQuery = search.trim().toLowerCase()
   const visibleItems = searchQuery

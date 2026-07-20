@@ -243,7 +243,7 @@ export function BlogPage() {
         type="text"
         placeholder="Search articles..."
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search size={18} /></InputAdornment> }, inputLabel: { shrink: true } }}
         fullWidth
       />
@@ -251,11 +251,11 @@ export function BlogPage() {
       {allTags.length > 0 && (
         <div ref={pillAttach} className="relative isolate flex flex-wrap gap-1.5">
           <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary border border-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }} />
-          <button data-tab-key="__all__" onClick={() => setTag(undefined)} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${!tag ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
+          <button data-tab-key="__all__" onClick={() => { setTag(undefined); setPage(1) }} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${!tag ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
             All
           </button>
           {allTags.map((t) => (
-            <button key={t} data-tab-key={t} onClick={() => setTag(tag === t ? undefined : t)} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${tag === t ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
+            <button key={t} data-tab-key={t} onClick={() => { setTag(tag === t ? undefined : t); setPage(1) }} className={`relative z-10 text-xs px-3 py-1.5 rounded-full border transition-colors ${tag === t ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}>
               {t}
             </button>
           ))}

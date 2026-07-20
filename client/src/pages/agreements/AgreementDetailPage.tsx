@@ -55,6 +55,7 @@ export function AgreementDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [showSignModal, setShowSignModal] = useState(false)
   const [signatureName, setSignatureName] = useState('')
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [editForm, setEditForm] = useState({
     rentAmount: '',
     securityDeposit: '',
@@ -102,7 +103,6 @@ export function AgreementDetailPage() {
 
   // Mint a short-lived, download-only token and open the PDF with it — the full
   // session JWT must never appear in a URL (logs, browser history, referers).
-  const [downloadingPdf, setDownloadingPdf] = useState(false)
   async function handleDownloadPdf() {
     if (!agreement) return
     setDownloadingPdf(true)
@@ -129,23 +129,31 @@ export function AgreementDetailPage() {
 
   async function handleUpdate(e: FormEvent) {
     e.preventDefault()
-    await updateAgreement.mutateAsync({
-      id: agreement!.id,
-      rentAmount: Number(editForm.rentAmount),
-      securityDeposit: Number(editForm.securityDeposit),
-      advanceMonths: Number(editForm.advanceMonths),
-      startDate: editForm.startDate,
-      endDate: editForm.endDate,
-      terms: editForm.terms.split('\n').filter(Boolean),
-      specialConditions: editForm.specialConditions.split('\n').filter(Boolean),
-    })
-    setIsEditing(false)
+    try {
+      await updateAgreement.mutateAsync({
+        id: agreement!.id,
+        rentAmount: Number(editForm.rentAmount),
+        securityDeposit: Number(editForm.securityDeposit),
+        advanceMonths: Number(editForm.advanceMonths),
+        startDate: editForm.startDate,
+        endDate: editForm.endDate,
+        terms: editForm.terms.split('\n').filter(Boolean),
+        specialConditions: editForm.specialConditions.split('\n').filter(Boolean),
+      })
+      setIsEditing(false)
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   async function handleSign() {
-    await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim() })
-    setShowSignModal(false)
-    setSignatureName('')
+    try {
+      await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim() })
+      setShowSignModal(false)
+      setSignatureName('')
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   return (

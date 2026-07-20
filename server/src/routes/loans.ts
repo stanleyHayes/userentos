@@ -63,6 +63,11 @@ router.post('/apply', authenticate, async (req, res) => {
   const monthlyPayment = (amount * monthlyRate * Math.pow(1 + monthlyRate, tenure)) / (Math.pow(1 + monthlyRate, tenure) - 1)
   const totalRepayment = monthlyPayment * tenure
 
+  // Auto-approve strong credit; reject the rest up front. Previously scores in
+  // the 50–69 band sat in 'pending' forever (no endpoint can move a loan out of
+  // pending) and, since a pending loan blocks new applications, locked the
+  // borrower out of ever re-applying.
+  const approved = creditScore.score >= 70
   const loan = await Loan.create({
     userId: req.user!.userId,
     agreementId,
@@ -73,23 +78,26 @@ router.post('/apply', authenticate, async (req, res) => {
     totalRepayment: Math.round(totalRepayment * 100) / 100,
     creditScoreAtApproval: creditScore.score,
     reason,
-    status: 'pending',
+    status: approved ? 'approved' : 'rejected',
   })
 
-  // Auto-approve if credit score is good enough (in production, would go through review)
-  if (creditScore.score >= 70) {
-    loan.status = 'approved'
-    await loan.save()
-
+  if (approved) {
     notify({
       userId: req.user!.userId,
       title: 'Loan Approved',
       message: `Your micro-loan of GHS ${amount.toFixed(2)} has been approved. It will be disbursed to your wallet shortly.`,
       actionUrl: '/savings',
     })
+  } else {
+    notify({
+      userId: req.user!.userId,
+      title: 'Loan Application Rejected',
+      message: `Your micro-loan application was rejected — automatic approval requires a credit score of at least 70 (yours is ${creditScore.score}). Improve your score and apply again.`,
+      actionUrl: '/savings',
+    })
   }
 
-  success(res, { ...loan.toObject(), id: loan._id.toString() }, 'Loan application submitted', 201)
+  success(res, { ...loan.toObject(), id: loan._id.toString() }, approved ? 'Loan application submitted' : 'Loan application rejected — credit score below 70', 201)
 })
 
 // Disburse approved loan

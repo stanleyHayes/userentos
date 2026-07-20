@@ -42,7 +42,6 @@ export function OwnerActions({ propertyId, listingStatus, rejectionReason, publi
       <Button variant="outline" className="w-full" onClick={() => imageInputRef.current?.click()} disabled={uploadImages.isPending}>
         {uploadImages.isPending ? 'Uploading...' : 'Upload Images'}
       </Button>
-      <Button variant="outline" className="w-full">Edit Listing</Button>
       {listingStatus === 'draft' && (
         <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
           <Send size={14} /> {isPublishing ? 'Publishing...' : 'Publish for Review'}

@@ -402,12 +402,20 @@ function FileClaimModal({ policy, onClose }: { policy: InsurancePolicy; onClose:
   const fileClaim = useFileClaim()
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
+  const [formError, setFormError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const num = Number(amount)
-    if (!num || num <= 0) return
-    if (description.trim().length < 10) return
+    if (!num || num <= 0) {
+      setFormError('Enter a claim amount greater than 0.')
+      return
+    }
+    if (description.trim().length < 10) {
+      setFormError('Description must be at least 10 characters.')
+      return
+    }
+    setFormError('')
     try {
       await fileClaim.mutateAsync({ id: policy.id, amount: num, description })
       useToastStore.getState().addToast('Claim filed successfully.', 'success')
@@ -449,6 +457,10 @@ function FileClaimModal({ policy, onClose }: { policy: InsurancePolicy; onClose:
           rows={4}
           slotProps={{ inputLabel: { shrink: true } }}
         />
+
+        {formError && (
+          <div className="rounded-md bg-danger/10 p-2.5 text-xs text-danger">{formError}</div>
+        )}
 
         {fileClaim.isError && (
           <div className="rounded-md bg-danger/10 p-2.5 text-xs text-danger">{(fileClaim.error as Error).message}</div>

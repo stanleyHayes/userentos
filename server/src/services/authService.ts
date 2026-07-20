@@ -89,8 +89,11 @@ export class AuthService {
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User registered: ${email} (${role})`)
 
-    // Welcome notification (in_app + email)
-    notifyWelcome(user._id.toString(), firstName)
+    // Welcome notification (in_app + email) — best-effort; a transient failure
+    // must not become an unhandled rejection (process-fatal without Sentry).
+    notifyWelcome(user._id.toString(), firstName).catch((err) =>
+      this.logger.warn(`Welcome notification failed for ${email}: ${(err as Error).message}`),
+    )
 
     return { data: { user: safeUser, token, refreshToken }, status: 201 }
   }

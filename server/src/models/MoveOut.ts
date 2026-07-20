@@ -119,11 +119,20 @@ const moveOutSchema = new Schema<IMoveOut>(
   { timestamps: true }
 )
 
-// One in-flight MoveOut per agreement is the typical case; allow only one
-// non-closed move-out per agreement at a time.
+// Allow only one non-closed move-out per agreement — enforced by a unique
+// partial index so two concurrent initiations can't both win the check-then-create
+// race. $ne isn't allowed in partialFilterExpression, hence the explicit $in list.
 moveOutSchema.index(
-  { agreementId: 1, status: 1 },
-  { unique: false }
+  { agreementId: 1 },
+  {
+    unique: true,
+    name: 'one_active_moveout_per_agreement',
+    partialFilterExpression: {
+      status: {
+        $in: ['initiated', 'inspection_scheduled', 'inspected', 'disputed', 'refund_pending', 'refund_paid'],
+      },
+    },
+  }
 )
 
 export const MoveOut = mongoose.model<IMoveOut>('MoveOut', moveOutSchema)

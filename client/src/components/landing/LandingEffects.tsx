@@ -179,8 +179,9 @@ export function CountUp({
     if (!isVisible || started.current) return
     started.current = true
     if (reducedMotion()) {
-      setDisplay(value)
-      return
+      // No animation — jump straight to the final value (deferred so the effect doesn't set state synchronously)
+      const raf = requestAnimationFrame(() => setDisplay(value))
+      return () => cancelAnimationFrame(raf)
     }
     const start = performance.now()
     let raf = 0

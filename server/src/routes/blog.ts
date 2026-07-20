@@ -36,10 +36,17 @@ router.get('/slug/:slug', async (req, res) => {
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })
 
-// Get post by ID (for editing)
+// Get post by ID (for editing). Unpublished drafts stay private to their author
+// and staff — the list/slug endpoints already filter to published posts only.
 router.get('/:id', authenticate, async (req, res) => {
   const post = await BlogPost.findById(param(req.params.id)).lean()
   if (!post) { error(res, 'Post not found', 404); return }
+  const roles = req.user!.roles
+  const isStaff = roles.includes('admin') || roles.includes('government') || roles.includes('legal_officer') || roles.includes('super_admin')
+  if (!post.published && post.author !== req.user!.userId && !isStaff) {
+    error(res, 'Post not found', 404)
+    return
+  }
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })
 

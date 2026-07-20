@@ -33,12 +33,14 @@ interface ShareEntry {
 
 export function TenantPassportPage() {
   const user = useAuthStore((s) => s.user)
-  const { data, isLoading } = useMyPassportPreview()
+  const isTenant = user?.activeRole === 'tenant'
+  const { data, isLoading } = useMyPassportPreview(isTenant)
   const generate = useGenerateShareLink()
   const [shareHistory, setShareHistory] = useState<ShareEntry[]>([])
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
-  if (user?.activeRole !== 'tenant') {
+  if (!isTenant) {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <Card>
@@ -54,7 +56,6 @@ export function TenantPassportPage() {
 
   // Mint a short-lived, download-only token for the PDF — the session JWT must
   // never appear in a URL (server logs, browser history, referers).
-  const [downloading, setDownloading] = useState(false)
   const handleDownload = async () => {
     setDownloading(true)
     try {

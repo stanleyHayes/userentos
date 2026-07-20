@@ -99,19 +99,10 @@ export const savingsController = {
     const parsed = amountMethodSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const debited = await debitWallet(req.user!.userId, parsed.data.amount, {
-      type: 'withdrawal',
-      reference: `WTH-${Date.now()}`,
-      description: `Withdrawal to ${parsed.data.method.replace('_', ' ')}`,
-    })
-    if (!debited) {
-      const exists = await Wallet.exists({ userId: req.user!.userId })
-      error(res, exists ? 'Insufficient balance' : 'Wallet not found', exists ? 400 : 404)
-      return
-    }
-
-    const wallet = await Wallet.findOne({ userId: req.user!.userId }).lean()
-    success(res, { wallet: { ...wallet, id: (wallet!._id as Types.ObjectId).toString() } })
+    // No payout rail exists yet (no provider disbursement, Payment record, or
+    // admin queue) — debiting here would permanently burn the user's balance.
+    // Refuse cleanly until a real disbursement path ships.
+    error(res, 'Withdrawals are not yet available', 503)
   },
 
   listPlans: async (req: Request, res: Response) => {

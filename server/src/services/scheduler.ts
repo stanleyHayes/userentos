@@ -1,7 +1,6 @@
 import cron from 'node-cron'
 import { Types } from 'mongoose'
 import { SavingsPlan } from '../models/SavingsPlan.js'
-import { Wallet } from '../models/Wallet.js'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
@@ -99,7 +98,7 @@ export function startScheduler() {
             title: 'Auto-debit Failed',
             message: `Insufficient wallet balance for your ${plan.frequency} savings contribution of GHS ${plan.contributionAmount.toFixed(2)}.`,
             actionUrl: '/savings',
-          })
+          }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           continue
         }
 
@@ -120,7 +119,7 @@ export function startScheduler() {
               title: 'Savings Goal Reached!',
               message: `Your savings plan has reached its target of GHS ${plan.targetAmount.toFixed(2)}!`,
               actionUrl: '/savings',
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           }
         } catch (err) {
           await creditWallet(plan.userId, plan.contributionAmount, {
@@ -136,7 +135,7 @@ export function startScheduler() {
         logger.error(`[Scheduler] Auto-debit failed for plan ${plan._id}:`, err)
       }
     }
-  })
+  }, { timezone: GHANA_TZ })
 
   // Rent reminders: runs every day at 9am
   // Checks active agreements and reminds tenants if rent is due within 3, 7, or 14 days
@@ -169,11 +168,20 @@ export function startScheduler() {
         const paidAgreementIds = new Set(recentPayments.map((p) => p.agreementId))
 
         for (const agreement of activeAgreements) {
-          // Calculate next payment due date based on start date and monthly cycle
+          // Rent falls due each month on the lease start day-of-month: this
+          // month's occurrence if it's still ahead, otherwise next month's.
+          // Clamp to the month length so a 31st-day start in a 30-day month
+          // falls due on the last day of the month.
           const start = new Date(agreement.startDate)
-          const monthsSinceStart = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
-          const nextDue = new Date(start)
-          nextDue.setMonth(start.getMonth() + monthsSinceStart + 1)
+          const startDay = start.getDate()
+          const daysThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+          let nextDue = new Date(now.getFullYear(), now.getMonth(), Math.min(startDay, daysThisMonth))
+          if (start.getTime() > now.getTime()) {
+            nextDue = start // lease hasn't started — first rent is due on the start date
+          } else if (nextDue.getTime() < now.getTime()) {
+            const daysNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate()
+            nextDue = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(startDay, daysNextMonth))
+          }
 
           const daysUntilDue = Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -188,7 +196,7 @@ export function startScheduler() {
               agreement.rentAmount,
               daysUntilDue,
               propertyTitle
-            )
+            ).catch((err) => logger.warn('[Scheduler] notify failed:', err))
             logger.info(`[Scheduler] Sent rent reminder to tenant ${agreement.tenantId} (${daysUntilDue} days)`)
           }
         }
@@ -197,7 +205,7 @@ export function startScheduler() {
     } catch (err) {
       logger.error('[Scheduler] Rent reminder error:', err)
     }
-  })
+  }, { timezone: GHANA_TZ })
 
   // ─── Daily 9am Ghana time: lease expiry + payment due + maintenance escalation ───
   cron.schedule(
@@ -239,13 +247,13 @@ export function startScheduler() {
               title: 'Lease Expiring Soon',
               message: `Lease for "${propertyTitle}" expires in ${days} days. Tap to renew.`,
               actionUrl: `/agreements/${(agreement._id as Types.ObjectId).toString()}`,
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
             notify({
               userId: agreement.tenantId,
               title: 'Your Lease Ends Soon',
               message: `Your lease at "${propertyTitle}" ends in ${days} days. Tap to renew.`,
               actionUrl: `/agreements/${(agreement._id as Types.ObjectId).toString()}`,
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
 
             // Persist the lastLeaseReminderAt directly (field is dynamic/extra)
             await Agreement.updateOne(
@@ -303,13 +311,13 @@ export function startScheduler() {
               title: 'Move-out Initiated',
               message: `Your lease at "${propertyTitle}" has ended. A move-out has been started — please review and acknowledge.`,
               actionUrl: `/agreements/${agId}/move-out`,
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
             notify({
               userId: a.landlordId,
               title: 'Move-out Initiated',
               message: `The lease at "${propertyTitle}" has ended. Schedule the inspection to begin the move-out.`,
               actionUrl: `/agreements/${agId}/move-out`,
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           }
           batch++
         } while (expired.length === batchSize)
@@ -361,13 +369,14 @@ export function startScheduler() {
           }
 
           notify({ userId: payment.tenantId, title, message, actionUrl: '/payments' })
+            .catch((err) => logger.warn('[Scheduler] notify failed:', err))
           if (days === -3 && payment.landlordId) {
             notify({
               userId: payment.landlordId,
               title: 'Tenant Payment Overdue',
               message: `A tenant payment of GHS ${payment.amount.toFixed(2)} is 3 days overdue.`,
               actionUrl: '/payments',
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           }
 
           await Payment.updateOne(
@@ -412,7 +421,7 @@ export function startScheduler() {
                 ? `"${request.title}" at "${propertyTitle}" is unanswered for >48h. Priority escalated to ${escalated}.`
                 : `"${request.title}" at "${propertyTitle}" is still awaiting your response.`,
               actionUrl: '/maintenance',
-            })
+            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           } catch (itemErr) {
             logger.error(`[Scheduler] Escalation failed for request ${request._id}:`, itemErr)
           }
@@ -460,7 +469,9 @@ export function startScheduler() {
             c.status = next as typeof c.status
             const msg = `Contract ${c._id.toString().slice(-6)} status: ${prev} → ${next} (${overdueCount} overdue installments)`
             notify({ userId: c.applicantId, title: 'Financing Status Update', message: msg, actionUrl: `/financing/contracts/${c._id}` })
+              .catch((err) => logger.warn('[Scheduler] notify failed:', err))
             notify({ userId: c.financierId, title: 'Contract Status Update', message: msg, actionUrl: `/financing/contracts/${c._id}` })
+              .catch((err) => logger.warn('[Scheduler] notify failed:', err))
           }
           c.lastArrearsCheckAt = now.toISOString()
           c.markModified('schedule')

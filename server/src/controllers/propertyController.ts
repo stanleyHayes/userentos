@@ -3,6 +3,7 @@ import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { propertyService } from '../container.js'
 import { Property } from '../models/Property.js'
+import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
@@ -14,6 +15,8 @@ import { cache } from '../services/cache.js'
 interface LeanProperty {
   _id: Types.ObjectId
   id?: string
+  landlordId?: string
+  listingStatus?: string
   preferences?: {
     minCreditScore?: number
     allowSmokers?: boolean
@@ -103,22 +106,30 @@ export const propertyController = {
       sort: q.sort as string | undefined,
     }
 
-    // Only show draft/pending properties to their landlords or admins
+    // Only show draft/pending properties to their owners or admins. `mine=true`
+    // scopes the list to the caller's own properties (any status); otherwise a
+    // landlord/manager browses all approved listings plus their own (the
+    // non-approved filter is applied post-query below, since listProperties
+    // can't express "approved OR mine").
     const user = req.user
-    if (user) {
-      if (user.roles.includes('landlord') || user.roles.includes('property_manager')) {
-        filters.landlordId = user.userId
-      } else if (!user.roles.includes('admin') && !user.roles.includes('super_admin')) {
-        // Tenants and other roles: hide draft/pending/rejected
-        filters.listingStatus = 'approved'
-      }
-    } else {
-      // Unauthenticated: only approved listings
+    const isLandlordRole = !!user && (user.roles.includes('landlord') || user.roles.includes('property_manager'))
+    const isAdmin = !!user && (user.roles.includes('admin') || user.roles.includes('super_admin'))
+    const ownOnly = !!user && q.mine === 'true'
+    if (ownOnly) {
+      filters.landlordId = user!.userId
+    } else if (!isLandlordRole && !isAdmin) {
+      // Tenants, other roles, and unauthenticated: hide draft/pending/rejected
       filters.listingStatus = 'approved'
     }
 
     const result = await propertyService.listProperties(filters)
     let items = result.items
+
+    // Browsing landlord/manager: hide other landlords' draft/pending/rejected
+    // listings, but keep their own of any status.
+    if (!ownOnly && isLandlordRole && !isAdmin) {
+      items = items.filter((p) => (p as LeanProperty).listingStatus === 'approved' || (p as LeanProperty).landlordId === user!.userId)
+    }
 
     // For government users, show occupied properties that are ending soon or not renewing
     if (user?.roles.includes('government')) {
@@ -261,13 +272,19 @@ export const propertyController = {
     property.listingStatus = 'pending_review'
     await property.save()
 
-    // Notify admins
-    notify({
-      userId: 'admin',
-      title: 'Property Pending Review',
-      message: `"${property.title}" has been submitted for review.`,
-      actionUrl: `/admin/properties`,
-    })
+    // Notify admins (best-effort) — a literal 'admin' userId reaches no one.
+    User.find({ roles: { $in: ['admin', 'super_admin'] } }).select('_id').lean()
+      .then((admins) => {
+        for (const admin of admins) {
+          notify({
+            userId: (admin._id as Types.ObjectId).toString(),
+            title: 'Property Pending Review',
+            message: `"${property.title}" has been submitted for review.`,
+            actionUrl: `/admin/properties`,
+          })
+        }
+      })
+      .catch((err) => console.warn('[Property] admin notify failed:', err))
 
     success(res, { ...property.toObject(), id: property._id.toString() }, 'Property submitted for review')
   },

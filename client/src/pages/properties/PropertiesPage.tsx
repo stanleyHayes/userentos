@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -78,13 +78,20 @@ export function PropertiesPage() {
   const user = useAuthStore((s) => s.user)
   const isLandlord = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager'
   const [filters, setFilters] = useState<Filters>(defaultFilters)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const { attach: viewPillAttach, style: viewPillStyle, visible: viewPillVisible } = useSlidingIndicator<HTMLDivElement>(view)
 
+  // Debounce the search filter so each keystroke doesn't fire a query
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.search), 300)
+    return () => clearTimeout(t)
+  }, [filters.search])
+
   const queryParams = new URLSearchParams()
   if (isLandlord) queryParams.set('mine', 'true')
-  if (filters.search) queryParams.set('search', filters.search)
+  if (debouncedSearch) queryParams.set('search', debouncedSearch)
   if (filters.type) queryParams.set('type', filters.type)
   if (filters.region) queryParams.set('region', filters.region)
   if (filters.city) queryParams.set('city', filters.city)

@@ -126,9 +126,9 @@ export function WorkerMarketplacePage() {
       {/* Filters */}
       <Card className="p-4 mb-6">
         <div className="grid md:grid-cols-5 gap-3">
-          <Select id="filter-trade" label="Trade" value={filters.trade} onChange={e => setFilters(p => ({ ...p, trade: e.target.value }))} options={TRADE_OPTIONS} />
-          <Input id="filter-location" label="Location" value={filters.location} onChange={e => setFilters(p => ({ ...p, location: e.target.value }))} placeholder="e.g. Accra" />
-          <Select id="filter-rating" label="Min Rating" value={filters.minRating} onChange={e => setFilters(p => ({ ...p, minRating: e.target.value }))} options={[
+          <Select id="filter-trade" label="Trade" value={filters.trade} onChange={e => { setFilters(p => ({ ...p, trade: e.target.value })); setPage(1) }} options={TRADE_OPTIONS} />
+          <Input id="filter-location" label="Location" value={filters.location} onChange={e => { setFilters(p => ({ ...p, location: e.target.value })); setPage(1) }} placeholder="e.g. Accra" />
+          <Select id="filter-rating" label="Min Rating" value={filters.minRating} onChange={e => { setFilters(p => ({ ...p, minRating: e.target.value })); setPage(1) }} options={[
             { value: '', label: 'Any' },
             { value: '3', label: '3+ stars' },
             { value: '4', label: '4+ stars' },
@@ -136,12 +136,12 @@ export function WorkerMarketplacePage() {
           ]} />
           <div className="flex items-end gap-3">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filters.emergency} onChange={e => setFilters(p => ({ ...p, emergency: e.target.checked }))} className="rounded border-border" />
+              <input type="checkbox" checked={filters.emergency} onChange={e => { setFilters(p => ({ ...p, emergency: e.target.checked })); setPage(1) }} className="rounded border-border" />
               <span className="text-sm text-muted">Emergency</span>
               <AlertCircle size={14} className="text-red-500" />
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filters.verified} onChange={e => setFilters(p => ({ ...p, verified: e.target.checked }))} className="rounded border-border" />
+              <input type="checkbox" checked={filters.verified} onChange={e => { setFilters(p => ({ ...p, verified: e.target.checked })); setPage(1) }} className="rounded border-border" />
               <span className="text-sm text-muted">Verified</span>
               <ShieldCheck size={14} className="text-green-500" />
             </label>

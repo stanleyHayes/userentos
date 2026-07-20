@@ -103,7 +103,7 @@ export function SwipeFeedPage() {
   }
 
   const decide = (decision: Decision) => {
-    if (!top) return
+    if (!top || exit) return
     setExit({ id: pid(top), direction: decision })
     if (decision === 'like') void toggleFavorite(pid(top))
     const decided = top

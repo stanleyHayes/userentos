@@ -1,12 +1,27 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 
 let socket: Socket | null = null
-let connecting = false
 let connectionCount = 0
+
+// The socket is a module-level singleton; subscribers re-render when it changes.
+const socketListeners = new Set<() => void>()
+
+function subscribeSocket(listener: () => void): () => void {
+  socketListeners.add(listener)
+  return () => socketListeners.delete(listener)
+}
+
+function getSocketSnapshot(): Socket | null {
+  return socket
+}
+
+function emitSocketChange(): void {
+  socketListeners.forEach((listener) => listener())
+}
 
 function getServerUrl(): string {
   // In production, use the API URL (without /api suffix)
@@ -17,10 +32,10 @@ function getServerUrl(): string {
 }
 
 function connectSocket(token: string): Socket {
-  // Guard against a mid-connect race: two consumers mounting while the first
-  // socket is still connecting must not create a second, orphaned connection.
-  if (socket?.connected || connecting) return socket!
-  connecting = true
+  // Reuse the live instance: a socket that is mid-connect or temporarily
+  // disconnected (auto-reconnect in progress) must not be replaced by a
+  // second, orphaned connection. Only an explicitly destroyed socket is recreated.
+  if (socket) return socket
 
   socket = io(getServerUrl(), {
     auth: { token },
@@ -32,7 +47,6 @@ function connectSocket(token: string): Socket {
   })
 
   socket.on('connect', () => {
-    connecting = false
     console.log('[Socket] Connected:', socket?.id)
   })
 
@@ -42,8 +56,11 @@ function connectSocket(token: string): Socket {
 
   socket.on('disconnect', (reason) => {
     console.log('[Socket] Disconnected:', reason)
+    // socket.io does not auto-reconnect after a server-initiated disconnect
+    if (reason === 'io server disconnect') socket?.connect()
   })
 
+  emitSocketChange()
   return socket
 }
 
@@ -53,8 +70,8 @@ function disconnectSocket(): void {
     socket.disconnect()
     socket = null
   }
-  connecting = false
   connectionCount = 0
+  emitSocketChange()
 }
 
 /**
@@ -64,14 +81,13 @@ function disconnectSocket(): void {
 export function useSocket(): Socket | null {
   const token = useAuthStore((s) => s.token)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const socketRef = useRef<Socket | null>(null)
+  const socketInstance = useSyncExternalStore(subscribeSocket, getSocketSnapshot)
   const queryClient = useQueryClient()
 
   useEffect(() => {
     if (isAuthenticated && token) {
       connectionCount++
       const s = connectSocket(token)
-      socketRef.current = s
 
       // Listen for real-time notifications → show toast
       const handleNotification = (data: { title: string; message: string }) => {
@@ -101,7 +117,6 @@ export function useSocket(): Socket | null {
       s.on('booking:reviewed', handleBookingEvent)
 
       return () => {
-        connectionCount--
         s.off('notification:new', handleNotification)
         s.off('badges:update', handleBadgeUpdate)
         s.off('booking:created', handleBookingEvent)
@@ -110,14 +125,18 @@ export function useSocket(): Socket | null {
         s.off('booking:quote_accepted', handleBookingEvent)
         s.off('booking:note_added', handleBookingEvent)
         s.off('booking:reviewed', handleBookingEvent)
-        // Only fully disconnect when all consumers have unmounted
-        if (connectionCount <= 0) {
-          disconnectSocket()
+        // Logout may have already torn this socket down (and reset the count);
+        // only cleanups against the live socket keep the refcount balanced.
+        if (socket === s) {
+          connectionCount--
+          // Only fully disconnect when all consumers have unmounted
+          if (connectionCount <= 0) {
+            disconnectSocket()
+          }
         }
       }
     } else {
       disconnectSocket()
-      socketRef.current = null
     }
   }, [isAuthenticated, token, queryClient])
 
@@ -126,11 +145,10 @@ export function useSocket(): Socket | null {
     const unsub = useAuthStore.subscribe((state, prevState) => {
       if (prevState.isAuthenticated && !state.isAuthenticated) {
         disconnectSocket()
-        socketRef.current = null
       }
     })
     return unsub
   }, [])
 
-  return isAuthenticated ? socket : null
+  return isAuthenticated ? socketInstance : null
 }

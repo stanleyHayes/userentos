@@ -26,8 +26,12 @@ export function CreateReviewModal({ propertyId, onClose }: CreateReviewModalProp
     if (rating === 0) return
     const pros = prosText.split('\n').map((s) => s.trim()).filter(Boolean)
     const cons = consText.split('\n').map((s) => s.trim()).filter(Boolean)
-    await createReview.mutateAsync({ propertyId, rating, comment, pros, cons, anonymous })
-    onClose()
+    try {
+      await createReview.mutateAsync({ propertyId, rating, comment, pros, cons, anonymous })
+      onClose()
+    } catch {
+      // Error is displayed via mutation.isError
+    }
   }
 
   return (

@@ -42,26 +42,24 @@ export function AdminInsurancePoliciesPage() {
   const [statusFilter, setStatusFilter] = useState<InsurancePolicyStatus | 'all'>('all')
   const [page, setPage] = useState(1)
   const { attach: statusPillAttach, style: statusPillStyle, visible: statusPillVisible } = useSlidingIndicator<HTMLDivElement>(statusFilter)
-  const queryParams = useMemo(() => ({ page }), [page])
+  const queryParams = useMemo(
+    () => ({ status: statusFilter === 'all' ? undefined : statusFilter, page }),
+    [statusFilter, page],
+  )
   const { data, isLoading } = useAdminInsurancePolicies(queryParams)
-  const allItems = useMemo(() => data?.items ?? [], [data?.items])
-
-  const items = useMemo(() => {
-    if (statusFilter === 'all') return allItems
-    return allItems.filter((p) => p.status === statusFilter)
-  }, [allItems, statusFilter])
+  const items = useMemo(() => data?.items ?? [], [data?.items])
 
   const total = data?.total ?? 0
   const totalPages = data?.totalPages ?? 1
 
   const stats = useMemo(() => {
-    const active = allItems.filter((p) => p.status === 'active').length
-    const risk = allItems.filter((p) => p.status === 'lapsed' || p.status === 'cancelled').length
-    const monthlyPremium = allItems.reduce((sum, p) => sum + p.monthlyPremium, 0)
-    const claims = allItems.reduce((sum, p) => sum + (p.claims?.length ?? 0), 0)
+    const active = items.filter((p) => p.status === 'active').length
+    const risk = items.filter((p) => p.status === 'lapsed' || p.status === 'cancelled').length
+    const monthlyPremium = items.reduce((sum, p) => sum + p.monthlyPremium, 0)
+    const claims = items.reduce((sum, p) => sum + (p.claims?.length ?? 0), 0)
 
     return { active, risk, monthlyPremium, claims }
-  }, [allItems])
+  }, [items])
 
   return (
     <div className="space-y-5">
@@ -120,7 +118,10 @@ export function AdminInsurancePoliciesPage() {
             <button
               key={f.value}
               data-tab-key={f.value}
-              onClick={() => setStatusFilter(f.value)}
+              onClick={() => {
+                setStatusFilter(f.value)
+                setPage(1)
+              }}
               className={`relative z-10 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 statusFilter === f.value
                   ? 'text-white'

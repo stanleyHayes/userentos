@@ -15,9 +15,9 @@ import { Property } from './models/Property.js'
 import { logger } from './utils/logger.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { errorTrackingHandler, readRecentErrors } from './middleware/errorTracking.js'
-import { authenticate, requireRole } from './middleware/auth.js'
+import { authenticate, optionalAuth, requireRole } from './middleware/auth.js'
 import { success } from './utils/response.js'
-import { claimBootstrap } from './models/BootstrapState.js'
+import { runBootstrap } from './models/BootstrapState.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
 import './openapi/endpoints.js'
@@ -76,6 +76,9 @@ import { finalizePayment } from './services/payments/finalize.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
+// Deployed behind Render's proxy: trust the first hop only, so express-rate-limit
+// accepts X-Forwarded-For instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1)
 const httpServer = http.createServer(app)
 
 // ─── Security & tracing ───
@@ -139,14 +142,21 @@ app.use((req, _res, next) => {
   next()
 })
 
-// Apply public read limiters to unauthenticated read endpoints
+// Apply public read limiters to unauthenticated read endpoints. Match on a
+// path-segment boundary so '/api/legal' doesn't also catch the admin-only
+// '/api/legal-documents/*' routes.
 const publicReadPaths = ['/api/blog', '/api/reviews', '/api/legal', '/api/subscriptions']
 app.use((req, res, next) => {
-  if (req.method === 'GET' && publicReadPaths.some((p) => req.path.startsWith(p))) {
+  if (req.method === 'GET' && publicReadPaths.some((p) => req.path === p || req.path.startsWith(`${p}/`))) {
     return publicLimiter(req, res, next)
   }
   next()
 })
+
+// Populate req.user from a valid Bearer token WITHOUT rejecting anonymous
+// requests, so writeLimiter's keyGenerator can key per authenticated user —
+// routers mount `authenticate` themselves, which is too late for app-level limiters.
+app.use(optionalAuth)
 
 // AI/LLM endpoints trigger paid provider calls — limit them hard. The aiLimiter
 // is applied per-route inside routes/ai.ts (AFTER authenticate) so its keyGenerator
@@ -322,19 +332,19 @@ async function start() {
       if (process.env.NODE_ENV === 'production') {
         logger.warn('SEED_DEMO=true in production — demo accounts with default passwords will be created. Rotate them immediately.')
       }
-      if (await claimBootstrap('seedDatabase')) {
-        await seedDatabase()
+      if (await runBootstrap('seedDatabase', seedDatabase)) {
+        logger.info('Bootstrap: seedDatabase completed.')
       } else {
         logger.info('Bootstrap: seedDatabase already ran on this database — skipping.')
       }
     }
-    if (await claimBootstrap('bootstrapInsurance')) {
-      await bootstrapInsurance()
+    if (await runBootstrap('bootstrapInsurance', bootstrapInsurance)) {
+      logger.info('Bootstrap: bootstrapInsurance completed.')
     } else {
       logger.info('Bootstrap: bootstrapInsurance already ran on this database — skipping.')
     }
-    if (await claimBootstrap('bootstrapFeatureFlags')) {
-      await bootstrapFeatureFlags()
+    if (await runBootstrap('bootstrapFeatureFlags', bootstrapFeatureFlags)) {
+      logger.info('Bootstrap: bootstrapFeatureFlags completed.')
     } else {
       logger.info('Bootstrap: bootstrapFeatureFlags already ran on this database — skipping.')
     }

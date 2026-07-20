@@ -200,7 +200,9 @@ export const agreementController = {
       }
       // Notify both that agreement is now active
       notifyAgreementFullySigned(agreement.tenantId, propertyTitle)
+        .catch((err) => console.warn('[Agreement] notify failed:', err))
       notifyAgreementFullySigned(agreement.landlordId, propertyTitle)
+        .catch((err) => console.warn('[Agreement] notify failed:', err))
       dispatchWebhook('agreement.activated', { agreementId: agreement._id.toString(), propertyId: agreement.propertyId, tenantId: agreement.tenantId, landlordId: agreement.landlordId }, { userId: agreement.tenantId })
       // Award first_lease (idempotent)
       checkAndAward(agreement.tenantId, 'lease_signed', { agreementId: agreement._id.toString() })
@@ -210,10 +212,46 @@ export const agreementController = {
       // Notify the other party that one side signed
       const otherPartyId = userId === agreement.landlordId ? agreement.tenantId : agreement.landlordId
       notifyAgreementSigned(otherPartyId, propertyTitle, signerName)
+        .catch((err) => console.warn('[Agreement] notify failed:', err))
       dispatchWebhook('agreement.signed', { agreementId: agreement._id.toString(), signedBy: userId, pendingParty: otherPartyId }, { userId: otherPartyId })
     }
 
     await agreement.save()
+
+    // Concurrent-sign recovery: when both parties sign at the same time, each
+    // works from a stale document and each save persists only its own modified
+    // paths — both signatures land in the DB, but neither in-memory copy sees
+    // the other, so the status would stay 'pending_signatures' forever. Re-read
+    // and, if both signatures are now present, run the both-signed transition.
+    const fresh = await Agreement.findById(agreement._id)
+    if (
+      fresh
+      && fresh.landlordSignature && fresh.tenantSignature
+      && (fresh.status === 'draft' || fresh.status === 'pending_signatures')
+    ) {
+      fresh.status = 'active'
+      // Same atomic predicate as above: only flip a non-occupied property.
+      const occupied = await Property.findOneAndUpdate(
+        { _id: fresh.propertyId, status: { $ne: 'occupied' } },
+        { $set: { status: 'occupied' } },
+        { new: true },
+      )
+      if (!occupied) {
+        error(res, 'This property is already occupied under another agreement', 409)
+        return
+      }
+      await fresh.save()
+      notifyAgreementFullySigned(fresh.tenantId, propertyTitle)
+        .catch((err) => console.warn('[Agreement] notify failed:', err))
+      notifyAgreementFullySigned(fresh.landlordId, propertyTitle)
+        .catch((err) => console.warn('[Agreement] notify failed:', err))
+      dispatchWebhook('agreement.activated', { agreementId: fresh._id.toString(), propertyId: fresh.propertyId, tenantId: fresh.tenantId, landlordId: fresh.landlordId }, { userId: fresh.tenantId })
+      checkAndAward(fresh.tenantId, 'lease_signed', { agreementId: fresh._id.toString() })
+        .catch((err) => console.warn('[Agreement] checkAndAward failed:', err.message))
+      success(res, { ...fresh.toObject(), id: fresh._id.toString() })
+      return
+    }
+
     success(res, { ...agreement.toObject(), id: agreement._id.toString() })
   },
 

@@ -97,6 +97,15 @@ router.post('/applications', authenticate, async (req, res) => {
     error(res, `Tenure must be between ${offer.minTenureMonths} and ${offer.maxTenureMonths} months`); return
   }
 
+  // A linked agreement must exist and belong to the applicant as tenant — at
+  // sign time the contract's disbursement target (landlordId) comes from this
+  // agreement, so an arbitrary id could redirect the payout to someone else.
+  if (parsed.data.agreementId) {
+    const agreement = await Agreement.findById(parsed.data.agreementId).select('tenantId').lean()
+    if (!agreement) { error(res, 'Linked agreement not found', 404); return }
+    if (agreement.tenantId !== req.user!.userId) { error(res, 'You can only link an agreement where you are the tenant'); return }
+  }
+
   const credit = await CreditScore.findOne({ userId: req.user!.userId })
   if (offer.minCreditScore > 0 && (!credit || credit.score < offer.minCreditScore)) {
     error(res, `Your credit score (${credit?.score ?? 0}) is below the minimum required (${offer.minCreditScore})`); return

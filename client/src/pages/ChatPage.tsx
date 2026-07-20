@@ -261,12 +261,16 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  // Mark conversation as read when opened
+  // Mark conversation as read when opened, and when messages arrive in the open
+  // thread via socket (latestMessageId changes). markRead only invalidates
+  // ['conversations'] / ['unread-count'] — the refetch zeroes unreadCount, so the
+  // effect settles instead of looping.
+  const latestMessageId = messages[messages.length - 1]?.id
   useEffect(() => {
     if (activeConversationId && activeConversation?.unreadCount && activeConversation.unreadCount > 0) {
       markRead.mutate(activeConversationId)
     }
-  }, [activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeConversationId, activeConversation?.unreadCount, latestMessageId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus input when conversation opens
   useEffect(() => {

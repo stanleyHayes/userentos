@@ -79,7 +79,7 @@ export function DisputeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const isGov = user?.activeRole === 'government' || user?.activeRole === 'admin' || user?.activeRole === 'legal_officer'
+  const isGov = user?.activeRole === 'government' || user?.activeRole === 'admin' || user?.activeRole === 'super_admin' || user?.activeRole === 'legal_officer'
 
   const { data: dispute, isLoading } = useDispute(id!)
   const updateStatus = useUpdateDisputeStatus()
@@ -112,13 +112,19 @@ export function DisputeDetailPage() {
   }
 
   const isClosed = dispute.status === 'closed' || dispute.status === 'resolved'
+  // Server 403s evidence uploads from non-parties — only tenant/landlord on the dispute may upload
+  const isParty = user?.id === dispute.filedBy || user?.id === dispute.filedAgainst
   const categoryLabel = categoryOptions.find((c) => c.value === dispute.category)?.label ?? dispute.category
   const catEmoji = categoryIcon[dispute.category] ?? '\u{1F4CB}'
 
   async function handleUpdate() {
     if (!status) return
-    await updateStatus.mutateAsync({ id: dispute!.id, status, resolution: resolution || undefined })
-    navigate('/disputes')
+    try {
+      await updateStatus.mutateAsync({ id: dispute!.id, status, resolution: resolution || undefined })
+      navigate('/disputes')
+    } catch {
+      // Rejected transitions (e.g. 409) surface inline via updateStatus.error
+    }
   }
 
   return (
@@ -258,7 +264,7 @@ export function DisputeDetailPage() {
         icon={Paperclip}
         title={`Evidence${dispute.evidence?.length ? ` (${dispute.evidence.length})` : ''}`}
         action={
-          !isClosed ? (
+          !isClosed && isParty ? (
             <>
               <input
                 ref={evidenceInputRef}
@@ -383,6 +389,11 @@ export function DisputeDetailPage() {
                 placeholder="Describe the outcome or next steps..."
                 aiContext="dispute resolution notes"
               />
+              {updateStatus.isError && (
+                <div className="rounded-lg bg-danger/10 border border-danger/20 px-3 py-2">
+                  <p className="text-xs text-danger">{(updateStatus.error as Error).message}</p>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="outline" size="sm" onClick={() => setShowGovPanel(false)}>Cancel</Button>
                 <Button size="sm" onClick={handleUpdate} disabled={updateStatus.isPending}>

@@ -86,6 +86,10 @@ export function useAuthHydrated(): boolean {
  * token on success, null otherwise. Mirrors the refresh flow in lib/api.ts —
  * duplicated here to avoid a circular import between the store and the client.
  */
+// Bound the auth-verification calls: without a timeout a hung connection would
+// leave the app on the loading screen indefinitely (fetch has no default timeout).
+const AUTH_CHECK_TIMEOUT_MS = 10_000
+
 async function tryRefreshSession(): Promise<string | null> {
   const { refreshToken } = useAuthStore.getState()
   if (!refreshToken) return null
@@ -95,6 +99,7 @@ async function tryRefreshSession(): Promise<string | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
+      signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
     })
     if (!res.ok) return null
     const data = await res.json()
@@ -139,7 +144,10 @@ export function useAuthRehydrate(): boolean {
     let cancelled = false
     const base = import.meta.env.VITE_API_URL || '/api'
     const fetchMe = (bearer: string) =>
-      fetch(`${base}/users/me`, { headers: { Authorization: `Bearer ${bearer}` } })
+      fetch(`${base}/users/me`, {
+        headers: { Authorization: `Bearer ${bearer}` },
+        signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
+      })
 
     ;(async () => {
       let res = await fetchMe(token)
