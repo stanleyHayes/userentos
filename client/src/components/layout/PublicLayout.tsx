@@ -52,14 +52,15 @@ export function PublicLayout() {
     <div className="public-shell-bg min-h-screen flex flex-col">
       {/* ── Navbar ── */}
       <nav className="sticky top-3 z-50 px-3 py-3 sm:px-6">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 rounded-full border border-border/70 bg-white/82 px-3 shadow-[0_18px_50px_rgba(15,31,51,0.1)] backdrop-blur-2xl dark:border-white/12 dark:bg-[#0a0d12]/78 dark:shadow-black/35 sm:h-16 sm:px-4">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 rounded-full border border-border/70 bg-white/88 px-3 shadow-[0_18px_50px_rgba(15,31,51,0.1)] backdrop-blur-2xl dark:border-sky-300/20 dark:bg-[#102238]/92 dark:shadow-[0_18px_50px_rgba(2,8,23,0.48)] sm:h-16 sm:px-4">
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
-            <Logo size={30} theme="dark" />
+            <span className="dark:hidden"><Logo size={30} theme="dark" /></span>
+            <span className="hidden dark:inline"><Logo size={30} theme="light" /></span>
           </Link>
 
           {/* Desktop links */}
-          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-white/10 dark:bg-white/[0.06] md:flex">
+          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-sky-200/10 dark:bg-[#0b1828]/70 md:flex">
             <span
               aria-hidden
               className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-cyan-300"

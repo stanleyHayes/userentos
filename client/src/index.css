@@ -334,6 +334,35 @@ html {
 .dark .neumorphic-button { box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34); }
 .dark .neumorphic-button:hover { box-shadow: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4); }
 
+.registry-filter-pill {
+  box-shadow: 4px 4px 9px rgba(15, 31, 51, 0.14), -4px -4px 9px rgba(255, 255, 255, 0.88);
+}
+
+.registry-filter-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 5px 5px 11px rgba(15, 31, 51, 0.18), -5px -5px 11px rgba(255, 255, 255, 0.94);
+}
+
+.registry-filter-pill-active {
+  box-shadow: none;
+}
+
+.registry-pill-active {
+  box-shadow: inset 2px 2px 5px rgba(15, 31, 51, 0.24), inset -2px -2px 5px rgba(125, 211, 252, 0.2), 4px 5px 11px rgba(15, 31, 51, 0.22);
+}
+
+.dark .registry-filter-pill {
+  box-shadow: 5px 5px 11px rgba(0, 0, 0, 0.52), -4px -4px 9px rgba(45, 58, 74, 0.34);
+}
+
+.dark .registry-filter-pill:hover {
+  box-shadow: 6px 6px 13px rgba(0, 0, 0, 0.58), -5px -5px 11px rgba(49, 63, 80, 0.4);
+}
+
+.dark .registry-pill-active {
+  box-shadow: inset 2px 2px 5px rgba(15, 23, 42, 0.34), inset -2px -2px 5px rgba(125, 211, 252, 0.22), 5px 6px 13px rgba(0, 0, 0, 0.5);
+}
+
 @keyframes headline-breathe {
   0%, 100% { letter-spacing: -0.035em; filter: brightness(1); }
   50% { letter-spacing: -0.02em; filter: brightness(1.08); }

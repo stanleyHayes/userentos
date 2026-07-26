@@ -240,7 +240,7 @@ export function PublicRegistryPage() {
           <div ref={regionPillAttach} className="relative isolate flex flex-wrap items-center gap-2">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              className="registry-pill-active pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
               style={{ ...regionPillStyle, opacity: regionPillVisible ? 1 : 0 }}
             />
             <ChipButton tabKey="__any_region__" active={!region} onClick={() => setRegion('')}>Any region</ChipButton>
@@ -255,7 +255,7 @@ export function PublicRegistryPage() {
           <div ref={typePillAttach} className="relative isolate flex flex-wrap items-center gap-2">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              className="registry-pill-active pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
               style={{ ...typePillStyle, opacity: typePillVisible ? 1 : 0 }}
             />
             <ChipButton tabKey="__any_type__" active={!propertyType} onClick={() => setPropertyType('')}>Any type</ChipButton>
@@ -270,7 +270,7 @@ export function PublicRegistryPage() {
           <div ref={pricePillAttach} className="relative isolate flex flex-wrap items-center gap-2">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
+              className="registry-pill-active pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary transition-[transform,width,height] duration-300 ease-out dark:bg-blue-500"
               style={{ ...pricePillStyle, opacity: pricePillVisible ? 1 : 0 }}
             />
             <ChipButton tabKey="__any_price__" active={priceRangeIdx === null} onClick={() => setPriceRangeIdx(null)}>Any price</ChipButton>
@@ -371,10 +371,10 @@ function ChipButton({
       type="button"
       data-tab-key={tabKey}
       onClick={onClick}
-      className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+      className={`registry-filter-pill relative z-10 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
         active
-          ? 'text-white border-primary dark:border-blue-500'
-          : 'bg-white dark:bg-[#161927] text-muted dark:text-white/60 border-border dark:border-[#252a3a] hover:border-primary/40 hover:text-primary-dark dark:hover:text-white'
+          ? 'registry-filter-pill-active text-white border-primary dark:border-blue-400'
+          : 'bg-[#f2f5f8] dark:bg-[#151b28] text-muted dark:text-white/65 border-white/70 dark:border-white/[0.07] hover:border-primary/30 hover:text-primary-dark dark:hover:text-white'
       }`}
     >
       {children}
@@ -389,7 +389,7 @@ function RegistryCard({ item }: { item: RegistryListing }) {
     <Link to={`/registry/${item.id}`} className="group block">
       <Card className="p-0 overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
         {/* Image */}
-        <div className="relative h-44 bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/15 dark:to-accent/10">
+        <div className="relative mx-3 mt-3 h-44 overflow-hidden rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/15 dark:to-accent/10">
           {item.image ? (
             <img
               src={item.image}
@@ -455,4 +455,3 @@ function RegistryCard({ item }: { item: RegistryListing }) {
     </Link>
   )
 }
-
