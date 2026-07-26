@@ -191,11 +191,12 @@ export function PublicRegistryPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0c0e1a]">
       {/* Hero */}
-      <section className="animate-circle-reveal relative bg-gradient-to-b from-[#0f1f33] via-primary to-[#0f1f33] pt-12 pb-10 md:pt-16 md:pb-14 overflow-hidden">
+      <section className="animate-circle-reveal relative overflow-hidden bg-gradient-to-b from-[#091421] via-[#173a55] to-[#0b1a2a] pt-12 pb-10 md:pt-16 md:pb-14">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-[120px]" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-400/10 rounded-full blur-[100px]" />
-          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+          <div className="absolute left-1/4 top-1/3 h-96 w-96 rounded-full bg-sky-300/[0.07] blur-[130px]" />
+          <div className="absolute bottom-1/4 right-1/4 h-80 w-80 rounded-full bg-emerald-300/[0.06] blur-[110px]" />
+          <div className="absolute inset-0 bg-[#07111d]/10" />
+          <div className="absolute inset-0 opacity-[0.045]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
           <IconWatermark icon={Search} tone="brand" className="animate-parallax-drift -bottom-10 -right-6 size-56 hidden md:block" />
         </div>
         <div className="relative max-w-5xl mx-auto px-6 text-center">
@@ -206,24 +207,24 @@ export function PublicRegistryPage() {
           <h1 className="text-3xl md:text-5xl font-extrabold font-display text-white leading-tight tracking-tight">
             Search Ghana's <span className="bg-gradient-to-r from-secondary via-amber-300 to-secondary bg-clip-text text-transparent">Property Registry</span>
           </h1>
-          <p className="text-base text-white/60 mt-4 max-w-2xl mx-auto">
+          <p className="mx-auto mt-4 max-w-2xl text-base text-white/78">
             Every listing is verified and approved. Transparent pricing, real properties, real landlords — across all 16 regions.
           </p>
 
           {/* Search bar */}
           <form onSubmit={handleSearch} className="mt-8 max-w-2xl mx-auto">
-            <div className="flex gap-2 p-1.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-lg shadow-2xl shadow-black/30">
+            <div className="flex gap-2 rounded-2xl border border-white/15 bg-[#071522]/55 p-1.5 shadow-2xl shadow-black/35 backdrop-blur-lg">
               <div className="flex-1 relative">
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+                <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/60" />
                 <input
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="City, neighborhood, digital address, or title…"
-                  className="w-full pl-11 pr-4 py-3 bg-transparent text-white placeholder:text-white/40 text-sm focus:outline-none rounded-xl"
+                  className="w-full rounded-xl bg-transparent py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/58 focus:outline-none"
                 />
               </div>
-              <Button type="submit" size="md" className="bg-gradient-to-r from-secondary to-amber-400 text-[#0f1f33] font-bold shrink-0 px-6">
+              <Button type="submit" size="md" className="dark-surface-control shrink-0 bg-gradient-to-r from-secondary to-amber-400 px-6 font-bold text-[#0f1f33]">
                 Search
               </Button>
             </div>

@@ -334,6 +334,44 @@ html {
 .dark .neumorphic-button { box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34); }
 .dark .neumorphic-button:hover { box-shadow: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4); }
 
+/* Controls placed on permanently dark artwork must not inherit light-page
+   neumorphic highlights when the site theme is light. */
+.dark-surface-control,
+.dark .dark-surface-control {
+  box-shadow: 7px 8px 18px rgba(0, 0, 0, 0.48), -4px -4px 11px rgba(92, 112, 133, 0.2);
+}
+
+.dark-surface-control:hover,
+.dark .dark-surface-control:hover {
+  box-shadow: 9px 10px 22px rgba(0, 0, 0, 0.54), -5px -5px 13px rgba(92, 112, 133, 0.24);
+}
+
+.dark-surface-control:active,
+.dark .dark-surface-control:active {
+  box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.46), inset -2px -2px 6px rgba(148, 163, 184, 0.15);
+}
+
+.dark-surface-outline,
+.dark .dark-surface-outline {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.075);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.dark-surface-outline:hover,
+.dark .dark-surface-outline:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.dark-surface-icon,
+.dark .dark-surface-icon {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 16, 25, 0.72);
+  box-shadow: 6px 7px 16px rgba(0, 0, 0, 0.5), -4px -4px 10px rgba(74, 94, 113, 0.2);
+}
+
 .registry-filter-pill {
   box-shadow: 4px 4px 9px rgba(15, 31, 51, 0.14), -4px -4px 9px rgba(255, 255, 255, 0.88);
 }

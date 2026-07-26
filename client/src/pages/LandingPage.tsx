@@ -466,8 +466,8 @@ export function LandingPage() {
               Find a verified home, sign, pay, save, insure, maintain, and resolve issues without losing the thread.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>
-              <Link to="/registry"><Button variant="outline" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">Explore verified homes <Search size={18} /></Button></Link>
+              <Magnetic><Link to="/register"><Button size="lg" className="dark-surface-control w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>
+              <Link to="/registry"><Button variant="outline" size="lg" className="dark-surface-control dark-surface-outline w-full sm:w-auto">Explore verified homes <Search size={18} /></Button></Link>
             </div>
             <div className="mt-12 grid max-w-2xl grid-cols-2 gap-5 border-t border-white/10 pt-7 sm:grid-cols-4">
               <Metric value="9+" numeric={9} suffix="+" label="Connected tools" />
@@ -485,7 +485,7 @@ export function LandingPage() {
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">Your rental journey</p>
                     <p className="mt-2 font-display text-2xl font-extrabold">One record. Every step.</p>
                   </div>
-                  <span className="neumorphic-icon flex h-12 w-12 items-center justify-center rounded-2xl text-secondary"><Sparkles size={21} /></span>
+                  <span className="dark-surface-icon flex h-12 w-12 items-center justify-center rounded-2xl text-secondary"><Sparkles size={21} /></span>
                 </div>
                 <div className="mt-7 space-y-3">
                   {[
