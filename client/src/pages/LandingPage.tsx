@@ -529,9 +529,19 @@ export function LandingPage() {
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted dark:text-gray-400 md:text-lg">RentOS keeps discovery, trust, money, paperwork, and service connected from first search to final handover.</p>
           </div>
         </div>
-        <div className="relative grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[220px]">
+        <div className="relative grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[280px]">
           {platformModules.map((item, i) => (
-            <Animate key={item.title} animation="fade-up" delay={(i % 4) * 80} className={cn('h-full', i === 0 && 'lg:col-span-2 lg:row-span-2', i === 3 && 'lg:col-span-2', i === 7 && 'lg:col-span-2')}>
+            <Animate
+              key={item.title}
+              animation="fade-up"
+              delay={(i % 4) * 80}
+              className={cn(
+                'h-full',
+                i === 0 && 'lg:col-span-2 lg:row-span-2',
+                (i === 3 || i === 4) && 'lg:col-span-2',
+                (i === 7 || i === 8) && 'lg:col-span-2',
+              )}
+            >
               <TiltCard maxTilt={5} className="h-full">
                 <Link
                   to={item.href}
