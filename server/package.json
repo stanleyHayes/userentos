@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=.env src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "prebuild": "cp ../shared/types/index.ts src/types/shared.ts 2>/dev/null || true",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
