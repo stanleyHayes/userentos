@@ -95,7 +95,7 @@ export function DashboardMetricCard({ label, value, sub, icon, accent, href, tre
       <div className="relative">
         <div className="mb-2 flex items-start justify-between sm:mb-3">
           <div
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 sm:h-10 sm:w-10"
+            className="neumorphic-icon flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 sm:h-10 sm:w-10"
             style={{ backgroundColor: `${accent}18`, color: accent }}
           >
             {icon}
@@ -177,7 +177,7 @@ export function DashboardActionItem({ title, description, icon, href, tone = 'de
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/70 shadow-sm dark:bg-white/10">
+        <div className="neumorphic-icon flex h-9 w-9 items-center justify-center rounded-xl">
           {icon}
         </div>
         <ArrowUpRight size={14} className="opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-80" />

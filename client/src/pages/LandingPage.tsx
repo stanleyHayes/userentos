@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import type { BlogPost } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Logo } from '@/components/ui/Logo'
-import { LogoWatermark } from '@/components/ui/Watermark'
+import { IconWatermark, LogoWatermark, WatermarkConstellation } from '@/components/ui/Watermark'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Footer } from '@/components/layout/Footer'
 import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
@@ -40,6 +40,7 @@ import {
   PiggyBank,
   Scale,
   Search,
+  Send,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -445,54 +446,104 @@ export function LandingPage() {
         </div>
       </aside>
 
-      <header className="relative min-h-[92vh] overflow-hidden bg-[#0a0d12] pt-16 text-white">
-        <Parallax speed={0.12} className="absolute right-[-4rem] top-1/2 hidden -translate-y-1/2 opacity-60 lg:block">
-          <LogoWatermark tone="brand" className="size-[30rem] rotate-[-8deg]" />
-        </Parallax>
-        <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col justify-center px-6 py-20">
-          <div className="max-w-4xl">
-            <h1 className="font-display text-5xl font-extrabold leading-[0.98] tracking-normal md:text-7xl lg:text-8xl">
-              <SplitText text="RentOS" immediate charDelay={70} />{' '}
-              <span className="text-secondary"><SplitText text="Ghana" immediate charDelay={70} startDelay={420} /></span>
+      <header className="relative min-h-[96vh] overflow-hidden bg-[#080c12] pt-20 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_30%,rgba(45,212,191,0.16),transparent_28rem),radial-gradient(circle_at_12%_70%,rgba(245,158,11,0.09),transparent_24rem)]" />
+        <LogoWatermark tone="brand" draw className="absolute -right-24 top-20 size-[34rem] rotate-[-9deg] opacity-60" />
+        <IconWatermark icon={Building2} tone="brand" className="-bottom-24 -left-20 size-80 rotate-12 opacity-50" />
+        <div className="relative mx-auto grid min-h-[calc(96vh-5rem)] max-w-7xl items-center gap-14 px-6 py-20 lg:grid-cols-[1.08fr_0.92fr]">
+          <div>
+            <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-secondary shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
+              Ghana&apos;s connected rental infrastructure
+            </div>
+            <h1 className="animate-headline-breathe max-w-4xl font-display text-5xl font-extrabold leading-[0.92] tracking-[-0.04em] md:text-7xl xl:text-[6.8rem]">
+              <SplitText text="Renting," immediate charDelay={48} />
+              <br />
+              <span className="text-white/45"><SplitText text="finally in" immediate charDelay={48} startDelay={300} /></span>{' '}
+              <span className="text-secondary"><SplitText text="sync." immediate charDelay={60} startDelay={620} /></span>
             </h1>
-            <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/64 md:text-xl">
-              One platform for renting in Ghana: verified listings, digital leases, mobile-money rent, tenant passports, savings, financing, payroll, insurance, and maintenance.
+            <p className="mt-8 max-w-xl text-lg leading-relaxed text-white/62 md:text-xl">
+              Find a verified home, sign, pay, save, insure, maintain, and resolve issues without losing the thread.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Create account <ArrowRight size={18} /></Button></Link></Magnetic>
-              <Link to="/registry"><Button variant="outline" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">Search registry <Search size={18} /></Button></Link>
-              <a href="#features"><Button variant="ghost" size="lg" className="w-full text-white/80 hover:bg-white/10 hover:text-white sm:w-auto">Explore features</Button></a>
+              <Magnetic><Link to="/register"><Button size="lg" className="w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>
+              <Link to="/registry"><Button variant="outline" size="lg" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">Explore verified homes <Search size={18} /></Button></Link>
+            </div>
+            <div className="mt-12 grid max-w-2xl grid-cols-2 gap-5 border-t border-white/10 pt-7 sm:grid-cols-4">
+              <Metric value="9+" numeric={9} suffix="+" label="Connected tools" />
+              <Metric value="9" numeric={9} label="Role spaces" />
+              <Metric value="4" numeric={4} label="Languages" />
+              <Metric value="1" label="Rental record" />
             </div>
           </div>
 
-          <div className="mt-14 grid max-w-5xl gap-4 border-t border-white/10 pt-8 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric value="9+" numeric={9} suffix="+" label="Product modules live" />
-            <Metric value="9" numeric={9} label="Role workspaces" />
-            <Metric value="4" numeric={4} label="Local language flows" />
-            <Metric value="1" label="Shared rental record" />
-          </div>
+          <Parallax speed={0.06} className="relative mx-auto hidden w-full max-w-[520px] lg:block">
+            <div className="relative min-h-[600px]">
+              <div className="absolute inset-x-8 top-8 rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-[20px_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">Your rental journey</p>
+                    <p className="mt-2 font-display text-2xl font-extrabold">One record. Every step.</p>
+                  </div>
+                  <span className="neumorphic-icon flex h-12 w-12 items-center justify-center rounded-2xl text-secondary"><Sparkles size={21} /></span>
+                </div>
+                <div className="mt-7 space-y-3">
+                  {[
+                    { label: 'Home verified', detail: 'Registry match complete', icon: ShieldCheck, color: 'text-emerald-300' },
+                    { label: 'Agreement ready', detail: 'Digital signing secured', icon: FileSignature, color: 'text-blue-300' },
+                    { label: 'Rent protected', detail: 'Payment + savings active', icon: PiggyBank, color: 'text-amber-300' },
+                  ].map(({ label, detail, icon: Icon, color }, index) => (
+                    <div key={label} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
+                      <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.07]', color)}><Icon size={19} /></span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold">{label}</p>
+                        <p className="mt-0.5 text-xs text-white/38">{detail}</p>
+                      </div>
+                      <span className="font-mono text-xs text-white/24">0{index + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="absolute -left-3 bottom-20 w-56 rotate-[-5deg] rounded-3xl border border-white/10 bg-[#111a23]/92 p-5 shadow-2xl backdrop-blur-xl">
+                <CreditCard className="text-secondary" size={21} />
+                <p className="mt-5 text-xs text-white/42">Next rent</p>
+                <p className="mt-1 font-display text-2xl font-extrabold">GHS 2,400</p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-3/4 rounded-full bg-gradient-to-r from-secondary to-emerald-400" /></div>
+              </div>
+              <div className="absolute -right-3 bottom-2 w-60 rotate-3 rounded-3xl border border-white/10 bg-[#13221f]/94 p-5 shadow-2xl backdrop-blur-xl">
+                <div className="flex items-center gap-3"><ShieldCheck className="text-emerald-300" size={20} /><span className="text-xs font-bold uppercase tracking-wider text-emerald-200">RentOS verified</span></div>
+                <p className="mt-4 font-display text-lg font-extrabold">Move with confidence.</p>
+                <p className="mt-2 text-xs leading-relaxed text-white/45">Identity, property, agreement, and payment signals travel together.</p>
+              </div>
+            </div>
+          </Parallax>
         </div>
       </header>
 
-      <section id="features" className="relative mx-auto max-w-7xl px-6 py-24 md:py-28">
-        <SectionHeader
-          title="More than a listing site"
-          description="RentOS is operating as a connected rental system. The public page now points to the same surfaces available inside the app."
-        />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <section id="features" className="relative mx-auto max-w-7xl px-6 py-24 md:py-32">
+        <WatermarkConstellation icons={[Building2, ShieldCheck, FileText]} className="opacity-70" />
+        <div className="relative mb-14 grid gap-6 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
+          <p className="eyebrow">The whole rental loop</p>
+          <div>
+            <h2 className="font-display text-4xl font-extrabold leading-[0.98] text-[#0f1f33] dark:text-white md:text-6xl">Not nine separate tools.<br /><span className="text-muted/55 dark:text-white/35">One calm system.</span></h2>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted dark:text-gray-400 md:text-lg">RentOS keeps discovery, trust, money, paperwork, and service connected from first search to final handover.</p>
+          </div>
+        </div>
+        <div className="relative grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[220px]">
           {platformModules.map((item, i) => (
-            <Animate key={item.title} animation="fade-up" delay={(i % 3) * 100}>
+            <Animate key={item.title} animation="fade-up" delay={(i % 4) * 80} className={cn('h-full', i === 0 && 'lg:col-span-2 lg:row-span-2', i === 3 && 'lg:col-span-2', i === 7 && 'lg:col-span-2')}>
               <TiltCard maxTilt={5} className="h-full">
                 <Link
                   to={item.href}
-                  className="group surface-card surface-card-interactive flex h-full min-h-[210px] flex-col justify-between rounded-2xl border p-5"
+                  className={cn('group surface-card surface-card-interactive relative flex h-full min-h-[210px] flex-col justify-between overflow-hidden rounded-[1.75rem] border p-5', i === 0 && 'p-7')}
                 >
+                  {i === 0 && <IconWatermark icon={Search} className="-bottom-10 -right-8 size-56 rotate-[-8deg]" />}
                   <div>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f1f33]/[0.06] text-[#0f1f33] dark:bg-white/[0.08] dark:text-white/85">
+                    <span className="neumorphic-icon flex h-12 w-12 items-center justify-center rounded-xl text-[#0f1f33] dark:text-white/85">
                       {item.icon}
                     </span>
-                    <h3 className="mt-5 font-display text-lg font-extrabold text-[#0f1f33] dark:text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-muted dark:text-gray-400">{item.description}</p>
+                    <h3 className={cn('mt-5 font-display text-lg font-extrabold text-[#0f1f33] dark:text-white', i === 0 && 'max-w-sm text-3xl')}>{item.title}</h3>
+                    <p className={cn('mt-2 text-sm leading-relaxed text-muted dark:text-gray-400', i === 0 && 'max-w-md text-base')}>{item.description}</p>
                   </div>
                   <span className="mt-5 inline-flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-300">
                     View surface <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
@@ -504,22 +555,28 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="roles" className="relative overflow-hidden bg-surface py-24 dark:bg-[#0c0e1a] md:py-28">
-        <div className="relative mx-auto max-w-7xl px-6">
-          <SectionHeader
-            title="Every participant gets the right workspace"
-            description="The product is organized around tenant, landlord, financier, employer, essential worker, government, and platform-admin workflows."
-          />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section id="roles" className="relative overflow-hidden bg-[#0f1f33] py-24 text-white md:py-32">
+        <IconWatermark icon={Users} className="-left-16 top-20 size-72 rotate-[-12deg]" />
+        <LogoWatermark tone="brand" className="-bottom-28 right-0 size-96 rotate-12" />
+        <div className="relative mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-[0.72fr_1.28fr]">
+          <div className="lg:sticky lg:top-32 lg:self-start">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Built around people</p>
+            <h2 className="mt-5 font-display text-4xl font-extrabold leading-[0.98] md:text-6xl">Your view changes.<br /><span className="text-white/35">The record doesn&apos;t.</span></h2>
+            <p className="mt-6 max-w-md text-base leading-relaxed text-white/55">Every participant gets the context and actions they need, without fragmenting the rental story.</p>
+            <Link to="/register" className="mt-8 inline-flex"><Button variant="secondary">Choose your workspace <Send size={16} /></Button></Link>
+          </div>
+          <div className="space-y-3">
             {roleRoutes.map((role, i) => (
-              <Animate key={role.title} animation="fade-up" delay={(i % 3) * 100}>
-                <article className="surface-card flex h-full flex-col rounded-2xl border p-5">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0f1f33]/[0.06] text-[#0f1f33] dark:bg-white/[0.08] dark:text-white/85">{role.icon}</span>
-                  <h3 className="mt-5 font-display text-base font-extrabold text-[#0f1f33] dark:text-white">{role.title}</h3>
-                  <p className="mt-2 flex-1 text-sm leading-relaxed text-muted dark:text-gray-400">{role.description}</p>
-                  <div className="mt-5 flex flex-wrap gap-1.5">
+              <Animate key={role.title} animation="fade-up" delay={i * 70}>
+                <article className="group grid gap-5 rounded-3xl border border-white/10 bg-white/[0.055] p-5 backdrop-blur-md transition-all hover:border-white/20 hover:bg-white/[0.08] sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08] text-secondary shadow-[6px_6px_16px_rgba(0,0,0,0.3),-4px_-4px_12px_rgba(255,255,255,0.05)]">{role.icon}</span>
+                  <div>
+                    <div className="flex items-center gap-3"><span className="font-mono text-[10px] text-white/25">0{i + 1}</span><h3 className="font-display text-lg font-extrabold">{role.title}</h3></div>
+                    <p className="mt-2 text-sm leading-relaxed text-white/48">{role.description}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 sm:max-w-[190px] sm:justify-end">
                     {role.checks.map((check) => (
-                      <span key={check} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary shadow-sm dark:bg-white/[0.06] dark:text-blue-300">{check}</span>
+                      <span key={check} className="rounded-full border border-white/8 bg-black/15 px-2.5 py-1 text-[10px] font-bold text-white/55">{check}</span>
                     ))}
                   </div>
                 </article>
@@ -529,7 +586,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="operations" className="mx-auto max-w-7xl px-6 py-24 md:py-28">
+      <section id="operations" className="relative mx-auto max-w-7xl overflow-hidden px-6 py-24 md:py-28">
+        <IconWatermark icon={BarChart3} className="-right-12 top-12 size-64 rotate-12" />
         <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
             <h2 className="font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">A shared rental record from search to service.</h2>

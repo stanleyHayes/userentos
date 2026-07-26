@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { User, UserRole } from '@/types'
 import { portal } from '@/hooks/usePortal'
 import { getBestRoleForPortal } from '@/lib/subdomain'
@@ -61,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'rentos-auth',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        user: state.user,
         token: state.token,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
@@ -88,7 +89,7 @@ export function useAuthHydrated(): boolean {
  */
 // Bound the auth-verification calls: without a timeout a hung connection would
 // leave the app on the loading screen indefinitely (fetch has no default timeout).
-const AUTH_CHECK_TIMEOUT_MS = 10_000
+const AUTH_CHECK_TIMEOUT_MS = 4_000
 
 async function tryRefreshSession(): Promise<string | null> {
   const { refreshToken } = useAuthStore.getState()
@@ -120,9 +121,10 @@ async function tryRefreshSession(): Promise<string | null> {
  * Only redirects to login if the session is truly dead.
  */
 export function useAuthRehydrate(): boolean {
-  const { token, isAuthenticated, user, login, logout } = useAuthStore()
+  const { token, isAuthenticated, user, logout } = useAuthStore()
   const hasHydrated = useAuthHydrated()
   const [ready, setReady] = useState(false)
+  const validationStarted = useRef(false)
 
   useEffect(() => {
     if (!hasHydrated) return
@@ -134,10 +136,13 @@ export function useAuthRehydrate(): boolean {
       return
     }
 
-    // User already loaded (same session, no refresh)
+    if (validationStarted.current) return
+    validationStarted.current = true
+
+    // A persisted user lets the shell render immediately. We still validate the
+    // token in the background below so revoked/expired sessions are cleared.
     if (user) {
       setReady(true)
-      return
     }
 
     // Verify token with server and fetch user
@@ -180,7 +185,7 @@ export function useAuthRehydrate(): boolean {
         if (bestRole) fetchedUser.activeRole = bestRole
       }
       // Re-login with fetched user to restore full state
-      useAuthStore.setState({ user: fetchedUser })
+      useAuthStore.setState({ user: fetchedUser, isAuthenticated: true })
       setReady(true)
     })().catch(() => {
       // Network error — keep the session and mark ready; React Query surfaces
@@ -190,7 +195,7 @@ export function useAuthRehydrate(): boolean {
     })
 
     return () => { cancelled = true }
-  }, [hasHydrated, token, isAuthenticated, user, login, logout])
+  }, [hasHydrated, token, isAuthenticated, user, logout])
 
   return ready
 }

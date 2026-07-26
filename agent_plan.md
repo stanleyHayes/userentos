@@ -6,6 +6,28 @@
 
 ---
 
+## UI Delivery — Theme Depth & Landing Redesign (2026-07-26)
+
+- [x] Reworked the shared light/dark backgrounds with cleaner layered gradients and removed the heavy checkerboard feel in dark mode.
+- [x] Added theme-aware neumorphic elevation to shared cards, buttons, icon wells, dashboard metrics, and admin primitives.
+- [x] Expanded decorative RentOS/logo/icon watermarks across the landing page and authenticated dashboard shell.
+- [x] Added animated landing-page headline treatment while preserving reduced-motion support.
+- [x] Rebuilt the landing composition with an editorial split hero, layered rental-journey visualization, asymmetric capability bento, and role-based workspace narrative.
+- [x] Replaced repetitive equal-card grids with varied section rhythms and purpose-specific watermark scenes.
+- [x] Verified the marketing landing page at desktop and mobile widths with no horizontal overflow.
+- [x] Verified compiled light and dark card/background/shadow tokens; client lint and production build pass.
+
+### Authentication & CI follow-up
+
+- [x] Persist safe user context so returning sessions render immediately while token validation continues in the background.
+- [x] Replace the blank auth-hydration return with a branded, explicit session-check state and shorten the network timeout.
+- [x] Show the full splash only once per browser session instead of replaying it on every route load.
+- [x] Redesign login and registration with responsive neumorphic form cards, route-specific story panels, and layered RentOS watermarks.
+- [x] Repair clean-runner type generation for client, server, and E2E workflows by creating destination folders and syncing shared types before typecheck.
+- [x] Verify client lint/typecheck/build and server lint/typecheck/tests/build locally.
+
+---
+
 ## Phase 1 — Critical Fixes (This Sprint)
 
 ### 1.1 Auth & Security

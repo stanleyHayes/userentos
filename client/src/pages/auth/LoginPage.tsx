@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore'
 import type { User } from '@/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
-import { Mail, ArrowRight, Loader2, ShieldCheck } from 'lucide-react'
+import { Mail, ArrowRight, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { PasswordInput } from '@/components/ui/PasswordInput'
@@ -119,7 +119,11 @@ export function LoginPage() {
   return (
     <div>
       <div className="mb-8 animate-fade-up relative">
-        <h1 className="text-3xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl neumorphic-icon text-secondary">
+          <Sparkles size={21} />
+        </div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/55 dark:text-cyan-300/60">Secure workspace access</p>
+        <h1 className="text-4xl font-extrabold font-display text-primary-dark dark:text-white tracking-[-0.035em]">
           {t('auth.loginPage.title')}
         </h1>
         <DoodleStars className="absolute -top-2 -right-2 text-primary/10 dark:text-blue-400/10 w-14 h-14 pointer-events-none" />
@@ -133,7 +137,7 @@ export function LoginPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-3xl bg-white/35 p-1 dark:bg-white/[0.015]">
         <div className="animate-fade-up" style={{ animationDelay: '0.1s' }}>
           <TextField
             id="email"

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "sync-types": "cp shared/types/index.ts client/src/types/shared.ts && cp shared/types/index.ts server/src/types/shared.ts && cp shared/types/index.ts mobile/types/shared.ts",
+    "sync-types": "mkdir -p client/src/types server/src/types mobile/types && cp shared/types/index.ts client/src/types/shared.ts && cp shared/types/index.ts server/src/types/shared.ts && cp shared/types/index.ts mobile/types/shared.ts",
     "dev": "npm run sync-types && concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server",

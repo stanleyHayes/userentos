@@ -103,11 +103,12 @@
 }
 
 :root {
-  --rentos-card: rgba(255, 255, 255, 0.92);
+  --rentos-card: rgba(240, 244, 248, 0.94);
   --rentos-card-muted: rgba(248, 250, 252, 0.82);
   --rentos-card-border: rgba(148, 163, 184, 0.24);
-  --rentos-shadow-soft: 0 16px 48px rgba(15, 31, 51, 0.08);
-  --rentos-shadow-lift: 0 22px 64px rgba(15, 31, 51, 0.12);
+  --rentos-shadow-soft: 10px 10px 24px rgba(163, 177, 194, 0.34), -10px -10px 24px rgba(255, 255, 255, 0.9);
+  --rentos-shadow-lift: 14px 14px 32px rgba(163, 177, 194, 0.4), -12px -12px 30px rgba(255, 255, 255, 0.96);
+  --rentos-shadow-inset: inset 3px 3px 7px rgba(163, 177, 194, 0.28), inset -3px -3px 7px rgba(255, 255, 255, 0.88);
   --rentos-ring: 0 0 0 4px rgba(30, 58, 95, 0.14);
 }
 
@@ -121,11 +122,12 @@
   --color-surface: #0a0d12;
   --color-border: #30283d;
   --color-muted: #9c96ad;
-  --rentos-card: rgba(20, 18, 31, 0.88);
-  --rentos-card-muted: rgba(13, 16, 24, 0.82);
-  --rentos-card-border: rgba(196, 181, 253, 0.18);
-  --rentos-shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.42);
-  --rentos-shadow-lift: 0 28px 78px rgba(0, 0, 0, 0.52);
+  --rentos-card: rgba(17, 22, 30, 0.94);
+  --rentos-card-muted: rgba(12, 16, 23, 0.88);
+  --rentos-card-border: rgba(125, 211, 252, 0.12);
+  --rentos-shadow-soft: 10px 10px 24px rgba(0, 0, 0, 0.5), -8px -8px 22px rgba(39, 50, 65, 0.42);
+  --rentos-shadow-lift: 14px 14px 34px rgba(0, 0, 0, 0.58), -10px -10px 28px rgba(42, 54, 70, 0.46);
+  --rentos-shadow-inset: inset 3px 3px 8px rgba(0, 0, 0, 0.54), inset -3px -3px 8px rgba(45, 58, 74, 0.38);
   --rentos-ring: 0 0 0 4px rgba(45, 212, 191, 0.2);
   color-scheme: dark;
 }
@@ -133,11 +135,10 @@
 /* Fallback dark overrides */
 .dark body {
   background:
-    linear-gradient(180deg, rgba(10, 13, 18, 0.98), rgba(18, 13, 28, 0.94)),
-    linear-gradient(115deg, rgba(45, 212, 191, 0.08), transparent 42%),
-    linear-gradient(90deg, rgba(196, 181, 253, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(251, 191, 36, 0.025) 1px, transparent 1px);
-  background-size: auto, auto, 48px 48px, 48px 48px;
+    radial-gradient(circle at 12% 8%, rgba(45, 212, 191, 0.11), transparent 28rem),
+    radial-gradient(circle at 88% 20%, rgba(125, 211, 252, 0.09), transparent 30rem),
+    linear-gradient(145deg, #0b1016 0%, #111722 48%, #0b1118 100%);
+  background-attachment: fixed;
   color: #f6f3ff;
 }
 .dark option { background-color: #14121f; color: #f6f3ff; }
@@ -244,6 +245,8 @@ html {
 }
 
 .app-shell-bg {
+  position: relative;
+  isolation: isolate;
   background-color: var(--color-surface);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(248, 250, 252, 0)),
@@ -253,12 +256,13 @@ html {
 }
 
 .dark .app-shell-bg {
-  background-color: #0a0d12;
+  background-color: #0d131b;
   background-image:
-    linear-gradient(180deg, rgba(45, 212, 191, 0.08), rgba(10, 13, 18, 0)),
-    linear-gradient(120deg, rgba(196, 181, 253, 0.08), transparent 34%),
-    linear-gradient(90deg, rgba(196, 181, 253, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(251, 191, 36, 0.025) 1px, transparent 1px);
+    radial-gradient(circle at 18% 4%, rgba(45, 212, 191, 0.1), transparent 28rem),
+    radial-gradient(circle at 92% 30%, rgba(125, 211, 252, 0.08), transparent 30rem),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(125, 211, 252, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, 56px 56px, 56px 56px;
 }
 
 .public-shell-bg {
@@ -268,10 +272,11 @@ html {
 }
 
 .dark .public-shell-bg {
-  background-color: #0a0d12;
+  background-color: #0d131b;
   background-image:
-    linear-gradient(180deg, rgba(10, 13, 18, 0), rgba(20, 18, 31, 0.66)),
-    linear-gradient(120deg, rgba(45, 212, 191, 0.07), transparent 40%);
+    radial-gradient(circle at 8% 10%, rgba(45, 212, 191, 0.1), transparent 28rem),
+    radial-gradient(circle at 92% 38%, rgba(125, 211, 252, 0.08), transparent 32rem),
+    linear-gradient(145deg, #0b1016, #111722 52%, #0b1118);
 }
 
 /*
@@ -287,6 +292,21 @@ html {
     box-shadow: var(--rentos-shadow-soft);
     backdrop-filter: blur(18px);
   }
+
+  .neumorphic-icon {
+    background: color-mix(in oklab, var(--rentos-card) 94%, transparent);
+    border: 1px solid var(--rentos-card-border);
+    box-shadow: 5px 5px 12px rgba(163, 177, 194, 0.26), -5px -5px 12px rgba(255, 255, 255, 0.82);
+  }
+
+  .dark .neumorphic-icon {
+    box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.48), -4px -4px 10px rgba(45, 58, 74, 0.36);
+  }
+
+  .neumorphic-inset {
+    background: color-mix(in oklab, var(--rentos-card) 95%, transparent);
+    box-shadow: var(--rentos-shadow-inset);
+  }
 }
 
 .surface-card-interactive {
@@ -295,14 +315,31 @@ html {
 
 .surface-card-interactive:hover {
   border-color: color-mix(in oklab, #1e3a5f 50%, var(--color-border));
-  box-shadow: 0 22px 45px -26px color-mix(in oklab, #1e3a5f 55%, transparent);
+  box-shadow: var(--rentos-shadow-lift);
   transform: translateY(-2px);
 }
 
 .dark .surface-card-interactive:hover {
   border-color: color-mix(in oklab, #7dd3fc 45%, transparent);
-  box-shadow: 0 22px 45px -26px color-mix(in oklab, #7dd3fc 35%, transparent);
+  box-shadow: var(--rentos-shadow-lift);
 }
+
+.neumorphic-button {
+  border: 1px solid color-mix(in oklab, currentColor 10%, transparent);
+  box-shadow: 5px 5px 12px rgba(15, 31, 51, 0.2), -4px -4px 10px rgba(255, 255, 255, 0.22);
+}
+
+.neumorphic-button:hover { box-shadow: 7px 7px 16px rgba(15, 31, 51, 0.24), -5px -5px 12px rgba(255, 255, 255, 0.26); }
+.neumorphic-button:active { box-shadow: var(--rentos-shadow-inset); }
+.dark .neumorphic-button { box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34); }
+.dark .neumorphic-button:hover { box-shadow: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4); }
+
+@keyframes headline-breathe {
+  0%, 100% { letter-spacing: -0.035em; filter: brightness(1); }
+  50% { letter-spacing: -0.02em; filter: brightness(1.08); }
+}
+
+.animate-headline-breathe { animation: headline-breathe 6s ease-in-out infinite; }
 
 /* ─── Adopted design features ─── */
 

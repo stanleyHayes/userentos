@@ -31,7 +31,7 @@ export function AdminPageHeader({ eyebrow, title, description, icon, accent, met
         <div className="min-w-0">
           <div className="mb-3 flex items-center gap-3">
             <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 shadow-lg"
+              className="neumorphic-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-white/10 bg-white/10"
               style={{ color: accent }}
             >
               {icon}

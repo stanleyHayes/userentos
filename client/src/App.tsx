@@ -110,8 +110,13 @@ const noop = () => {}
 export default function App() {
   const { resolvedTheme } = useThemeStore()
   const muiTheme = resolvedTheme() === 'dark' ? darkTheme : lightTheme
-  const [showSplash, setShowSplash] = useState(true)
-  const handleSplashFinished = useCallback(() => setShowSplash(false), [])
+  const [showSplash, setShowSplash] = useState(
+    () => typeof window !== 'undefined' && sessionStorage.getItem('rentos-splash-seen') !== '1',
+  )
+  const handleSplashFinished = useCallback(() => {
+    sessionStorage.setItem('rentos-splash-seen', '1')
+    setShowSplash(false)
+  }, [])
 
   const { isPortal } = portalValue
 

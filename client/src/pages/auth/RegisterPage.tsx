@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import type { UserRole, User as UserType } from '@/types'
-import { User, Mail, Phone, ArrowRight, Loader2, Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench, Check } from 'lucide-react'
+import { User, Mail, Phone, ArrowRight, Loader2, Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench, Check, Sparkles } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { PasswordInput } from '@/components/ui/PasswordInput'
@@ -65,7 +65,11 @@ export function RegisterPage() {
   return (
     <div>
       <div className="mb-6 animate-fade-up relative">
-        <h1 className="text-3xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="neumorphic-icon flex h-11 w-11 items-center justify-center rounded-2xl text-secondary"><Sparkles size={19} /></span>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/55 dark:text-cyan-300/60">Create your RentOS identity</p>
+        </div>
+        <h1 className="text-4xl font-extrabold font-display text-primary-dark dark:text-white tracking-[-0.035em]">
           Create your account
         </h1>
         <DoodleSpiral className="absolute -top-2 -right-2 text-primary/10 dark:text-blue-400/10 w-14 h-14 pointer-events-none" />
@@ -83,16 +87,16 @@ export function RegisterPage() {
         {/* Role selector */}
         <div className="animate-fade-up" style={{ animationDelay: '0.05s' }}>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">I am a...</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {roles.map((r) => (
               <button
                 key={r.value}
                 type="button"
                 onClick={() => setForm((prev) => ({ ...prev, role: r.value }))}
-                className={`rounded-xl border-2 p-3 flex flex-col items-center justify-center transition-all ${
+                className={`min-h-[104px] rounded-2xl border p-3 flex flex-col items-center justify-center transition-all ${
                   form.role === r.value
-                    ? 'border-primary dark:border-blue-500 bg-primary/5 dark:bg-blue-500/10 scale-[1.02] shadow-md shadow-primary/10'
-                    : 'border-border dark:border-[#252a3a] hover:border-primary/30 dark:hover:border-blue-500/30'
+                    ? 'border-primary/35 bg-primary/8 text-primary shadow-[inset_3px_3px_8px_rgba(30,58,95,0.12)] dark:border-cyan-300/30 dark:bg-cyan-300/8 dark:text-cyan-300'
+                    : 'neumorphic-icon border-border/70 hover:-translate-y-0.5 hover:border-primary/25 dark:hover:border-cyan-300/25'
                 }`}
               >
                 <div className={`mb-1.5 ${form.role === r.value ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500'}`}>

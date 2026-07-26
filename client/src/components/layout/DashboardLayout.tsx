@@ -11,9 +11,10 @@ import { usePushNotifications } from '@/hooks/usePushNotifications'
 import { usePortal } from '@/hooks/usePortal'
 import { getBestRoleForPortal } from '@/lib/subdomain'
 import { api } from '@/lib/api'
-import { ShieldAlert } from 'lucide-react'
+import { Building2, FileText, KeyRound, ShieldAlert, Sparkles } from 'lucide-react'
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour'
 import { SplashScreen } from '@/components/ui/SplashScreen'
+import { WatermarkConstellation } from '@/components/ui/Watermark'
 
 // SplashScreen expects an onFinished callback; here it unmounts as soon as auth
 // rehydration flips `ready`, so the timer never fires user-visibly.
@@ -111,8 +112,12 @@ export function DashboardLayout() {
 
   return (
     <div className="app-shell-bg min-h-screen">
+      <WatermarkConstellation
+        icons={[Building2, FileText, KeyRound, ShieldAlert, Sparkles]}
+        className="fixed inset-0 z-0 opacity-70"
+      />
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <div className={`transition-all duration-300 ease-in-out ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
+      <div className={`relative z-10 transition-all duration-300 ease-in-out ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
         <Header onMenuToggle={() => setMobileOpen(true)} />
         <main className="p-3 sm:p-4 md:p-6">
           <div className="max-w-[1480px] mx-auto pb-10">
