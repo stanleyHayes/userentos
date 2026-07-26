@@ -34,13 +34,15 @@ test.describe('agreement signing', () => {
       data: { email: 'yaw@rentos.gh', password: 'password123' },
     })
     const loginData = await loginRes.json()
+    expect(loginRes.ok(), `Landlord login failed: ${JSON.stringify(loginData)}`).toBeTruthy()
     const landlordToken: string = loginData.data.token
 
     // ── 3. Get one of yaw's properties ──
-    const propsRes = await request.get(`${API_BASE}/api/properties`, {
+    const propsRes = await request.get(`${API_BASE}/api/properties?mine=true`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
     })
     const propsData = await propsRes.json()
+    expect(propsRes.ok(), `Landlord properties request failed: ${JSON.stringify(propsData)}`).toBeTruthy()
     const propertyId: string = propsData.data.items[0]?.id
     if (!propertyId) throw new Error('No property found for landlord')
 
@@ -59,6 +61,7 @@ test.describe('agreement signing', () => {
       },
     })
     const createData = await createRes.json()
+    expect(createRes.ok(), `Agreement creation failed: ${JSON.stringify(createData)}`).toBeTruthy()
     const agreementId: string = createData.data.id
 
     // ── 5. Landlord signs the agreement → status becomes pending_signatures ──
