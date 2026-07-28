@@ -10,7 +10,7 @@ const shared = {
     h5: { fontFamily: "'DM Sans', 'Outfit', system-ui, sans-serif", fontWeight: 800 },
     h6: { fontFamily: "'DM Sans', 'Outfit', system-ui, sans-serif", fontWeight: 800 },
   },
-  shape: { borderRadius: 14 },
+  shape: { borderRadius: 8 },
   components: {
     MuiCssBaseline: {
       styleOverrides: {

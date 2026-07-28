@@ -185,7 +185,7 @@ export function SwipeFeedPage() {
 
       <div className="flex-1 flex flex-col items-center justify-center">
         {isLoading ? (
-          <div className="w-full max-w-sm h-[520px] rounded-3xl bg-gray-100 dark:bg-[#161927] animate-pulse" />
+          <div className="w-full max-w-sm h-[520px] rounded-xl bg-gray-100 dark:bg-[#161927] animate-pulse" />
         ) : queue.length === 0 ? (
           <div className="w-full max-w-sm">
             <EmptyState
@@ -250,7 +250,7 @@ export function SwipeFeedPage() {
           <button
             onClick={undo}
             disabled={history.length === 0}
-            className="w-12 h-12 rounded-full border border-border/40 dark:border-[#252a3a] bg-white dark:bg-[#161927] flex items-center justify-center text-muted dark:text-gray-400 hover:text-amber-500 disabled:opacity-30 transition-colors shadow-sm"
+            className="w-12 h-12 rounded-lg neumorphic-icon flex items-center justify-center text-muted dark:text-gray-400 hover:text-amber-500 disabled:opacity-30 transition-colors"
             title="Undo (Z)"
             aria-label="Undo"
           >
@@ -258,7 +258,7 @@ export function SwipeFeedPage() {
           </button>
           <button
             onClick={() => decide('pass')}
-            className="w-16 h-16 rounded-full border-2 border-danger/30 bg-white dark:bg-[#161927] flex items-center justify-center text-danger hover:bg-danger hover:text-white transition-colors shadow-md"
+            className="w-16 h-16 rounded-lg neumorphic-icon border-2 border-danger/30 flex items-center justify-center text-danger hover:bg-danger hover:text-white transition-colors"
             title="Pass (←)"
             aria-label="Pass"
           >
@@ -266,7 +266,7 @@ export function SwipeFeedPage() {
           </button>
           <button
             onClick={() => top && navigate(`/properties/${pid(top)}`)}
-            className="w-12 h-12 rounded-full border border-border/40 dark:border-[#252a3a] bg-white dark:bg-[#161927] flex items-center justify-center text-primary dark:text-blue-400 hover:bg-primary/10 dark:hover:bg-blue-400/10 transition-colors shadow-sm"
+            className="w-12 h-12 rounded-lg neumorphic-icon flex items-center justify-center text-primary dark:text-blue-400 hover:bg-primary/10 dark:hover:bg-blue-400/10 transition-colors"
             title="Details (↑)"
             aria-label="Details"
           >
@@ -274,7 +274,7 @@ export function SwipeFeedPage() {
           </button>
           <button
             onClick={() => decide('like')}
-            className="w-16 h-16 rounded-full border-2 border-success/30 bg-white dark:bg-[#161927] flex items-center justify-center text-success hover:bg-success hover:text-white transition-colors shadow-md"
+            className="w-16 h-16 rounded-lg neumorphic-icon border-2 border-success/30 flex items-center justify-center text-success hover:bg-success hover:text-white transition-colors"
             title="Save (→)"
             aria-label="Save"
           >
@@ -283,7 +283,7 @@ export function SwipeFeedPage() {
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="w-12 h-12 rounded-full border border-border/40 dark:border-[#252a3a] bg-white dark:bg-[#161927] flex items-center justify-center text-muted dark:text-gray-400 hover:text-primary dark:hover:text-blue-400 disabled:opacity-30 transition-colors shadow-sm"
+            className="w-12 h-12 rounded-lg neumorphic-icon flex items-center justify-center text-muted dark:text-gray-400 hover:text-primary dark:hover:text-blue-400 disabled:opacity-30 transition-colors"
             title="Refresh queue"
             aria-label="Refresh"
           >
@@ -312,7 +312,7 @@ const CardSlot = forwardRef<HTMLDivElement, CardSlotProps>(function CardSlot(
   return (
     <div
       ref={ref}
-      className="absolute inset-0 rounded-3xl overflow-hidden bg-white dark:bg-[#161927] border border-border/30 dark:border-[#252a3a]/60 shadow-xl select-none touch-none"
+      className="absolute inset-0 rounded-xl overflow-hidden surface-card border select-none touch-none"
       style={style}
       {...rest}
     >
@@ -399,13 +399,13 @@ const CardSlot = forwardRef<HTMLDivElement, CardSlotProps>(function CardSlot(
             {property.amenities.slice(0, 4).map((a) => (
               <span
                 key={a}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-primary/5 dark:bg-blue-400/10 text-primary dark:text-blue-400 font-medium"
+                className="text-[10px] px-2 py-0.5 rounded-md bg-primary/5 dark:bg-blue-400/10 text-primary dark:text-blue-400 font-medium"
               >
                 {a}
               </span>
             ))}
             {property.amenities.length > 4 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/10 text-muted dark:text-gray-500 font-medium">
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-muted/10 text-muted dark:text-gray-500 font-medium">
                 +{property.amenities.length - 4}
               </span>
             )}

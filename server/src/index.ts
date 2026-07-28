@@ -57,6 +57,7 @@ import badgeRoutes from './routes/badges.js'
 import subscriptionRoutes from './routes/subscriptions.js'
 import financingRoutes from './routes/financing.js'
 import employerRoutes from './routes/employers.js'
+import businessRoutes from './routes/businesses.js'
 import publicRegistryRoutes from './routes/publicRegistry.js'
 import tenantPassportRoutes from './routes/tenantPassport.js'
 import maintenanceRoutes from './routes/maintenance.js'
@@ -255,6 +256,7 @@ app.use('/api/badges', badgeRoutes)
 app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/financing', financingRoutes)
 app.use('/api/employers', employerRoutes)
+app.use('/api/businesses', businessRoutes)
 app.use('/api/public/properties', publicRegistryRoutes)
 app.use('/api/tenant-passport', tenantPassportRoutes)
 app.use('/api/maintenance', maintenanceRoutes)

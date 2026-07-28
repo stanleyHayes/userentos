@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
-import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts } from '@/hooks/useApi'
+import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
 import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
@@ -19,7 +19,7 @@ import type { AgreementStatus } from '@/types'
 import {
   ArrowLeft, FileText, CheckCircle, AlertTriangle, PenTool, Shield,
   Calendar, Building2, CreditCard, Clock, User, Edit2, XCircle,
-  Download, LogOut,
+  Download, LogOut, Store,
 } from 'lucide-react'
 
 const statusVariant: Record<AgreementStatus, 'muted' | 'warning' | 'success' | 'danger'> = {
@@ -51,6 +51,14 @@ export function AgreementDetailPage() {
 
   const agreement = data?.items?.find((a) => a.id === id)
   const existingMoveOut = moveOutsData?.items?.find((m) => m.agreementId === id)
+
+  // Move-in essentials: tenants see local businesses in the property's city.
+  // useProperty is a no-op until the agreement resolves (enabled: !!id).
+  const { data: agreementProperty } = useProperty(agreement?.propertyId ?? '')
+  const propertyCity = agreementProperty?.address?.city ?? ''
+  const isTenantView = user?.activeRole === 'tenant'
+  const { data: localBusinessData } = useBusinesses({ city: propertyCity }, { enabled: isTenantView && !!propertyCity })
+  const localBusinesses = (localBusinessData?.items ?? []).slice(0, 4)
 
   const [isEditing, setIsEditing] = useState(false)
   const [showSignModal, setShowSignModal] = useState(false)
@@ -508,6 +516,41 @@ export function AgreementDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Move-in essentials — local businesses in the property's city (tenants only) */}
+      {isTenantView && localBusinesses.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm"><Store size={16} className="text-amber-500" />Move-in essentials near {propertyCity}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {localBusinesses.map(({ business, listings }) => {
+                const first = listings[0]
+                return (
+                  <Link key={business.id} to="/local-services" className="rounded-lg border border-border/50 dark:border-[#252a3a]/50 p-3 hover:bg-surface dark:hover:bg-[#0c0e1a] transition-colors">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-primary-dark dark:text-white truncate">{business.name}</p>
+                      <Badge variant="muted" className="text-[9px] flex-shrink-0">{businessCategoryLabel(business.category)}</Badge>
+                    </div>
+                    {first && (
+                      <p className="text-[11px] text-muted dark:text-gray-500 truncate mt-1">
+                        {first.title}
+                        {first.type === 'discount' && first.promoText
+                          ? <span className="text-amber-600 dark:text-amber-400 font-semibold"> · {first.promoText}</span>
+                          : first.price !== undefined && ` · ${formatCurrency(first.price)}`}
+                      </p>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+            <Link to="/local-services" className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-primary dark:text-blue-400 hover:underline">
+              Browse all local services
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

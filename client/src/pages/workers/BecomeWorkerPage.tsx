@@ -8,22 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Wrench, Plus, X, Loader2, CheckCircle, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const TRADE_OPTIONS = [
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'carpentry', label: 'Carpentry' },
-  { value: 'painting', label: 'Painting' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'masonry', label: 'Masonry' },
-  { value: 'tiling', label: 'Tiling' },
-  { value: 'roofing', label: 'Roofing' },
-  { value: 'hvac', label: 'HVAC / AC Repair' },
-  { value: 'security', label: 'Security Systems' },
-  { value: 'gardening', label: 'Gardening / Landscaping' },
-  { value: 'appliance', label: 'Appliance Repair' },
-  { value: 'pest', label: 'Pest Control' },
-]
+import { TRADE_OPTIONS } from '@/lib/trades'
 
 export function BecomeWorkerPage() {
   const navigate = useNavigate()

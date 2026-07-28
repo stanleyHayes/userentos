@@ -67,11 +67,11 @@ export function AchievementsPage() {
             <div className="flex flex-col items-center gap-3">
               <StreakRing streak={currentStreak} />
               <div className="grid grid-cols-2 gap-3 w-full mt-2">
-                <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-3 text-center">
+                <div className="neumorphic-inset rounded-lg p-3 text-center">
                   <p className="text-xs text-muted dark:text-gray-500">Current</p>
                   <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{currentStreak}</p>
                 </div>
-                <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-3 text-center">
+                <div className="neumorphic-inset rounded-lg p-3 text-center">
                   <p className="text-xs text-muted dark:text-gray-500">Longest</p>
                   <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{longestStreak}</p>
                 </div>
@@ -104,7 +104,7 @@ export function AchievementsPage() {
                 {leaderboard.slice(0, 10).map((entry, i) => (
                   <li
                     key={entry.userId}
-                    className="flex items-center gap-3 rounded-lg bg-surface dark:bg-[#0c0e1a] px-3 py-2"
+                    className="neumorphic-inset flex items-center gap-3 rounded-lg px-3 py-2"
                   >
                     <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
                       i === 0

@@ -87,6 +87,7 @@ const WorkerDetailPage = lazy(() => import('@/pages/workers/WorkerDetailPage').t
 const MyBookingsPage = lazy(() => import('@/pages/workers/MyBookingsPage').then((m) => ({ default: m.MyBookingsPage })))
 const BecomeWorkerPage = lazy(() => import('@/pages/workers/BecomeWorkerPage').then((m) => ({ default: m.BecomeWorkerPage })))
 const InsuranceMarketplacePage = lazy(() => import('@/pages/insurance/InsuranceMarketplacePage').then((m) => ({ default: m.InsuranceMarketplacePage })))
+const LocalServicesPage = lazy(() => import('@/pages/business/LocalServicesPage').then((m) => ({ default: m.LocalServicesPage })))
 const AchievementsPage = lazy(() => import('@/pages/AchievementsPage').then((m) => ({ default: m.AchievementsPage })))
 const AdminFinancingPage = lazy(() => import('@/pages/admin/AdminFinancingPage').then((m) => ({ default: m.AdminFinancingPage })))
 const AdminEmployersPage = lazy(() => import('@/pages/admin/AdminEmployersPage').then((m) => ({ default: m.AdminEmployersPage })))
@@ -177,6 +178,8 @@ export default function App() {
             <Route path="/my-profile" element={<TenantProfilePage />} />
             <Route path="/blog/new" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><BlogEditorPage /></RequireRole>} />
             <Route path="/blog/edit/:id" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><BlogEditorPage /></RequireRole>} />
+            {/* In-app blog index — keeps signed-in users out of the marketing shell */}
+            <Route path="/dashboard/blog" element={<BlogPage />} />
             <Route path="/blog/:slug" element={<BlogDetailPage />} />
             <Route path="/messages" element={<ChatPage />} />
             <Route path="/saved" element={<SavedPropertiesPage />} />
@@ -214,6 +217,7 @@ export default function App() {
             <Route path="/workers/join" element={<BecomeWorkerPage />} />
             <Route path="/bookings" element={<MyBookingsPage />} />
             <Route path="/insurance" element={<InsuranceMarketplacePage />} />
+            <Route path="/local-services" element={<LocalServicesPage />} />
             <Route path="/achievements" element={<AchievementsPage />} />
             {/* Platform Admin — read-only views across all tenants */}
             <Route path="/admin/financing" element={<RequireRole roles={['admin']}><AdminFinancingPage /></RequireRole>} />

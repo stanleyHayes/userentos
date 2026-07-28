@@ -347,6 +347,55 @@ const super_admin: TourScript = [
   },
 ]
 
+const service_provider: TourScript = [
+  {
+    title: 'Akwaaba — welcome to RentOS',
+    body:
+      "I'm Ama. As a service provider, RentOS connects you with tenants and landlords who need your trade. Let me show you around.",
+  },
+  {
+    title: 'Your worker profile is your storefront',
+    body:
+      'Your trades, location, and rates are what clients see when they search. Keep them up to date so the right jobs find you.',
+    target: '[data-tour="dashboard-stats"]',
+    expression: 'pointing',
+  },
+  {
+    title: 'Jobs come to you',
+    body:
+      'Booking requests land in your jobs list with the details and budget attached. Quote, confirm, and mark work complete — all in one place.',
+    target: '[data-tour="dashboard-actions"]',
+    expression: 'pointing',
+  },
+  {
+    title: 'Good ratings bring more work',
+    body:
+      'Clients rate completed jobs, and your rating decides how high you appear in search. Every well-done job grows your reputation.',
+  },
+]
+
+const business: TourScript = [
+  {
+    title: 'Akwaaba — welcome to RentOS',
+    body:
+      "I'm Ama. As a local business, RentOS puts your products, services, and discounts in front of renters settling into a new home. Let me show you around.",
+  },
+  {
+    title: 'Your business profile',
+    body:
+      'Your dashboard shows your public profile and verification status. Keep your name, category, and city accurate so nearby renters can find you.',
+    target: '[data-tour="dashboard-stats"]',
+    expression: 'pointing',
+  },
+  {
+    title: 'Listings bring customers',
+    body:
+      'Create listings for products, services, and discount offers. Active listings appear on the Local Services page — toggle them off any time.',
+    target: '[data-tour="dashboard-actions"]',
+    expression: 'pointing',
+  },
+]
+
 export const tourScripts: Record<UserRole, TourScript> = {
   tenant,
   landlord,
@@ -355,6 +404,8 @@ export const tourScripts: Record<UserRole, TourScript> = {
   legal_officer,
   financier,
   employer,
+  service_provider,
+  business,
   admin: adminScript,
   super_admin,
 }

@@ -32,6 +32,7 @@ import {
   FileSignature,
   FileText,
   Hammer,
+  Handshake,
   Landmark,
   Loader2,
     MapPin,
@@ -46,6 +47,8 @@ import {
   ShieldCheck,
   ShieldPlus,
   Sparkles,
+  Store,
+  TrendingUp,
   Users,
   Wand2,
   X,
@@ -126,44 +129,80 @@ const platformModules = [
     icon: <Wand2 size={22} />,
     href: '/login',
   },
+  {
+    title: 'AI pricing and recommendations',
+    description: 'Suggest fair rental prices from market data and match tenants with homes that fit their budget and history.',
+    icon: <Sparkles size={22} />,
+    href: '/register',
+  },
+  {
+    title: 'Government and market analytics',
+    description: 'Track regional rental prices, housing demand, and vacancy trends to support planning and housing policy.',
+    icon: <BarChart3 size={22} />,
+    href: '/register',
+  },
 ]
 
 const roleRoutes = [
   {
     title: 'Tenants',
-    description: 'Find a place, manage agreements, save for rent, pay digitally, share a verified passport, and resolve issues.',
+    description: 'Find verified homes and landlords with transparent pricing, apply and sign digitally, pay online with receipts, and build a portable rental history.',
     icon: <Users size={22} />,
-    checks: ['Discover homes', 'Tenant passport', 'RentGuard', 'Disputes'],
+    checks: ['Verified homes', 'AI matches', 'Digital receipts', 'Rental history'],
   },
   {
     title: 'Landlords and managers',
-    description: 'List properties, screen applications, manage tenants, collect rent, create content, and coordinate maintenance.',
+    description: 'Screen verified tenants with scoring, collect rent digitally with automated reminders, manage vacancies and expenses, and price with AI.',
     icon: <Building2 size={22} />,
-    checks: ['Listings', 'Applications', 'Tenants', 'AI Writer'],
+    checks: ['Tenant scoring', 'Rent collection', 'AI pricing', 'Analytics'],
   },
   {
-    title: 'Financiers',
-    description: 'Publish financing offers, review applications, manage contracts, collect repayments, and watch portfolio risk.',
+    title: 'Agents',
+    description: 'Manage leads and a digital portfolio, take online bookings, verify clients, and track commissions — less time searching, more time closing deals.',
+    icon: <Handshake size={22} />,
+    checks: ['Lead management', 'Digital portfolio', 'Commissions', 'CRM & analytics'],
+  },
+  {
+    title: 'Service providers',
+    description: 'Electricians, plumbers, cleaners, movers, and more win jobs through a marketplace with verified customers, ratings, scheduling, and secure payments.',
+    icon: <Hammer size={22} />,
+    checks: ['Job marketplace', 'Verified customers', 'Ratings & reviews', 'Secure payments'],
+  },
+  {
+    title: 'Local businesses',
+    description: 'Furniture, appliance, internet, moving, and cleaning businesses advertise their services, sell products, and offer discounts to renters settling into a new home.',
+    icon: <Store size={22} />,
+    checks: ['Business profiles', 'Product listings', 'Discount offers', 'Move-in reach'],
+  },
+  {
+    title: 'Banks and financiers',
+    description: 'Assess credit from real rental history, open mortgage and rental-financing channels, and collect through secure digital payment rails.',
     icon: <Landmark size={22} />,
-    checks: ['Offers', 'Contracts', 'Collections', 'Risk view'],
+    checks: ['Credit assessment', 'Rental financing', 'Digital collections', 'Risk view'],
+  },
+  {
+    title: 'Insurers',
+    description: 'Offer rent protection, property and tenant cover, and damage claims, integrated directly into the rental agreement.',
+    icon: <ShieldPlus size={22} />,
+    checks: ['Rent protection', 'Property cover', 'Damage claims', 'Agreement integration'],
   },
   {
     title: 'Employers',
-    description: 'Maintain employer profiles, employee data, deduction mandates, and payroll run workflows.',
+    description: 'Maintain employee records, approve payroll deduction mandates, and run payroll with clear approval workflows.',
     icon: <BriefcaseBusiness size={22} />,
     checks: ['Employees', 'Mandates', 'Payroll', 'Approvals'],
   },
   {
-    title: 'Essential workers',
-    description: 'Receive maintenance work, manage bookings, track job history, and show verified service readiness.',
-    icon: <Hammer size={22} />,
-    checks: ['Job requests', 'Bookings', 'Work history', 'Service profile'],
+    title: 'Developers',
+    description: 'Read demand analytics, vacancy trends, rental pricing intelligence, and demographic insights to build what people actually need.',
+    icon: <TrendingUp size={22} />,
+    checks: ['Demand analytics', 'Vacancy trends', 'Pricing intelligence', 'Demographics'],
   },
   {
     title: 'Government and admins',
-    description: 'Review property compliance, policies, feature flags, packages, claims, platform finance, and market analytics.',
+    description: 'Monitor regional rental prices, analyse housing demand, support tax compliance and fraud reduction, and spot underserved communities.',
     icon: <ClipboardCheck size={22} />,
-    checks: ['Reviews', 'Policies', 'Analytics', 'Admin console'],
+    checks: ['Price monitoring', 'Housing demand', 'Compliance', 'Analytics'],
   },
 ]
 
@@ -300,37 +339,70 @@ export function LandingPage() {
     return location.pathname === href || location.pathname.startsWith(`${href}/`)
   }
 
-  function navLinkClass(active: boolean) {
+  function navLinkClass(underPill: boolean) {
     return cn(
-      'relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors',
-      active
+      'relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-[color,transform] duration-200 active:scale-95',
+      underPill
         ? 'text-[#0a0d12]'
-        : 'text-white/62 hover:bg-white/10 hover:text-white',
+        : 'text-white/62 hover:text-white',
     )
   }
 
   const activeNavHref = navLinks.find((item) => isNavActive(item.href))?.href ?? null
-  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(activeNavHref)
+  // Kedland-style: the pill rests on the active route but chases hovered/focused
+  // links, returning on pointer leave.
+  const [hoveredNavHref, setHoveredNavHref] = useState<string | null>(null)
+  const pillKey = hoveredNavHref ?? activeNavHref
+  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(pillKey)
+
+  // Kedland-style settle ↔ float morph: full-width flush bar at the top of the
+  // page, floating inset capsule once scrollY passes 48px. Never hides.
+  const [navScrolled, setNavScrolled] = useState(false)
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        setNavScrolled(window.scrollY > 48)
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const NAV_EASE = 'ease-[cubic-bezier(0.22,1,0.36,1)]'
 
   return (
     <div className="public-shell-bg min-h-screen overflow-hidden">
-      <nav className="fixed inset-x-0 top-3 z-50 px-3 sm:top-4 sm:px-6">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 rounded-full border border-white/12 bg-[#0a0d12]/78 px-3 shadow-[0_18px_50px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:h-16 sm:px-4">
+      <nav className={`fixed inset-x-0 top-0 z-50 transition-[padding] duration-500 motion-reduce:transition-none ${NAV_EASE} ${navScrolled ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'px-0 pt-0'}`}>
+        <div className={`mx-auto flex h-14 items-center justify-between gap-3 border backdrop-blur-2xl sm:h-16 transition-[max-width,border-radius,padding,box-shadow,background-color,border-color] duration-500 motion-reduce:transition-none ${NAV_EASE} ${
+          navScrolled
+            ? 'max-w-7xl rounded-full border-white/12 bg-[#0a0d12]/78 px-3 shadow-[0_18px_50px_rgba(0,0,0,0.32)] sm:px-4'
+            : 'max-w-[100vw] rounded-none border-x-0 border-t-0 border-white/12 bg-[#0a0d12]/96 px-4 shadow-none sm:px-6'
+        }`}>
           <Link to="/" aria-label="RentOS home"><Logo size={28} theme="light" /></Link>
-          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] p-1 md:flex">
+          <div ref={navPillAttach} onMouseLeave={() => setHoveredNavHref(null)} className="relative isolate hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] p-1 md:flex">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out"
+              className={`pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ${NAV_EASE}`}
               style={{ ...navPillStyle, opacity: navPillVisible ? 1 : 0 }}
             />
             {navLinks.map((item) => {
               const active = isNavActive(item.href)
+              const underPill = pillKey === item.href
               const content = (
                 <>
                   {item.label}
                   {active && <span className="absolute -bottom-1 left-1/2 h-1 w-5 -translate-x-1/2 rounded-full bg-secondary shadow-[0_0_16px_rgba(245,158,11,0.65)]" />}
                 </>
               )
+              const hoverProps = {
+                onMouseEnter: () => setHoveredNavHref(item.href),
+                onFocus: () => setHoveredNavHref(item.href),
+              }
               return item.href.startsWith('#') ? (
                 <a
                   key={item.href}
@@ -338,12 +410,13 @@ export function LandingPage() {
                   data-tab-key={item.href}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setActiveSection(item.href.slice(1) as (typeof LANDING_SECTION_IDS)[number])}
-                  className={navLinkClass(active)}
+                  className={navLinkClass(underPill)}
+                  {...hoverProps}
                 >
                   {content}
                 </a>
               ) : (
-                <Link key={item.href} to={item.href} data-tab-key={item.href} aria-current={active ? 'page' : undefined} className={navLinkClass(active)}>{content}</Link>
+                <Link key={item.href} to={item.href} data-tab-key={item.href} aria-current={active ? 'page' : undefined} className={navLinkClass(underPill)} {...hoverProps}>{content}</Link>
               )
             })}
           </div>
@@ -454,7 +527,7 @@ export function LandingPage() {
           <div>
             <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
               <span className="h-2 w-2 animate-pulse rounded-full bg-secondary shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
-              Ghana&apos;s connected rental infrastructure
+              The digital OS for Ghana&apos;s rental ecosystem
             </div>
             <h1 className="animate-headline-breathe max-w-4xl font-display text-5xl font-extrabold leading-[0.92] tracking-[-0.04em] md:text-7xl xl:text-[6.8rem]">
               <SplitText text="Renting," immediate charDelay={48} />

@@ -353,7 +353,7 @@ export function CreditScorePage() {
 
 function MiniStat({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
-    <div className={`rounded-lg px-3 py-1.5 text-center ${alert ? 'bg-red-500/10' : 'bg-surface dark:bg-[#1e293b]'}`}>
+    <div className={`rounded-lg px-3 py-1.5 text-center ${alert ? 'bg-red-500/10' : 'neumorphic-icon'}`}>
       <p className={`text-sm font-bold ${alert ? 'text-red-500' : 'text-primary-dark dark:text-white'}`}>{value}</p>
       <p className="text-[9px] text-muted dark:text-gray-500">{label}</p>
     </div>

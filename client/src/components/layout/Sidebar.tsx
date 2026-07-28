@@ -6,7 +6,7 @@ import {
   ChevronDown, UserCircle, FolderOpen, FlaskConical,
   MessageSquare, Lock, FileCheck, ClipboardCheck, Crown, Package,
   Banknote, FileSignature, Calendar, ShieldCheck, Award, Wrench, ShieldPlus,
-  Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp,
+  Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp, Store,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -22,13 +22,13 @@ interface NavItem { label: string; labelKey?: string; path: string; icon: React.
 interface NavGroup { label: string; labelKey?: string; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean }
 
 const navGroups: NavGroup[] = [
-  { label: 'Overview', labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer'], defaultOpen: true,
+  { label: 'Overview', labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business'], defaultOpen: true,
     items: [
-      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer'] },
+      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business'] },
       { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin', 'financier'] },
     ],
   },
-  { label: 'Rentals', labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin'], defaultOpen: true,
+  { label: 'Rentals', labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,
     items: [
       { label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
       { label: 'Discover', labelKey: 'nav.discover', path: '/discover', icon: <Sparkles size={20} />, roles: ['tenant'] },
@@ -43,8 +43,9 @@ const navGroups: NavGroup[] = [
       { label: 'Subscription', labelKey: 'nav.subscription', path: '/subscription', icon: <Crown size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'AI Writer', labelKey: 'nav.aiWriter', path: '/ai-writer', icon: <PenTool size={20} />, roles: ['landlord', 'property_manager', 'admin'] },
       { label: 'Pricing', labelKey: 'nav.pricing', path: '/pricing', icon: <TrendingUp size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Workers', labelKey: 'nav.workers', path: '/workers', icon: <Wrench size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
+      { label: 'Workers', labelKey: 'nav.workers', path: '/workers', icon: <Wrench size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
+      { label: 'Local Services', labelKey: 'nav.localServices', path: '/local-services', icon: <Store size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider', 'business'] },
+      { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
     ],
   },
   { label: 'Financial', labelKey: 'nav.financial', roles: ['tenant'], defaultOpen: true,
@@ -73,12 +74,12 @@ const navGroups: NavGroup[] = [
       { label: 'Payroll', labelKey: 'nav.payroll', path: '/employer/payroll', icon: <Calendar size={20} />, roles: ['employer'] },
     ],
   },
-  { label: 'Support', labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer'], defaultOpen: false,
+  { label: 'Support', labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,
     items: [
-      { label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer'] },
+      { label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'] },
       { label: 'Disputes', labelKey: 'nav.disputes', path: '/disputes', icon: <AlertTriangle size={20} />, roles: ['tenant', 'landlord', 'government', 'legal_officer', 'admin'] },
       { label: 'Rental Laws', labelKey: 'nav.rentalLaws', path: '/legal', icon: <Scale size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer'] },
-      { label: 'Blog', labelKey: 'nav.blog', path: '/blog', icon: <BookOpen size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin'] },
+      { label: 'Blog', labelKey: 'nav.blog', path: '/dashboard/blog', icon: <BookOpen size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin'] },
       { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier'] },
     ],
   },

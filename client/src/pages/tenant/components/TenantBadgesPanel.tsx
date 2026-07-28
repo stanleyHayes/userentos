@@ -28,11 +28,11 @@ export function TenantBadgesPanel({ streak, achievements }: TenantBadgesPanelPro
             <StreakRing streak={streak?.currentStreak ?? 0} size={112} />
             <div className="flex-1 min-w-0">
               <div className="grid grid-cols-2 gap-2 mb-2">
-                <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-2">
+                <div className="neumorphic-inset rounded-lg p-2">
                   <p className="text-[10px] text-muted dark:text-gray-500">Current</p>
                   <p className="text-sm font-bold text-primary-dark dark:text-white">{streak?.currentStreak ?? 0} mo</p>
                 </div>
-                <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-2">
+                <div className="neumorphic-inset rounded-lg p-2">
                   <p className="text-[10px] text-muted dark:text-gray-500">Longest</p>
                   <p className="text-sm font-bold text-primary-dark dark:text-white">{streak?.longestStreak ?? 0} mo</p>
                 </div>

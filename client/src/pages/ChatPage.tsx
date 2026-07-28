@@ -381,7 +381,7 @@ export function ChatPage() {
         {/* Left panel -- conversation list */}
         <div
           className={cn(
-            'w-full md:w-80 lg:w-96 border-r border-border/60 dark:border-[#252a3a]/60 flex flex-col',
+            'w-full md:w-80 lg:w-96 border-r border-border/60 dark:border-[#252a3a]/60 bg-[var(--rentos-card-muted)] flex flex-col',
             showMobileThread ? 'hidden md:flex' : 'flex'
           )}
         >
@@ -397,13 +397,13 @@ export function ChatPage() {
                 placeholder="Search conversations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-surface dark:bg-[#0c0e1a] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
+                className="w-full pl-9 pr-3 py-2 rounded-lg text-sm neumorphic-inset border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
               />
             </div>
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {convosLoading ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -430,8 +430,10 @@ export function ChatPage() {
                     key={convo.id}
                     onClick={() => handleSelectConversation(convo.id)}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-surface dark:hover:bg-[#0c0e1a]/60',
-                      isActive && 'bg-primary/5 dark:bg-blue-500/10'
+                      'w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all',
+                      isActive
+                        ? 'neumorphic-inset bg-primary/5 dark:bg-blue-500/10 ring-1 ring-primary/40 dark:ring-blue-400/40'
+                        : 'neumorphic-icon hover:-translate-y-px'
                     )}
                   >
                     {/* Avatar with online dot */}
@@ -539,7 +541,7 @@ export function ChatPage() {
                   <div key={gi}>
                     {/* Date separator */}
                     <div className="flex items-center justify-center my-4">
-                      <span className="px-3 py-1 rounded-full text-[10px] font-medium bg-surface dark:bg-[#0c0e1a] text-muted dark:text-gray-500">
+                      <span className="neumorphic-icon px-3 py-1 rounded-full text-[10px] font-medium text-muted dark:text-gray-500">
                         {formatDateHeader(group.date)}
                       </span>
                     </div>
@@ -557,7 +559,7 @@ export function ChatPage() {
                         >
                           <div
                             className={cn(
-                              'max-w-[75%] rounded-2xl px-3.5 py-2 text-sm',
+                              'max-w-[75%] rounded-2xl px-3.5 py-2 text-sm neumorphic-button',
                               isMine
                                 ? 'bg-primary dark:bg-blue-600 text-white rounded-br-md'
                                 : 'bg-surface dark:bg-[#0c0e1a] text-primary-dark dark:text-gray-200 rounded-bl-md'
@@ -602,7 +604,7 @@ export function ChatPage() {
                     value={messageText}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 px-4 py-2.5 rounded-xl text-sm bg-surface dark:bg-[#0c0e1a] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
+                    className="flex-1 px-4 py-2.5 rounded-xl text-sm neumorphic-inset border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
                   />
                   <Button
                     onClick={handleSend}
@@ -695,7 +697,7 @@ function NewConversationModal({
             placeholder="Search users by name (min 2 characters)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm bg-surface dark:bg-[#0c0e1a] border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
+            className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm neumorphic-inset border border-border/60 dark:border-[#252a3a]/60 text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-blue-500/30"
           />
         </div>
 

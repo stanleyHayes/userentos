@@ -4,6 +4,8 @@ import { LandlordDashboard } from './landlord/LandlordDashboard'
 import { GovernmentDashboard } from './government/GovernmentDashboard'
 import { FinancierDashboard } from './financier/FinancierDashboard'
 import { EmployerDashboard } from './employer/EmployerDashboard'
+import { ServiceProviderDashboard } from './serviceProvider/ServiceProviderDashboard'
+import { BusinessDashboard } from './business/BusinessDashboard'
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
@@ -21,6 +23,10 @@ export function DashboardPage() {
       return <FinancierDashboard />
     case 'employer':
       return <EmployerDashboard />
+    case 'service_provider':
+      return <ServiceProviderDashboard />
+    case 'business':
+      return <BusinessDashboard />
     default:
       return <TenantDashboard />
   }

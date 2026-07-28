@@ -35,7 +35,7 @@ registry.registerPath({
             password: z.string().min(8),
             firstName: z.string().min(1),
             lastName: z.string().min(1),
-            role: z.enum(['tenant', 'landlord', 'property_manager', 'financier', 'employer']),
+            role: z.enum(['tenant', 'landlord', 'property_manager', 'financier', 'employer', 'service_provider', 'business']),
           }),
         },
       },

@@ -69,6 +69,7 @@ const resources = {
         pricing: 'Pricing',
         workers: 'Workers',
         myBookings: 'My Bookings',
+        localServices: 'Local Services',
       },
       common: { search: 'Search', save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', create: 'Create', view: 'View', loading: 'Loading...', noData: 'No data found', confirm: 'Confirm', back: 'Back' },
       auth: {
@@ -205,6 +206,7 @@ const resources = {
         pricing: 'Boɔ Nhwɛsoɔ',
         workers: 'Adwumayɛfoɔ',
         myBookings: 'Me Nsrahwɛ',
+        localServices: 'Mpɔtam Dwumadie',
       },
       common: { search: 'Hwehwe', save: 'Fa sie', cancel: 'Gyae', delete: 'Yi fi ho', edit: 'Sesa', create: 'Yaw foforo', view: 'Hwee', loading: 'Relodie...', noData: 'Nea ehia nni ho', confirm: 'Gye tom', back: 'San koo' },
       auth: {
@@ -338,6 +340,7 @@ const resources = {
         pricing: 'Bɔɔ Kwɛmɔ',
         workers: 'Nitsulɔi',
         myBookings: 'Mi Hemɔi',
+        localServices: 'Local Services',
       },
       common: { search: 'Feo', save: 'Koo', cancel: 'Baa', delete: 'Naa fi', edit: 'Yoo', create: 'Bu', view: 'Kee', loading: 'Ejee...', noData: 'Moko naa', confirm: 'Hie', back: 'Ba tsui' },
       auth: {
@@ -471,6 +474,7 @@ const resources = {
         pricing: 'Asixɔxɔ',
         workers: 'Dɔwɔlawo',
         myBookings: 'Nye Babladewo',
+        localServices: 'Local Services',
       },
       common: { search: 'Di', save: 'Ðo anyi', cancel: 'Tutuu', delete: 'Tutui', edit: 'Trɔ', create: 'Wɔ yeye', view: 'Kpɔ', loading: 'Le dzadzam...', noData: 'Nane aɖeke meli o', confirm: 'Ɖo edzi', back: 'Gbugbɔ' },
       auth: {

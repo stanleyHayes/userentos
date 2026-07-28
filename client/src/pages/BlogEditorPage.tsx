@@ -65,7 +65,7 @@ export function BlogEditorPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blog'] })
       queryClient.invalidateQueries({ queryKey: ['blog-post', id] })
-      navigate('/blog')
+      navigate('/dashboard/blog')
     },
   })
 
@@ -94,7 +94,7 @@ export function BlogEditorPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link
-            to="/blog"
+            to="/dashboard/blog"
             className="flex items-center gap-2 text-sm text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white mb-2 transition-colors"
           >
             <ArrowLeft size={16} /> Back to Blog
@@ -231,7 +231,7 @@ export function BlogEditorPage() {
               </Button>
             </>
           )}
-          <Button variant="ghost" onClick={() => navigate('/blog')}>
+          <Button variant="ghost" onClick={() => navigate('/dashboard/blog')}>
             Cancel
           </Button>
         </div>

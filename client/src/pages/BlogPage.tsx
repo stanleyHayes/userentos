@@ -39,6 +39,10 @@ export function BlogPage() {
   const isAdmin = user && ADMIN_ROLES.includes(user.activeRole)
   const queryClient = useQueryClient()
 
+  // Signed-in users read inside the app shell (/blog/:slug); anonymous visitors
+  // stay on the marketing site (/article/:slug).
+  const postHref = (slug: string) => (user ? `/blog/${slug}` : `/article/${slug}`)
+
   const { data, isLoading } = useQuery({
     queryKey: ['blog', search, tag],
     queryFn: () => {
@@ -205,7 +209,7 @@ export function BlogPage() {
                   <p className="text-xs font-bold text-primary-dark dark:text-white uppercase tracking-wider mb-3">Related Articles</p>
                   <div className="border-t border-border dark:border-[#252a3a] pt-3 space-y-3">
                     {relatedPosts.map((p) => (
-                      <button key={p.id} onClick={() => navigate(`/article/${p.slug}`)} className="w-full text-left group">
+                      <button key={p.id} onClick={() => navigate(postHref(p.slug))} className="w-full text-left group">
                         <p className="text-sm font-semibold text-primary-dark dark:text-white group-hover:text-primary dark:group-hover:text-blue-400 transition-colors line-clamp-2">{p.title}</p>
                         <p className="text-[10px] text-muted dark:text-gray-500 mt-1">{formatDate(p.createdAt)}</p>
                       </button>
@@ -244,7 +248,7 @@ export function BlogPage() {
         placeholder="Search articles..."
         value={search}
         onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-        slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search size={18} /></InputAdornment> }, inputLabel: { shrink: true } }}
+        slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search size={18} /></InputAdornment>, className: 'neumorphic-inset rounded-xl' }, inputLabel: { shrink: true } }}
         fullWidth
       />
 
@@ -272,8 +276,8 @@ export function BlogPage() {
           {posts[0] && (() => {
             const readTime = Math.max(1, Math.ceil((posts[0].content?.length ?? 0) / 1000))
             return (
-              <div className="relative group cursor-pointer" onClick={() => navigate(`/article/${posts[0].slug}`)}>
-                <div className="rounded-2xl overflow-hidden border border-border dark:border-[#252a3a] bg-white dark:bg-[#161927] hover:shadow-2xl dark:hover:shadow-black/40 transition-all">
+              <div className="relative group cursor-pointer" onClick={() => navigate(postHref(posts[0].slug))}>
+                <div className="surface-card surface-card-interactive rounded-2xl overflow-hidden border">
                   <div className="grid grid-cols-1 md:grid-cols-[1.1fr_1fr]">
                     {/* Image area */}
                     <div className="relative h-56 md:h-auto min-h-[280px] bg-gradient-to-br from-[#0f2847] via-[#143665] to-[#0d3360] overflow-hidden">
@@ -348,8 +352,8 @@ export function BlogPage() {
             {paginatedPosts.map((post) => {
               const readTime = Math.max(1, Math.ceil((post.content?.length ?? 0) / 1000))
               return (
-                <div key={post.id} className="relative group cursor-pointer" onClick={() => navigate(`/article/${post.slug}`)}>
-                  <div className="rounded-xl overflow-hidden border border-border dark:border-[#252a3a] bg-white dark:bg-[#161927] hover:shadow-xl dark:hover:shadow-black/30 hover:-translate-y-0.5 hover:border-primary/20 dark:hover:border-blue-500/20 transition-all h-full flex flex-col">
+                <div key={post.id} className="relative group cursor-pointer" onClick={() => navigate(postHref(post.slug))}>
+                  <div className="surface-card surface-card-interactive rounded-xl overflow-hidden border h-full flex flex-col">
                     {/* Image */}
                     <div className="relative h-40 overflow-hidden">
                       {post.coverImage ? (

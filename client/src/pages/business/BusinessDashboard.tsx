@@ -1,0 +1,310 @@
+import { useState, type FormEvent } from 'react'
+import TextField from '@mui/material/TextField'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { Select } from '@/components/ui/Select'
+import { CityAutocomplete } from '@/components/ui/CityAutocomplete'
+import { Modal } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
+import { useAuthStore } from '@/stores/authStore'
+import { formatCurrency } from '@/lib/utils'
+import {
+  useMyBusiness,
+  useUpsertMyBusiness,
+  useCreateBusinessListing,
+  useUpdateBusinessListing,
+  useDeleteBusinessListing,
+  businessCategoryLabel,
+  BUSINESS_CATEGORY_OPTIONS,
+  type Business,
+  type BusinessCategory,
+  type BusinessListing,
+} from '@/hooks/useApi'
+import toast from 'react-hot-toast'
+import { Store, Package, Truck, Percent, Plus, Loader2, Trash2, MapPin, Phone, PackageCheck, Tag } from 'lucide-react'
+
+const LISTING_TYPE_OPTIONS: { value: BusinessListing['type']; label: string }[] = [
+  { value: 'product', label: 'Product' },
+  { value: 'service', label: 'Service' },
+  { value: 'discount', label: 'Discount' },
+]
+
+const LISTING_TYPE_VARIANTS: Record<BusinessListing['type'], 'default' | 'success' | 'warning'> = {
+  product: 'default',
+  service: 'success',
+  discount: 'warning',
+}
+
+const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
+  product: <Package size={14} />,
+  service: <Truck size={14} />,
+  discount: <Percent size={14} />,
+}
+
+export function BusinessDashboard() {
+  const user = useAuthStore((s) => s.user)
+  const { data, isLoading } = useMyBusiness()
+  const business = data?.business ?? null
+  const listings = data?.listings ?? []
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!business) {
+    return <BusinessSetupCard defaultPhone={user?.phone ?? ''} defaultEmail={user?.email ?? ''} />
+  }
+
+  return <BusinessOverview business={business} listings={listings} />
+}
+
+/** Shown when the owner has no business profile yet — POST /businesses/me upsert. */
+function BusinessSetupCard({ defaultPhone, defaultEmail }: { defaultPhone: string; defaultEmail: string }) {
+  const upsert = useUpsertMyBusiness()
+  const [form, setForm] = useState({
+    name: '',
+    category: 'furniture' as BusinessCategory,
+    city: '',
+    phone: defaultPhone,
+    email: defaultEmail,
+    description: '',
+  })
+
+  const canSubmit = form.name.trim().length >= 2 && form.phone.trim().length >= 7 && !!form.city.trim()
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!canSubmit) return
+    try {
+      await upsert.mutateAsync({
+        name: form.name.trim(),
+        category: form.category,
+        phone: form.phone.trim(),
+        city: form.city.trim(),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        ...(form.description.trim() ? { description: form.description.trim() } : {}),
+      })
+      toast.success('Business profile created')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save your business profile')
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <DashboardHero
+        eyebrow="Local business portal"
+        title="Set up your business"
+        description="Create your public business profile so renters can discover your products, services, and discounts"
+        tone="employer"
+        watermarkIcon={Store}
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Business profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <TextField id="biz-name" label="Business name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} fullWidth placeholder="e.g. Adwoa Furniture Hub" slotProps={{ inputLabel: { shrink: true } }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select id="biz-category" label="Category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as BusinessCategory }))} options={BUSINESS_CATEGORY_OPTIONS} />
+              <CityAutocomplete id="biz-city" label="City *" value={form.city} onChange={(v) => setForm((f) => ({ ...f, city: v }))} required />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <TextField id="biz-phone" label="Phone *" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField id="biz-email" label="Email (optional)" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            </div>
+            <TextField id="biz-description" label="Description (optional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} fullWidth multiline rows={3} placeholder="Tell renters what you offer — delivery areas, brands, installation, support..." slotProps={{ inputLabel: { shrink: true } }} />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!canSubmit || upsert.isPending}>
+                {upsert.isPending ? <Loader2 size={16} className="animate-spin" /> : <><Store size={14} /> Create Business Profile</>}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function BusinessOverview({ business, listings }: { business: Business; listings: BusinessListing[] }) {
+  const updateListing = useUpdateBusinessListing()
+  const deleteListing = useDeleteBusinessListing()
+  const [showCreate, setShowCreate] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<BusinessListing | null>(null)
+
+  const activeDiscounts = listings.filter((l) => l.type === 'discount' && l.isActive).length
+  const activeOffers = listings.filter((l) => l.type !== 'discount' && l.isActive).length
+
+  async function toggleActive(listing: BusinessListing) {
+    try {
+      await updateListing.mutateAsync({ id: listing.id, isActive: !listing.isActive })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the listing')
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    try {
+      await deleteListing.mutateAsync(pendingDelete.id)
+      toast.success('Listing deleted')
+      setPendingDelete(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete the listing')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <DashboardHero
+        eyebrow="Local business portal"
+        title={business.name}
+        description={
+          <>
+            {businessCategoryLabel(business.category)} · <MapPin size={11} className="inline -mt-0.5" /> {business.city} · <Phone size={11} className="inline -mt-0.5" /> {business.phone}
+          </>
+        }
+        tone="employer"
+        watermarkIcon={Store}
+        actions={
+          <Badge variant={business.isVerified ? 'success' : 'warning'} className="text-[10px]">
+            {business.isVerified ? 'Verified' : 'Pending verification'}
+          </Badge>
+        }
+      />
+
+      <div className="stagger-3d grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
+        <DashboardMetricCard label="Total Listings" value={String(listings.length)} sub={`${listings.filter((l) => l.isActive).length} active`} accent="#3b82f6" icon={<Package size={18} />} />
+        <DashboardMetricCard label="Active Discounts" value={String(activeDiscounts)} sub="Promos visible to renters" accent="#f59e0b" icon={<Tag size={18} />} />
+        <DashboardMetricCard label="Active Products & Services" value={String(activeOffers)} sub="Visible on Local Services" accent="#10b981" icon={<PackageCheck size={18} />} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">Listings</CardTitle>
+            <Button size="sm" onClick={() => setShowCreate(true)}><Plus size={14} /> New Listing</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {listings.length === 0 ? (
+            <EmptyState preset="general" title="No listings yet" description="Add products, services, or discount offers — they appear on the Local Services page for renters near you." action={{ label: 'Create Listing', onClick: () => setShowCreate(true) }} compact />
+          ) : (
+            <div className="space-y-1.5">
+              {listings.map((listing) => (
+                <div key={listing.id} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-surface dark:hover:bg-[#0c0e1a]">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted dark:text-gray-500">{LISTING_TYPE_ICONS[listing.type]}</span>
+                      <p className="text-sm font-bold text-primary-dark dark:text-white truncate">{listing.title}</p>
+                      <Badge variant={LISTING_TYPE_VARIANTS[listing.type]} className="text-[9px] capitalize">{listing.type}</Badge>
+                    </div>
+                    <p className="text-[11px] text-muted dark:text-gray-500 truncate mt-0.5">
+                      {listing.type === 'discount' && listing.promoText
+                        ? <span className="text-amber-600 dark:text-amber-400 font-semibold">{listing.promoText}</span>
+                        : listing.description ?? ''}
+                      {listing.price !== undefined && ` · ${formatCurrency(listing.price)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void toggleActive(listing)}
+                      disabled={updateListing.isPending}
+                      className={`relative h-5 w-9 rounded-full transition-colors ${listing.isActive ? 'bg-accent' : 'bg-gray-300 dark:bg-[#252a3a]'}`}
+                      aria-label={listing.isActive ? 'Deactivate listing' : 'Activate listing'}
+                    >
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${listing.isActive ? 'translate-x-4.5 left-0.5' : 'translate-x-0 left-0.5'}`} />
+                    </button>
+                    <span className={`text-[10px] font-semibold ${listing.isActive ? 'text-accent' : 'text-muted dark:text-gray-500'}`}>
+                      {listing.isActive ? 'Active' : 'Hidden'}
+                    </span>
+                    <button type="button" onClick={() => setPendingDelete(listing)} className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger/10 transition-colors" aria-label="Delete listing">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {showCreate && <CreateListingModal onClose={() => setShowCreate(false)} />}
+
+      <Modal open={!!pendingDelete} onClose={() => setPendingDelete(null)} title="Delete listing">
+        <div className="flex flex-col gap-5">
+          <p className="text-sm text-muted dark:text-gray-400">
+            Delete <span className="font-semibold text-primary-dark dark:text-white">{pendingDelete?.title}</span>? Renters will no longer see this offer.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button type="button" onClick={() => void confirmDelete()} disabled={deleteListing.isPending}>
+              {deleteListing.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+function CreateListingModal({ onClose }: { onClose: () => void }) {
+  const createListing = useCreateBusinessListing()
+  const [form, setForm] = useState({
+    title: '',
+    type: 'product' as BusinessListing['type'],
+    price: '',
+    promoText: '',
+    description: '',
+  })
+
+  const canSubmit = form.title.trim().length >= 2 && (form.price === '' || Number(form.price) >= 0)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!canSubmit) return
+    try {
+      await createListing.mutateAsync({
+        title: form.title.trim(),
+        type: form.type,
+        ...(form.price !== '' && Number(form.price) >= 0 ? { price: Number(form.price) } : {}),
+        ...(form.promoText.trim() ? { promoText: form.promoText.trim() } : {}),
+        ...(form.description.trim() ? { description: form.description.trim() } : {}),
+      })
+      toast.success('Listing created')
+      onClose()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create the listing')
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="New listing">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <TextField id="listing-title" label="Title *" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} fullWidth placeholder="e.g. Double bed + mattress" autoFocus slotProps={{ inputLabel: { shrink: true } }} />
+        <div className="grid grid-cols-2 gap-4">
+          <Select id="listing-type" label="Type" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as BusinessListing['type'] }))} options={LISTING_TYPE_OPTIONS} />
+          <TextField id="listing-price" label="Price (GHS, optional)" type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} fullWidth placeholder="Optional" slotProps={{ inputLabel: { shrink: true } }} />
+        </div>
+        {form.type === 'discount' && (
+          <TextField id="listing-promo" label="Promo text" value={form.promoText} onChange={(e) => setForm((f) => ({ ...f, promoText: e.target.value }))} fullWidth placeholder="e.g. 15% off for new renters" slotProps={{ inputLabel: { shrink: true } }} />
+        )}
+        <TextField id="listing-description" label="Description (optional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} fullWidth multiline rows={3} slotProps={{ inputLabel: { shrink: true } }} />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={!canSubmit || createListing.isPending}>
+            {createListing.isPending ? 'Creating...' : 'Create Listing'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

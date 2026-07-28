@@ -37,6 +37,8 @@ const roleLabels: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   financier: 'Financier',
   employer: 'Employer',
+  service_provider: 'Service Provider',
+  business: 'Local Business',
 }
 
 function getGreeting(): string {
@@ -74,7 +76,7 @@ function HeaderLanguageToggle() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="focus-ring flex items-center gap-1.5 rounded-xl p-2 text-muted transition-colors hover:bg-surface hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
+        className="focus-ring neumorphic-icon flex items-center gap-1.5 rounded-xl p-2 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white"
         aria-label="Change language"
         aria-expanded={open}
         title="Language"
@@ -168,7 +170,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           </button>
           {/* Desktop: toggle sidebar collapse */}
           <button
-            className="focus-ring hidden rounded-xl p-2 text-muted ring-1 ring-border/50 transition-colors hover:bg-surface hover:text-primary-dark dark:text-gray-400 dark:ring-white/10 dark:hover:bg-white/5 dark:hover:text-white lg:flex"
+            className="focus-ring neumorphic-icon hidden rounded-xl p-2 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white lg:flex"
             onClick={toggle}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -227,7 +229,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
         <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 ml-2 sm:ml-4">
           <Link
             to="/settings"
-            className="focus-ring hidden rounded-xl p-2 text-muted transition-colors hover:bg-surface hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white sm:flex"
+            className="focus-ring neumorphic-icon hidden rounded-xl p-2 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white sm:flex"
             aria-label="Settings"
             title="Settings"
           >
@@ -237,7 +239,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           <HeaderLanguageToggle />
 
           {/* Theme toggle */}
-          <ThemeToggle className="hover:bg-surface dark:hover:bg-white/5 rounded-xl" />
+          <ThemeToggle className="neumorphic-icon rounded-xl" />
 
           {/* Role switcher — on portal subdomains, only show portal-relevant roles */}
           {user && (() => {
@@ -273,7 +275,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           <div className="relative">
             <button
               onClick={() => setShowNotifs(!showNotifs)}
-              className="focus-ring relative rounded-xl p-2.5 text-muted transition-colors hover:bg-surface hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
+              className="focus-ring neumorphic-icon relative rounded-xl p-2.5 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white"
             >
               <Bell size={19} />
               {unreadCount > 0 && (
@@ -345,7 +347,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             <button
               data-testid="user-menu-trigger"
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="focus-ring flex items-center gap-2.5 rounded-xl p-1.5 pr-3 transition-colors hover:bg-surface dark:hover:bg-white/5"
+              className="focus-ring neumorphic-icon flex items-center gap-2.5 rounded-xl p-1.5 pr-3 transition-colors"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-light dark:from-blue-600 dark:to-blue-400 text-white text-xs font-bold shadow-sm">
                 {(user?.firstName?.[0] ?? '').toUpperCase()}{(user?.lastName?.[0] ?? '').toUpperCase()}

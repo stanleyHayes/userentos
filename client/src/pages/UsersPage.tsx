@@ -47,6 +47,8 @@ const roleVariant: Record<UserRole, 'default' | 'success' | 'warning' | 'muted' 
   super_admin: 'danger',
   financier: 'success',
   employer: 'default',
+  service_provider: 'default',
+  business: 'default',
 }
 
 const roleLabel: Record<UserRole, string> = {
@@ -59,6 +61,8 @@ const roleLabel: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   financier: 'Financier',
   employer: 'Employer',
+  service_provider: 'Service Provider',
+  business: 'Local Business',
 }
 
 type Tab = 'users' | 'invitations'

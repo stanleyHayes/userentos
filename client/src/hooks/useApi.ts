@@ -1927,3 +1927,135 @@ export function useAdminInsurancePolicies(params?: { status?: string; page?: num
       ),
   })
 }
+
+// ─────────────────────────────────────────────
+// LOCAL BUSINESSES (business role + tenant-facing marketplace)
+// ─────────────────────────────────────────────
+
+export type BusinessCategory = 'furniture' | 'appliances' | 'internet' | 'moving' | 'cleaning' | 'other'
+
+export interface Business {
+  id: string
+  ownerId: string
+  name: string
+  category: BusinessCategory
+  description?: string
+  phone: string
+  email?: string
+  city: string
+  address?: string
+  isVerified: boolean
+  createdAt: string
+}
+
+export interface BusinessListing {
+  id: string
+  businessId: string
+  title: string
+  description?: string
+  type: 'product' | 'service' | 'discount'
+  price?: number
+  promoText?: string
+  isActive: boolean
+  createdAt: string
+}
+
+export const BUSINESS_CATEGORY_OPTIONS: { value: BusinessCategory; label: string }[] = [
+  { value: 'furniture', label: 'Furniture & Home' },
+  { value: 'appliances', label: 'Appliances & Electronics' },
+  { value: 'internet', label: 'Internet & Connectivity' },
+  { value: 'moving', label: 'Moving & Relocation' },
+  { value: 'cleaning', label: 'Cleaning Services' },
+  { value: 'other', label: 'Other' },
+]
+
+export function businessCategoryLabel(category: BusinessCategory): string {
+  return BUSINESS_CATEGORY_OPTIONS.find((c) => c.value === category)?.label ?? category
+}
+
+export interface BusinessWithListings {
+  business: Business
+  /** Active listings only, per the /businesses contract. */
+  listings: BusinessListing[]
+}
+
+export function useBusinesses(
+  params?: { category?: BusinessCategory | ''; city?: string; search?: string },
+  options?: { enabled?: boolean },
+) {
+  const query = new URLSearchParams()
+  if (params?.category) query.set('category', params.category)
+  if (params?.city) query.set('city', params.city)
+  if (params?.search) query.set('search', params.search)
+  const qs = query.toString()
+  return useQuery({
+    queryKey: ['businesses', params],
+    queryFn: () => api.get<{ items: BusinessWithListings[] }>(`/businesses${qs ? `?${qs}` : ''}`),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useBusiness(id: string) {
+  return useQuery({
+    queryKey: ['business', id],
+    queryFn: () => api.get<{ business: Business; listings: BusinessListing[] }>(`/businesses/${id}`),
+    enabled: !!id,
+  })
+}
+
+export function useMyBusiness() {
+  return useQuery({
+    queryKey: ['my-business'],
+    queryFn: () => api.get<{ business: Business | null; listings: BusinessListing[] }>('/businesses/me'),
+  })
+}
+
+export function useUpsertMyBusiness() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      name: string
+      category: BusinessCategory
+      description?: string
+      phone: string
+      email?: string
+      city: string
+      address?: string
+    }) => api.post<{ business: Business; listings: BusinessListing[] }>('/businesses/me', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-business'] })
+      qc.invalidateQueries({ queryKey: ['businesses'] })
+    },
+  })
+}
+
+export function useCreateBusinessListing() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      title: string
+      description?: string
+      type: BusinessListing['type']
+      price?: number
+      promoText?: string
+    }) => api.post<BusinessListing>('/businesses/me/listings', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-business'] }),
+  })
+}
+
+export function useUpdateBusinessListing() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Partial<Omit<BusinessListing, 'id' | 'businessId' | 'createdAt'>>) =>
+      api.patch<BusinessListing>(`/businesses/me/listings/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-business'] }),
+  })
+}
+
+export function useDeleteBusinessListing() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/businesses/me/listings/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-business'] }),
+  })
+}

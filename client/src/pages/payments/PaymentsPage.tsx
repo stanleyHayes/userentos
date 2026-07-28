@@ -206,27 +206,27 @@ export function PaymentsPage() {
             <div className={`overflow-x-auto ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border dark:border-[#252a3a]">
-                    <th className="text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">Reference</th>
-                    <th className="text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">
+                  <tr>
+                    <th className="neumorphic-inset rounded-l-lg text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">Reference</th>
+                    <th className="neumorphic-inset text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">
                       <button onClick={() => toggleSort('date')} className="flex items-center gap-1 hover:text-primary-dark dark:hover:text-white transition-colors">
                         Date
                         <ArrowUpDown size={12} className={sortField === 'date' ? 'text-primary dark:text-blue-400' : ''} />
                       </button>
                     </th>
-                    <th className="text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">Method</th>
-                    <th className="text-right py-3 px-2 text-muted dark:text-gray-400 font-medium">
+                    <th className="neumorphic-inset text-left py-3 px-2 text-muted dark:text-gray-400 font-medium">Method</th>
+                    <th className="neumorphic-inset text-right py-3 px-2 text-muted dark:text-gray-400 font-medium">
                       <button onClick={() => toggleSort('amount')} className="flex items-center gap-1 ml-auto hover:text-primary-dark dark:hover:text-white transition-colors">
                         Amount
                         <ArrowUpDown size={12} className={sortField === 'amount' ? 'text-primary dark:text-blue-400' : ''} />
                       </button>
                     </th>
-                    <th className="text-right py-3 px-2 text-muted dark:text-gray-400 font-medium">Status</th>
+                    <th className="neumorphic-inset rounded-r-lg text-right py-3 px-2 text-muted dark:text-gray-400 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((payment) => (
-                    <tr key={payment.id} className="border-b border-border dark:border-[#252a3a] last:border-0 hover:bg-surface dark:hover:bg-[#0c0e1a]/50 transition-colors cursor-pointer" onClick={() => setSelectedPayment(payment)}>
+                    <tr key={payment.id} className="border-b border-border/50 dark:border-[#252a3a]/60 last:border-0 hover:bg-[var(--rentos-card-muted)] transition-colors cursor-pointer" onClick={() => setSelectedPayment(payment)}>
                       <td className="py-3 px-2 font-mono text-xs text-primary-dark dark:text-gray-200">{payment.reference}</td>
                       <td className="py-3 px-2 text-muted dark:text-gray-400">{formatDate(payment.createdAt)}</td>
                       <td className="py-3 px-2 text-muted dark:text-gray-400 capitalize">{payment.method.replace('_', ' ')}</td>

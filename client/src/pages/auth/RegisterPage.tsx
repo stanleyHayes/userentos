@@ -1,65 +1,231 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
-import type { UserRole, User as UserType } from '@/types'
-import { User, Mail, Phone, ArrowRight, Loader2, Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench, Check, Sparkles } from 'lucide-react'
-import TextField from '@mui/material/TextField'
-import InputAdornment from '@mui/material/InputAdornment'
-import { PasswordInput } from '@/components/ui/PasswordInput'
+import { useSubscriptionPackages } from '@/hooks/useApi'
+import type { UserRole, User as UserType, SubscriptionPackage } from '@/types'
+import { ArrowLeft, ArrowRight, Loader2, Users, Lock, Briefcase, Crown, Check, Sparkles } from 'lucide-react'
 import { DoodleSpiral } from '@/components/ui/Doodles'
 import { passwordRequirements } from '@/pages/settings/passwordStrength'
+import { phoneDigits } from '@/lib/ghana'
+import toast from 'react-hot-toast'
+import { RoleStep } from './steps/RoleStep'
+import { AccountStep } from './steps/AccountStep'
+import { RoleDetailsStep } from './steps/RoleDetailsStep'
+import { PlanStep } from './steps/PlanStep'
+import { emptyRoleDetails, type AccountForm, type RoleDetails } from './steps/types'
 
-// 'essential_worker' is a registration-only choice, not an auth role: it signs the
-// user up with a tenant base account and routes them to the worker-profile setup.
-type RoleOption = UserRole | 'essential_worker'
-
-const roles: { value: RoleOption; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'tenant', label: 'Tenant', icon: <Home size={20} />, desc: 'Find & rent properties' },
-  { value: 'landlord', label: 'Landlord', icon: <Building2 size={20} />, desc: 'List & manage properties' },
-  { value: 'property_manager', label: 'Manager', icon: <Briefcase size={20} />, desc: 'Manage for landlords' },
-  { value: 'financier', label: 'Financier', icon: <Banknote size={20} />, desc: 'Lend rent advance & deposit loans' },
-  { value: 'employer', label: 'Employer', icon: <UsersIcon size={20} />, desc: 'Run payroll deductions for employees' },
-  { value: 'essential_worker', label: 'Essential Worker', icon: <Wrench size={20} />, desc: 'Offer trade & repair services' },
+const STEPS = [
+  { label: 'Role', icon: <Users size={16} /> },
+  { label: 'Account', icon: <Lock size={16} /> },
+  { label: 'Details', icon: <Briefcase size={16} /> },
+  { label: 'Plan', icon: <Crown size={16} /> },
 ]
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * Best-effort persistence of the step-3 role details, run after registration
+ * and login. Throws on failure — the caller catches and toasts, so a failure
+ * here never blocks the user from entering the app.
+ *
+ * Not everything is persistable:
+ * - landlord: only ghanaCardId is accepted by PATCH /users/me; the rest is
+ *   informational.
+ * - property_manager / financier: no endpoint accepts these fields today.
+ */
+async function persistRoleProfile(role: UserRole, account: AccountForm, details: RoleDetails): Promise<void> {
+  switch (role) {
+    case 'tenant': {
+      // GET auto-creates the profile server-side; only PATCH when the user
+      // actually entered something, and only keys profilePatchSchema accepts.
+      await api.get('/tenant-profile/me')
+      const searchPreferences: Record<string, unknown> = {}
+      if (details.searchCity.trim()) searchPreferences.preferredCities = [details.searchCity.trim().slice(0, 60)]
+      if (details.monthlyBudget && Number(details.monthlyBudget) > 0) searchPreferences.maxBudget = Number(details.monthlyBudget)
+      if (details.bedrooms && Number(details.bedrooms) > 0) searchPreferences.minBedrooms = Math.floor(Number(details.bedrooms))
+      if (Object.keys(searchPreferences).length > 0) {
+        await api.patch('/tenant-profile/me', { searchPreferences })
+      }
+      break
+    }
+    case 'landlord': {
+      if (details.ghanaCardId.trim()) {
+        await api.patch('/users/me', { ghanaCardId: details.ghanaCardId.trim() })
+      }
+      break
+    }
+    case 'service_provider': {
+      await api.post('/workers', {
+        name: `${account.firstName} ${account.lastName}`.trim(),
+        phone: phoneDigits(account.phone),
+        email: account.email,
+        trades: details.trades,
+        location: details.location.trim(),
+        serviceRadiusKm: Number(details.serviceRadiusKm) > 0 ? Number(details.serviceRadiusKm) : 10,
+        ...(details.hourlyRate && Number(details.hourlyRate) > 0 ? { hourlyRate: Number(details.hourlyRate) } : {}),
+        ...(details.bio.trim() ? { bio: details.bio.trim() } : {}),
+      })
+      break
+    }
+    case 'employer': {
+      // Server requires legalName ≥2, tin ≥5, and an address object — skip the
+      // call entirely when name/TIN are missing; the dashboard nudges completion.
+      const legalName = details.legalName.trim()
+      const tin = details.tin.trim()
+      if (legalName.length >= 2 && tin.length >= 5) {
+        const cityRegion = details.cityRegion.trim()
+        await api.post('/employers/me', {
+          legalName,
+          tin,
+          ...(details.tradingName.trim() ? { tradingName: details.tradingName.trim() } : {}),
+          ...(details.industry.trim() ? { industry: details.industry.trim() } : {}),
+          address: {
+            street: details.businessAddress.trim(),
+            city: cityRegion,
+            region: cityRegion,
+          },
+          contactEmail: account.email,
+          contactPhone: phoneDigits(account.phone),
+        })
+      }
+      break
+    }
+    case 'business': {
+      // Server requires name ≥2, phone ≥7, and a city — the wizard step already
+      // enforces name/city; the dashboard offers full profile setup otherwise.
+      const name = details.businessName.trim()
+      const city = details.businessCity.trim()
+      if (name.length >= 2 && city) {
+        await api.post('/businesses/me', {
+          name,
+          category: details.businessCategory,
+          phone: phoneDigits(account.phone),
+          email: account.email.trim(),
+          city,
+          ...(details.businessDescription.trim() ? { description: details.businessDescription.trim() } : {}),
+        })
+      }
+      break
+    }
+    default:
+      // property_manager & financier details are informational only.
+      break
+  }
+}
+
+/** Plan used when the user skips: the default package, else the cheapest free one. */
+function pickFreePackage(packages: SubscriptionPackage[]): SubscriptionPackage | null {
+  return (
+    packages.find((p) => p.isDefault) ??
+    packages.filter((p) => p.price <= 0).sort((a, b) => a.price - b.price)[0] ??
+    null
+  )
+}
 
 export function RegisterPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
-  const [form, setForm] = useState({
+  const { data: packagesData, isLoading: pkgLoading } = useSubscriptionPackages()
+  const packages = packagesData?.items ?? []
+
+  const [step, setStep] = useState(0)
+  const [role, setRole] = useState<UserRole>('tenant')
+  const [account, setAccount] = useState<AccountForm>({
     firstName: '', lastName: '', email: '', phone: '', password: '',
-    role: 'tenant' as RoleOption,
   })
+  const [details, setDetails] = useState<RoleDetails>(emptyRoleDetails)
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function update(field: string, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
+  // Free Starter plan is preselected — derived (not synced state) so the user
+  // can still override it before packages finish loading.
+  const effectivePackageId = selectedPackageId ?? (packages.length > 0 ? (pickFreePackage(packages)?.id ?? packages[0].id) : null)
+
+  function updateAccount(field: keyof AccountForm, value: string) {
+    setAccount((prev) => ({ ...prev, [field]: value }))
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
+  function updateDetails(field: keyof RoleDetails, value: string) {
+    setDetails((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function toggleTrade(trade: string) {
+    setDetails((prev) => ({
+      ...prev,
+      trades: prev.trades.includes(trade) ? prev.trades.filter((t) => t !== trade) : [...prev.trades, trade],
+    }))
+  }
+
+  function canProceed(): boolean {
+    switch (step) {
+      case 0:
+        return !!role
+      case 1:
+        return !!(
+          account.firstName.trim() &&
+          account.lastName.trim() &&
+          EMAIL_RE.test(account.email.trim()) &&
+          phoneDigits(account.phone).length >= 10 &&
+          passwordRequirements.every((r) => r.test(account.password))
+        )
+      case 2:
+        // Service providers need trades + location — they create the worker profile.
+        if (role === 'service_provider') return details.trades.length >= 1 && !!details.location.trim()
+        // Businesses need name + city — they create the public business profile.
+        if (role === 'business') return details.businessName.trim().length >= 2 && !!details.businessCity.trim()
+        return true
+      default:
+        return true
+    }
+  }
+
+  /** Register, then run the best-effort chain: role profile → subscription. */
+  async function finish(skipPlan: boolean) {
     setError('')
     setLoading(true)
+    let auth: { user: UserType; token: string; refreshToken: string }
     try {
-      // Essential Worker isn't a server role — register a tenant base account, then
-      // send them to complete their worker profile.
-      const isWorker = form.role === 'essential_worker'
-      const data = await api.post<{ user: UserType; token: string; refreshToken: string }>('/auth/register', {
-        ...form,
-        role: isWorker ? 'tenant' : form.role,
+      auth = await api.post<{ user: UserType; token: string; refreshToken: string }>('/auth/register', {
+        ...account,
+        email: account.email.trim(),
+        phone: phoneDigits(account.phone),
+        role,
       })
-      // AuthLayout redirects authenticated users away from auth pages; hand it the
-      // worker-setup destination so login() below doesn't bounce us to /dashboard.
-      if (isWorker) sessionStorage.setItem('postAuthRedirect', '/workers/join')
-      login(data.user, data.token, data.refreshToken)
-      navigate(isWorker ? '/workers/join' : '/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
-    } finally {
       setLoading(false)
+      return
     }
+    login(auth.user, auth.token, auth.refreshToken)
+
+    // 1) Role profile — best-effort; failure must not strand the user here.
+    try {
+      await persistRoleProfile(role, account, details)
+    } catch (err) {
+      toast.error(`Account created, but your ${role.replace('_', ' ')} profile could not be saved — you can complete it later. ${err instanceof Error ? err.message : ''}`)
+    }
+
+    // 2) Subscription — free plans activate instantly; paid plans are paid on
+    //    the Subscription page (MoMo), never inside the wizard.
+    const chosen = skipPlan
+      ? pickFreePackage(packages)
+      : (packages.find((p) => p.id === effectivePackageId) ?? pickFreePackage(packages))
+
+    let dest = '/dashboard'
+    if (chosen && chosen.price > 0 && !skipPlan) {
+      dest = '/subscription'
+    } else if (chosen) {
+      try {
+        await api.post('/subscriptions/subscribe', { packageId: chosen.id })
+      } catch {
+        toast.error('Account created, but plan activation failed — pick a plan from the Subscription page.')
+      }
+    }
+
+    navigate(dest)
   }
 
   return (
@@ -76,6 +242,27 @@ export function RegisterPage() {
         <p className="text-sm text-muted dark:text-gray-400 mt-2">Join RentOS Ghana today</p>
       </div>
 
+      {/* Step Indicator */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-4 animate-fade-up" style={{ animationDelay: '0.05s' }}>
+        {STEPS.map((s, i) => (
+          <button
+            key={s.label}
+            type="button"
+            onClick={() => i < step && setStep(i)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+              i === step
+                ? 'bg-primary dark:bg-blue-600 text-white'
+                : i < step
+                  ? 'bg-primary/10 dark:bg-blue-500/15 text-primary dark:text-blue-400 cursor-pointer'
+                  : 'text-muted dark:text-gray-500'
+            }`}
+          >
+            {i < step ? <Check size={14} /> : s.icon}
+            <span className="hidden sm:inline">{s.label}</span>
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div className="mb-4 rounded-xl bg-danger/10 border border-danger/20 p-4 text-sm text-danger flex items-center gap-2 animate-scale-in">
           <div className="w-2 h-2 rounded-full bg-danger flex-shrink-0" />
@@ -83,79 +270,51 @@ export function RegisterPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Role selector */}
-        <div className="animate-fade-up" style={{ animationDelay: '0.05s' }}>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">I am a...</label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {roles.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => setForm((prev) => ({ ...prev, role: r.value }))}
-                className={`min-h-[104px] rounded-2xl border p-3 flex flex-col items-center justify-center transition-all ${
-                  form.role === r.value
-                    ? 'border-primary/35 bg-primary/8 text-primary shadow-[inset_3px_3px_8px_rgba(30,58,95,0.12)] dark:border-cyan-300/30 dark:bg-cyan-300/8 dark:text-cyan-300'
-                    : 'neumorphic-icon border-border/70 hover:-translate-y-0.5 hover:border-primary/25 dark:hover:border-cyan-300/25'
-                }`}
-              >
-                <div className={`mb-1.5 ${form.role === r.value ? 'text-primary dark:text-blue-400' : 'text-muted dark:text-gray-500'}`}>
-                  {r.icon}
-                </div>
-                <p className={`text-xs font-bold ${form.role === r.value ? 'text-primary dark:text-blue-400' : 'text-primary-dark dark:text-gray-300'}`}>{r.label}</p>
-                <p className="text-[10px] text-muted dark:text-gray-500 mt-0.5">{r.desc}</p>
-              </button>
-            ))}
+      <div>
+        {step === 0 && <RoleStep value={role} onChange={setRole} />}
+        {step === 1 && <AccountStep form={account} update={updateAccount} />}
+        {step === 2 && <RoleDetailsStep role={role} details={details} update={updateDetails} toggleTrade={toggleTrade} />}
+        {step === 3 && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
+
+        {/* Navigation */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-5 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            className="whitespace-nowrap"
+            onClick={() => (step === 0 ? navigate('/login') : setStep(step - 1))}
+          >
+            <ArrowLeft size={14} /> Back
+          </Button>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {step === 2 && role !== 'service_provider' && role !== 'business' && (
+              <Button type="button" variant="ghost" className="whitespace-nowrap" onClick={() => setStep(3)}>
+                Skip for now
+              </Button>
+            )}
+            {step < STEPS.length - 1 ? (
+              <Button type="button" className="whitespace-nowrap" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
+                Continue <ArrowRight size={14} />
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="ghost" className="whitespace-nowrap" disabled={loading} onClick={() => void finish(true)}>
+                  Skip — Starter (free)
+                </Button>
+                <Button type="button" className="whitespace-nowrap" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
+                  {loading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <>Create account <ArrowRight size={16} /></>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         </div>
-
-        {/* Name */}
-        <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
-          <TextField id="firstName" label="First Name" value={form.firstName} onChange={(e) => update('firstName', e.target.value)} required fullWidth placeholder="Kwame" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><User size={18} className="text-gray-400" /></InputAdornment> } }} />
-          <TextField id="lastName" label="Last Name" value={form.lastName} onChange={(e) => update('lastName', e.target.value)} required fullWidth placeholder="Asante" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><User size={18} className="text-gray-400" /></InputAdornment> } }} />
-        </div>
-
-        {/* Email */}
-        <div className="animate-fade-up" style={{ animationDelay: '0.15s' }}>
-          <TextField id="email" label="Email" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required fullWidth placeholder="you@example.com" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Mail size={18} className="text-gray-400" /></InputAdornment> } }} />
-        </div>
-
-        {/* Phone */}
-        <div className="animate-fade-up" style={{ animationDelay: '0.2s' }}>
-          <TextField id="phone" label="Phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} required fullWidth placeholder="024 XXX XXXX" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Phone size={18} className="text-gray-400" /></InputAdornment> } }} />
-        </div>
-
-        {/* Password */}
-        <div className="animate-fade-up" style={{ animationDelay: '0.25s' }}>
-          <PasswordInput id="password" label="Password" value={form.password} onChange={(e) => update('password', e.target.value)} required minLength={8} placeholder="Min 8 characters" />
-          {/* Same checklist the security settings enforce — weak passwords must
-              not be creatable here and rejected there later. */}
-          {form.password.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {passwordRequirements.map((req) => {
-                const met = req.test(form.password)
-                return (
-                  <li key={req.key} className={`flex items-center gap-1.5 text-xs ${met ? 'text-emerald-500' : 'text-muted dark:text-gray-500'}`}>
-                    <Check size={12} className={met ? 'opacity-100' : 'opacity-30'} />
-                    {req.label}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
-
-        {/* Submit */}
-        <div className="animate-fade-up" style={{ animationDelay: '0.3s' }}>
-          <Button type="submit" disabled={loading || !passwordRequirements.every((r) => r.test(form.password))} size="lg" className="w-full">
-            {loading ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <>Create Account <ArrowRight size={16} /></>
-            )}
-          </Button>
-        </div>
-      </form>
+      </div>
 
       <div className="animate-fade-up" style={{ animationDelay: '0.35s' }}>
         <div className="flex items-center gap-3 my-5">

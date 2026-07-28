@@ -65,8 +65,8 @@ export function BadgeCard({ title, description, icon, tier, earned, earnedAt, cl
         className={cn(
           'group relative rounded-2xl p-4 border transition-all',
           earned
-            ? `bg-gradient-to-br ${gradient} border-white/20 shadow-lg ring-2 ${ring} hover:-translate-y-0.5 hover:shadow-xl`
-            : 'bg-surface dark:bg-[#0c0e1a] border-border/40 dark:border-[#252a3a]/40 opacity-60 hover:opacity-80',
+            ? `bg-gradient-to-br ${gradient} border-white/20 ring-2 ${ring} shadow-[var(--rentos-shadow-soft)] hover:-translate-y-0.5 hover:shadow-[var(--rentos-shadow-lift)]`
+            : 'neumorphic-inset border border-border/30 dark:border-[#252a3a]/40 opacity-60 hover:opacity-80',
           className,
         )}
       >
@@ -74,7 +74,7 @@ export function BadgeCard({ title, description, icon, tier, earned, earnedAt, cl
           <div
             className={cn(
               'w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm',
-              earned ? 'bg-white/30 text-white' : 'bg-muted/10 dark:bg-gray-700/20 text-muted dark:text-gray-500',
+              earned ? 'bg-white/30 text-white' : 'neumorphic-inset text-muted dark:text-gray-500',
             )}
           >
             {earned ? <Icon size={26} /> : <Lock size={22} />}

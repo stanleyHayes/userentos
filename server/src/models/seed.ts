@@ -1,4 +1,7 @@
 import bcrypt from 'bcryptjs'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { config } from '../config/index.js'
 import { User } from './User.js'
 import { Property } from './Property.js'
@@ -31,6 +34,8 @@ import { Employment } from './Employment.js'
 import { DeductionMandate } from './DeductionMandate.js'
 import { PayrollRun } from './PayrollRun.js'
 import { Worker } from './Worker.js'
+import { Business } from './Business.js'
+import { BusinessListing } from './BusinessListing.js'
 import { ServiceBooking } from './ServiceBooking.js'
 import { MaintenanceRequest } from './MaintenanceRequest.js'
 import { MoveOut } from './MoveOut.js'
@@ -163,6 +168,9 @@ export async function seedDatabase() {
       'employer:configure_deductions', 'employer:approve_deductions',
       'employer:run_payroll', 'employer:disburse', 'employer:view_payroll_reports',
     ] },
+    // Local businesses — furniture, internet, etc. advertising to renters
+    { email: 'furniture@rentos.gh', phone: '0244331000', firstName: 'Adom', lastName: 'Furnishings', passwordHash: hash, roles: ['business'], activeRole: 'business', isVerified: true, permissions: [] },
+    { email: 'internet@rentos.gh', phone: '0244332000', firstName: 'SwiftLink', lastName: 'Ghana', passwordHash: hash, roles: ['business'], activeRole: 'business', isVerified: true, permissions: [] },
   ])
 
   const [tenant1, tenant2, tenant3, tenant4, tenant5, tenant6, tenant7, tenant8,
@@ -170,7 +178,8 @@ export async function seedDatabase() {
     manager1, manager2,
     gov, legal, admin, ofiAdmin, superAdmin,
     financier1, financier2,
-    employerOwner1, employerOwner2] = users
+    employerOwner1, employerOwner2,
+    businessOwner1, businessOwner2] = users
 
   const t1 = tenant1._id.toString()
   const t2 = tenant2._id.toString()
@@ -1367,6 +1376,34 @@ export async function seedDatabase() {
   const [plumber, electrician, carpenter] = workers
 
   // ════════════════════════════════════════════
+  // LOCAL BUSINESSES — furniture store + ISP with listings
+  // ════════════════════════════════════════════
+
+  const businesses = await Business.insertMany([
+    {
+      ownerId: businessOwner1._id.toString(), name: 'Adom Furnishings', category: 'furniture',
+      description: 'Quality home and office furniture made in Ghana. Beds, sofas, dining sets and full move-in packages for new renters.',
+      phone: '0244331000', email: 'furniture@rentos.gh', city: 'Accra', address: '12 Spintex Road, Accra', isVerified: true,
+    },
+    {
+      ownerId: businessOwner2._id.toString(), name: 'SwiftLink Ghana', category: 'internet',
+      description: 'Fast fibre and 4G home internet. Same-week installation for new tenants across Greater Accra and Tema.',
+      phone: '0244332000', email: 'internet@rentos.gh', city: 'Tema', isVerified: true,
+    },
+  ])
+
+  const [adomFurnishings, swiftLink] = businesses
+
+  await BusinessListing.insertMany([
+    { businessId: adomFurnishings._id.toString(), title: 'Move-in Furniture Package', description: 'Bed, mattress, wardrobe, sofa and dining set — everything a new tenant needs in one delivery.', type: 'product', price: 8500 },
+    { businessId: adomFurnishings._id.toString(), title: 'Double Bed + Mattress', description: 'Sturdy locally-made double bed frame with orthopedic mattress.', type: 'product', price: 2400 },
+    { businessId: adomFurnishings._id.toString(), title: 'New Renter Discount', description: 'Show your RentOS agreement and save on your first order.', type: 'discount', promoText: '15% off first order for RentOS tenants' },
+    { businessId: swiftLink._id.toString(), title: 'Home Fibre 50Mbps', description: 'Unlimited 50Mbps fibre for streaming and remote work. Free router included.', type: 'service', price: 350 },
+    { businessId: swiftLink._id.toString(), title: '4G Home Starter', description: 'Plug-and-play 4G router with 100GB bundled data.', type: 'product', price: 550 },
+    { businessId: swiftLink._id.toString(), title: 'Free Installation', description: 'Free installation and first week free for verified RentOS tenants.', type: 'discount', promoText: 'Free installation (save GH₵150)' },
+  ])
+
+  // ════════════════════════════════════════════
   // SERVICE BOOKINGS — 3 bookings across states
   // ════════════════════════════════════════════
 
@@ -2340,33 +2377,45 @@ export async function seedDatabase() {
   const collectionNames = ['users', 'properties', 'agreements', 'payments', 'savingsplans', 'disputes', 'tenantprofiles', 'creditscores', 'reviews', 'loans', 'investments', 'legalarticles', 'blogposts', 'notifications', 'wallets', 'conversations', 'messages', 'applications', 'favorites', 'profileaccesses', 'invitations', 'documents', 'auditlogs', 'financingoffers', 'financingapplications', 'financingcontracts', 'employers', 'employments', 'deductionmandates', 'payrollruns', 'workers', 'servicebookings', 'maintenancerequests', 'achievements', 'paymentstreaks', 'moveouts']
   console.log(`\nSeeded ${total} documents across ${counts.length} collections.`)
   counts.forEach((c, i) => console.log(`  ${(collectionNames[i] ?? `collection_${i}`).padEnd(24)} ${c}`))
-  console.log('\nDemo accounts (all passwords: password123):')
-  console.log('  Tenant 1:       kwame@rentos.gh      (78 credit, software dev, active loans & investments)')
-  console.log('  Tenant 2:       ama@rentos.gh        (65 credit, marketing manager)')
-  console.log('  Tenant 3:       kofi@rentos.gh       (88 credit, CEO, business owner)')
-  console.log('  Tenant 4:       abena@rentos.gh      (35 credit, unverified, junior accountant)')
-  console.log('  Tenant 5:       akua@rentos.gh       (82 credit, diplomat, Trasacco resident)')
-  console.log('  Tenant 6:       yeboah@rentos.gh     (76 credit, finance director, Roman Ridge)')
-  console.log('  Tenant 7:       nii@rentos.gh        (55 credit, logistics officer, Kasoa)')
-  console.log('  Tenant 8:       serwa@rentos.gh      (28 credit, unverified, beauty salon owner)')
-  console.log('  Landlord 1:     yaw@rentos.gh        (8 properties in Accra)')
-  console.log('  Landlord 2:     adjoa@rentos.gh      (6 properties across Ghana)')
-  console.log('  Landlord 3:     kwaku@rentos.gh      (6 properties incl. Trasacco, Cape Coast)')
-  console.log('  Landlord 4:     efua@rentos.gh       (4 properties incl. Tamale, Ho, Sunyani)')
-  console.log('  Prop Manager 1: manager@rentos.gh    (4 managed properties)')
-  console.log('  Prop Manager 2: kwadwo@rentos.gh     (2 managed properties)')
-  console.log('  Government:     gov@rentos.gh        (gov permissions: review, disputes, analytics, legal, simulation)')
-  console.log('  Legal Officer:  legal@rentos.gh      (legal permissions: disputes, blog, legal articles)')
-  console.log('  Admin:          admin@rentos.gh       (admin permissions: users, properties, disputes, blog)')
-  console.log('  Admin 2:        ofi@rentos.gh         (full admin permissions incl. manage_permissions, system)')
-  console.log('  Super Admin:    superadmin@rentos.gh  (super_admin role — bypasses all permission checks)')
-  if (ownerEmail) console.log(`  Owner Admin:    ${ownerEmail}  (super_admin — password from SEED_ADMIN_PASSWORD env)`)
-  console.log('  Financier 1:    bloom@rentos.gh       (offers rent advance + deposit loans)')
-  console.log('  Financier 2:    rentplus@rentos.gh    (payroll-linked, lower rates)')
-  console.log('  Employer 1:     mtn-hr@rentos.gh      (MTN Ghana — 3 employees, monthly payroll)')
-  console.log('  Employer 2:     ucc-hr@rentos.gh      (University of Cape Coast — 1 employee)')
-  console.log('\nPending invitations:')
-  console.log('  mensah.akufo@rentos.gh    → government role (invited by super admin)')
-  console.log('  grace.tetteh@rentos.gh    → legal_officer role (invited by super admin)')
-  console.log('  daniel.quartey@rentos.gh  → admin role (invited by ofi)')
+  const credentialsLines: string[] = []
+  const logCred = (l: string) => { credentialsLines.push(l); console.log(l) }
+  logCred('\nDemo accounts (all passwords: password123):')
+  logCred('  Tenant 1:       kwame@rentos.gh      (78 credit, software dev, active loans & investments)')
+  logCred('  Tenant 2:       ama@rentos.gh        (65 credit, marketing manager)')
+  logCred('  Tenant 3:       kofi@rentos.gh       (88 credit, CEO, business owner)')
+  logCred('  Tenant 4:       abena@rentos.gh      (35 credit, unverified, junior accountant)')
+  logCred('  Tenant 5:       akua@rentos.gh       (82 credit, diplomat, Trasacco resident)')
+  logCred('  Tenant 6:       yeboah@rentos.gh     (76 credit, finance director, Roman Ridge)')
+  logCred('  Tenant 7:       nii@rentos.gh        (55 credit, logistics officer, Kasoa)')
+  logCred('  Tenant 8:       serwa@rentos.gh      (28 credit, unverified, beauty salon owner)')
+  logCred('  Landlord 1:     yaw@rentos.gh        (8 properties in Accra)')
+  logCred('  Landlord 2:     adjoa@rentos.gh      (6 properties across Ghana)')
+  logCred('  Landlord 3:     kwaku@rentos.gh      (6 properties incl. Trasacco, Cape Coast)')
+  logCred('  Landlord 4:     efua@rentos.gh       (4 properties incl. Tamale, Ho, Sunyani)')
+  logCred('  Prop Manager 1: manager@rentos.gh    (4 managed properties)')
+  logCred('  Prop Manager 2: kwadwo@rentos.gh     (2 managed properties)')
+  logCred('  Government:     gov@rentos.gh        (gov permissions: review, disputes, analytics, legal, simulation)')
+  logCred('  Legal Officer:  legal@rentos.gh      (legal permissions: disputes, blog, legal articles)')
+  logCred('  Admin:          admin@rentos.gh       (admin permissions: users, properties, disputes, blog)')
+  logCred('  Admin 2:        ofi@rentos.gh         (full admin permissions incl. manage_permissions, system)')
+  logCred('  Super Admin:    superadmin@rentos.gh  (super_admin role — bypasses all permission checks)')
+  if (ownerEmail) logCred(`  Owner Admin:    ${ownerEmail}  (super_admin — password from SEED_ADMIN_PASSWORD env)`)
+  logCred('  Financier 1:    bloom@rentos.gh       (offers rent advance + deposit loans)')
+  logCred('  Financier 2:    rentplus@rentos.gh    (payroll-linked, lower rates)')
+  logCred('  Employer 1:     mtn-hr@rentos.gh      (MTN Ghana — 3 employees, monthly payroll)')
+  logCred('  Employer 2:     ucc-hr@rentos.gh      (University of Cape Coast — 1 employee)')
+  logCred('  Business 1:     furniture@rentos.gh   (Adom Furnishings — furniture store, Accra)')
+  logCred('  Business 2:     internet@rentos.gh    (SwiftLink Ghana — internet provider, Tema)')
+  logCred('\nPending invitations:')
+  logCred('  mensah.akufo@rentos.gh    → government role (invited by super admin)')
+  logCred('  grace.tetteh@rentos.gh    → legal_officer role (invited by super admin)')
+  logCred('  daniel.quartey@rentos.gh  → admin role (invited by ofi)')
+
+  // Keep a copy at the repo root for easy access during development.
+  try {
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+    fs.writeFileSync(path.join(repoRoot, 'credentials.txt'), `${credentialsLines.join('\n')}\n`)
+  } catch {
+    // Non-fatal — the console output above is the source of truth.
+  }
 }

@@ -34,13 +34,13 @@ export function BlogDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/blog/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['blog'] }); navigate('/blog') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['blog'] }); navigate('/dashboard/blog') },
   })
 
   if (isLoading) return <DetailSkeleton />
 
   if (!post) {
-    return <EmptyState preset="properties" title="Post not found" description="This blog post doesn't exist or has been removed." action={{ label: 'Back to Blog', href: '/blog' }} />
+    return <EmptyState preset="properties" title="Post not found" description="This blog post doesn't exist or has been removed." action={{ label: 'Back to Blog', href: '/dashboard/blog' }} />
   }
 
   const readTime = Math.max(1, Math.ceil((post.content?.length ?? 0) / 1000))
@@ -49,7 +49,7 @@ export function BlogDetailPage() {
     <div className="max-w-5xl mx-auto animate-fade-up space-y-6">
       {/* Back + actions */}
       <div className="flex items-center justify-between">
-        <Link to="/blog" className="flex items-center gap-2 text-sm text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors">
+        <Link to="/dashboard/blog" className="flex items-center gap-2 text-sm text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors">
           <ArrowLeft size={16} /> Back to Blog
         </Link>
         {isAdmin && (

@@ -17,7 +17,7 @@ interface PortalConfig {
 
 export const PORTAL_CONFIG: Record<Portal, PortalConfig> = {
   www: {
-    roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer'],
+    roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider', 'business'],
     defaultRole: 'tenant',
     label: 'RentOS',
   },
