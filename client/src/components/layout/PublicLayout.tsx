@@ -46,13 +46,41 @@ export function PublicLayout() {
   }, [open])
 
   const activeTo = NAV_LINKS.find((l) => isNavActive(l.to))?.to ?? null
-  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(activeTo)
+  // Landing-parity (kedland-style): the pill rests on the active route but
+  // chases hovered/focused links, returning on pointer leave.
+  const [hoveredTo, setHoveredTo] = useState<string | null>(null)
+  const pillKey = hoveredTo ?? activeTo
+  const { attach: navPillAttach, style: navPillStyle, visible: navPillVisible } = useSlidingIndicator<HTMLDivElement>(pillKey)
+
+  // Landing-parity settle ↔ float morph: full-width flush bar at the top,
+  // floating inset capsule once scrollY passes 48px. Never hides.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        setScrolled(window.scrollY > 48)
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const NAV_EASE = 'ease-[cubic-bezier(0.22,1,0.36,1)]'
 
   return (
     <div className="public-shell-bg min-h-screen flex flex-col">
       {/* ── Navbar ── */}
-      <nav className="sticky top-3 z-50 px-3 py-3 sm:px-6">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 rounded-full border border-border/70 bg-white/88 px-3 shadow-[0_18px_50px_rgba(15,31,51,0.1)] backdrop-blur-2xl dark:border-sky-300/20 dark:bg-[#102238]/92 dark:shadow-[0_18px_50px_rgba(2,8,23,0.48)] sm:h-16 sm:px-4">
+      <nav className={`sticky top-0 z-50 transition-[padding] duration-500 motion-reduce:transition-none ${NAV_EASE} ${scrolled ? 'px-3 pt-3 sm:px-6' : 'px-0 pt-0'}`}>
+        <div className={`mx-auto flex h-14 items-center justify-between gap-3 border backdrop-blur-2xl sm:h-16 transition-[max-width,border-radius,padding,box-shadow,background-color,border-color] duration-500 motion-reduce:transition-none ${NAV_EASE} ${
+          scrolled
+            ? 'max-w-7xl rounded-full border-border/70 bg-white/88 px-3 shadow-[0_18px_50px_rgba(15,31,51,0.1)] dark:border-sky-300/20 dark:bg-[#102238]/92 dark:shadow-[0_18px_50px_rgba(2,8,23,0.48)] sm:px-4'
+            : 'max-w-[100vw] rounded-none border-x-0 border-t-0 border-border/70 bg-white/95 px-4 shadow-none dark:border-sky-300/20 dark:bg-[#102238]/96 sm:px-6'
+        }`}>
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
             <span className="dark:hidden"><Logo size={30} theme="dark" /></span>
@@ -60,24 +88,27 @@ export function PublicLayout() {
           </Link>
 
           {/* Desktop links */}
-          <div ref={navPillAttach} className="relative isolate hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-sky-200/10 dark:bg-[#0b1828]/70 md:flex">
+          <div ref={navPillAttach} onMouseLeave={() => setHoveredTo(null)} className="relative isolate hidden items-center gap-1 rounded-full border border-border/70 bg-surface/70 p-1 dark:border-sky-200/10 dark:bg-[#0b1828]/70 md:flex">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-cyan-300"
+              className={`pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-sm transition-[transform,width,height] duration-300 dark:bg-cyan-300 ${NAV_EASE}`}
               style={{ ...navPillStyle, opacity: navPillVisible ? 1 : 0 }}
             />
             {NAV_LINKS.map(({ to, label }) => {
               const active = isNavActive(to)
+              const underPill = pillKey === to
               return (
                 <Link
                   key={to}
                   to={to}
                   data-tab-key={to}
                   aria-current={active ? 'page' : undefined}
-                  className={`focus-ring relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors ${
-                    active
+                  onMouseEnter={() => setHoveredTo(to)}
+                  onFocus={() => setHoveredTo(to)}
+                  className={`focus-ring relative z-10 rounded-full px-3.5 py-1.5 text-sm font-bold transition-[color,transform] duration-200 active:scale-95 ${
+                    underPill
                       ? 'text-white dark:text-[#071018]'
-                      : 'text-muted hover:bg-white hover:text-primary-dark dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white'
+                      : 'text-muted hover:text-primary-dark dark:text-white/60 dark:hover:text-white'
                   }`}
                 >
                   {label}

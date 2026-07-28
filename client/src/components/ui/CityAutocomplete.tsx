@@ -25,11 +25,19 @@ export function CityAutocomplete({ id, label, value, onChange, required }: CityA
       autoHighlight
       renderInput={(params) => (
         <TextField
-          {...params}
+          id={params.id}
+          disabled={params.disabled}
+          fullWidth={params.fullWidth}
+          size={params.size}
           label={label}
           required={required}
           placeholder="Start typing a city..."
-          slotProps={{ inputLabel: { shrink: true } }}
+          slotProps={{
+            input: params.slotProps.input,
+            htmlInput: params.slotProps.htmlInput,
+            inputLabel: { shrink: true, ...params.slotProps.inputLabel },
+          }}
+          sx={{ '& .MuiAutocomplete-inputRoot': { minHeight: 56, paddingBlock: 0 } }}
         />
       )}
     />

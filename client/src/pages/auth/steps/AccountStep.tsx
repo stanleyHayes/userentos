@@ -10,7 +10,7 @@ export function AccountStep({ form, update }: { form: AccountForm; update: (fiel
   return (
     <div className="space-y-5">
       {/* Name */}
-      <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.05s' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.05s' }}>
         <TextField id="firstName" label="First Name" value={form.firstName} onChange={(e) => update('firstName', e.target.value)} required fullWidth placeholder="Kwame" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><User size={18} className="text-gray-400" /></InputAdornment> } }} />
         <TextField id="lastName" label="Last Name" value={form.lastName} onChange={(e) => update('lastName', e.target.value)} required fullWidth placeholder="Asante" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><User size={18} className="text-gray-400" /></InputAdornment> } }} />
       </div>

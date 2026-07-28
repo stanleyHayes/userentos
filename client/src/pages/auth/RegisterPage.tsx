@@ -277,33 +277,33 @@ export function RegisterPage() {
         {step === 3 && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
 
         {/* Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-5 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 animate-fade-up" style={{ animationDelay: '0.3s' }}>
           <Button
             type="button"
             variant="outline"
             disabled={loading}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap w-full sm:w-auto"
             onClick={() => (step === 0 ? navigate('/login') : setStep(step - 1))}
           >
             <ArrowLeft size={14} /> Back
           </Button>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
             {step === 2 && role !== 'service_provider' && role !== 'business' && (
-              <Button type="button" variant="ghost" className="whitespace-nowrap" onClick={() => setStep(3)}>
+              <Button type="button" variant="ghost" className="whitespace-nowrap w-full sm:w-auto" onClick={() => setStep(3)}>
                 Skip for now
               </Button>
             )}
             {step < STEPS.length - 1 ? (
-              <Button type="button" className="whitespace-nowrap" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
+              <Button type="button" className="whitespace-nowrap w-full sm:w-auto" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
                 Continue <ArrowRight size={14} />
               </Button>
             ) : (
               <>
-                <Button type="button" variant="ghost" className="whitespace-nowrap" disabled={loading} onClick={() => void finish(true)}>
+                <Button type="button" variant="ghost" className="whitespace-nowrap w-full sm:w-auto" disabled={loading} onClick={() => void finish(true)}>
                   Skip — Starter (free)
                 </Button>
-                <Button type="button" className="whitespace-nowrap" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
+                <Button type="button" className="whitespace-nowrap w-full sm:w-auto" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
                   {loading ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (

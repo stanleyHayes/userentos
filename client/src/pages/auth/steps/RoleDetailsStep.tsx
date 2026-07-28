@@ -44,7 +44,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
           <div className="animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <CityAutocomplete id="searchCity" label="Where are you searching?" value={details.searchCity} onChange={(v) => update('searchCity', v)} />
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <TextField id="monthlyBudget" label="Monthly budget (GHS)" type="number" value={details.monthlyBudget} onChange={(e) => update('monthlyBudget', e.target.value)} fullWidth placeholder="e.g. 2500" slotProps={{ inputLabel: { shrink: true } }} />
             <TextField id="bedrooms" label="Bedrooms" type="number" value={details.bedrooms} onChange={(e) => update('bedrooms', e.target.value)} fullWidth placeholder="e.g. 2" slotProps={{ inputLabel: { shrink: true } }} />
           </div>
@@ -53,7 +53,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
 
       {role === 'landlord' && (
         <>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <TextField id="propertiesOwned" label="Properties owned" type="number" value={details.propertiesOwned} onChange={(e) => update('propertiesOwned', e.target.value)} fullWidth placeholder="e.g. 3" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Building2 size={18} className="text-gray-400" /></InputAdornment> } }} />
             <CityAutocomplete id="primaryCity" label="Primary city" value={details.primaryCity} onChange={(v) => update('primaryCity', v)} />
           </div>
@@ -68,7 +68,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
           <div className="animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <TextField id="agencyName" label="Agency / company name" value={details.agencyName} onChange={(e) => update('agencyName', e.target.value)} fullWidth placeholder="e.g. Asante Realty" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Briefcase size={18} className="text-gray-400" /></InputAdornment> } }} />
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <TextField id="yearsExperience" label="Years of experience" type="number" value={details.yearsExperience} onChange={(e) => update('yearsExperience', e.target.value)} fullWidth placeholder="e.g. 5" slotProps={{ inputLabel: { shrink: true } }} />
             <TextField id="regionsCovered" label="Regions covered" value={details.regionsCovered} onChange={(e) => update('regionsCovered', e.target.value)} fullWidth placeholder="e.g. Greater Accra" slotProps={{ inputLabel: { shrink: true } }} />
           </div>
@@ -95,7 +95,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <CityAutocomplete id="spLocation" label="Location / City *" value={details.location} onChange={(v) => update('location', v)} required />
             <TextField id="serviceRadiusKm" label="Service radius (km)" type="number" value={details.serviceRadiusKm} onChange={(e) => update('serviceRadiusKm', e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
           </div>
@@ -110,7 +110,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
 
       {role === 'financier' && (
         <>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <TextField id="institutionName" label="Institution name" value={details.institutionName} onChange={(e) => update('institutionName', e.target.value)} fullWidth placeholder="e.g. Nhyira Microfinance" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Banknote size={18} className="text-gray-400" /></InputAdornment> } }} />
             <Select id="institutionType" label="Institution type" value={details.institutionType} onChange={(e) => update('institutionType', e.target.value)}
               options={INSTITUTION_TYPES.map((t) => ({ value: t, label: t }))}
@@ -124,15 +124,15 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
 
       {role === 'employer' && (
         <>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <TextField id="legalName" label="Company legal name" value={details.legalName} onChange={(e) => update('legalName', e.target.value)} fullWidth placeholder="e.g. Acme Ghana Ltd" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Building2 size={18} className="text-gray-400" /></InputAdornment> } }} />
             <TextField id="tradingName" label="Trading name" value={details.tradingName} onChange={(e) => update('tradingName', e.target.value)} fullWidth placeholder="e.g. Acme" slotProps={{ inputLabel: { shrink: true } }} />
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <TextField id="industry" label="Industry" value={details.industry} onChange={(e) => update('industry', e.target.value)} fullWidth placeholder="e.g. Agriculture" slotProps={{ inputLabel: { shrink: true } }} />
             <TextField id="tin" label="TIN (optional)" value={details.tin} onChange={(e) => update('tin', e.target.value)} fullWidth placeholder="Tax Identification Number" slotProps={{ inputLabel: { shrink: true } }} />
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.2s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.2s' }}>
             <TextField id="businessAddress" label="Business address" value={details.businessAddress} onChange={(e) => update('businessAddress', e.target.value)} fullWidth placeholder="e.g. 12 Independence Ave" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><MapPin size={18} className="text-gray-400" /></InputAdornment> } }} />
             <CityAutocomplete id="cityRegion" label="City" value={details.cityRegion} onChange={(v) => update('cityRegion', v)} />
           </div>
@@ -145,7 +145,7 @@ export function RoleDetailsStep({ role, details, update, toggleTrade }: Props) {
           <div className="animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <TextField id="businessName" label="Business name *" value={details.businessName} onChange={(e) => update('businessName', e.target.value)} fullWidth placeholder="e.g. Adwoa Furniture Hub" slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <InputAdornment position="start"><Store size={18} className="text-gray-400" /></InputAdornment> } }} />
           </div>
-          <div className="grid grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <Select id="businessCategory" label="Category" value={details.businessCategory} onChange={(e) => update('businessCategory', e.target.value)}
               options={BUSINESS_CATEGORY_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
             />
