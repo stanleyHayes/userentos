@@ -4,7 +4,7 @@ import {
   TouchableOpacity, Image, TextInput,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
 import { api } from '../lib/api'
@@ -29,7 +29,6 @@ const TRADE_OPTIONS = ['all', 'plumbing', 'electrical', 'carpentry', 'painting',
 
 export default function WorkersScreen() {
   const c = useThemeColors()
-  const qc = useQueryClient()
   const router = useRouter()
   const [tradeFilter, setTradeFilter] = useState('all')
   const [search, setSearch] = useState('')

@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator,
-  TouchableOpacity, Alert, TextInput, Modal,
+  TouchableOpacity, TextInput, Modal,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
 import { api } from '../lib/api'
-import { useAuthStore } from '../stores/authStore'
 
 interface Booking {
   id: string
@@ -51,8 +49,6 @@ const STATUS_LABELS: Record<string, string> = {
 export default function BookingsScreen() {
   const c = useThemeColors()
   const qc = useQueryClient()
-  const router = useRouter()
-  const user = useAuthStore((s) => s.user)
   const [viewMode, setViewMode] = useState<'requester' | 'worker'>('requester')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [noteModal, setNoteModal] = useState(false)

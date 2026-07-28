@@ -42,6 +42,9 @@ export default function ProfileScreen() {
   const isTenant = user?.activeRole === 'tenant'
   const isLandlord = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager'
   const isGovOrAdmin = user?.activeRole === 'government' || user?.activeRole === 'admin'
+  const isBusiness = user?.activeRole === 'business'
+  const isFinancier = user?.activeRole === 'financier'
+  const isEmployer = user?.activeRole === 'employer'
 
   const sections: MenuSection[] = [
     {
@@ -68,11 +71,20 @@ export default function ProfileScreen() {
     {
       title: 'Services',
       items: [
+        { icon: 'storefront-outline', label: 'Local Services', onPress: () => router.push('/local-services' as string) },
         { icon: 'construct-outline', label: 'Find Workers', onPress: () => router.push('/workers') },
         { icon: 'calendar-outline', label: 'My Bookings', onPress: () => router.push('/bookings') },
         { icon: 'hammer-outline', label: 'Become a Worker', onPress: () => router.push('/become-worker') },
       ],
     },
+    ...((isBusiness || isFinancier || isEmployer) ? [{
+      title: 'Portals',
+      items: [
+        ...(isBusiness ? [{ icon: 'briefcase-outline' as const, label: 'My Business', onPress: () => router.push('/my-business' as string) }] : []),
+        ...(isFinancier ? [{ icon: 'cash-outline' as const, label: 'Financier Portal', onPress: () => router.push('/financier' as string) }] : []),
+        ...(isEmployer ? [{ icon: 'people-outline' as const, label: 'Employer Portal', onPress: () => router.push('/employer' as string) }] : []),
+      ],
+    }] : []),
     {
       title: 'Insights',
       items: [
