@@ -216,6 +216,16 @@ export function MyBookingsPage() {
                     <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold uppercase', STATUS_COLORS[booking.status])}>
                       {STATUS_LABELS[booking.status]}
                     </span>
+                    {booking.quoteAmount !== undefined && (
+                      <span className={cn(
+                        'px-2 py-0.5 rounded text-[10px] font-bold uppercase',
+                        booking.quoteAccepted
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      )}>
+                        {booking.quoteAccepted ? 'Quote accepted' : 'Quote sent'}
+                      </span>
+                    )}
                     <span className="text-xs text-muted capitalize">{booking.type}</span>
                   </div>
                   <p className="text-sm font-medium text-primary-dark dark:text-white">{booking.description}</p>
@@ -249,9 +259,15 @@ export function MyBookingsPage() {
               {view === 'requester' && (
                 <div className="flex flex-wrap gap-2 mt-3">
                   {booking.status === 'pending' && booking.quoteAmount !== undefined && !booking.quoteAccepted && (
-                    <Button size="sm" disabled={rowPending} onClick={() => handleAcceptQuote(booking)}>
-                      <CheckCircle size={12} className="mr-1" /> Accept Quote
-                    </Button>
+                    <>
+                      <Button size="sm" disabled={rowPending} onClick={() => handleAcceptQuote(booking)}>
+                        <CheckCircle size={12} className="mr-1" /> Accept Quote
+                      </Button>
+                      {/* Declining a quote cancels the booking — there is no separate 'declined' state. */}
+                      <Button size="sm" variant="ghost" disabled={rowPending} onClick={() => handleCancel(booking)}>
+                        <X size={12} className="mr-1" /> Decline
+                      </Button>
+                    </>
                   )}
                   {booking.status === 'in_progress' && (
                     <Button size="sm" variant="ghost" disabled={rowPending} onClick={() => handleComplete(booking)}>
@@ -263,7 +279,9 @@ export function MyBookingsPage() {
                       <Star size={12} className="mr-1" /> Rate
                     </Button>
                   )}
-                  {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                  {/* Plain cancel is hidden while a quote decision is pending — Decline covers it. */}
+                  {(booking.status === 'pending' || booking.status === 'confirmed') &&
+                    !(booking.status === 'pending' && booking.quoteAmount !== undefined && !booking.quoteAccepted) && (
                     <Button size="sm" variant="ghost" disabled={rowPending} onClick={() => handleCancel(booking)}>
                       <X size={12} className="mr-1" /> Cancel
                     </Button>

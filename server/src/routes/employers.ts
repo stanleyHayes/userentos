@@ -440,4 +440,95 @@ router.post('/payroll/runs/:id/process', authenticate, requireRole('employer'), 
   }
 })
 
+// ────────────────────────────────────────
+// PAYROLL REPORTS — per-run breakdown, per-employee history, CSV export
+// ────────────────────────────────────────
+
+// GET /payroll/runs/:id/report — the run with deductions grouped per employee
+router.get('/payroll/runs/:id/report', authenticate, requireRole('employer'), requirePermission('employer:view_payroll_reports'), async (req, res) => {
+  const employer = await loadMyEmployer(req.user!.userId)
+  const run = await PayrollRun.findById(param(req.params.id)).lean()
+  if (!run || !employer || run.employerId !== employer._id.toString()) { error(res, 'Payroll run not found', 404); return }
+
+  const byEmployeeMap = new Map<string, { employeeId: string; employeeName: string; total: number; lines: typeof run.deductions }>()
+  for (const d of run.deductions) {
+    const entry = byEmployeeMap.get(d.employeeId) ?? { employeeId: d.employeeId, employeeName: d.employeeName ?? 'Unknown', total: 0, lines: [] }
+    entry.total += d.amount
+    entry.lines.push(d)
+    byEmployeeMap.set(d.employeeId, entry)
+  }
+
+  success(res, {
+    run: idOf(run),
+    employees: [...byEmployeeMap.values()].sort((a, b) => b.total - a.total),
+    statusBreakdown: {
+      disbursed: run.deductions.filter((d) => d.status === 'disbursed').length,
+      failed: run.deductions.filter((d) => d.status === 'failed').length,
+      queued: run.deductions.filter((d) => d.status === 'queued').length,
+      skipped: run.deductions.filter((d) => d.status === 'skipped').length,
+    },
+  })
+})
+
+// GET /reports/deductions?months=6 — per-employee deduction history across runs
+router.get('/reports/deductions', authenticate, requireRole('employer'), requirePermission('employer:view_payroll_reports'), async (req, res) => {
+  const employer = await loadMyEmployer(req.user!.userId)
+  if (!employer) { error(res, 'Employer profile not found', 404); return }
+
+  const months = Math.min(24, Math.max(1, Number(req.query.months) || 6))
+  const since = new Date()
+  since.setMonth(since.getMonth() - months)
+
+  const runs = await PayrollRun.find({
+    employerId: employer._id.toString(),
+    status: { $in: ['processed', 'processing', 'approved'] },
+    createdAt: { $gte: since },
+  }).sort({ createdAt: -1 }).lean()
+
+  const byEmployeeMap = new Map<string, {
+    employeeId: string; employeeName: string; totalDeducted: number; runs: number
+    byType: Record<string, number>
+  }>()
+  let grandTotal = 0
+  for (const run of runs) {
+    const seen = new Set<string>()
+    for (const d of run.deductions) {
+      if (d.status !== 'disbursed') continue
+      const entry = byEmployeeMap.get(d.employeeId) ?? {
+        employeeId: d.employeeId, employeeName: d.employeeName ?? 'Unknown', totalDeducted: 0, runs: 0, byType: {},
+      }
+      entry.totalDeducted += d.amount
+      entry.byType[d.allocationType] = (entry.byType[d.allocationType] ?? 0) + d.amount
+      byEmployeeMap.set(d.employeeId, entry)
+      if (!seen.has(d.employeeId)) { entry.runs += 1; seen.add(d.employeeId) }
+      grandTotal += d.amount
+    }
+  }
+
+  success(res, {
+    months,
+    runsIncluded: runs.length,
+    grandTotal,
+    employees: [...byEmployeeMap.values()].sort((a, b) => b.totalDeducted - a.totalDeducted),
+  })
+})
+
+// GET /payroll/runs/:id/export — CSV download of the run's deduction lines
+router.get('/payroll/runs/:id/export', authenticate, requireRole('employer'), requirePermission('employer:view_payroll_reports'), async (req, res) => {
+  const employer = await loadMyEmployer(req.user!.userId)
+  const run = await PayrollRun.findById(param(req.params.id)).lean()
+  if (!run || !employer || run.employerId !== employer._id.toString()) { error(res, 'Payroll run not found', 404); return }
+
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const header = 'Employee,Employee ID,Type,Amount (GHS),Status,Reference,Failure Reason'
+  const rows = run.deductions.map((d) =>
+    [esc(d.employeeName), esc(d.employeeId), esc(d.allocationType), d.amount.toFixed(2), esc(d.status), esc(d.disbursementReference), esc(d.failureReason)].join(','),
+  )
+  const csv = [header, ...rows].join('\n')
+
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader('Content-Disposition', `attachment; filename="payroll-${run.periodLabel.replace(/\s+/g, '-')}.csv"`)
+  res.send(csv)
+})
+
 export default router

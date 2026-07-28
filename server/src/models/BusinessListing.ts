@@ -10,6 +10,7 @@ export interface IBusinessListing extends Document {
   price?: number
   promoText?: string
   isActive: boolean
+  viewCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -23,6 +24,7 @@ const businessListingSchema = new Schema<IBusinessListing>(
     price: Number,
     promoText: String,
     isActive: { type: Boolean, default: true },
+    viewCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 )

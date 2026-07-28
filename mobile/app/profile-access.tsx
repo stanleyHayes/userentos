@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -103,7 +104,7 @@ export default function ProfileAccessScreen() {
     const color = statusColors[item.status]
 
     return (
-      <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[s.card, neuCard(c)]}>
         {/* Header */}
         <View style={s.cardHeader}>
           <View style={[s.avatar, { backgroundColor: c.primary + '15' }]}>
@@ -135,7 +136,7 @@ export default function ProfileAccessScreen() {
 
         {/* Message */}
         {item.message && (
-          <View style={[s.messageBox, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <View style={[s.messageBox, neuInset(c, 8)]}>
             <Text style={[s.messageText, { color: c.textLight }]}>"{item.message}"</Text>
           </View>
         )}
@@ -265,7 +266,7 @@ const s = StyleSheet.create({
   filterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   filterText: { fontSize: 12, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
   list: { padding: spacing.md, gap: 12 },
-  card: { borderRadius: 12, borderWidth: 1, padding: spacing.md },
+  card: { padding: spacing.md },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   cardInfo: { flex: 1 },
@@ -276,7 +277,7 @@ const s = StyleSheet.create({
   meta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  messageBox: { marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1 },
+  messageBox: { marginTop: 10, padding: 10 },
   messageText: { fontSize: 12, fontFamily: 'Manrope_400Regular', fontStyle: 'italic' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Mod
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
@@ -77,7 +78,7 @@ export default function TenantsScreen() {
           const active = item.agreements.find((a) => a.status === 'active')
           const totalPaid = item.agreements.reduce((s, a) => s + a.totalPaid, 0)
           return (
-            <TouchableOpacity style={[s.card, { backgroundColor: c.white }]} activeOpacity={0.7} onPress={() => setSelected(item)}>
+            <TouchableOpacity style={[s.card, neuCard(c)]} activeOpacity={0.7} onPress={() => setSelected(item)}>
               <View style={[s.avatar, { backgroundColor: c.primary }]}>
                 <Text style={s.avatarText}>{item.firstName[0]}{item.lastName[0]}</Text>
               </View>
@@ -126,11 +127,11 @@ export default function TenantsScreen() {
 
                 {/* Stats */}
                 <View style={s.statsRow}>
-                  <View style={[s.statBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.statBox, neuInset(c)]}>
                     <Text style={[s.statValue, { color: c.primary }]}>{selected.agreements.length}</Text>
                     <Text style={[s.statLabel, { color: c.muted }]}>Agreements</Text>
                   </View>
-                  <View style={[s.statBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.statBox, neuInset(c)]}>
                     <Text style={[s.statValue, { color: c.accent }]}>{formatCurrency(selected.agreements.reduce((s, a) => s + a.totalPaid, 0))}</Text>
                     <Text style={[s.statLabel, { color: c.muted }]}>Total Paid</Text>
                   </View>
@@ -141,7 +142,7 @@ export default function TenantsScreen() {
                 {selected.agreements.map((a) => {
                   const isActive = a.status === 'active'
                   return (
-                    <View key={a.id} style={[s.agreementCard, { borderColor: isActive ? c.accent + '30' : c.border }]}>
+                    <View key={a.id} style={[s.agreementCard, neuInset(c), isActive && { borderColor: c.accent + '30' }]}>
                       <View style={s.agreementHeader}>
                         <View style={{ flex: 1 }}>
                           <Text style={[s.agreementTitle, { color: c.primaryDark }]} numberOfLines={1}>{a.propertyTitle}</Text>
@@ -190,7 +191,7 @@ const s = StyleSheet.create({
   summaryLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   summaryDivider: { width: 1, marginVertical: 4 },
   list: { padding: spacing.md, gap: spacing.sm, paddingBottom: 40 },
-  card: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 12, gap: 10 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
   avatar: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
   cardBody: { flex: 1 },
@@ -218,11 +219,11 @@ const s = StyleSheet.create({
   detailEmail: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
   detailPhone: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.md },
-  statBox: { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center' },
+  statBox: { flex: 1, padding: 12, alignItems: 'center' },
   statValue: { fontSize: 16, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   sectionLabel: { fontSize: 10, fontFamily: 'Manrope_600SemiBold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm },
-  agreementCard: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: spacing.sm },
+  agreementCard: { padding: 12, marginBottom: spacing.sm },
   agreementHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   agreementTitle: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   agreementDates: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },

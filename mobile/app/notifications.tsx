@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -56,7 +57,7 @@ export default function NotificationsScreen() {
     const icon = typeIcons[item.type] ?? 'notifications-outline'
     return (
       <TouchableOpacity
-        style={[s.card, { backgroundColor: c.white }, !item.isRead && { backgroundColor: c.primary + '05', borderLeftWidth: 3, borderLeftColor: c.primary }]}
+        style={[s.card, neuCard(c), !item.isRead && { backgroundColor: c.primary + '05', borderLeftWidth: 3, borderLeftColor: c.primary }]}
         onPress={() => { if (!item.isRead) markAsRead(item.id) }}
         activeOpacity={item.isRead ? 1 : 0.7}
       >
@@ -116,7 +117,7 @@ const s = StyleSheet.create({
   unreadLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   markAllText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   list: { padding: spacing.md, gap: spacing.sm },
-  card: { flexDirection: 'row', borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  card: { flexDirection: 'row', padding: spacing.md },
   cardLeft: { marginRight: spacing.md },
   iconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   unreadDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, borderWidth: 2 },

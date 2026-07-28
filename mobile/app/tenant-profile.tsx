@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
 
@@ -104,7 +105,7 @@ export default function TenantProfileScreen() {
   return (
     <ScrollView style={[s.container, { backgroundColor: c.surface }]}>
 
-      <View style={[s.scoreCard, { backgroundColor: c.white }]}>
+      <View style={[s.scoreCard, neuCard(c)]}>
         <View style={s.scoreHeader}>
           <Text style={[s.scoreTitle, { color: c.primaryDark }]}>Profile Completion</Text>
           <Text style={[s.scoreValue, { color: c.accent }]}>{completionScore}%</Text>
@@ -117,7 +118,7 @@ export default function TenantProfileScreen() {
         </Text>
       </View>
 
-      <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="person-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Personal Information</Text>
@@ -131,7 +132,7 @@ export default function TenantProfileScreen() {
         <ChipMultiSelect label="Languages Spoken" options={languageOptions} selected={form.languagesSpoken} onChange={(v) => setForm((prev) => ({ ...prev, languagesSpoken: v }))} c={c} />
       </View>
 
-      <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="school-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Academic Background</Text>
@@ -162,7 +163,7 @@ export default function TenantProfileScreen() {
         )}
       </View>
 
-      <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="briefcase-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Professional Information</Text>
@@ -176,7 +177,7 @@ export default function TenantProfileScreen() {
           <Text style={[s.fieldLabel, { color: c.muted }]}>Monthly Income</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <TextInput
-              style={[s.fieldInput, { backgroundColor: c.surface, color: c.text, borderColor: c.border, flex: 1 }]}
+              style={[s.fieldInput, neuInset(c), { color: c.text, flex: 1 }]}
               value={form.monthlyIncome}
               onChangeText={(v) => updateForm('monthlyIncome', v)}
               placeholder="e.g. 5000"
@@ -222,7 +223,7 @@ export default function TenantProfileScreen() {
         </View>
 
         {/* Additional Income Sources */}
-        <View style={[s.incomeSourcesBox, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <View style={[s.incomeSourcesBox, neuInset(c, 12)]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
             <Ionicons name="wallet-outline" size={16} color={c.primary} />
             <Text style={[s.incomeSourcesTitle, { color: c.primaryDark }]}>Additional Income Sources</Text>
@@ -234,7 +235,7 @@ export default function TenantProfileScreen() {
           )}
 
           {form.incomeSources.map((src, i) => (
-            <View key={i} style={[s.incomeSourceCard, { backgroundColor: c.white, borderColor: c.border }]}>
+            <View key={i} style={[s.incomeSourceCard, neuCard(c, 10)]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
                 <Text style={[s.incomeSourceCardLabel, { color: c.primaryDark }]}>Source {i + 1}</Text>
                 <TouchableOpacity
@@ -250,7 +251,7 @@ export default function TenantProfileScreen() {
               </View>
 
               <TextInput
-                style={[s.fieldInput, { backgroundColor: c.surface, color: c.text, borderColor: c.border, marginBottom: spacing.sm }]}
+                style={[s.fieldInput, neuInset(c), { color: c.text, marginBottom: spacing.sm }]}
                 value={src.source}
                 onChangeText={(v) => {
                   const updated = [...form.incomeSources]
@@ -263,7 +264,7 @@ export default function TenantProfileScreen() {
 
               <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
                 <TextInput
-                  style={[s.fieldInput, { backgroundColor: c.surface, color: c.text, borderColor: c.border, flex: 1 }]}
+                  style={[s.fieldInput, neuInset(c), { color: c.text, flex: 1 }]}
                   value={src.amount ? String(src.amount) : ''}
                   onChangeText={(v) => {
                     const updated = [...form.incomeSources]
@@ -347,7 +348,7 @@ export default function TenantProfileScreen() {
         })()}
       </View>
 
-      <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="heart-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Lifestyle</Text>
@@ -380,7 +381,7 @@ function FormField({ label, value, onChange, placeholder, multiline, keyboardTyp
     <View style={s.fieldContainer}>
       <Text style={[s.fieldLabel, { color: c.muted }]}>{label}</Text>
       <TextInput
-        style={[s.fieldInput, { backgroundColor: disabled ? c.border : c.surface, color: disabled ? c.muted : c.text, borderColor: c.border }, multiline && s.fieldInputMultiline]}
+        style={[s.fieldInput, neuInset(c), { color: disabled ? c.muted : c.text }, disabled && { backgroundColor: c.border }, multiline && s.fieldInputMultiline]}
         value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={c.muted}
         multiline={multiline} numberOfLines={multiline ? 3 : 1} keyboardType={keyboardType ?? 'default'}
         editable={!disabled}
@@ -395,7 +396,7 @@ function ToggleField({ label, value, onChange, c }: {
   return (
     <View style={s.fieldContainer}>
       <TouchableOpacity
-        style={[s.toggleRow, { backgroundColor: c.surface, borderColor: c.border }]}
+        style={[s.toggleRow, neuInset(c)]}
         onPress={() => onChange(!value)}
         activeOpacity={0.7}
       >
@@ -463,40 +464,40 @@ function OptionPicker({ label, value, options, onChange, c }: {
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
-  scoreCard: { margin: spacing.md, borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  scoreCard: { margin: spacing.md, padding: spacing.md },
   scoreHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   scoreTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   scoreValue: { fontSize: 20, fontFamily: 'Manrope_800ExtraBold' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
   scoreHint: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: spacing.sm },
-  sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
   sectionTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   fieldContainer: { marginBottom: spacing.md },
   fieldLabel: { fontSize: 12, fontFamily: 'Manrope_600SemiBold', marginBottom: 6 },
-  fieldInput: { borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', borderWidth: 1 },
+  fieldInput: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   fieldInputMultiline: { minHeight: 80, textAlignVertical: 'top' },
   optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   optionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
   optionChipText: { fontSize: 12, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, borderWidth: 1 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 12 },
   toggleLabel: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
   toggleTrack: { width: 44, height: 24, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 2 },
   toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ffffff' },
   toggleThumbActive: { transform: [{ translateX: 20 }] },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.lg, paddingVertical: 16, borderRadius: 12 },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.lg, paddingVertical: 16, borderRadius: 10 },
   saveButtonText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
   currencyChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   currencyChipSymbol: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
   currencyChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   currencyChipSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   currencyChipSmallText: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
-  incomeSourcesBox: { borderRadius: 12, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md },
+  incomeSourcesBox: { padding: spacing.md, marginBottom: spacing.md },
   incomeSourcesTitle: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
   incomeSourcesHint: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm },
   incomeSourcesEmpty: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingVertical: spacing.md },
-  incomeSourceCard: { borderRadius: 10, borderWidth: 1, padding: spacing.sm, marginBottom: spacing.sm },
+  incomeSourceCard: { padding: spacing.sm, marginBottom: spacing.sm },
   incomeSourceCardLabel: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   addSourceButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', marginTop: spacing.sm },
 } as const)

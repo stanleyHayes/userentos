@@ -9,6 +9,9 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
+import { Modal } from '@/components/ui/Modal'
+import TextField from '@mui/material/TextField'
+import { useCreateLead, useRequestViewing } from '@/hooks/useAgent'
 import { useState } from 'react'
 import {
   ArrowLeft, MapPin, Trash2, Bed, Bath, Car, Sofa, Ruler, Building2, Eye,
@@ -16,7 +19,7 @@ import {
   User, Phone, Clock, Lock, Share2, Flag,
   Wifi, Zap, Droplets, ShieldCheck, TreePine, Dumbbell, Wind, Tv, WashingMachine,
   Cctv, DoorOpen, Waves, ParkingCircle, Fuel, CreditCard, CheckCircle2,
-  Accessibility, Ear,
+  Accessibility, Ear, CalendarDays, Loader2,
 } from 'lucide-react'
 import { DoodleCircle } from '@/components/ui/Doodles'
 import { statusVariant, listingStatusVariant, listingStatusLabel } from './components/propertyStatusMaps'
@@ -121,6 +124,18 @@ export function PropertyDetailPage() {
     },
   })
 
+  // Agent lead + viewing CTAs (non-owner signed-in users)
+  const [showInterest, setShowInterest] = useState(false)
+  const [interestMessage, setInterestMessage] = useState('')
+  const [leadSent, setLeadSent] = useState(false)
+  const [showViewing, setShowViewing] = useState(false)
+  const [viewingDate, setViewingDate] = useState('')
+  const [viewingTime, setViewingTime] = useState('')
+  const [viewingNotes, setViewingNotes] = useState('')
+  const [viewingSent, setViewingSent] = useState(false)
+  const leadMutation = useCreateLead()
+  const viewingMutation = useRequestViewing()
+
   async function messageAboutProperty(participantId: string) {
     setMessagingReviewer(true)
     try {
@@ -151,6 +166,9 @@ export function PropertyDetailPage() {
 
   const p = property
   const isOwner = p.landlordId === user?.id
+  // The agent endpoints reject inquiries from the property's manager too.
+  const isManager = (p as Property & { managerId?: string }).managerId === user?.id
+  const canInquire = !!user && !isOwner && !isManager
   const isTenant = user?.activeRole === 'tenant'
   const isGovOrAdmin = user?.activeRole === 'government' || user?.activeRole === 'admin'
   const images = p.images?.length > 0 ? p.images : []
@@ -268,6 +286,41 @@ export function PropertyDetailPage() {
                   isError={reviewMutation.isError}
                   errorMessage={reviewMutation.error ? (reviewMutation.error as Error).message : undefined}
                 />
+              )}
+
+              {canInquire && (
+                <div className="space-y-2.5 border-t border-border/40 pt-4 dark:border-[#252a3a]/60">
+                  {leadSent && (
+                    <div role="status" className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-emerald-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Interest sent</p>
+                        <p className="mt-0.5 text-xs text-muted dark:text-gray-400">The agent will contact you.</p>
+                      </div>
+                    </div>
+                  )}
+                  {viewingSent && (
+                    <div role="status" className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-emerald-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Viewing requested</p>
+                        <p className="mt-0.5 text-xs text-muted dark:text-gray-400">The agent will confirm your slot shortly.</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {!leadSent && (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowInterest(true)}>
+                        <MessageSquare size={14} /> I'm interested
+                      </Button>
+                    )}
+                    {!viewingSent && (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowViewing(true)}>
+                        <CalendarDays size={14} /> Book a viewing
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-4 dark:border-[#252a3a]/60">
@@ -412,6 +465,92 @@ export function PropertyDetailPage() {
         isError={applyMutation.isError}
         errorMessage={applyMutation.error ? (applyMutation.error as Error).message : undefined}
       />
+
+      {/* Agent lead: "I'm interested" */}
+      <Modal open={showInterest} onClose={() => setShowInterest(false)} title="I'm interested">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs leading-relaxed text-muted dark:text-gray-400">
+            Let the agent for <span className="font-semibold text-primary-dark dark:text-white">{p.title}</span> know you're interested — they'll get your name and phone number.
+          </p>
+          <TextField
+            label="Message (optional)"
+            value={interestMessage}
+            onChange={(e) => setInterestMessage(e.target.value)}
+            multiline
+            rows={3}
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowInterest(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={leadMutation.isPending}
+              onClick={() =>
+                leadMutation.mutate(
+                  { propertyId: id!, ...(interestMessage.trim() ? { message: interestMessage.trim() } : {}) },
+                  { onSuccess: () => { setLeadSent(true); setShowInterest(false); setInterestMessage('') } },
+                )
+              }
+            >
+              {leadMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <MessageSquare size={13} />}
+              Send interest
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Agent viewing: "Book a viewing" */}
+      <Modal open={showViewing} onClose={() => setShowViewing(false)} title="Book a viewing">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs leading-relaxed text-muted dark:text-gray-400">
+            Request a slot to view <span className="font-semibold text-primary-dark dark:text-white">{p.title}</span> — the agent will confirm.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              label="Date"
+              type="date"
+              value={viewingDate}
+              onChange={(e) => setViewingDate(e.target.value)}
+              fullWidth
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: new Date().toISOString().slice(0, 10) } }}
+            />
+            <TextField
+              label="Time"
+              type="time"
+              value={viewingTime}
+              onChange={(e) => setViewingTime(e.target.value)}
+              fullWidth
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </div>
+          <TextField
+            label="Notes (optional)"
+            value={viewingNotes}
+            onChange={(e) => setViewingNotes(e.target.value)}
+            multiline
+            rows={2}
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowViewing(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={!viewingDate || !viewingTime || viewingMutation.isPending}
+              onClick={() =>
+                viewingMutation.mutate(
+                  { propertyId: id!, date: viewingDate, time: viewingTime, ...(viewingNotes.trim() ? { notes: viewingNotes.trim() } : {}) },
+                  { onSuccess: () => { setViewingSent(true); setShowViewing(false); setViewingNotes('') } },
+                )
+              }
+            >
+              {viewingMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CalendarDays size={13} />}
+              Request viewing
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

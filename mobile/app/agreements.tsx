@@ -1,18 +1,109 @@
 import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as SecureStore from 'expo-secure-store'
+import { router } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
+import { useAuthStore } from '../stores/authStore'
 
 interface Agreement {
   id: string; propertyId: string; rentAmount: number; status: string
   startDate: string; endDate: string
 }
 
+/* Move-in checklist (mirrors client/src/components/agreements/MoveInChecklist.tsx).
+   Progress persists per agreement in SecureStore; tasks with a business
+   category link to /local-services when such businesses exist in the
+   agreement property's city. */
+const MOVE_IN_TASKS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; category?: string }[] = [
+  { key: 'handover', label: 'Confirm move-in date & key handover', icon: 'key-outline' },
+  { key: 'meters', label: 'Photograph meter readings & condition', icon: 'camera-outline' },
+  { key: 'internet', label: 'Set up home internet', icon: 'wifi-outline', category: 'internet' },
+  { key: 'movers', label: 'Schedule movers', icon: 'car-outline', category: 'moving' },
+  { key: 'cleaning', label: 'Book a deep clean', icon: 'sparkles-outline', category: 'cleaning' },
+  { key: 'furniture', label: 'Buy furniture & essentials', icon: 'bed-outline', category: 'furniture' },
+  { key: 'address', label: 'Update your address everywhere', icon: 'location-outline' },
+]
+
+function MoveInChecklist({ agreementId, propertyId }: { agreementId: string; propertyId: string }) {
+  const c = useThemeColors()
+  const [checked, setChecked] = useState<string[]>([])
+  const [city, setCity] = useState('')
+  const [categoriesInCity, setCategoriesInCity] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const key = `rentos-movein-${agreementId}`
+    SecureStore.getItemAsync(key)
+      .then((raw) => { if (raw) setChecked(JSON.parse(raw) as string[]) })
+      .catch(() => {})
+    // City comes from the agreement's property — the list endpoint doesn't
+    // carry it, so fetch the property, then businesses in that city.
+    api.get<{ address?: { city?: string } }>(`/properties/${propertyId}`)
+      .then(async (p) => {
+        const propCity = p.address?.city ?? ''
+        setCity(propCity)
+        if (!propCity) return
+        const res = await api.get<{ items: { business: { category: string } }[] }>(`/businesses?city=${encodeURIComponent(propCity)}`)
+        setCategoriesInCity(new Set((res.items ?? []).map((i) => i.business.category)))
+      })
+      .catch(() => {})
+  }, [agreementId, propertyId])
+
+  function toggle(taskKey: string) {
+    setChecked((prev) => {
+      const next = prev.includes(taskKey) ? prev.filter((k) => k !== taskKey) : [...prev, taskKey]
+      SecureStore.setItemAsync(`rentos-movein-${agreementId}`, JSON.stringify(next)).catch(() => {})
+      return next
+    })
+  }
+
+  const done = checked.length
+  const pct = Math.round((done / MOVE_IN_TASKS.length) * 100)
+
+  return (
+    <View style={[s.checklistCard, neuCard(c)]}>
+      <View style={s.checklistHeader}>
+        <Ionicons name="clipboard-outline" size={16} color={c.primary} />
+        <Text style={[s.checklistTitle, { color: c.primaryDark }]}>Move-in checklist</Text>
+        <Text style={[s.checklistCount, { color: c.muted }]}>{done}/{MOVE_IN_TASKS.length}</Text>
+      </View>
+      <View style={[s.progressTrack, { backgroundColor: c.surface }]}>
+        <View style={[s.progressFill, { backgroundColor: c.accent, width: `${pct}%` }]} />
+      </View>
+      {MOVE_IN_TASKS.map((task) => {
+        const isDone = checked.includes(task.key)
+        const nearby = task.category && categoriesInCity.has(task.category)
+        return (
+          <View key={task.key} style={s.taskRow}>
+            <TouchableOpacity
+              style={[s.checkbox, { borderColor: isDone ? c.accent : c.border }, isDone && { backgroundColor: c.accent }]}
+              onPress={() => toggle(task.key)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              {isDone && <Ionicons name="checkmark" size={12} color="#ffffff" />}
+            </TouchableOpacity>
+            <Ionicons name={task.icon} size={15} color={c.muted} style={isDone && s.taskIconDone} />
+            <Text style={[s.taskLabel, { color: c.text }, isDone && { textDecorationLine: 'line-through', color: c.muted }]}>{task.label}</Text>
+            {nearby && !isDone && (
+              <TouchableOpacity onPress={() => router.push('/local-services')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Text style={[s.nearbyLink, { color: c.primary }]}>Nearby options →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )
+      })}
+      {!!city && <Text style={[s.cityNote, { color: c.muted }]}>Suggestions based on {city}.</Text>}
+    </View>
+  )
+}
+
 export default function AgreementsScreen() {
   const c = useThemeColors()
+  const isTenant = useAuthStore((state) => state.user?.activeRole === 'tenant')
   const [agreements, setAgreements] = useState<Agreement[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -54,11 +145,16 @@ export default function AgreementsScreen() {
     ])
   }
 
+  // Tenants get a move-in checklist under their active agreement (this screen
+  // is list-only — there is no detail view to hang it on).
+  const activeAgreement = agreements.find((a) => a.status === 'active')
+
   function renderAgreement({ item }: { item: Agreement }) {
     const statusColor = statusColors[item.status] ?? c.muted
     const isPending = item.status === 'pending_signature' || item.status === 'pending'
     return (
-      <View style={[s.card, { backgroundColor: c.white }]}>
+      <View>
+      <View style={[s.card, neuCard(c)]}>
         <View style={s.cardTop}>
           <View style={[s.cardIcon, { backgroundColor: c.primary + '10' }]}>
             <Ionicons name="document-text" size={20} color={c.primary} />
@@ -103,6 +199,10 @@ export default function AgreementsScreen() {
           </TouchableOpacity>
         )}
       </View>
+      {isTenant && activeAgreement?.id === item.id && (
+        <MoveInChecklist agreementId={item.id} propertyId={item.propertyId} />
+      )}
+      </View>
     )
   }
 
@@ -134,7 +234,8 @@ export default function AgreementsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.md },
-  card: { borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  // Cards — depth comes from neuCard() at the call site
+  card: { padding: spacing.md },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   cardIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   cardBody: { flex: 1 },
@@ -146,8 +247,21 @@ const s = StyleSheet.create({
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   detailLabel: { fontSize: 12, width: 40, fontFamily: 'Manrope_400Regular' },
   detailValue: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  signBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, borderRadius: 12, marginTop: spacing.sm },
+  signBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, borderRadius: 10, marginTop: spacing.sm },
   signBtnText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
   emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  // Move-in checklist (tenant, active agreement)
+  checklistCard: { padding: spacing.md, marginTop: spacing.sm },
+  checklistHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
+  checklistTitle: { flex: 1, fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  checklistCount: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: spacing.sm },
+  progressFill: { height: '100%', borderRadius: 3 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  taskIconDone: { opacity: 0.5 },
+  taskLabel: { flex: 1, fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  nearbyLink: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  cityNote: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: spacing.sm },
 })

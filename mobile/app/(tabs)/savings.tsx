@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, 
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useThemeColors, useIsDark, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { formatCompact, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { ListSkeleton } from '../../components/Skeleton'
@@ -256,7 +257,7 @@ export default function SavingsScreen() {
               const isActive = plan.status === 'active'
               const progressColor = pct >= 75 ? c.accent : pct >= 40 ? c.warning : c.primary
               return (
-                <View key={plan.id} style={[s.planCard, { backgroundColor: c.white }]}>
+                <View key={plan.id} style={[s.planCard, neuCard(c)]}>
                   <View style={s.planHeader}>
                     <View style={s.planHeaderLeft}>
                       <View style={[s.planIconWrap, { backgroundColor: (isActive ? c.accent : c.muted) + '15' }]}>
@@ -309,7 +310,7 @@ export default function SavingsScreen() {
           <View style={s.section}>
             <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Recent Transactions</Text>
             {recentTxs.map((tx, i) => (
-              <View key={`${tx.id}-${i}`} style={[s.txItem, { backgroundColor: c.white }]}>
+              <View key={`${tx.id}-${i}`} style={[s.txItem, neuCard(c)]}>
                 <View style={[s.txIcon, { backgroundColor: tx.type === 'deposit' ? c.accent + '15' : c.danger + '15' }]}>
                   <Ionicons
                     name={tx.type === 'deposit' ? 'arrow-down' : 'arrow-up'}
@@ -335,7 +336,7 @@ export default function SavingsScreen() {
       {/* New Plan Modal */}
       <Modal visible={showPlanModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: c.white }]}>
+          <View style={[s.modalContent, neuCard(c, 20)]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: c.primaryDark }]}>New Savings Plan</Text>
               <TouchableOpacity onPress={resetPlanModal} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -346,7 +347,7 @@ export default function SavingsScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[s.fieldLabel, { color: c.text }]}>Target Amount (GHS)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="e.g. 5000"
                 placeholderTextColor={c.muted}
                 keyboardType="numeric"
@@ -359,7 +360,7 @@ export default function SavingsScreen() {
                 {frequencies.map((f) => (
                   <TouchableOpacity
                     key={f.value}
-                    style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, frequency === f.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
+                    style={[s.optionBtn, neuInset(c), frequency === f.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
                     onPress={() => setFrequency(f.value)}
                   >
                     <Text style={[s.optionText, { color: c.text }, frequency === f.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{f.label}</Text>
@@ -369,7 +370,7 @@ export default function SavingsScreen() {
 
               <Text style={[s.fieldLabel, { color: c.text }]}>Contribution Amount (GHS)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="e.g. 200"
                 placeholderTextColor={c.muted}
                 keyboardType="numeric"
@@ -379,7 +380,7 @@ export default function SavingsScreen() {
 
               <Text style={[s.fieldLabel, { color: c.text }]}>Target Date (YYYY-MM-DD)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="e.g. 2026-12-31"
                 placeholderTextColor={c.muted}
                 value={targetDate}
@@ -409,7 +410,7 @@ export default function SavingsScreen() {
       {/* Deposit/Withdraw Modal */}
       <Modal visible={showWalletModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: c.white }]}>
+          <View style={[s.modalContent, neuCard(c, 20)]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: c.primaryDark }]}>{walletAction === 'deposit' ? 'Deposit to Wallet' : 'Withdraw from Wallet'}</Text>
               <TouchableOpacity onPress={() => setShowWalletModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -419,7 +420,7 @@ export default function SavingsScreen() {
 
             <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
             <TextInput
-              style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+              style={[s.input, neuInset(c), { color: c.text }]}
               placeholder="0.00"
               placeholderTextColor={c.muted}
               keyboardType="numeric"
@@ -432,7 +433,7 @@ export default function SavingsScreen() {
               {paymentMethods.map((m) => (
                 <TouchableOpacity
                   key={m.value}
-                  style={[s.optionBtn, { flex: 0, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: c.surface, borderColor: c.border }, walletMethod === m.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
+                  style={[s.optionBtn, neuInset(c), { flex: 0, paddingHorizontal: 14, paddingVertical: 10 }, walletMethod === m.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
                   onPress={() => setWalletMethod(m.value)}
                 >
                   <Text style={[s.optionText, { fontSize: 12, color: c.text }, walletMethod === m.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{m.label}</Text>
@@ -444,7 +445,7 @@ export default function SavingsScreen() {
               <>
                 <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
                 <TextInput
-                  style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                  style={[s.input, neuInset(c), { color: c.text }]}
                   placeholder="0241234567"
                   placeholderTextColor={c.muted}
                   keyboardType="phone-pad"
@@ -507,8 +508,8 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
 
-  // Plan Cards
-  planCard: { borderRadius: 14, padding: spacing.md, marginBottom: spacing.sm, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  // Plan Cards — depth comes from neuCard() at the call site
+  planCard: { padding: spacing.md, marginBottom: spacing.sm },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   planHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   planIconWrap: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
@@ -536,22 +537,22 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
 
   // Transactions
-  txItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: spacing.md, marginBottom: spacing.xs, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
+  txItem: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, marginBottom: spacing.xs },
   txIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   txBody: { flex: 1 },
   txDesc: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
   txDate: { fontSize: 11, marginTop: 2, fontFamily: 'Manrope_400Regular' },
   txAmount: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
 
-  // Modal
+  // Modal — depth + top radius come from neuCard(c, 20) at the call site
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
+  modalContent: { padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm },
-  optionBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5 },
+  optionBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   optionText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },

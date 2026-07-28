@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 interface Worker {
@@ -50,7 +51,7 @@ export default function WorkersScreen() {
         <Text style={s.headerSubtitle}>Book skilled tradespeople near you</Text>
       </View>
 
-      <View style={[s.searchWrap, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[s.searchWrap, neuInset(c)]}>
         <Ionicons name="search" size={18} color={c.muted} />
         <TextInput
           style={[s.searchInput, { color: c.text }]}
@@ -104,7 +105,7 @@ export default function WorkersScreen() {
           filtered.map((w) => (
             <TouchableOpacity
               key={w.id ?? w._id}
-              style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}
+              style={[s.card, neuCard(c)]}
               onPress={() => router.push(`/worker/${w.id ?? w._id}` as string)}
               activeOpacity={0.7}
             >
@@ -149,14 +150,14 @@ const s = StyleSheet.create({
   header: { paddingTop: 64, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg + 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerTitle: { color: '#fff', fontSize: 22, fontFamily: 'Manrope_800ExtraBold' },
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: 2 },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: -18, borderRadius: 12, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: -18, paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   filterScroll: { marginTop: spacing.md },
   filterContent: { paddingHorizontal: spacing.lg, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginRight: 8 },
   filterChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   listContent: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
-  card: { flexDirection: 'row', borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: spacing.md },
+  card: { flexDirection: 'row', padding: spacing.md, gap: spacing.md },
   photo: { width: 64, height: 64, borderRadius: 12 },
   info: { flex: 1, gap: 2 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

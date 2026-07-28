@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset, neuChip } from '../lib/neu'
 import { api } from '../lib/api'
 
 interface PricingAnalysis { marketMedian: number; marketAverage: number; comparableCount: number; suggestedRent: number }
@@ -105,7 +106,7 @@ export default function PricingScreen() {
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[s.tab, { backgroundColor: activeTab === tab.key ? c.primary : c.card, borderColor: c.border }]}
+            style={[s.tab, neuChip(c, 20), activeTab === tab.key && { backgroundColor: c.primary, borderColor: c.primary }]}
             onPress={() => setActiveTab(tab.key)}
           >
             <Ionicons name={tab.icon} size={16} color={activeTab === tab.key ? '#fff' : c.text} />
@@ -115,26 +116,26 @@ export default function PricingScreen() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={s.scroll}>
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.label, { color: c.text }]}>City</Text>
-          <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={city} onChangeText={setCity} placeholder="Accra" placeholderTextColor={c.muted} />
+          <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={city} onChangeText={setCity} placeholder="Accra" placeholderTextColor={c.muted} />
 
           <Text style={[s.label, { color: c.text }]}>Property Type</Text>
-          <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={type} onChangeText={setType} placeholder="apartment" placeholderTextColor={c.muted} />
+          <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={type} onChangeText={setType} placeholder="apartment" placeholderTextColor={c.muted} />
 
           <View style={s.row}>
             <View style={s.half}>
               <Text style={[s.label, { color: c.text }]}>Bedrooms</Text>
-              <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={bedrooms} onChangeText={setBedrooms} keyboardType="numeric" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={bedrooms} onChangeText={setBedrooms} keyboardType="numeric" />
             </View>
             <View style={s.half}>
               <Text style={[s.label, { color: c.text }]}>Bathrooms</Text>
-              <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={bathrooms} onChangeText={setBathrooms} keyboardType="numeric" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={bathrooms} onChangeText={setBathrooms} keyboardType="numeric" />
             </View>
           </View>
 
           <Text style={[s.label, { color: c.text }]}>Floor Area (sqm)</Text>
-          <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={floorArea} onChangeText={setFloorArea} keyboardType="numeric" placeholder="Optional" placeholderTextColor={c.muted} />
+          <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={floorArea} onChangeText={setFloorArea} keyboardType="numeric" placeholder="Optional" placeholderTextColor={c.muted} />
 
           <TouchableOpacity style={s.furnishedRow} onPress={() => setFurnished(!furnished)}>
             <View style={[s.checkbox, { borderColor: c.border, backgroundColor: furnished ? c.primary : c.surface }]}>
@@ -149,18 +150,18 @@ export default function PricingScreen() {
             {analysisQuery.isLoading ? (
               <ActivityIndicator style={{ marginTop: 20 }} color={c.primary} />
             ) : analysisQuery.data ? (
-              <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={[s.card, neuCard(c)]}>
                 <Text style={[s.sectionTitle, { color: c.text }]}>Market Analysis</Text>
                 <View style={s.statGrid}>
-                  <View style={[s.statBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.statBox, neuInset(c)]}>
                     <Text style={[s.statValue, { color: c.primary }]}>GHS {analysisQuery.data.marketMedian ?? 0}</Text>
                     <Text style={[s.statLabel, { color: c.muted }]}>Median</Text>
                   </View>
-                  <View style={[s.statBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.statBox, neuInset(c)]}>
                     <Text style={[s.statValue, { color: c.primary }]}>GHS {analysisQuery.data.marketAverage ?? 0}</Text>
                     <Text style={[s.statLabel, { color: c.muted }]}>Average</Text>
                   </View>
-                  <View style={[s.statBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.statBox, neuInset(c)]}>
                     <Text style={[s.statValue, { color: c.primary }]}>{analysisQuery.data.comparableCount ?? 0}</Text>
                     <Text style={[s.statLabel, { color: c.muted }]}>Comparables</Text>
                   </View>
@@ -178,7 +179,7 @@ export default function PricingScreen() {
             {trendsQuery.isLoading ? (
               <ActivityIndicator style={{ marginTop: 20 }} color={c.primary} />
             ) : trendsQuery.data && Array.isArray(trendsQuery.data.trends) ? (
-              <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={[s.card, neuCard(c)]}>
                 <Text style={[s.sectionTitle, { color: c.text }]}>Rent Trends</Text>
                 {trendsQuery.data.trends.map((t, i) => (
                   <View key={i} style={s.trendRow}>
@@ -194,9 +195,9 @@ export default function PricingScreen() {
 
         {activeTab === 'fair' && (
           <View>
-            <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View style={[s.card, neuCard(c)]}>
               <Text style={[s.label, { color: c.text }]}>Price to Check (GHS)</Text>
-              <TextInput style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]} value={checkPrice} onChangeText={setCheckPrice} keyboardType="numeric" placeholder="3000" placeholderTextColor={c.muted} />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={checkPrice} onChangeText={setCheckPrice} keyboardType="numeric" placeholder="3000" placeholderTextColor={c.muted} />
               <TouchableOpacity
                 style={[s.generateBtn, { backgroundColor: c.primary }]}
                 onPress={() => fairPriceMutation.mutate()}
@@ -206,7 +207,7 @@ export default function PricingScreen() {
               </TouchableOpacity>
             </View>
             {fairPriceMutation.data && (
-              <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={[s.card, neuCard(c)]}>
                 <Text style={[s.sectionTitle, { color: c.text }]}>Fair Price Check</Text>
                 <Text style={[s.verdict, { color: fairPriceMutation.data.isFair ? '#10b981' : '#ef4444' }]}>
                   {fairPriceMutation.data.verdict}
@@ -221,7 +222,7 @@ export default function PricingScreen() {
 
         {activeTab === 'ml' && (
           <View>
-            <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View style={[s.card, neuCard(c)]}>
               <Text style={[s.sectionTitle, { color: c.text }]}>ML Model Status</Text>
               {modelStatusQuery.isLoading ? (
                 <ActivityIndicator color={c.primary} />
@@ -247,7 +248,7 @@ export default function PricingScreen() {
               </TouchableOpacity>
             </View>
             {mlResult && (
-              <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={[s.card, neuCard(c)]}>
                 <Text style={[s.sectionTitle, { color: c.text }]}>ML Prediction</Text>
                 <Text style={[s.mlRent, { color: c.primary }]}>GHS {String(mlResult.predictedRent)}</Text>
                 <Text style={[s.mlStat, { color: c.textLight }]}>
@@ -270,12 +271,12 @@ const s = StyleSheet.create({
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   tabScroll: { marginTop: spacing.md },
   tabContent: { paddingHorizontal: spacing.lg, gap: 8 },
-  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
   tabText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   scroll: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  card: { padding: spacing.md, gap: spacing.sm },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   row: { flexDirection: 'row', gap: spacing.md },
   half: { flex: 1 },
   furnishedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
@@ -285,7 +286,7 @@ const s = StyleSheet.create({
   generateBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
   statGrid: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  statBox: { flex: 1, borderRadius: 10, padding: spacing.sm, alignItems: 'center' },
+  statBox: { flex: 1, padding: spacing.sm, alignItems: 'center' },
   statValue: { fontSize: 16, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   suggestedRent: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },

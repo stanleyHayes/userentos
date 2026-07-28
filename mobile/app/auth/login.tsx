@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore, type User } from '../../stores/authStore'
 import { Logo } from '../../components/Logo'
@@ -166,10 +167,10 @@ export default function LoginScreen() {
 
         <View style={s.form}>
           <Text style={[s.label, { color: c.text }]}>Email</Text>
-          <TextInput style={[s.input, { borderColor: c.border, backgroundColor: c.white, color: c.text }]} placeholder="you@example.com" placeholderTextColor={c.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="you@example.com" placeholderTextColor={c.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
           <Text style={[s.label, { color: c.text }]}>Password</Text>
-          <View style={[s.passwordWrap, { borderColor: c.border, backgroundColor: c.white }]}>
+          <View style={[s.passwordWrap, neuInset(c)]}>
             <TextInput style={[s.passwordInput, { color: c.text }]} placeholder="Enter your password" placeholderTextColor={c.muted} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
             <Pressable onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
               <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.muted} />
@@ -183,7 +184,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           {capability?.available && !bioEnabled ? (
-            <View style={[s.bioHint, { borderColor: c.border, backgroundColor: c.card }]}>
+            <View style={[s.bioHint, neuCard(c)]}>
               <Ionicons name={bioIcon} size={18} color={c.primary} />
               <Text style={[s.bioHintText, { color: c.muted }]}>
                 Tip: enable {bioName} after signing in for one-tap access.
@@ -208,8 +209,8 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 12 },
   form: { gap: spacing.sm },
   label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { height: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
-  passwordWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, height: 52 },
+  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  passwordWrap: { flexDirection: 'row', alignItems: 'center', height: 52 },
   passwordInput: { flex: 1, height: '100%', paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
   eyeBtn: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
   button: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: spacing.md },
@@ -226,6 +227,6 @@ const s = StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
-  bioHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12, borderWidth: 1, marginTop: spacing.md },
+  bioHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, marginTop: spacing.md },
   bioHintText: { flex: 1, fontSize: 13, fontFamily: 'Manrope_400Regular' },
 })

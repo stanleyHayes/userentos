@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, TextInput, Alert, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
@@ -110,7 +111,7 @@ export default function DisputesScreen() {
     const statusColor = statusColors[item.status] ?? c.muted
     const icon = categoryIcons[item.category] ?? 'alert-circle-outline'
     return (
-      <View style={[s.card, { backgroundColor: c.white }]}>
+      <View style={[s.card, neuCard(c)]}>
         <View style={[s.cardIcon, { backgroundColor: statusColor + '15' }]}>
           <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={20} color={statusColor} />
         </View>
@@ -173,7 +174,7 @@ export default function DisputesScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[s.fieldLabel, { color: c.text }]}>Title</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="Brief title for the dispute"
                 placeholderTextColor={c.muted}
                 value={title}
@@ -202,7 +203,7 @@ export default function DisputesScreen() {
 
               <Text style={[s.fieldLabel, { color: c.text }]}>Filed Against (User ID)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="User ID of the other party"
                 placeholderTextColor={c.muted}
                 value={filedAgainst}
@@ -211,7 +212,7 @@ export default function DisputesScreen() {
 
               <Text style={[s.fieldLabel, { color: c.text }]}>Property ID</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="ID of the related property"
                 placeholderTextColor={c.muted}
                 value={propertyId}
@@ -252,10 +253,11 @@ export default function DisputesScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 12 },
+  createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 10 },
   createBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   list: { padding: spacing.md, gap: spacing.sm },
-  card: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  // Cards — depth comes from neuCard() at the call site
+  card: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
   cardIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   cardBody: { flex: 1 },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
@@ -274,12 +276,13 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  // Inputs — pressed well comes from neuInset() at the call site
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, fontFamily: 'Manrope_500Medium' },
   textArea: { minHeight: 100, paddingTop: 14 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   categoryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1.5 },
   categoryBtnText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
 })

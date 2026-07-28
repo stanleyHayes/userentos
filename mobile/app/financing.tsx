@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -127,7 +128,7 @@ export default function FinancingScreen() {
           </View>
         ) : (
           offers.map((o) => (
-            <View key={o.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View key={o.id} style={[s.card, neuCard(c)]}>
               <View style={s.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{o.name}</Text>
@@ -190,7 +191,7 @@ export default function FinancingScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {selected && (
-                <View style={[s.summaryBox, { backgroundColor: c.surface }]}>
+                <View style={[s.summaryBox, neuInset(c)]}>
                   <Text style={[s.summaryRow, { color: c.muted }]}>
                     Allowed amount: <Text style={[s.summaryBold, { color: c.text }]}>
                       {formatCurrency(selected.minAmount)} – {formatCurrency(selected.maxAmount)}
@@ -210,7 +211,7 @@ export default function FinancingScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Amount requested (GHS)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
@@ -220,7 +221,7 @@ export default function FinancingScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Tenure (months)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 keyboardType="numeric"
                 value={tenure}
                 onChangeText={setTenure}
@@ -230,7 +231,7 @@ export default function FinancingScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Purpose</Text>
               <TextInput
-                style={[s.input, s.textArea, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
                 multiline
                 numberOfLines={3}
                 value={purpose}
@@ -296,7 +297,7 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
   card: {
-    borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md,
+    padding: spacing.md, marginBottom: spacing.md,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
   cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
@@ -322,18 +323,18 @@ const s = StyleSheet.create({
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 17, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
-  summaryBox: { padding: spacing.sm, borderRadius: 10, marginBottom: spacing.md, gap: 4 },
+  summaryBox: { padding: spacing.sm, marginBottom: spacing.md, gap: 4 },
   summaryRow: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
   summaryBold: { fontFamily: 'Manrope_700Bold' },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   textArea: { minHeight: 70, textAlignVertical: 'top' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   checkboxLabel: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
+    paddingVertical: 14, borderRadius: 10, marginTop: spacing.lg, marginBottom: spacing.md,
   },
   submitDisabled: { opacity: 0.6 },
   submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Act
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { formatCurrency } from '../../lib/format'
 import { api } from '../../lib/api'
 import { PropertyGridSkeleton } from '../../components/Skeleton'
@@ -78,7 +79,7 @@ export default function PropertiesScreen() {
   function renderProperty({ item }: { item: Property }) {
     const statusColor = statusColors[item.status] ?? c.muted
     return (
-      <TouchableOpacity style={[s.card, { backgroundColor: c.white }]} activeOpacity={0.7} onPress={() => router.push(`/property/${item.id}`)}>
+      <TouchableOpacity style={[s.card, neuCard(c)]} activeOpacity={0.7} onPress={() => router.push(`/property/${item.id}`)}>
         {item.images && item.images.length > 0 ? (
           <Image source={{ uri: item.images[0] }} style={s.cardImage} resizeMode="cover" />
         ) : (
@@ -111,7 +112,7 @@ export default function PropertiesScreen() {
     <View style={[s.container, { backgroundColor: c.surface }]}>
       {/* Search Bar */}
       <View style={[s.searchContainer, { backgroundColor: c.white, borderBottomColor: c.border }]}>
-        <View style={[s.searchBar, { backgroundColor: c.surface }]}>
+        <View style={[s.searchBar, neuInset(c)]}>
           <Ionicons name="search" size={18} color={c.muted} />
           <TextInput
             style={[s.searchInput, { color: c.text }]}
@@ -186,13 +187,13 @@ export default function PropertiesScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   searchContainer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: spacing.md, height: 44, gap: 8 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, height: 44, gap: 8 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_500Medium' },
   filterRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   filterText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
   list: { padding: spacing.md, gap: spacing.md },
-  card: { borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  card: { overflow: 'hidden' },
   cardImage: { height: 120, justifyContent: 'center', alignItems: 'center' },
   cardImageText: { fontSize: 40, fontFamily: 'Manrope_700Bold' },
   cardBody: { padding: spacing.md },

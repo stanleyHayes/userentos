@@ -1945,6 +1945,9 @@ export interface Business {
   city: string
   address?: string
   isVerified: boolean
+  viewCount: number
+  ratingAvg: number
+  reviewCount: number
   createdAt: string
 }
 
@@ -1979,6 +1982,44 @@ export interface BusinessWithListings {
   listings: BusinessListing[]
 }
 
+export type BusinessInquiryStatus = 'new' | 'contacted' | 'won' | 'lost'
+
+export interface BusinessInquiry {
+  id: string
+  businessId: string
+  listingId?: string
+  listingTitle?: string
+  requesterId: string
+  requesterName: string
+  requesterPhone: string
+  requesterEmail?: string
+  message?: string
+  status: BusinessInquiryStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BusinessReview {
+  id: string
+  businessId: string
+  authorId: string
+  authorName: string
+  rating: number
+  review?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BusinessAnalytics {
+  profileViews: number
+  listingViews: number
+  totalInquiries: number
+  newInquiries: number
+  wonInquiries: number
+  conversionRate: number
+  inquiriesByDay: { date: string; count: number }[]
+}
+
 export function useBusinesses(
   params?: { category?: BusinessCategory | ''; city?: string; search?: string },
   options?: { enabled?: boolean },
@@ -2003,10 +2044,70 @@ export function useBusiness(id: string) {
   })
 }
 
+export function useBusinessReviews(id: string) {
+  return useQuery({
+    queryKey: ['business-reviews', id],
+    queryFn: () => api.get<{ items: BusinessReview[]; canReview: boolean }>(`/businesses/${id}/reviews`),
+    enabled: !!id,
+  })
+}
+
+export function useCreateBusinessInquiry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ businessId, ...body }: { businessId: string; listingId?: string; message?: string }) =>
+      api.post<BusinessInquiry>(`/businesses/${businessId}/inquiries`, body),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['business', variables.businessId] })
+      qc.invalidateQueries({ queryKey: ['my-business-inquiries'] })
+    },
+  })
+}
+
+export function useUpsertBusinessReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ businessId, ...body }: { businessId: string; rating: number; review?: string }) =>
+      api.post<BusinessReview>(`/businesses/${businessId}/reviews`, body),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['business-reviews', variables.businessId] })
+      qc.invalidateQueries({ queryKey: ['businesses'] })
+      qc.invalidateQueries({ queryKey: ['business', variables.businessId] })
+    },
+  })
+}
+
 export function useMyBusiness() {
   return useQuery({
     queryKey: ['my-business'],
     queryFn: () => api.get<{ business: Business | null; listings: BusinessListing[] }>('/businesses/me'),
+  })
+}
+
+export function useMyBusinessInquiries(status?: BusinessInquiryStatus | '') {
+  const qs = status ? `?status=${status}` : ''
+  return useQuery({
+    queryKey: ['my-business-inquiries', status],
+    queryFn: () => api.get<{ items: BusinessInquiry[] }>(`/businesses/me/inquiries${qs}`),
+  })
+}
+
+export function useUpdateBusinessInquiry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: BusinessInquiryStatus }) =>
+      api.patch<BusinessInquiry>(`/businesses/me/inquiries/${id}`, { status }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-business-inquiries'] })
+      qc.invalidateQueries({ queryKey: ['my-business-analytics'] })
+    },
+  })
+}
+
+export function useMyBusinessAnalytics() {
+  return useQuery({
+    queryKey: ['my-business-analytics'],
+    queryFn: () => api.get<BusinessAnalytics>('/businesses/me/analytics'),
   })
 }
 

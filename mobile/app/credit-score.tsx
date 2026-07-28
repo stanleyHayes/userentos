@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TextInput, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { DetailSkeleton } from '../components/Skeleton'
@@ -96,7 +97,7 @@ export default function CreditScoreScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       {/* Score Display */}
-      <View style={[s.scoreCard, { backgroundColor: c.card }]}>
+      <View style={[s.scoreCard, neuCard(c)]}>
         <View style={s.scoreRow}>
           {/* Circle */}
           <View style={s.circleWrap}>
@@ -125,7 +126,7 @@ export default function CreditScoreScreen() {
       </View>
 
       {/* Factor Breakdown */}
-      <View style={[s.sectionCard, { backgroundColor: c.card }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <Text style={[s.sectionTitle, { color: c.text }]}>Score Breakdown</Text>
         {factorConfig.map((factor) => {
           const value = data.factors[factor.key as keyof typeof data.factors]
@@ -151,7 +152,7 @@ export default function CreditScoreScreen() {
       </View>
 
       {/* How to Improve */}
-      <View style={[s.sectionCard, { backgroundColor: c.card }]}>
+      <View style={[s.sectionCard, neuCard(c)]}>
         <Text style={[s.sectionTitle, { color: c.text }]}>How to Improve Your Score</Text>
         {tips.map((tip, i) => (
           <View key={i} style={s.tipRow}>
@@ -165,11 +166,11 @@ export default function CreditScoreScreen() {
 
       {/* Tenant Lookup — landlord/admin only */}
       {canLookup && (
-        <View style={[s.sectionCard, { backgroundColor: c.card }]}>
+        <View style={[s.sectionCard, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.text }]}>Lookup Tenant Score</Text>
           <View style={s.lookupRow}>
             <TextInput
-              style={[s.lookupInput, { borderColor: c.border, color: c.text, backgroundColor: c.surface }]}
+              style={[s.lookupInput, neuInset(c), { color: c.text }]}
               placeholder="Enter tenant user ID"
               placeholderTextColor={c.muted}
               value={lookupId}
@@ -231,7 +232,7 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 13, textAlign: 'center', fontFamily: 'Manrope_400Regular' },
 
   // Score card
-  scoreCard: { margin: spacing.md, borderRadius: 16, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  scoreCard: { margin: spacing.md, padding: spacing.md },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   circleWrap: { width: 100, height: 100, position: 'relative', justifyContent: 'center', alignItems: 'center' },
   circleBg: { position: 'absolute', width: 100, height: 100, borderRadius: 50, borderWidth: 8 },
@@ -246,7 +247,7 @@ const s = StyleSheet.create({
   lastUpdated: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
 
   // Sections
-  sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, borderRadius: 16, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.md },
   sectionTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', marginBottom: spacing.md },
 
   // Factors
@@ -267,7 +268,7 @@ const s = StyleSheet.create({
 
   // Lookup
   lookupRow: { flexDirection: 'row', gap: spacing.sm },
-  lookupInput: { flex: 1, height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  lookupInput: { flex: 1, height: 44, paddingHorizontal: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   lookupBtn: { width: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   lookupResult: { marginTop: spacing.md, gap: spacing.sm },
   lookupScoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

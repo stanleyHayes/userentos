@@ -14,6 +14,9 @@ export interface IBusiness extends Document {
   city: string
   address?: string
   isVerified: boolean
+  viewCount: number
+  ratingAvg: number
+  reviewCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -29,6 +32,9 @@ const businessSchema = new Schema<IBusiness>(
     city: { type: String, required: true, index: true },
     address: String,
     isVerified: { type: Boolean, default: false },
+    viewCount: { type: Number, default: 0 },
+    ratingAvg: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 )

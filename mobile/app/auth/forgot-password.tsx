@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { Link } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 
 export default function ForgotPasswordScreen() {
@@ -60,7 +61,7 @@ export default function ForgotPasswordScreen() {
 
         <View style={s.form}>
           <Text style={[s.label, { color: c.text }]}>Email</Text>
-          <TextInput style={[s.input, { borderColor: c.border, backgroundColor: c.white, color: c.text }]} placeholder="you@example.com" placeholderTextColor={c.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="you@example.com" placeholderTextColor={c.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
           <TouchableOpacity style={[s.button, { backgroundColor: c.primary }, status === 'loading' && s.buttonDisabled]} onPress={handleSubmit} disabled={status === 'loading'} activeOpacity={0.85}>
             {status === 'loading' ? <ActivityIndicator color="#ffffff" /> : (
@@ -84,7 +85,7 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginBottom: spacing.lg },
   form: { gap: spacing.sm },
   label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { height: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
   button: { height: 52, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: spacing.md },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#ffffff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },

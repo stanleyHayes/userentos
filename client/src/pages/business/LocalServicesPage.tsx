@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
 import { CityAutocomplete } from '@/components/ui/CityAutocomplete'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -15,8 +16,14 @@ import {
   type BusinessCategory,
   type BusinessListing,
   type BusinessWithListings,
+  useBusiness,
+  useBusinessReviews,
+  useCreateBusinessInquiry,
+  useUpsertBusinessReview,
 } from '@/hooks/useApi'
-import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent } from 'lucide-react'
+import { useAuthStore } from '@/stores/authStore'
+import toast from 'react-hot-toast'
+import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent, MessageSquare, Star, Loader2 } from 'lucide-react'
 
 const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
   product: <Package size={13} />,
@@ -55,6 +62,11 @@ function BusinessCard({ item, onOpen }: { item: BusinessWithListings; onOpen: ()
           <p className="text-xs text-muted dark:text-gray-500 mt-0.5 flex items-center gap-1">
             <MapPin size={10} /> {business.city}
           </p>
+          {business.reviewCount > 0 && (
+            <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+              <Star size={11} fill="currentColor" /> {business.ratingAvg.toFixed(1)} <span className="font-normal text-muted">({business.reviewCount})</span>
+            </p>
+          )}
         </div>
         <Badge variant="muted" className="text-[10px] flex-shrink-0">{businessCategoryLabel(business.category)}</Badge>
       </div>
@@ -84,7 +96,44 @@ function BusinessCard({ item, onOpen }: { item: BusinessWithListings; onOpen: ()
 }
 
 function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; onClose: () => void }) {
-  const { business, listings } = item
+  const detail = useBusiness(item.business.id)
+  const business = detail.data?.business ?? item.business
+  const listings = detail.data?.listings ?? item.listings
+  const user = useAuthStore((s) => s.user)
+  const { data: reviewsData } = useBusinessReviews(business.id)
+  const inquiry = useCreateBusinessInquiry()
+  const submitReview = useUpsertBusinessReview()
+  const [inquiryForm, setInquiryForm] = useState<{ listingId?: string; message: string } | null>(null)
+  const [reviewForm, setReviewForm] = useState<{ rating: number; review: string } | null>(null)
+  const reviews = reviewsData?.items ?? []
+  const canContact = user?.activeRole !== 'business'
+
+  async function sendInquiry() {
+    if (!inquiryForm) return
+    try {
+      await inquiry.mutateAsync({
+        businessId: business.id,
+        ...(inquiryForm.listingId ? { listingId: inquiryForm.listingId } : {}),
+        ...(inquiryForm.message.trim() ? { message: inquiryForm.message.trim() } : {}),
+      })
+      toast.success('Your request was sent to the business')
+      setInquiryForm(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send your request')
+    }
+  }
+
+  async function saveReview() {
+    if (!reviewForm) return
+    try {
+      await submitReview.mutateAsync({ businessId: business.id, rating: reviewForm.rating, ...(reviewForm.review.trim() ? { review: reviewForm.review.trim() } : {}) })
+      toast.success('Review saved')
+      setReviewForm(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save review')
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title={business.name}>
       <div className="flex flex-col gap-4">
@@ -110,15 +159,81 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
         </div>
 
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-muted dark:text-gray-500 mb-2">Offers</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted dark:text-gray-500">Offers</p>
+            {canContact && <Button size="sm" onClick={() => setInquiryForm({ message: '' })}><MessageSquare size={13} /> Request a quote</Button>}
+          </div>
           {listings.length === 0 ? (
             <p className="text-xs text-muted dark:text-gray-500 italic">No active offers right now.</p>
           ) : (
             <div className="divide-y divide-border/50 dark:divide-[#252a3a]/50">
-              {listings.map((l) => <ListingRow key={l.id} listing={l} />)}
+              {listings.map((l) => (
+                <div key={l.id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><ListingRow listing={l} /></div>
+                  {canContact && (
+                    <button type="button" onClick={() => setInquiryForm({ listingId: l.id, message: '' })} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold text-primary hover:border-primary/50 dark:border-[#252a3a]">
+                      Interested
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
+
+        <div className="border-t border-border/60 pt-4 dark:border-[#252a3a]">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-muted dark:text-gray-500">
+              <Star size={13} /> Reviews ({reviews.length})
+            </p>
+            {reviewsData?.canReview && <button type="button" onClick={() => setReviewForm({ rating: 5, review: '' })} className="text-xs font-semibold text-primary hover:underline">Write a review</button>}
+          </div>
+          {reviews.length === 0 ? (
+            <p className="text-xs italic text-muted">No verified-customer reviews yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {reviews.map((review) => (
+                <div key={review.id} className="rounded-xl bg-surface/70 p-3 dark:bg-[#0c0e1a]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-primary-dark dark:text-white">{review.authorName}</p>
+                    <span className="flex text-amber-500">{Array.from({ length: 5 }, (_, i) => <Star key={i} size={11} fill={i < review.rating ? 'currentColor' : 'none'} />)}</span>
+                  </div>
+                  {review.review && <p className="mt-1 text-xs leading-relaxed text-muted dark:text-gray-400">{review.review}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {inquiryForm && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <p className="text-sm font-bold text-primary-dark dark:text-white">Send an inquiry</p>
+            <p className="mt-0.5 text-xs text-muted">{inquiryForm.listingId ? `About ${listings.find((l) => l.id === inquiryForm.listingId)?.title ?? 'this offer'}` : 'Ask for a quote or more information.'}</p>
+            <TextField value={inquiryForm.message} onChange={(e) => setInquiryForm((current) => current ? { ...current, message: e.target.value } : null)} label="Message (optional)" multiline rows={3} fullWidth margin="normal" slotProps={{ inputLabel: { shrink: true } }} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setInquiryForm(null)}>Cancel</Button>
+              <Button size="sm" disabled={inquiry.isPending} onClick={() => void sendInquiry()}>{inquiry.isPending ? <Loader2 size={13} className="animate-spin" /> : <MessageSquare size={13} />} Send request</Button>
+            </div>
+          </div>
+        )}
+
+        {reviewForm && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+            <p className="text-sm font-bold text-primary-dark dark:text-white">Your verified-customer review</p>
+            <div className="my-3 flex gap-1">
+              {Array.from({ length: 5 }, (_, i) => (
+                <button key={i} type="button" aria-label={`${i + 1} stars`} onClick={() => setReviewForm((current) => current ? { ...current, rating: i + 1 } : null)} className="text-amber-500">
+                  <Star size={22} fill={i < reviewForm.rating ? 'currentColor' : 'none'} />
+                </button>
+              ))}
+            </div>
+            <TextField value={reviewForm.review} onChange={(e) => setReviewForm((current) => current ? { ...current, review: e.target.value } : null)} label="Review (optional)" multiline rows={3} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setReviewForm(null)}>Cancel</Button>
+              <Button size="sm" disabled={submitReview.isPending} onClick={() => void saveReview()}>Save review</Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   )

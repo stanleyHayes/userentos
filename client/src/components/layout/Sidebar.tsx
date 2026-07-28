@@ -7,6 +7,7 @@ import {
   MessageSquare, Lock, FileCheck, ClipboardCheck, Crown, Package,
   Banknote, FileSignature, Calendar, ShieldCheck, Award, Wrench, ShieldPlus,
   Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp, Store,
+  Receipt, Inbox, CalendarCheck, Coins,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,15 @@ const navGroups: NavGroup[] = [
       { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
     ],
   },
+  { label: 'Portfolio', labelKey: 'nav.portfolio', roles: ['landlord', 'property_manager'], defaultOpen: true,
+    items: [
+      { label: 'Leads', labelKey: 'nav.leads', path: '/agent/leads', icon: <Inbox size={20} />, roles: ['landlord', 'property_manager'] },
+      { label: 'Viewings', labelKey: 'nav.viewings', path: '/agent/viewings', icon: <CalendarCheck size={20} />, roles: ['landlord', 'property_manager'] },
+      { label: 'Commissions', labelKey: 'nav.commissions', path: '/agent/commissions', icon: <Coins size={20} />, roles: ['landlord', 'property_manager'] },
+      { label: 'Expenses', labelKey: 'nav.expenses', path: '/landlord/expenses', icon: <Receipt size={20} />, roles: ['landlord', 'property_manager'] },
+      { label: 'Vacancy', labelKey: 'nav.vacancy', path: '/landlord/vacancy', icon: <Building2 size={20} />, roles: ['landlord', 'property_manager'] },
+    ],
+  },
   { label: 'Financial', labelKey: 'nav.financial', roles: ['tenant'], defaultOpen: true,
     items: [
       { label: 'RentGuard', labelKey: 'nav.rentguard', path: '/savings', icon: <PiggyBank size={20} />, roles: ['tenant'] },
@@ -72,6 +82,7 @@ const navGroups: NavGroup[] = [
       { label: 'Profile', labelKey: 'nav.profile', path: '/employer/profile', icon: <Building2 size={20} />, roles: ['employer'] },
       { label: 'Employees', labelKey: 'nav.employees', path: '/employer/employees', icon: <Users size={20} />, roles: ['employer'] },
       { label: 'Payroll', labelKey: 'nav.payroll', path: '/employer/payroll', icon: <Calendar size={20} />, roles: ['employer'] },
+      { label: 'Payroll Reports', labelKey: 'nav.payrollReports', path: '/employer/reports', icon: <BarChart3 size={20} />, roles: ['employer'] },
     ],
   },
   { label: 'Support', labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,

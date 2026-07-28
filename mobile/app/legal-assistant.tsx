@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -59,7 +60,7 @@ export default function LegalAssistantScreen() {
       ) : (
         <ScrollView ref={scrollRef} style={s.chatArea} contentContainerStyle={s.chatContent}>
           {messages.map((msg, i) => (
-            <View key={i} style={[s.bubble, msg.role === 'user' ? [s.userBubble, { backgroundColor: c.primary }] : [s.aiBubble, { backgroundColor: c.white }]]}>
+            <View key={i} style={[s.bubble, msg.role === 'user' ? [s.userBubble, { backgroundColor: c.primary }] : [s.aiBubble, neuCard(c)]]}>
               {msg.role === 'assistant' && (
                 <View style={s.aiHeader}>
                   <Ionicons name="sparkles" size={12} color={c.primary} />
@@ -70,7 +71,7 @@ export default function LegalAssistantScreen() {
             </View>
           ))}
           {loading && (
-            <View style={[s.bubble, s.aiBubble, { backgroundColor: c.white }]}>
+            <View style={[s.bubble, s.aiBubble, neuCard(c)]}>
               <ActivityIndicator size="small" color={c.primary} />
             </View>
           )}
@@ -79,7 +80,7 @@ export default function LegalAssistantScreen() {
 
       <View style={[s.inputBar, { backgroundColor: c.white, borderColor: c.border }]}>
         <TextInput
-          style={[s.textInput, { color: c.text }]}
+          style={[s.textInput, neuInset(c), { color: c.text }]}
           placeholder="Ask about rental law..."
           placeholderTextColor={c.muted}
           value={input}
@@ -98,7 +99,7 @@ export default function LegalAssistantScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
-  emptyIcon: { width: 64, height: 64, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md },
+  emptyIcon: { width: 64, height: 64, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md },
   emptyTitle: { fontSize: 20, fontFamily: 'Manrope_700Bold', marginBottom: spacing.xs },
   emptyDesc: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', lineHeight: 20, maxWidth: 300, marginBottom: spacing.lg },
   suggestions: { gap: spacing.sm, width: '100%', maxWidth: 340 },
@@ -106,7 +107,7 @@ const s = StyleSheet.create({
   suggestionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
   chatArea: { flex: 1 },
   chatContent: { padding: spacing.md, gap: spacing.sm, paddingBottom: 20 },
-  bubble: { maxWidth: '85%', borderRadius: 16, padding: 14 },
+  bubble: { maxWidth: '85%', borderRadius: 12, padding: 14 },
   userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
   aiBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
@@ -114,5 +115,5 @@ const s = StyleSheet.create({
   bubbleText: { fontSize: 14, fontFamily: 'Manrope_400Regular', lineHeight: 21 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', padding: spacing.sm, paddingBottom: Platform.OS === 'ios' ? 28 : spacing.sm, borderTopWidth: 1, gap: spacing.sm },
   textInput: { flex: 1, fontSize: 15, fontFamily: 'Manrope_400Regular', maxHeight: 100, paddingVertical: 8, paddingHorizontal: 12 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  sendBtn: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 })

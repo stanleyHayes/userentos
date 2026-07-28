@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore, type User } from '../../stores/authStore'
 import { Logo } from '../../components/Logo'
@@ -382,7 +383,7 @@ export default function RegisterScreen() {
       <View>
         <Text style={[s.label, { color: c.text }]}>{label}{opts?.required ? ' *' : ''}</Text>
         <TextInput
-          style={[s.input, { borderColor: c.border, color: c.text }, opts?.multiline && s.multilineInput]}
+          style={[s.input, neuInset(c), { color: c.text }, opts?.multiline && s.multilineInput]}
           value={details[field] as string}
           onChangeText={(v) => updateDetails(field, v)}
           placeholder={opts?.placeholder}
@@ -468,22 +469,22 @@ export default function RegisterScreen() {
             <View style={s.row}>
               <View style={s.half}>
                 <Text style={[s.label, { color: c.text }]}>First Name</Text>
-                <TextInput style={[s.input, { borderColor: c.border, color: c.text }]} value={account.firstName} onChangeText={(v) => updateAccount('firstName', v)} placeholder="Kwame" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.firstName} onChangeText={(v) => updateAccount('firstName', v)} placeholder="Kwame" placeholderTextColor={c.muted} />
               </View>
               <View style={s.half}>
                 <Text style={[s.label, { color: c.text }]}>Last Name</Text>
-                <TextInput style={[s.input, { borderColor: c.border, color: c.text }]} value={account.lastName} onChangeText={(v) => updateAccount('lastName', v)} placeholder="Asante" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.lastName} onChangeText={(v) => updateAccount('lastName', v)} placeholder="Asante" placeholderTextColor={c.muted} />
               </View>
             </View>
 
             <Text style={[s.label, { color: c.text }]}>Email</Text>
-            <TextInput style={[s.input, { borderColor: c.border, color: c.text }]} value={account.email} onChangeText={(v) => updateAccount('email', v)} placeholder="you@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.email} onChangeText={(v) => updateAccount('email', v)} placeholder="you@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
 
             <Text style={[s.label, { color: c.text }]}>Phone</Text>
-            <TextInput style={[s.input, { borderColor: c.border, color: c.text }]} value={account.phone} onChangeText={(v) => updateAccount('phone', v)} placeholder="024 XXX XXXX" placeholderTextColor={c.muted} keyboardType="phone-pad" />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.phone} onChangeText={(v) => updateAccount('phone', v)} placeholder="024 XXX XXXX" placeholderTextColor={c.muted} keyboardType="phone-pad" />
 
             <Text style={[s.label, { color: c.text }]}>Password</Text>
-            <View style={[s.passwordWrap, { borderColor: c.border, backgroundColor: c.white }]}>
+            <View style={[s.passwordWrap, neuInset(c)]}>
               <TextInput style={[s.passwordInput, { color: c.text }]} value={account.password} onChangeText={(v) => updateAccount('password', v)} placeholder="Min 8 characters" placeholderTextColor={c.muted} secureTextEntry={!showPassword} autoCapitalize="none" />
               <Pressable onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.muted} />
@@ -699,9 +700,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.md },
   half: { flex: 1 },
   label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { height: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   multilineInput: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
-  passwordWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, height: 52, marginTop: 4 },
+  passwordWrap: { flexDirection: 'row', alignItems: 'center', height: 52, marginTop: 4 },
   passwordInput: { flex: 1, height: '100%', paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
   eyeBtn: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
   reqList: { marginTop: spacing.sm, gap: 4 },
@@ -710,7 +711,7 @@ const s = StyleSheet.create({
 
   // Chips
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6, marginBottom: spacing.xs },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
 
   // Details step

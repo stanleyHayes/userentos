@@ -6,6 +6,31 @@
 
 ---
 
+## Role Capabilities — P1 Complete (2026-07-28, kimi lane)
+
+- [x] P1.1 Local business depth: inquiries pipeline, verified-customer reviews, analytics (server+web+mobile).
+- [x] P1.2 Service provider: /workers/me + /workers/me/earnings, availability editor, quote accept/decline flow (server+web+mobile).
+- [x] P1.3 Agent: leads pipeline, viewing scheduler, commission tracking (server+web+mobile; property-page "I'm interested" + "Book viewing" CTAs).
+- [x] P1.4 Financier: portfolio analytics + collections queue (web pre-existing; mobile added).
+- [x] P1.5 Landlord: expense tracking with summaries, vacancy dashboard (server+web+mobile).
+- [x] P1.6 Employer: per-run payroll reports, per-employee deduction history, CSV export (server+web+mobile).
+- [x] P1.7 Tenant: move-in checklist driven by agreement city, persisted per agreement (web+mobile).
+- [x] Central wiring: web routes + Portfolio sidebar group + i18n (4 locales); mobile profile-menu links.
+- [x] Verified: tsc+eslint clean in server/client/mobile; 58/58 server tests; live curl + Playwright smoke on all new surfaces.
+
+- [x] Add renter-to-business inquiries for general and listing-specific quote requests.
+- [x] Add a business-owned inquiry pipeline with new, contacted, won, and lost states.
+- [x] Notify business owners when a new inquiry arrives without blocking inquiry creation.
+- [x] Restrict ratings and reviews to verified customers with a won inquiry; keep one updatable review per customer.
+- [x] Surface aggregate ratings in the local-services directory and review details in the business view.
+- [x] Track profile/listing views and expose inquiry totals, open leads, wins, conversion, and 30-day trend data.
+- [x] Replace the brochure-only business dashboard with analytics and an actionable sales pipeline.
+- [x] Add focused analytics unit coverage and verify client/server typecheck, lint, tests, and production builds.
+
+**Coordination note:** Implemented around the existing mobile neumorphic-polish lane; unrelated mobile changes were preserved.
+
+**Coordination note (kimi session):** Adopted and live-verified the above (inquiry→won→review pipeline, analytics). Continuing with P1.1 mobile UI + P1.2–P1.7 in this lane. Shared registry files (client App.tsx/Sidebar/useApi, server index.ts, mobile profile.tsx) are edited CENTRALLY by this lane to avoid concurrent-edit conflicts.
+
 ## UI Delivery — Theme Depth & Landing Redesign (2026-07-26)
 
 - [x] Reworked the shared light/dark backgrounds with cleaner layered gradients and removed the heavy checkerboard feel in dark mode.

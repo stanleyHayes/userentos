@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, useIsDark, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
@@ -132,7 +133,7 @@ export default function LoansScreen() {
               const pct = loan.totalRepayment > 0 ? Math.round((loan.amountPaid / loan.totalRepayment) * 100) : 0
               const progressColor = pct >= 75 ? c.accent : pct >= 40 ? c.warning : c.primary
               return (
-                <View key={loan.id} style={[s.card, { backgroundColor: c.white }]}>
+                <View key={loan.id} style={[s.card, neuCard(c)]}>
                   {/* Card header with icon-enhanced status badge */}
                   <View style={s.cardHeader}>
                     <View style={s.cardHeaderLeft}>
@@ -232,7 +233,7 @@ export default function LoansScreen() {
                 </View>
               )}
               <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} placeholder="50 - 10,000" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="50 - 10,000" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
               <Text style={[s.fieldLabel, { color: c.text }]}>Repayment Period</Text>
               <View style={s.optionsGroup}>
                 {tenureOptions.map((t) => (
@@ -243,7 +244,7 @@ export default function LoansScreen() {
               </View>
               <AITextInput label="Reason" aiContext="loan application reason" placeholder="Why do you need this loan? (min 10 chars)" numberOfLines={3} value={reason} onChangeText={setReason} />
               {amountNum > 0 && (
-                <View style={[s.calcCard, { backgroundColor: c.surface }]}>
+                <View style={[s.calcCard, neuInset(c)]}>
                   <Text style={[s.calcRow, { color: c.text }]}>Interest rate: <Text style={s.calcBold}>15% annual</Text></Text>
                   <Text style={[s.calcRow, { color: c.text }]}>Monthly payment: <Text style={s.calcBold}>{formatCurrency(Math.round(monthlyPayment * 100) / 100)}</Text></Text>
                   <Text style={[s.calcRow, { color: c.text }]}>Total repayment: <Text style={s.calcBold}>{formatCurrency(Math.round(totalRepayment * 100) / 100)}</Text></Text>
@@ -267,16 +268,16 @@ const s = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   infoBanner: { flexDirection: 'row', gap: spacing.sm, borderWidth: 1, borderRadius: 12, padding: spacing.md, margin: spacing.md },
   infoBannerText: { flex: 1, fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, paddingVertical: 12, borderRadius: 12 },
+  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, paddingVertical: 12, borderRadius: 10 },
   newBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
 
   // Loan cards
-  card: { borderRadius: 14, padding: spacing.md, marginBottom: spacing.sm, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: spacing.sm },
-  cardIconWrap: { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
+  cardIconWrap: { width: 38, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   cardMeta: { fontSize: 11, marginTop: 2, fontFamily: 'Manrope_400Regular' },
 
@@ -315,15 +316,15 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
   textArea: { height: 80, paddingTop: 14 },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  optionBtn: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },
+  optionBtn: { borderRadius: 10, paddingVertical: 12, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },
   optionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
-  calcCard: { borderRadius: 12, padding: spacing.md, marginTop: spacing.md },
+  calcCard: { padding: spacing.md, marginTop: spacing.md },
   calcRow: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginBottom: 4 },
   calcBold: { fontFamily: 'Manrope_700Bold' },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
 })

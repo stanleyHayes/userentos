@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 const TRADE_OPTIONS = ['plumbing', 'electrical', 'carpentry', 'painting', 'pest', 'cleaning', 'security', 'appliance']
@@ -70,10 +71,10 @@ export default function BecomeWorkerScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll}>
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.label, { color: c.text }]}>Full Name *</Text>
           <TextInput
-            style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="Kwasi Osei"
             placeholderTextColor={c.muted}
             value={name}
@@ -82,7 +83,7 @@ export default function BecomeWorkerScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Phone Number *</Text>
           <TextInput
-            style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="0244441111"
             placeholderTextColor={c.muted}
             value={phone}
@@ -110,7 +111,7 @@ export default function BecomeWorkerScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Skills (comma separated)</Text>
           <TextInput
-            style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="Pipe fitting, Leak detection, ..."
             placeholderTextColor={c.muted}
             value={skills}
@@ -119,7 +120,7 @@ export default function BecomeWorkerScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Bio</Text>
           <TextInput
-            style={[s.input, s.textarea, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, s.textarea, neuInset(c), { color: c.text }]}
             placeholder="Tell customers about your experience..."
             placeholderTextColor={c.muted}
             value={bio}
@@ -130,7 +131,7 @@ export default function BecomeWorkerScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Location</Text>
           <TextInput
-            style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="Accra"
             placeholderTextColor={c.muted}
             value={location}
@@ -141,7 +142,7 @@ export default function BecomeWorkerScreen() {
             <View style={s.half}>
               <Text style={[s.label, { color: c.text }]}>Hourly Rate (GHS)</Text>
               <TextInput
-                style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="80"
                 placeholderTextColor={c.muted}
                 value={hourlyRate}
@@ -152,7 +153,7 @@ export default function BecomeWorkerScreen() {
             <View style={s.half}>
               <Text style={[s.label, { color: c.text }]}>Service Radius (km)</Text>
               <TextInput
-                style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="15"
                 placeholderTextColor={c.muted}
                 value={serviceRadius}
@@ -164,7 +165,7 @@ export default function BecomeWorkerScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Years of Experience</Text>
           <TextInput
-            style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="5"
             placeholderTextColor={c.muted}
             value={yearsExperience}
@@ -196,12 +197,12 @@ const s = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 22, fontFamily: 'Manrope_800ExtraBold' },
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   scroll: { padding: spacing.lg },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  card: { padding: spacing.md, gap: spacing.sm },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   textarea: { height: 80, textAlignVertical: 'top' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
   row: { flexDirection: 'row', gap: spacing.md },
   half: { flex: 1 },

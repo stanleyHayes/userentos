@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { Logo } from '../components/Logo'
 
 const features = [
@@ -33,7 +34,7 @@ export default function AboutScreen() {
         </View>
 
         {/* Description */}
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Our Mission</Text>
           <Text style={[s.bodyText, { color: c.muted }]}>
             RentOS is Ghana's national digital infrastructure for rental housing. We're building a transparent, fair, and efficient ecosystem that protects both tenants and landlords while ensuring compliance with Ghanaian rental laws.
@@ -44,7 +45,7 @@ export default function AboutScreen() {
         </View>
 
         {/* Features */}
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Platform Features</Text>
           {features.map((f, i) => (
             <View key={f.title} style={[s.featureRow, i < features.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}>
@@ -60,18 +61,18 @@ export default function AboutScreen() {
         </View>
 
         {/* Stats */}
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Platform Coverage</Text>
           <View style={s.statsRow}>
-            <View style={[s.statItem, { backgroundColor: c.surface }]}>
+            <View style={[s.statItem, neuInset(c)]}>
               <Text style={[s.statValue, { color: c.primary }]}>16</Text>
               <Text style={[s.statLabel, { color: c.muted }]}>Regions</Text>
             </View>
-            <View style={[s.statItem, { backgroundColor: c.surface }]}>
+            <View style={[s.statItem, neuInset(c)]}>
               <Text style={[s.statValue, { color: c.accent }]}>34K+</Text>
               <Text style={[s.statLabel, { color: c.muted }]}>Users</Text>
             </View>
-            <View style={[s.statItem, { backgroundColor: c.surface }]}>
+            <View style={[s.statItem, neuInset(c)]}>
               <Text style={[s.statValue, { color: c.secondary }]}>12K+</Text>
               <Text style={[s.statLabel, { color: c.muted }]}>Properties</Text>
             </View>
@@ -79,7 +80,7 @@ export default function AboutScreen() {
         </View>
 
         {/* Links */}
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Legal</Text>
           {[
             { label: 'Terms of Service', url: 'https://rentos.gh/terms' },
@@ -122,7 +123,7 @@ const s = StyleSheet.create({
   versionText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
 
   // Card
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
   bodyText: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 20 },
 
@@ -134,7 +135,7 @@ const s = StyleSheet.create({
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 8 },
-  statItem: { flex: 1, borderRadius: 10, padding: 12, alignItems: 'center' },
+  statItem: { flex: 1, padding: 12, alignItems: 'center' },
   statValue: { fontSize: 20, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },
 

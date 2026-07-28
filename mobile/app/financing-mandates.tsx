@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -168,7 +169,7 @@ export default function FinancingMandatesScreen() {
           </View>
         ) : (
           mandates.map((m) => (
-            <View key={m.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View key={m.id} style={[s.card, neuCard(c)]}>
               <View style={s.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.cardTitle, { color: c.text }]}>
@@ -256,7 +257,7 @@ export default function FinancingMandatesScreen() {
                 <>
                   <Text style={[s.label, { color: c.text }]}>Target entity ID (optional)</Text>
                   <TextInput
-                    style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                    style={[s.input, neuInset(c), { color: c.text }]}
                     value={targetEntityId}
                     onChangeText={setTargetEntityId}
                     placeholder="agreement / savings / contract id"
@@ -292,7 +293,7 @@ export default function FinancingMandatesScreen() {
                 {amountType === 'fixed' ? 'Amount (GHS)' : 'Percentage (%)'}
               </Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
@@ -302,7 +303,7 @@ export default function FinancingMandatesScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Start date (YYYY-MM-DD)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={startDate}
                 onChangeText={setStartDate}
                 placeholder="YYYY-MM-DD"
@@ -311,7 +312,7 @@ export default function FinancingMandatesScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Type your full name to sign</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={signature}
                 onChangeText={setSignature}
                 placeholder="Full name"
@@ -357,13 +358,13 @@ const s = StyleSheet.create({
   bannerText: { flex: 1, fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17 },
   newBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 12, borderRadius: 12, marginBottom: spacing.md,
+    paddingVertical: 12, borderRadius: 10, marginBottom: spacing.md,
   },
   newBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
   cardSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
@@ -386,7 +387,7 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   optionGroup: { gap: 6 },
   optionBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, paddingHorizontal: spacing.md },
   optionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
@@ -395,7 +396,7 @@ const s = StyleSheet.create({
   disclaimer: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: spacing.md, lineHeight: 16 },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
+    paddingVertical: 14, borderRadius: 10, marginTop: spacing.lg, marginBottom: spacing.md,
   },
   submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
 })

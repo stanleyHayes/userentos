@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
@@ -94,7 +95,7 @@ export default function DocumentsScreen() {
             const icon = getFileIcon(doc.mimeType)
             const isOwn = doc.userId === user?.id
             return (
-              <View key={doc.id} style={[s.docCard, { backgroundColor: c.white }]}>
+              <View key={doc.id} style={[s.docCard, neuCard(c)]}>
                 <View style={s.docRow}>
                   <View style={[s.docIcon, { backgroundColor: icon.color + '15' }]}>
                     <Ionicons name={icon.name as keyof typeof Ionicons.glyphMap} size={22} color={icon.color} />
@@ -141,13 +142,13 @@ export default function DocumentsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
-  uploadButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 14, borderRadius: 12 },
+  uploadButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 14, borderRadius: 10 },
   uploadButtonText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   emptyContainer: { alignItems: 'center', padding: spacing.xl, gap: spacing.sm, marginTop: spacing.xl },
   emptyText: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
   emptySubText: { fontSize: 13, textAlign: 'center', fontFamily: 'Manrope_400Regular' },
   docList: { paddingHorizontal: spacing.md, marginTop: spacing.md, gap: spacing.sm },
-  docCard: { borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  docCard: { padding: spacing.md },
   docRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   docIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   docInfo: { flex: 1 },

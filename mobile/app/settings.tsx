@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { useAuthStore, type User } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -112,7 +113,7 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   }
 
   return (
-    <View style={[s.section, { backgroundColor: c.white }]}>
+    <View style={[s.section, neuCard(c)]}>
       <View style={s.sectionHeader}>
         <Ionicons name="person-outline" size={20} color={c.primary} />
         <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Edit Profile</Text>
@@ -217,7 +218,7 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   return (
     <>
       {/* Biometric login */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name={bioIcon} size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Biometric Login</Text>
@@ -267,7 +268,7 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       </View>
 
       {/* Change Password */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="lock-closed-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Change Password</Text>
@@ -299,7 +300,7 @@ function AppearanceTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   return (
     <>
       {/* Theme */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="color-palette-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Theme</Text>
@@ -332,7 +333,7 @@ function AppearanceTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       </View>
 
       {/* Language */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={s.sectionHeader}>
           <Ionicons name="globe-outline" size={20} color={c.primary} />
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Language</Text>
@@ -377,7 +378,7 @@ function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   }
 
   return (
-    <View style={[s.section, { backgroundColor: c.white }]}>
+    <View style={[s.section, neuCard(c)]}>
       <View style={s.sectionHeader}>
         <Ionicons name="notifications-outline" size={20} color={c.primary} />
         <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Notification Preferences</Text>
@@ -412,7 +413,7 @@ function Field({ label, value, onChangeText, c, ...props }: {
     <>
       <Text style={[s.fieldLabel, { color: c.text }]}>{label}</Text>
       <TextInput
-        style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+        style={[s.input, neuInset(c), { color: c.text }]}
         placeholderTextColor={c.muted}
         value={value}
         onChangeText={onChangeText}
@@ -444,11 +445,11 @@ const s = StyleSheet.create({
   tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   tabLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   scroll: { padding: spacing.md },
-  section: { borderRadius: 12, padding: spacing.lg, marginBottom: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  section: { padding: spacing.lg, marginBottom: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.md },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, fontFamily: 'Manrope_500Medium' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },

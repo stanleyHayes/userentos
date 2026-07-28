@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Act
 import { useRouter, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { ListSkeleton } from '../../components/Skeleton'
 import { useAuthStore } from '../../stores/authStore'
@@ -140,7 +141,7 @@ export default function MessagesScreen() {
     const preview = item.lastMessage ? (isMine ? 'You: ' : '') + item.lastMessage.text : 'No messages yet'
     const isOnline = onlineUsers.has(item.otherUser?.id)
     return (
-      <TouchableOpacity style={[s.convItem, { backgroundColor: c.white }]} activeOpacity={0.7} onPress={() => router.push(`/chat/${item.id}`)}>
+      <TouchableOpacity style={[s.convItem, neuCard(c)]} activeOpacity={0.7} onPress={() => router.push(`/chat/${item.id}`)}>
         <View style={s.avatarWrap}>
           <View style={[s.avatar, { backgroundColor: c.primary }]}>
             <Text style={s.avatarText}>{`${item.otherUser.firstName?.[0] ?? ''}${item.otherUser.lastName?.[0] ?? ''}`.toUpperCase()}</Text>
@@ -168,7 +169,7 @@ export default function MessagesScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.surface }]}>
-      <View style={[s.searchWrap, { backgroundColor: c.white, borderColor: c.border }]}>
+      <View style={[s.searchWrap, neuInset(c)]}>
         <Ionicons name="search-outline" size={18} color={c.muted} />
         <TextInput style={[s.searchInput, { color: c.text }]} placeholder="Search conversations..." placeholderTextColor={c.muted} value={search} onChangeText={setSearch} />
         {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={18} color={c.muted} /></TouchableOpacity>}
@@ -197,7 +198,7 @@ export default function MessagesScreen() {
             </View>
 
             {/* Search bar */}
-            <View style={[s.userSearchWrap, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <View style={[s.userSearchWrap, neuInset(c)]}>
               <Ionicons name="search-outline" size={16} color={c.muted} />
               <TextInput
                 style={[s.userSearchInput, { color: c.text }]}
@@ -261,7 +262,7 @@ export default function MessagesScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: Platform.OS === 'ios' ? 12 : 8, borderWidth: 1, gap: spacing.sm },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: Platform.OS === 'ios' ? 12 : 8, gap: spacing.sm },
   searchInput: { flex: 1, fontSize: 15, fontFamily: 'Manrope_400Regular', paddingVertical: 0 },
   list: { paddingBottom: 100 },
   convItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 14 },
@@ -289,7 +290,7 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   inputLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
   modalInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_400Regular' },
-  userSearchWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 6, gap: 8, marginBottom: spacing.md },
+  userSearchWrap: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 6, gap: 8, marginBottom: spacing.md },
   userSearchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_400Regular', paddingVertical: 0 },
   userListLoading: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   userListLoadingText: { fontSize: 13, fontFamily: 'Manrope_400Regular' },

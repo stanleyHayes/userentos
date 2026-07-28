@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -91,7 +92,7 @@ export default function GovReviewsScreen() {
   function renderProperty({ item }: { item: PendingProperty }) {
     const isActioning = actioningId === item.id
     return (
-      <View style={[s.card, { backgroundColor: c.white }]}>
+      <View style={[s.card, neuCard(c)]}>
         <View style={s.cardHeader}>
           <View style={[s.cardIcon, { backgroundColor: c.warning + '15' }]}>
             <Ionicons name="business-outline" size={20} color={c.warning} />
@@ -184,7 +185,7 @@ export default function GovReviewsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm },
-  card: { borderRadius: 14, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  card: { padding: spacing.md },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   cardIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   cardHeaderText: { flex: 1 },

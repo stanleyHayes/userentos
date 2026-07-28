@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { formatCurrency, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
@@ -107,7 +108,7 @@ export default function PaymentsScreen() {
   function renderPayment({ item }: { item: Payment }) {
     const statusColor = statusColors[item.status] ?? c.muted
     return (
-      <View style={[s.item, { backgroundColor: c.white }]}>
+      <View style={[s.item, neuCard(c)]}>
         <View style={[s.itemIcon, { backgroundColor: statusColor + '15' }]}>
           <Ionicons name={item.status === 'completed' ? 'checkmark-circle' : 'time'} size={20} color={statusColor} />
         </View>
@@ -137,7 +138,7 @@ export default function PaymentsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.surface }]}>
-      <View style={[s.summaryCard, { backgroundColor: c.white }]}>
+      <View style={[s.summaryCard, neuCard(c)]}>
         <View style={s.summaryItem}>
           <Text style={[s.summaryLabel, { color: c.muted }]}>Total Paid</Text>
           <Text style={[s.summaryValue, { color: c.primaryDark }]}>{formatCurrency(totalPaid)}</Text>
@@ -215,7 +216,7 @@ export default function PaymentsScreen() {
               {/* Amount Input */}
               <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="0.00"
                 placeholderTextColor={c.muted}
                 keyboardType="numeric"
@@ -251,7 +252,7 @@ export default function PaymentsScreen() {
                 <>
                   <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
                   <TextInput
-                    style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                    style={[s.input, neuInset(c), { color: c.text }]}
                     placeholder="0241234567"
                     placeholderTextColor={c.muted}
                     keyboardType="phone-pad"
@@ -288,14 +289,14 @@ export default function PaymentsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  summaryCard: { flexDirection: 'row', margin: spacing.md, borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  summaryCard: { flexDirection: 'row', margin: spacing.md, padding: spacing.md },
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryLabel: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
   summaryValue: { fontSize: 20, fontFamily: 'Manrope_700Bold', marginTop: 4 },
   divider: { width: 1 },
   list: { paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: 100 },
-  item: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
-  itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
+  item: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
+  itemIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   itemBody: { flex: 1 },
   itemRef: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   itemDate: { fontSize: 11, marginTop: 2, textTransform: 'capitalize', fontFamily: 'Manrope_400Regular' },
@@ -316,13 +317,13 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
   noDataText: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Manrope_400Regular' },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
   optionsGroup: { gap: spacing.sm },
-  optionBtn: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, borderWidth: 1.5 },
+  optionBtn: { borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 14, borderWidth: 1.5 },
   optionText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
   optionSub: { fontSize: 12, marginTop: 2, fontFamily: 'Manrope_400Regular' },
   methodRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
 })

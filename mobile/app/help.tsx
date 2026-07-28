@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'r
 import { useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { spacing, useThemeColors } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 
 const faqs = [
   { q: 'How do I pay my rent?', a: 'Go to the Payments tab and tap "Make Payment". Select your agreement, enter the amount, choose a payment method (MTN MoMo, Telecel Cash, AirtelTigo Money, or Bank Transfer), and confirm.' },
@@ -26,7 +27,7 @@ export default function HelpScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Contact */}
         <Text style={[styles.sectionTitle, { color: c.text }]}>Contact Us</Text>
-        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[styles.card, neuCard(c)]}>
           {contactOptions.map((opt, i) => (
             <TouchableOpacity
               key={opt.label}
@@ -72,7 +73,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <TouchableOpacity
-      style={[styles.faqCard, { backgroundColor: c.card, borderColor: c.border }]}
+      style={[styles.faqCard, neuCard(c)]}
       onPress={() => setOpen(!open)}
       activeOpacity={0.7}
     >
@@ -89,12 +90,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacing.md },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
-  card: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  card: { overflow: 'hidden' },
   contactRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   contactLabel: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
   contactValue: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: 2 },
-  faqCard: { borderRadius: 12, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  faqCard: { padding: spacing.md, marginBottom: spacing.sm },
   faqHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   faqQ: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
   faqA: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 20, marginTop: spacing.sm },

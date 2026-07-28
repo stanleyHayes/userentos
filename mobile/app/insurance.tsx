@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -164,7 +165,7 @@ function BrowseTab() {
         </View>
       ) : (
         products.map((p) => (
-          <View key={p.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+          <View key={p.id} style={[s.card, neuCard(c)]}>
             <View style={s.cardHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{p.productName}</Text>
@@ -178,11 +179,11 @@ function BrowseTab() {
             <Text style={[s.desc, { color: c.muted }]} numberOfLines={3}>{p.description}</Text>
 
             <View style={s.statRow}>
-              <View style={[s.statBox, { backgroundColor: c.surface }]}>
+              <View style={[s.statBox, neuInset(c)]}>
                 <Text style={[s.statBoxLabel, { color: c.muted }]}>Premium</Text>
                 <Text style={[s.statBoxValue, { color: c.primary }]}>{formatCurrency(p.monthlyPremium)}/mo</Text>
               </View>
-              <View style={[s.statBox, { backgroundColor: c.surface }]}>
+              <View style={[s.statBox, neuInset(c)]}>
                 <Text style={[s.statBoxLabel, { color: c.muted }]}>Coverage</Text>
                 <Text style={[s.statBoxValue, { color: c.text }]}>{formatCurrency(p.coverageLimit)}</Text>
               </View>
@@ -219,7 +220,7 @@ function BrowseTab() {
                 <Text style={[s.cardTitle, { color: c.text }]}>{selected.productName}</Text>
                 <Text style={[s.cardSub, { color: c.muted, marginBottom: spacing.md }]}>{selected.providerName}</Text>
 
-                <View style={[s.summaryBox, { backgroundColor: c.surface }]}>
+                <View style={[s.summaryBox, neuInset(c)]}>
                   <SummaryRow label="Monthly premium" value={formatCurrency(selected.monthlyPremium)} c={c} />
                   <SummaryRow label="Coverage limit" value={formatCurrency(selected.coverageLimit)} c={c} />
                   <SummaryRow label="Excess" value={formatCurrency(selected.excessAmount)} c={c} />
@@ -227,7 +228,7 @@ function BrowseTab() {
                 </View>
 
                 {selected.terms ? (
-                  <View style={[s.termsBox, { backgroundColor: c.surface }]}>
+                  <View style={[s.termsBox, neuInset(c)]}>
                     <Text style={[s.termsLabel, { color: c.muted }]}>TERMS</Text>
                     <Text style={[s.termsText, { color: c.text }]}>{selected.terms}</Text>
                   </View>
@@ -335,7 +336,7 @@ function PoliciesTab() {
           const product = productsById.get(policy.productId)
           const canClaim = policy.status === 'active' || policy.status === 'claimed'
           return (
-            <View key={policy.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View key={policy.id} style={[s.card, neuCard(c)]}>
               <View style={s.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
@@ -352,22 +353,22 @@ function PoliciesTab() {
               </View>
 
               <View style={s.statRow}>
-                <View style={[s.statBox, { backgroundColor: c.surface, flex: 1 }]}>
+                <View style={[s.statBox, neuInset(c), { flex: 1 }]}>
                   <Text style={[s.statBoxLabel, { color: c.muted }]}>Premium</Text>
                   <Text style={[s.statBoxValue, { color: c.text }]}>{formatCurrency(policy.monthlyPremium)}</Text>
                 </View>
-                <View style={[s.statBox, { backgroundColor: c.surface, flex: 1 }]}>
+                <View style={[s.statBox, neuInset(c), { flex: 1 }]}>
                   <Text style={[s.statBoxLabel, { color: c.muted }]}>Started</Text>
                   <Text style={[s.statBoxValue, { color: c.text }]}>{formatDate(policy.startDate).split(',')[0]}</Text>
                 </View>
-                <View style={[s.statBox, { backgroundColor: c.surface, flex: 1 }]}>
+                <View style={[s.statBox, neuInset(c), { flex: 1 }]}>
                   <Text style={[s.statBoxLabel, { color: c.muted }]}>Ends</Text>
                   <Text style={[s.statBoxValue, { color: c.text }]}>{formatDate(policy.endDate).split(',')[0]}</Text>
                 </View>
               </View>
 
               {policy.claims.length > 0 && (
-                <View style={[s.claimsBox, { backgroundColor: c.surface }]}>
+                <View style={[s.claimsBox, neuInset(c)]}>
                   <Text style={[s.claimsLabel, { color: c.muted }]}>CLAIMS</Text>
                   {policy.claims.map((cl) => (
                     <View key={cl.id} style={s.claimRow}>
@@ -405,7 +406,7 @@ function PoliciesTab() {
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {claimPolicy && (
-                <View style={[s.summaryBox, { backgroundColor: c.surface, marginTop: 0 }]}>
+                <View style={[s.summaryBox, neuInset(c), { marginTop: 0 }]}>
                   <Text style={[s.termsLabel, { color: c.muted }]}>POLICY</Text>
                   <Text style={[s.policyNum, { color: c.text, fontSize: 13 }]}>{claimPolicy.policyNumber}</Text>
                 </View>
@@ -413,7 +414,7 @@ function PoliciesTab() {
 
               <Text style={[s.label, { color: c.text }]}>Claim Amount (GHS)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 keyboardType="numeric"
                 value={claimAmount}
                 onChangeText={setClaimAmount}
@@ -423,7 +424,7 @@ function PoliciesTab() {
 
               <Text style={[s.label, { color: c.text }]}>Description (min 10 chars)</Text>
               <TextInput
-                style={[s.input, s.textArea, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
                 value={claimDesc}
                 onChangeText={setClaimDesc}
                 placeholder="Describe what happened..."
@@ -480,13 +481,13 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', borderBottomWidth: 1 },
   tabBtn: { paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   filterChipText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
+  card: { padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
   cardSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
@@ -496,7 +497,7 @@ const s = StyleSheet.create({
   desc: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 18 },
 
   statRow: { flexDirection: 'row', gap: 6 },
-  statBox: { flex: 1, padding: 10, borderRadius: 8, gap: 2 },
+  statBox: { flex: 1, padding: 10, gap: 2 },
   statBoxLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase' },
   statBoxValue: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
 
@@ -511,7 +512,7 @@ const s = StyleSheet.create({
   },
   buyBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
 
-  claimsBox: { padding: 10, borderRadius: 8, gap: 4 },
+  claimsBox: { padding: 10, gap: 4 },
   claimsLabel: { fontSize: 9, fontFamily: 'Manrope_700Bold', letterSpacing: 0.5 },
   claimRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   claimDesc: { fontSize: 11, fontFamily: 'Manrope_500Medium', flex: 1 },
@@ -528,15 +529,15 @@ const s = StyleSheet.create({
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
-  summaryBox: { padding: spacing.md, borderRadius: 10, marginTop: spacing.md, gap: 6 },
+  summaryBox: { padding: spacing.md, marginTop: spacing.md, gap: 6 },
   summaryRowItem: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryRowLabel: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
   summaryRowValue: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
-  termsBox: { padding: spacing.md, borderRadius: 10, marginTop: spacing.md, gap: 6 },
+  termsBox: { padding: spacing.md, marginTop: spacing.md, gap: 6 },
   termsLabel: { fontSize: 9, fontFamily: 'Manrope_700Bold', letterSpacing: 0.5 },
   termsText: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17 },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.md, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

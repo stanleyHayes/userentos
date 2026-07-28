@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { api } from '../lib/api'
 import { authenticateWithBiometric, getDeviceId } from '../lib/biometric'
 
@@ -146,7 +147,7 @@ export default function BiometricDevicesScreen() {
       </Text>
 
       {devices.length === 0 ? (
-        <View style={[s.empty, { backgroundColor: c.white, borderColor: c.border }]}>
+        <View style={[s.empty, neuCard(c)]}>
           <Ionicons name="finger-print" size={32} color={c.muted} />
           <Text style={[s.emptyTitle, { color: c.primaryDark }]}>No devices enrolled</Text>
           <Text style={[s.emptyDesc, { color: c.muted }]}>
@@ -158,7 +159,7 @@ export default function BiometricDevicesScreen() {
           {devices.map((d) => {
             const isThis = d.deviceId === thisDeviceId
             return (
-              <View key={d.id} style={[s.card, { backgroundColor: c.white, borderColor: c.border }]}>
+              <View key={d.id} style={[s.card, neuCard(c)]}>
                 <View style={s.cardRow}>
                   <View style={[s.icon, { backgroundColor: c.primary + '15' }]}>
                     <Ionicons name="phone-portrait-outline" size={20} color={c.primary} />
@@ -214,10 +215,10 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 20, fontFamily: 'Manrope_700Bold' },
   subtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm },
-  empty: { borderWidth: 1, borderRadius: 14, padding: spacing.xl, alignItems: 'center', gap: 8 },
+  empty: { padding: spacing.xl, alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   emptyDesc: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center' },
-  card: { borderWidth: 1, borderRadius: 14, padding: spacing.md },
+  card: { padding: spacing.md },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },

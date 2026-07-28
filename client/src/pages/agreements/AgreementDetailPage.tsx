@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { MoveInChecklist } from '@/components/agreements/MoveInChecklist'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -516,6 +517,15 @@ export function AgreementDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Move-in checklist — persisted per agreement, city-aware (tenants only) */}
+      {isTenantView && agreement && (
+        <MoveInChecklist
+          agreementId={agreement.id}
+          city={propertyCity}
+          businessItems={localBusinessData?.items ?? []}
+        />
+      )}
 
       {/* Move-in essentials — local businesses in the property's city (tenants only) */}
       {isTenantView && localBusinesses.length > 0 && (

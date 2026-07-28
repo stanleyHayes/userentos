@@ -5,6 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 type AchievementTier = 'bronze' | 'silver' | 'gold' | 'platinum'
@@ -153,7 +154,7 @@ export default function AchievementsScreen() {
       </View>
 
       {/* Streak card */}
-      <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[s.card, neuCard(c)]}>
         <View style={s.cardTitleRow}>
           <Ionicons name="trending-up" size={16} color="#f97316" />
           <Text style={[s.cardTitle, { color: c.text }]}>Your Payment Streak</Text>
@@ -164,11 +165,11 @@ export default function AchievementsScreen() {
             <Text style={[s.ringLabel, { color: c.muted }]}>months</Text>
           </View>
           <View style={s.streakStats}>
-            <View style={[s.streakStatBox, { backgroundColor: c.surface }]}>
+            <View style={[s.streakStatBox, neuInset(c)]}>
               <Text style={[s.streakStatLabel, { color: c.muted }]}>Current</Text>
               <Text style={[s.streakStatValue, { color: c.text }]}>{currentStreak}</Text>
             </View>
-            <View style={[s.streakStatBox, { backgroundColor: c.surface }]}>
+            <View style={[s.streakStatBox, neuInset(c)]}>
               <Text style={[s.streakStatLabel, { color: c.muted }]}>Longest</Text>
               <Text style={[s.streakStatValue, { color: c.text }]}>{longestStreak}</Text>
             </View>
@@ -178,7 +179,7 @@ export default function AchievementsScreen() {
       </View>
 
       {/* Leaderboard */}
-      <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[s.card, neuCard(c)]}>
         <View style={s.cardTitleRow}>
           <Ionicons name="trophy" size={16} color="#eab308" />
           <Text style={[s.cardTitle, { color: c.text }]}>Streak Leaderboard</Text>
@@ -190,7 +191,7 @@ export default function AchievementsScreen() {
           </View>
         ) : (
           leaderboard.slice(0, 10).map((entry, i) => (
-            <View key={entry.userId} style={[s.leaderboardRow, { backgroundColor: c.surface }]}>
+            <View key={entry.userId} style={[s.leaderboardRow, neuInset(c)]}>
               <View style={[s.rankBadge, { backgroundColor: rankColor(i, c.border) }]}>
                 <Text style={[s.rankText, { color: i < 3 ? '#1e293b' : c.muted }]}>{i + 1}</Text>
               </View>
@@ -205,7 +206,7 @@ export default function AchievementsScreen() {
       </View>
 
       {/* Badges grid */}
-      <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text, marginBottom: spacing.sm }]}>All Badges</Text>
         <View style={s.badgeGrid}>
           {sortedCatalog.map((def) => {
@@ -257,7 +258,8 @@ const s = StyleSheet.create({
   unlockBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   unlockText: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
 
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
+  // Cards — depth comes from neuCard() at the call site
+  card: { padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
 
@@ -266,14 +268,14 @@ const s = StyleSheet.create({
   ringValue: { fontSize: 28, fontFamily: 'Manrope_800ExtraBold' },
   ringLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium' },
   streakStats: { gap: 6 },
-  streakStatBox: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, minWidth: 90, alignItems: 'center' },
+  streakStatBox: { paddingVertical: 8, paddingHorizontal: 14, minWidth: 90, alignItems: 'center' },
   streakStatLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase' },
   streakStatValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
   streakHint: { fontSize: 11, fontFamily: 'Manrope_400Regular', textAlign: 'center', marginTop: spacing.sm },
 
   leaderboardRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: 8, marginBottom: 6,
+    paddingHorizontal: spacing.md, paddingVertical: 10, marginBottom: 6,
   },
   rankBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   rankText: { fontSize: 11, fontFamily: 'Manrope_800ExtraBold' },

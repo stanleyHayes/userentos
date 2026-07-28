@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
+import { useMyWorker } from '@/hooks/useProvider'
 import {
   Wrench, Star, MapPin, Phone, ShieldCheck, CheckCircle,
   Clock, User, ArrowLeft, Loader2, AlertCircle, Quote,
@@ -67,6 +68,9 @@ export function WorkerDetailPage() {
     queryFn: () => api.get<{ reviews: Review[] }>(`/workers/${id}/reviews`),
     enabled: !!id,
   })
+
+  const { data: myWorker } = useMyWorker()
+  const isOwner = !!myWorker && myWorker._id === worker?._id
 
   const reviews = reviewsData?.reviews ?? []
 
@@ -221,6 +225,11 @@ export function WorkerDetailPage() {
           <Phone size={16} /> Call {worker.phone}
         </a>
       </div>
+      {!isOwner && (
+        <p className="text-xs text-muted mt-2 text-center">
+          Send a request and {worker.name.split(' ')[0]} will review it and provide a quote — you only confirm the job once you accept the quote.
+        </p>
+      )}
 
       {/* Reviews */}
       {reviews.length > 0 && (

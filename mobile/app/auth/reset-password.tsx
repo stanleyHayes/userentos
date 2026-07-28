@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 
 export default function ResetPasswordScreen() {
@@ -54,7 +55,7 @@ export default function ResetPasswordScreen() {
 
         <View style={s.form}>
           <Text style={[s.label, { color: c.text }]}>New Password</Text>
-          <View style={[s.inputWrap, { borderColor: c.border, backgroundColor: c.white }]}>
+          <View style={[s.inputWrap, neuInset(c)]}>
             <TextInput
               style={[s.input, { color: c.text }]}
               placeholder="Min 8 characters"
@@ -70,7 +71,7 @@ export default function ResetPasswordScreen() {
 
           <Text style={[s.label, { color: c.text }]}>Confirm Password</Text>
           <TextInput
-            style={[s.inputPlain, { borderColor: c.border, backgroundColor: c.white, color: c.text }]}
+            style={[s.inputPlain, neuInset(c), { color: c.text }]}
             placeholder="Re-enter password"
             placeholderTextColor={c.muted}
             value={confirm}
@@ -105,9 +106,9 @@ const s = StyleSheet.create({
   successDesc: { fontSize: 14, fontFamily: 'Manrope_400Regular', textAlign: 'center', lineHeight: 22 },
   form: { gap: spacing.sm },
   label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  inputWrap: { height: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center' },
+  inputWrap: { height: 52, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1, fontSize: 15, fontFamily: 'Manrope_400Regular' },
-  inputPlain: { height: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  inputPlain: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
   matchRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   button: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: spacing.md },
   buttonDisabled: { opacity: 0.6 },

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Ima
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatCurrency } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
@@ -78,7 +79,7 @@ export default function SavedPropertiesScreen() {
           const statusColor = statusColors[item.status] ?? c.muted
           return (
             <TouchableOpacity
-              style={[s.card, { backgroundColor: c.white }]}
+              style={[s.card, neuCard(c)]}
               activeOpacity={0.7}
               onPress={() => router.push(`/property/${pid}`)}
             >
@@ -133,7 +134,7 @@ const s = StyleSheet.create({
   emptySubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center' },
   browseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: spacing.sm },
   browseBtnText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  card: { borderRadius: 14, overflow: 'hidden' },
+  card: { overflow: 'hidden' },
   cardImage: { width: '100%', height: 160 },
   cardImagePlaceholder: { width: '100%', height: 160, justifyContent: 'center', alignItems: 'center' },
   statusBadge: { position: 'absolute', top: 10, left: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },

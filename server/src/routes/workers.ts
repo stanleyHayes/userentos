@@ -47,6 +47,72 @@ router.get('/', authenticate, async (req, res) => {
 })
 
 /* ================================================================
+   GET /api/workers/me — my own worker profile (or null)
+   NOTE: must precede GET /:id or 'me' would be treated as an id.
+   ================================================================ */
+router.get('/me', authenticate, async (req, res) => {
+  const worker = await Worker.findOne({ userId: req.user!.userId }).lean()
+  success(res, { worker: worker ?? null })
+})
+
+/* ================================================================
+   GET /api/workers/me/earnings — the service provider's earnings
+   dashboard numbers, derived from their bookings.
+   ================================================================ */
+router.get('/me/earnings', authenticate, async (req, res) => {
+  const worker = await Worker.findOne({ userId: req.user!.userId }).lean()
+  if (!worker) { error(res, 'Create your worker profile first', 400); return }
+  const workerUserId = req.user!.userId
+
+  const bookings = await ServiceBooking.find({ workerUserId }).lean()
+  const price = (b: (typeof bookings)[number]) => b.finalCost ?? b.quoteAmount ?? b.estimatedCost ?? 0
+
+  const completed = bookings.filter((b) => b.status === 'completed')
+  const active = bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress')
+
+  const totalEarned = completed.reduce((s, b) => s + price(b), 0)
+  const totalPaid = completed.reduce((s, b) => s + (b.paymentAmount ?? 0), 0)
+  // Pending payout: agreed price not yet marked paid (partial counts the remainder).
+  const pendingPayout = completed
+    .filter((b) => b.paymentStatus !== 'paid')
+    .reduce((s, b) => s + Math.max(0, price(b) - (b.paymentAmount ?? 0)), 0)
+
+  // Per-job-type breakdown (completed only)
+  const byTypeMap = new Map<string, { jobs: number; total: number }>()
+  for (const b of completed) {
+    const entry = byTypeMap.get(b.type) ?? { jobs: 0, total: 0 }
+    entry.jobs += 1
+    entry.total += price(b)
+    byTypeMap.set(b.type, entry)
+  }
+
+  // Last 6 months of completed jobs (count + total per month)
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+  const byMonthMap = new Map<string, { jobs: number; total: number }>()
+  for (const b of completed.filter((x) => new Date(x.createdAt) >= sixMonthsAgo)) {
+    const key = new Date(b.createdAt).toISOString().slice(0, 7)
+    const entry = byMonthMap.get(key) ?? { jobs: 0, total: 0 }
+    entry.jobs += 1
+    entry.total += price(b)
+    byMonthMap.set(key, entry)
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  success(res, {
+    totalEarned: round2(totalEarned),
+    totalPaid: round2(totalPaid),
+    pendingPayout: round2(pendingPayout),
+    completedJobs: completed.length,
+    activeJobs: active.length,
+    rating: worker.rating,
+    reviewCount: worker.reviewCount,
+    byType: [...byTypeMap.entries()].map(([type, v]) => ({ type, jobs: v.jobs, total: round2(v.total) })),
+    byMonth: [...byMonthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, v]) => ({ month, jobs: v.jobs, total: round2(v.total) })),
+  })
+})
+
+/* ================================================================
    GET /api/workers/:id — get worker details
    ================================================================ */
 router.get('/:id', authenticate, async (req, res) => {

@@ -77,6 +77,12 @@ const EmployerProfilePage = lazy(() => import('@/pages/employer/EmployerProfileP
 const EmployerEmployeesPage = lazy(() => import('@/pages/employer/EmployeesPage').then((m) => ({ default: m.EmployerEmployeesPage })))
 const EmployerPayrollPage = lazy(() => import('@/pages/employer/PayrollPage').then((m) => ({ default: m.EmployerPayrollPage })))
 const PayrollRunDetailPage = lazy(() => import('@/pages/employer/PayrollRunDetailPage').then((m) => ({ default: m.PayrollRunDetailPage })))
+const PayrollReportsPage = lazy(() => import('@/pages/employer/PayrollReportsPage').then((m) => ({ default: m.PayrollReportsPage })))
+const ExpensesPage = lazy(() => import('@/pages/landlord/ExpensesPage').then((m) => ({ default: m.ExpensesPage })))
+const VacancyPage = lazy(() => import('@/pages/landlord/VacancyPage').then((m) => ({ default: m.VacancyPage })))
+const AgentLeadsPage = lazy(() => import('@/pages/agent/AgentLeadsPage').then((m) => ({ default: m.AgentLeadsPage })))
+const AgentViewingsPage = lazy(() => import('@/pages/agent/AgentViewingsPage').then((m) => ({ default: m.AgentViewingsPage })))
+const AgentCommissionsPage = lazy(() => import('@/pages/agent/AgentCommissionsPage').then((m) => ({ default: m.AgentCommissionsPage })))
 const TenantPassportPage = lazy(() => import('@/pages/TenantPassportPage').then((m) => ({ default: m.TenantPassportPage })))
 const PublicPassportPage = lazy(() => import('@/pages/PublicPassportPage').then((m) => ({ default: m.PublicPassportPage })))
 const MaintenancePage = lazy(() => import('@/pages/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
@@ -208,6 +214,13 @@ export default function App() {
             <Route path="/employer/employees" element={<RequireRole roles={['employer']}><EmployerEmployeesPage /></RequireRole>} />
             <Route path="/employer/payroll" element={<RequireRole roles={['employer']}><EmployerPayrollPage /></RequireRole>} />
             <Route path="/employer/payroll/:id" element={<RequireRole roles={['employer']}><PayrollRunDetailPage /></RequireRole>} />
+            <Route path="/employer/reports" element={<RequireRole roles={['employer']}><PayrollReportsPage /></RequireRole>} />
+            {/* Landlord / agent operations */}
+            <Route path="/landlord/expenses" element={<RequireRole roles={['landlord', 'property_manager']}><ExpensesPage /></RequireRole>} />
+            <Route path="/landlord/vacancy" element={<RequireRole roles={['landlord', 'property_manager']}><VacancyPage /></RequireRole>} />
+            <Route path="/agent/leads" element={<RequireRole roles={['landlord', 'property_manager']}><AgentLeadsPage /></RequireRole>} />
+            <Route path="/agent/viewings" element={<RequireRole roles={['landlord', 'property_manager']}><AgentViewingsPage /></RequireRole>} />
+            <Route path="/agent/commissions" element={<RequireRole roles={['landlord', 'property_manager']}><AgentCommissionsPage /></RequireRole>} />
             <Route path="/passport" element={<TenantPassportPage />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/ai-writer" element={<RequireRole roles={['landlord', 'property_manager', 'admin']}><AIWritingAssistantPage /></RequireRole>} />

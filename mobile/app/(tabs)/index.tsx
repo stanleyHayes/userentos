@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, S
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard } from '../../lib/neu'
 import { formatCompact, formatCurrency, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
@@ -206,7 +207,7 @@ export default function HomeScreen() {
 
         {/* Savings progress */}
         {!isLandlord && analytics && (analytics.savingsTarget ?? 0) > 0 && (
-          <View style={[s.card, { backgroundColor: c.card }]}>
+          <View style={[s.card, neuCard(c)]}>
             <View style={s.cardHeader}>
               <Text style={[s.cardTitle, { color: c.text }]}>Savings Progress</Text>
               <Text style={[s.cardPct, { color: c.accent }]}>{Math.min(100, analytics.savingsProgress ?? 0)}%</Text>
@@ -383,8 +384,8 @@ const s = StyleSheet.create({
   residenceDivider: { width: 1, height: 24, marginHorizontal: 12, opacity: 0.3 },
   residenceSub: { fontSize: 12, fontFamily: 'Manrope_400Regular', paddingLeft: 44 },
 
-  // Cards
-  card: { marginHorizontal: spacing.md, borderRadius: 14, padding: spacing.md, marginTop: spacing.md, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  // Cards — depth comes from neuCard() at the call site
+  card: { marginHorizontal: spacing.md, padding: spacing.md, marginTop: spacing.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
   cardPct: { fontSize: 16, fontFamily: 'Manrope_800ExtraBold' },

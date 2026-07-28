@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Modal, Alert, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 interface User {
@@ -96,7 +97,7 @@ export default function UsersAdminScreen() {
   function renderUser({ item }: { item: User }) {
     const initials = `${item.firstName?.[0] ?? ''}${item.lastName?.[0] ?? ''}`.toUpperCase()
     return (
-      <TouchableOpacity style={[s.card, { backgroundColor: c.white }]} activeOpacity={0.7} onPress={() => setSelectedUser(item)}>
+      <TouchableOpacity style={[s.card, neuCard(c)]} activeOpacity={0.7} onPress={() => setSelectedUser(item)}>
         <View style={[s.avatar, { backgroundColor: c.primary + '15' }]}>
           <Text style={[s.avatarText, { color: c.primary }]}>{initials}</Text>
         </View>
@@ -165,7 +166,7 @@ export default function UsersAdminScreen() {
                 </View>
 
                 <Text style={[s.detailSectionLabel, { color: c.muted }]}>User ID</Text>
-                <Text style={[s.detailMono, { color: c.text, backgroundColor: c.surface }]}>{selectedUser.id}</Text>
+                <Text style={[s.detailMono, { color: c.text }, neuInset(c, 8)]}>{selectedUser.id}</Text>
 
                 <View style={{ gap: 10, marginTop: spacing.lg, marginBottom: spacing.xl }}>
                   <TouchableOpacity
@@ -186,7 +187,7 @@ export default function UsersAdminScreen() {
 
       {/* Search Bar */}
       <View style={[s.searchWrap, { backgroundColor: c.white, borderBottomColor: c.border }]}>
-        <View style={[s.searchBar, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <View style={[s.searchBar, neuInset(c)]}>
           <Ionicons name="search-outline" size={18} color={c.muted} />
           <TextInput
             style={[s.searchInput, { color: c.text }]}
@@ -262,13 +263,13 @@ export default function UsersAdminScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   searchWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: spacing.sm, gap: 6, height: 42 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, gap: 6, height: 42 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_500Medium', paddingVertical: 0 },
   filterRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5 },
   filterChipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
   list: { padding: spacing.md, gap: spacing.sm },
-  card: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
   avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   avatarText: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
   cardBody: { flex: 1 },
@@ -295,7 +296,7 @@ const s = StyleSheet.create({
   detailEmail: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
   verifyBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginTop: 4 },
   detailSectionLabel: { fontSize: 10, fontFamily: 'Manrope_600SemiBold', textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.md, marginBottom: 6 },
-  detailMono: { fontSize: 11, fontFamily: 'Manrope_400Regular', padding: 10, borderRadius: 8, overflow: 'hidden' },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5 },
+  detailMono: { fontSize: 11, fontFamily: 'Manrope_400Regular', padding: 10, overflow: 'hidden' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5 },
   deleteBtnText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
 })

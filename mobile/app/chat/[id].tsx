@@ -4,6 +4,7 @@ import { useAudioPlayer, AudioSource } from 'expo-audio'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset, neuChip } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { getSocket, connectSocket } from '../../lib/socket'
@@ -208,7 +209,7 @@ export default function ChatScreen() {
               <Text style={[s.msgAvatarText, { color: c.primary }]}>{conversation?.otherUser.firstName?.[0] ?? '?'}</Text>
             </View>
           )}
-          <View style={[s.bubble, isMine ? { backgroundColor: c.primary, borderBottomRightRadius: 4 } : { backgroundColor: c.white, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: c.border }]}>
+          <View style={[s.bubble, isMine ? { backgroundColor: c.primary, borderBottomRightRadius: 4 } : { ...neuCard(c), borderBottomLeftRadius: 4 }]}>
             <Text style={[s.msgText, isMine ? { color: '#ffffff' } : { color: c.text }]}>{item.text}</Text>
             <View style={s.msgMeta}>
               <Text style={[s.msgTime, isMine ? { color: 'rgba(255,255,255,0.6)' } : { color: c.muted }]}>{formatMessageTime(item.createdAt)}</Text>
@@ -257,8 +258,8 @@ export default function ChatScreen() {
         </View>
       )}
       <View style={[s.inputBar, { backgroundColor: c.white, borderTopColor: c.border }]}>
-        <TextInput style={[s.textInput, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} placeholder="Type a message..." placeholderTextColor={c.muted} value={inputText} onChangeText={handleInputChange} multiline maxLength={2000} />
-        <TouchableOpacity style={[s.sendBtn, { backgroundColor: c.primary }, (!inputText.trim() || sending) && s.sendBtnDisabled]} onPress={sendMessage} disabled={!inputText.trim() || sending}>
+        <TextInput style={[s.textInput, neuInset(c), { color: c.text }]} placeholder="Type a message..." placeholderTextColor={c.muted} value={inputText} onChangeText={handleInputChange} multiline maxLength={2000} />
+        <TouchableOpacity style={[s.sendBtn, neuChip(c), { backgroundColor: c.primary }, (!inputText.trim() || sending) && s.sendBtnDisabled]} onPress={sendMessage} disabled={!inputText.trim() || sending}>
           {sending ? <ActivityIndicator size="small" color="#ffffff" /> : <Ionicons name="send" size={18} color="#ffffff" />}
         </TouchableOpacity>
       </View>
@@ -282,7 +283,7 @@ const s = StyleSheet.create({
   msgRowLeft: { justifyContent: 'flex-start' },
   msgAvatar: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
   msgAvatarText: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
-  bubble: { maxWidth: '75%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  bubble: { maxWidth: '75%', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   msgText: { fontSize: 15, lineHeight: 21, fontFamily: 'Manrope_400Regular' },
   msgMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'flex-end' },
   msgTime: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
@@ -295,7 +296,7 @@ const s = StyleSheet.create({
   typingBar: { paddingHorizontal: spacing.md, paddingVertical: 6, borderTopWidth: 1 },
   typingText: { fontSize: 12, fontFamily: 'Manrope_400Regular', fontStyle: 'italic' },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: Platform.OS === 'ios' ? 28 : spacing.md, borderTopWidth: 1, gap: spacing.sm },
-  textInput: { flex: 1, borderRadius: 20, paddingHorizontal: spacing.md, paddingTop: Platform.OS === 'ios' ? 10 : 8, paddingBottom: Platform.OS === 'ios' ? 10 : 8, fontSize: 15, fontFamily: 'Manrope_400Regular', maxHeight: 100, borderWidth: 1 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  textInput: { flex: 1, paddingHorizontal: spacing.md, paddingTop: Platform.OS === 'ios' ? 10 : 8, paddingBottom: Platform.OS === 'ios' ? 10 : 8, fontSize: 15, fontFamily: 'Manrope_400Regular', maxHeight: 100 },
+  sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   sendBtnDisabled: { opacity: 0.4 },
 })

@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
 
@@ -216,7 +217,7 @@ export default function AddPropertyScreen() {
 
 function Section({ title, icon, c, children }: { title: string; icon: keyof typeof Ionicons.glyphMap; c: ReturnType<typeof useThemeColors>; children: React.ReactNode }) {
   return (
-    <View style={[s.section, { backgroundColor: c.white }]}>
+    <View style={[s.section, neuCard(c)]}>
       <View style={s.sectionHeader}>
         <Ionicons name={icon} size={18} color={c.primary} />
         <Text style={[s.sectionTitle, { color: c.primaryDark }]}>{title}</Text>
@@ -233,7 +234,7 @@ function Field({ label, value, onChangeText, c, ...props }: {
     <>
       <Text style={[s.fieldLabel, { color: c.text }]}>{label}</Text>
       <TextInput
-        style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+        style={[s.input, neuInset(c), { color: c.text }]}
         placeholderTextColor={c.muted}
         value={value}
         onChangeText={onChangeText}
@@ -246,13 +247,13 @@ function Field({ label, value, onChangeText, c, ...props }: {
 const s = StyleSheet.create({
   container: { flex: 1 },
   scroll: { padding: spacing.md },
-  section: { borderRadius: 12, padding: spacing.lg, marginBottom: spacing.md, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  section: { padding: spacing.lg, marginBottom: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
   sectionTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.sm },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, fontFamily: 'Manrope_500Medium' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   row: { flexDirection: 'row', gap: 12 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
@@ -263,6 +264,6 @@ const s = StyleSheet.create({
   previewWrap: { marginRight: 10, position: 'relative' },
   previewImg: { width: 80, height: 80, borderRadius: 10 },
   previewRemove: { position: 'absolute', top: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 18 },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 18 },
   submitBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Manrope_700Bold' },
 })

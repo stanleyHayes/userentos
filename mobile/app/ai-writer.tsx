@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset, neuChip } from '../lib/neu'
 import { api } from '../lib/api'
 
 const TABS = [
@@ -104,7 +105,7 @@ export default function AIWriterScreen() {
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[s.tab, { backgroundColor: activeTab === tab.key ? c.primary : c.card, borderColor: c.border }]}
+            style={[s.tab, neuChip(c, 20), activeTab === tab.key && { backgroundColor: c.primary, borderColor: c.primary }]}
             onPress={() => { setActiveTab(tab.key); setResult('') }}
           >
             <Ionicons name={tab.icon} size={16} color={activeTab === tab.key ? '#fff' : c.text} />
@@ -114,7 +115,7 @@ export default function AIWriterScreen() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={s.scroll}>
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           {activeTab === 'listing' && (
             <>
               <Text style={[s.label, { color: c.text }]}>Tone</Text>
@@ -122,7 +123,7 @@ export default function AIWriterScreen() {
                 {TONES.map((t) => (
                   <TouchableOpacity
                     key={t.value}
-                    style={[s.chip, { backgroundColor: tone === t.value ? c.primary : c.surface, borderColor: c.border }]}
+                    style={[s.chip, neuChip(c), tone === t.value && { backgroundColor: c.primary, borderColor: c.primary }]}
                     onPress={() => setTone(t.value)}
                   >
                     <Text style={[s.chipText, { color: tone === t.value ? '#fff' : c.textLight }]}>{t.label}</Text>
@@ -139,7 +140,7 @@ export default function AIWriterScreen() {
                 {LANGUAGES.map((l) => (
                   <TouchableOpacity
                     key={l.value}
-                    style={[s.chip, { backgroundColor: language === l.value ? c.primary : c.surface, borderColor: c.border }]}
+                    style={[s.chip, neuChip(c), language === l.value && { backgroundColor: c.primary, borderColor: c.primary }]}
                     onPress={() => setLanguage(l.value)}
                   >
                     <Text style={[s.chipText, { color: language === l.value ? '#fff' : c.textLight }]}>{l.label}</Text>
@@ -153,7 +154,7 @@ export default function AIWriterScreen() {
             {activeTab === 'listing' ? 'Property Details' : activeTab === 'formalize' ? 'Informal Text' : activeTab === 'translate' ? 'Text to Translate' : 'Listing Text'}
           </Text>
           <TextInput
-            style={[s.input, s.textarea, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+            style={[s.input, s.textarea, neuInset(c), { color: c.text }]}
             placeholder={
               activeTab === 'listing' ? '2-bedroom apartment in East Legon, 95sqm, furnished, parking...'
                 : activeTab === 'formalize' ? 'Hey bro, got a nice place for rent...'
@@ -181,7 +182,7 @@ export default function AIWriterScreen() {
         </View>
 
         {result ? (
-          <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+          <View style={[s.card, neuCard(c)]}>
             <View style={s.resultHeader}>
               <Text style={[s.resultTitle, { color: c.text }]}>Result</Text>
               <TouchableOpacity onPress={handleCopy}>
@@ -204,15 +205,15 @@ const s = StyleSheet.create({
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   tabScroll: { marginTop: spacing.md },
   tabContent: { paddingHorizontal: spacing.lg, gap: 8 },
-  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
   tabText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   scroll: { padding: spacing.lg, gap: spacing.md },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  card: { padding: spacing.md, gap: spacing.sm },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   textarea: { height: 100, textAlignVertical: 'top' },
   generateBtn: { marginTop: spacing.lg, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   generateBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },

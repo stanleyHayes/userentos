@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, useIsDark, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -168,7 +169,7 @@ export default function InvestmentsScreen() {
             {investments.map((inv) => {
               const sc = statusColors[inv.status] || statusColors.pending
               return (
-                <View key={inv.id} style={[s.card, { backgroundColor: c.white }]}>
+                <View key={inv.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardTitle, { color: c.primaryDark }]}>{inv.type.replace('_', ' ')}</Text>
@@ -247,7 +248,7 @@ export default function InvestmentsScreen() {
                 ))}
               </View>
               <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} placeholder="Min. 100" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="Min. 100" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
               {amountNum > 0 && rate && (
                 <View style={[s.returnCard, { backgroundColor: c.accent + '08', borderColor: c.accent + '30' }]}>
                   <Text style={[s.returnRow, { color: c.text }]}>Rate: <Text style={s.returnBold}>{rate}%</Text></Text>
@@ -284,16 +285,16 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   summaryStrip: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xs, gap: spacing.sm },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: spacing.md, minWidth: 170 },
-  summaryIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: spacing.md, minWidth: 170 },
+  summaryIconWrap: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   summaryTextBlock: { flex: 1 },
   summaryLabel: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginBottom: 2 },
   summaryValue: { fontSize: 20, fontFamily: 'Manrope_800ExtraBold' },
-  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 12 },
+  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 10 },
   newBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
-  card: { borderRadius: 12, padding: spacing.md, marginBottom: spacing.sm, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
   cardMeta: { fontSize: 11, marginTop: 2, fontFamily: 'Manrope_400Regular' },
@@ -313,10 +314,10 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, borderWidth: 1, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm },
   optionsGroupScroll: { flexDirection: 'row', gap: spacing.sm },
-  optionBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5 },
+  optionBtn: { flex: 1, borderRadius: 10, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5 },
   optionText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
   returnCard: { borderWidth: 1, borderRadius: 12, padding: spacing.md, marginTop: spacing.md },
   returnRow: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginBottom: 4 },
@@ -327,7 +328,7 @@ const s = StyleSheet.create({
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   checkboxLabel: { flex: 1, fontSize: 13, fontFamily: 'Manrope_500Medium' },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
 })

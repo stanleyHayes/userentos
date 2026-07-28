@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useThemeColors, useIsDark, spacing } from '../../lib/theme'
+import { neuCard } from '../../lib/neu'
 import { useAuthStore } from '../../stores/authStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { api } from '../../lib/api'
@@ -45,6 +46,7 @@ export default function ProfileScreen() {
   const isBusiness = user?.activeRole === 'business'
   const isFinancier = user?.activeRole === 'financier'
   const isEmployer = user?.activeRole === 'employer'
+  const isServiceProvider = user?.activeRole === 'service_provider'
 
   const sections: MenuSection[] = [
     {
@@ -66,6 +68,13 @@ export default function ProfileScreen() {
         { icon: 'document-attach-outline', label: 'Applications', onPress: () => router.push('/applications') },
         { icon: 'document-text-outline', label: 'My Agreements', onPress: () => router.push('/agreements') },
         { icon: 'folder-outline', label: 'Documents', onPress: () => router.push('/documents') },
+        ...(isLandlord ? [
+          { icon: 'people-circle-outline' as const, label: 'Leads', onPress: () => router.push('/agent-leads' as string) },
+          { icon: 'calendar-outline' as const, label: 'Viewings', onPress: () => router.push('/agent-viewings' as string) },
+          { icon: 'cash-outline' as const, label: 'Commissions', onPress: () => router.push('/agent-commissions' as string) },
+          { icon: 'receipt-outline' as const, label: 'Expenses', onPress: () => router.push('/landlord-expenses' as string) },
+          { icon: 'business-outline' as const, label: 'Vacancy', onPress: () => router.push('/landlord-vacancy' as string) },
+        ] : []),
       ],
     },
     {
@@ -75,6 +84,7 @@ export default function ProfileScreen() {
         { icon: 'construct-outline', label: 'Find Workers', onPress: () => router.push('/workers') },
         { icon: 'calendar-outline', label: 'My Bookings', onPress: () => router.push('/bookings') },
         { icon: 'hammer-outline', label: 'Become a Worker', onPress: () => router.push('/become-worker') },
+        ...(isServiceProvider ? [{ icon: 'wallet-outline' as const, label: 'Earnings', onPress: () => router.push('/earnings' as string) }] : []),
       ],
     },
     ...((isBusiness || isFinancier || isEmployer) ? [{
@@ -185,7 +195,7 @@ export default function ProfileScreen() {
 
       {/* Role switcher */}
       {user && user.roles.length > 1 && (
-        <View style={[s.roleSwitcher, { backgroundColor: c.white, borderColor: c.border }]}>
+        <View style={[s.roleSwitcher, neuCard(c)]}>
           <Text style={[s.roleSwitchLabel, { color: c.muted }]}>Switch role</Text>
           <View style={s.roleRow}>
             {user.roles.map((role) => {
@@ -214,7 +224,7 @@ export default function ProfileScreen() {
       {sections.map((section) => (
         <View key={section.title} style={s.section}>
           <Text style={[s.sectionTitle, { color: c.muted }]}>{section.title}</Text>
-          <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+          <View style={[s.sectionCard, neuCard(c)]}>
             {section.items.map((item, i) => (
               <TouchableOpacity
                 key={item.label}
@@ -244,7 +254,7 @@ export default function ProfileScreen() {
       {/* Theme toggle */}
       <View style={s.section}>
         <Text style={[s.sectionTitle, { color: c.muted }]}>Appearance</Text>
-        <View style={[s.sectionCard, { backgroundColor: c.white }]}>
+        <View style={[s.sectionCard, neuCard(c)]}>
           <View style={s.themeRow}>
             {themeOptions.map((opt) => {
               const active = mode === opt.value
@@ -311,7 +321,7 @@ const s = StyleSheet.create({
   settingsBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -348,7 +358,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   roleText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', color: '#ffffff', textTransform: 'capitalize' },
   verifiedBadge: {
@@ -358,7 +368,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(16,185,129,0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   verifiedText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', color: '#10b981' },
 
@@ -377,18 +387,11 @@ const s = StyleSheet.create({
   statValue: { fontSize: 13, fontFamily: 'Manrope_500Medium', color: 'rgba(255,255,255,0.7)' },
   statDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  // Role switcher
+  // Role switcher — depth comes from neuCard() at the call site
   roleSwitcher: {
     marginHorizontal: spacing.md,
     marginTop: -12,
-    borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   roleSwitchLabel: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   roleRow: { flexDirection: 'row', gap: 8 },
@@ -415,7 +418,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
   },
-  sectionCard: { borderRadius: 14, overflow: 'hidden' },
+  sectionCard: { overflow: 'hidden' },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -453,7 +456,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     marginTop: spacing.md,
   },

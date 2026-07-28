@@ -6,6 +6,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset, neuChip } from '../../lib/neu'
 import { formatCurrency, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
@@ -108,6 +109,18 @@ export default function PropertyDetailScreen() {
   // Contact modal
   const [showContactModal, setShowContactModal] = useState(false)
   const [contactMessage, setContactMessage] = useState('')
+
+  // Agent lead ("I'm interested") modal
+  const [showInterestModal, setShowInterestModal] = useState(false)
+  const [interestMessage, setInterestMessage] = useState('')
+  const [sendingInterest, setSendingInterest] = useState(false)
+
+  // Book viewing modal
+  const [showViewingModal, setShowViewingModal] = useState(false)
+  const [viewingDate, setViewingDate] = useState('')
+  const [viewingTime, setViewingTime] = useState('')
+  const [viewingNotes, setViewingNotes] = useState('')
+  const [bookingViewing, setBookingViewing] = useState(false)
 
   // Government reject modal
   const [showRejectModal, setShowRejectModal] = useState(false)
@@ -332,6 +345,42 @@ export default function PropertyDetailScreen() {
     await messageAboutProperty(property.landlordId)
   }
 
+  async function submitInterest() {
+    setSendingInterest(true)
+    try {
+      await api.post(`/agent/leads/property/${id}`, {
+        ...(interestMessage.trim() ? { message: interestMessage.trim() } : {}),
+      })
+      setShowInterestModal(false)
+      setInterestMessage('')
+      Alert.alert('Interest Sent', 'The agent will contact you.')
+    } catch (err) {
+      Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to send interest')
+    } finally { setSendingInterest(false) }
+  }
+
+  async function submitViewing() {
+    if (viewingDate.trim().length < 4 || viewingTime.trim().length < 3) {
+      Alert.alert('Missing Fields', 'Please enter a date and time for the viewing.')
+      return
+    }
+    setBookingViewing(true)
+    try {
+      await api.post(`/agent/viewings/property/${id}`, {
+        date: viewingDate.trim(),
+        time: viewingTime.trim(),
+        ...(viewingNotes.trim() ? { notes: viewingNotes.trim() } : {}),
+      })
+      setShowViewingModal(false)
+      setViewingDate('')
+      setViewingTime('')
+      setViewingNotes('')
+      Alert.alert('Viewing Requested', 'Viewing requested — the agent will confirm your slot.')
+    } catch (err) {
+      Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to request viewing')
+    } finally { setBookingViewing(false) }
+  }
+
   async function handleShare() {
     if (!property) return
     try {
@@ -433,7 +482,7 @@ export default function PropertyDetailScreen() {
       )}
 
       {/* Header */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={s.titleRow}>
           <Text style={[s.title, { color: c.primaryDark }]}>{property.title}</Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -457,7 +506,7 @@ export default function PropertyDetailScreen() {
       </View>
 
       {/* Quick Details */}
-      <View style={[s.detailsCard, { backgroundColor: c.white }]}>
+      <View style={[s.detailsCard, neuCard(c)]}>
         <DetailItem icon="bed-outline" label="Bedrooms" value={String(property.bedrooms ?? '-')} c={c} />
         <DetailItem icon="water-outline" label="Bathrooms" value={String(property.bathrooms ?? '-')} c={c} />
         <DetailItem icon="car-outline" label="Parking" value={String(property.parkingSpaces ?? '-')} c={c} />
@@ -465,7 +514,7 @@ export default function PropertyDetailScreen() {
       </View>
 
       {/* Property Details Strip */}
-      <View style={[s.detailStrip, { backgroundColor: c.white, borderColor: c.border + '60' }]}>
+      <View style={[s.detailStrip, neuCard(c)]}>
         <DetailCell icon="business-outline" label="Type" value={property.type} c={c} />
         <DetailCell icon="time-outline" label="Duration" value={`${property.rentDurationMonths ?? '-'} mo`} c={c} />
         <DetailCell icon="shield-outline" label="Advance" value={`${property.advanceMonths ?? '-'} mo`} c={c} />
@@ -473,7 +522,7 @@ export default function PropertyDetailScreen() {
       </View>
 
       {/* Stats */}
-      <View style={[s.statsRow, { backgroundColor: c.white }]}>
+      <View style={[s.statsRow, neuCard(c)]}>
         <StatItem icon="eye-outline" value={String(property.views ?? 0)} label="Views" c={c} />
         <StatItem icon="heart-outline" value={String(property.favorites ?? 0)} label="Saved" c={c} />
         <StatItem icon="chatbubble-outline" value={String(property.inquiries ?? 0)} label="Inquiries" c={c} />
@@ -481,7 +530,7 @@ export default function PropertyDetailScreen() {
 
       {/* Description */}
       {property.description ? (
-        <View style={[s.section, { backgroundColor: c.white }]}>
+        <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Description</Text>
           <Text style={[s.descriptionText, { color: c.textLight }]}>{property.description}</Text>
         </View>
@@ -489,7 +538,7 @@ export default function PropertyDetailScreen() {
 
       {/* Amenities */}
       {property.amenities && property.amenities.length > 0 ? (
-        <View style={[s.section, { backgroundColor: c.white }]}>
+        <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Amenities</Text>
           <View style={s.tagList}>
             {property.amenities.map((a) => (
@@ -504,7 +553,7 @@ export default function PropertyDetailScreen() {
 
       {/* Rules */}
       {property.rules && property.rules.length > 0 ? (
-        <View style={[s.section, { backgroundColor: c.white }]}>
+        <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Rules</Text>
           {property.rules.map((r, i) => (
             <View key={i} style={s.ruleRow}>
@@ -517,7 +566,7 @@ export default function PropertyDetailScreen() {
 
       {/* Tenant Requirements */}
       {prefs && Object.values(prefs).some((v: unknown) => v !== true && v !== 'any' && v !== 0 && v !== 10 && v !== 100 && v !== 18) && (
-        <View style={[s.section, { backgroundColor: c.white }]}>
+        <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Tenant Requirements</Text>
           <View style={s.tagList}>
             {(prefs.minCreditScore ?? 0) > 0 && (
@@ -550,7 +599,7 @@ export default function PropertyDetailScreen() {
 
       {/* Qualification Status */}
       {isTenant && qualification && qualification.totalCount > 0 && (
-        <View style={[s.section, { backgroundColor: c.white }]}>
+        <View style={[s.section, neuCard(c)]}>
           <View style={[
             s.qualBanner,
             { backgroundColor: qualification.qualified ? c.accent + '15' : c.warning + '15' },
@@ -623,7 +672,7 @@ export default function PropertyDetailScreen() {
       )}
 
       {/* Map Placeholder */}
-      <View style={[s.mapPlaceholder, { backgroundColor: c.white }]}>
+      <View style={[s.mapPlaceholder, neuCard(c)]}>
         <Ionicons name="location" size={20} color={c.primary + '40'} />
         <Text style={[s.mapPlaceholderText, { color: c.muted }]}>{property.address.city}, {property.address.region}</Text>
         {property.address.digitalAddress && (
@@ -770,13 +819,35 @@ export default function PropertyDetailScreen() {
               )
             )}
 
+            {/* Agent CTAs — interest + viewing (signed-in non-owners only) */}
+            {user && (
+              <View style={s.actionRow}>
+                <TouchableOpacity
+                  style={[s.compactBtn, { borderColor: c.primary, flex: 1 }]}
+                  onPress={() => setShowInterestModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="heart-outline" size={16} color={c.primary} />
+                  <Text style={[s.compactBtnText, { color: c.primary }]}>I'm Interested</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.compactBtn, { borderColor: c.primary, flex: 1 }]}
+                  onPress={() => setShowViewingModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={c.primary} />
+                  <Text style={[s.compactBtnText, { color: c.primary }]}>Book a Viewing</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={s.actionRow}>
               <TouchableOpacity style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1 }]} onPress={() => setShowContactModal(true)}>
                 <Ionicons name="chatbubble-outline" size={20} color="#ffffff" />
                 <Text style={s.primaryBtnText}>Contact Landlord</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.favoriteBtn, { backgroundColor: isFavorited ? c.danger + '15' : c.surface, borderColor: isFavorited ? c.danger + '40' : c.border }]}
+                style={[s.favoriteBtn, neuChip(c), isFavorited && { backgroundColor: c.danger + '15', borderColor: c.danger + '40' }]}
                 onPress={toggleFavorite}
                 disabled={togglingFavorite}
                 activeOpacity={0.7}
@@ -799,7 +870,7 @@ export default function PropertyDetailScreen() {
       </View>
 
       {/* Tenants & Reviews Tabs */}
-      <View style={[s.section, { backgroundColor: c.white }]}>
+      <View style={[s.section, neuCard(c)]}>
         <View style={[s.tabBar, { borderColor: c.border + '40' }]}>
           <TouchableOpacity
             style={[s.tab, activeTab === 'tenants' && { borderBottomColor: c.primary, borderBottomWidth: 2 }]}
@@ -825,7 +896,7 @@ export default function PropertyDetailScreen() {
           pastAgreements.length > 0 ? (
             <View style={{ gap: spacing.sm, paddingTop: spacing.md }}>
               {pastAgreements.map((a) => (
-                <View key={a.id} style={[s.tenantCard, { borderColor: c.border + '40' }]}>
+                <View key={a.id} style={[s.tenantCard, neuInset(c)]}>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.tenantName, { color: c.primaryDark }]}>
                       {a.tenantName ?? a.tenantId?.slice(0, 8)}
@@ -884,7 +955,7 @@ export default function PropertyDetailScreen() {
               <Text style={[s.noReviewsText, { color: c.muted }]}>No reviews yet. Be the first to leave one!</Text>
             ) : (
               reviews.map((review) => (
-                <View key={review.id} style={[s.reviewCard, { backgroundColor: c.surface }]}>
+                <View key={review.id} style={[s.reviewCard, neuInset(c)]}>
                   <View style={s.reviewCardHeader}>
                     <View style={s.reviewStars}>
                       {[1, 2, 3, 4, 5].map((star) => (
@@ -970,7 +1041,7 @@ export default function PropertyDetailScreen() {
 
               <Text style={[s.inputLabel, { color: c.text }]}>Pros (comma-separated)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={reviewPros}
                 onChangeText={setReviewPros}
                 placeholder="e.g. Quiet area, Good water supply"
@@ -979,7 +1050,7 @@ export default function PropertyDetailScreen() {
 
               <Text style={[s.inputLabel, { color: c.text }]}>Cons (comma-separated)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={reviewCons}
                 onChangeText={setReviewCons}
                 placeholder="e.g. Noisy neighbors, Poor drainage"
@@ -1063,7 +1134,7 @@ export default function PropertyDetailScreen() {
 
               <Text style={[s.inputLabel, { color: c.text }]}>Desired Move-in Date *</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={applyMoveIn}
                 onChangeText={setApplyMoveIn}
                 placeholder="YYYY-MM-DD"
@@ -1095,7 +1166,7 @@ export default function PropertyDetailScreen() {
 
               <Text style={[s.inputLabel, { color: c.text }]}>Offered Rent (optional)</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={applyRent}
                 onChangeText={setApplyRent}
                 placeholder={String(property.rentAmount)}
@@ -1163,6 +1234,138 @@ export default function PropertyDetailScreen() {
                 >
                   <Ionicons name="send" size={16} color="#fff" />
                   <Text style={s.primaryBtnText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: spacing.lg }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Interest Modal (agent lead) */}
+      <Modal visible={showInterestModal} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.white }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.primaryDark }]}>I'm Interested</Text>
+              <TouchableOpacity onPress={() => setShowInterestModal(false)}>
+                <Ionicons name="close" size={24} color={c.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.modalSubtitle, { color: c.muted }]}>
+              Let the agent know you're interested in "{property.title}". They'll reach out to you directly.
+            </Text>
+
+            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+              <Text style={[s.inputLabel, { color: c.text }]}>Message (optional)</Text>
+              <TextInput
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
+                value={interestMessage}
+                onChangeText={setInterestMessage}
+                placeholder="Hi, I'm interested in this property..."
+                placeholderTextColor={c.muted}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
+                <TouchableOpacity
+                  style={[s.outlineBtn, { borderColor: c.border, flex: 1 }]}
+                  onPress={() => setShowInterestModal(false)}
+                >
+                  <Text style={[s.outlineBtnText, { color: c.muted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1, opacity: sendingInterest ? 0.6 : 1 }]}
+                  onPress={submitInterest}
+                  disabled={sendingInterest}
+                >
+                  {sendingInterest ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={16} color="#fff" />
+                      <Text style={s.primaryBtnText}>Send Interest</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: spacing.lg }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Book Viewing Modal */}
+      <Modal visible={showViewingModal} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.white }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Book a Viewing</Text>
+              <TouchableOpacity onPress={() => setShowViewingModal(false)}>
+                <Ionicons name="close" size={24} color={c.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.modalSubtitle, { color: c.muted }]}>
+              Request a viewing slot for "{property.title}".
+            </Text>
+
+            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+              <Text style={[s.inputLabel, { color: c.text }]}>Date *</Text>
+              <TextInput
+                style={[s.input, neuInset(c), { color: c.text }]}
+                value={viewingDate}
+                onChangeText={setViewingDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={c.muted}
+              />
+
+              <Text style={[s.inputLabel, { color: c.text }]}>Time *</Text>
+              <TextInput
+                style={[s.input, neuInset(c), { color: c.text }]}
+                value={viewingTime}
+                onChangeText={setViewingTime}
+                placeholder="e.g. 10:30 AM"
+                placeholderTextColor={c.muted}
+              />
+
+              <Text style={[s.inputLabel, { color: c.text }]}>Notes (optional)</Text>
+              <TextInput
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
+                value={viewingNotes}
+                onChangeText={setViewingNotes}
+                placeholder="Anything the agent should know..."
+                placeholderTextColor={c.muted}
+                multiline
+                numberOfLines={3}
+                maxLength={300}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
+                <TouchableOpacity
+                  style={[s.outlineBtn, { borderColor: c.border, flex: 1 }]}
+                  onPress={() => setShowViewingModal(false)}
+                >
+                  <Text style={[s.outlineBtnText, { color: c.muted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1, opacity: bookingViewing ? 0.6 : 1 }]}
+                  onPress={submitViewing}
+                  disabled={bookingViewing}
+                >
+                  {bookingViewing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="calendar" size={16} color="#fff" />
+                      <Text style={s.primaryBtnText}>Request Viewing</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
 
@@ -1250,7 +1453,7 @@ function DetailCell({ icon, label, value, c, highlight }: { icon: string; label:
 
 function StatItem({ icon, value, label, c }: { icon: string; value: string; label: string; c: ReturnType<typeof useThemeColors> }) {
   return (
-    <View style={[s.statItem, { borderColor: c.border + '60' }]}>
+    <View style={[s.statItem, neuInset(c)]}>
       <View style={[s.statIcon, { backgroundColor: c.surface }]}>
         <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={14} color={c.muted} />
       </View>
@@ -1300,14 +1503,14 @@ const s = StyleSheet.create({
   detailLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
 
   // Detail strip
-  detailStrip: { flexDirection: 'row', marginTop: spacing.sm, borderTopWidth: 1, borderBottomWidth: 1 },
+  detailStrip: { flexDirection: 'row', marginTop: spacing.sm },
   detailCellItem: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center' },
   detailCellLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
   detailCellValue: { fontSize: 13, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, marginTop: spacing.sm },
-  statItem: { flex: 1, alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingVertical: 10, gap: 2 },
+  statItem: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 2 },
   statIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
   statValue: { fontSize: 14, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
@@ -1321,7 +1524,7 @@ const s = StyleSheet.create({
   ruleText: { fontSize: 13, flex: 1, fontFamily: 'Manrope_400Regular' },
 
   // Preferences
-  prefTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  prefTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   prefTagText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
 
   // Map
@@ -1336,7 +1539,9 @@ const s = StyleSheet.create({
   primaryBtnText: { fontSize: 16, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
   outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5 },
   outlineBtnText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
-  favoriteBtn: { width: 52, height: 52, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  compactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
+  compactBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  favoriteBtn: { width: 52, height: 52, justifyContent: 'center', alignItems: 'center' },
 
   // Applied badge
   appliedBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12 },
@@ -1352,7 +1557,7 @@ const s = StyleSheet.create({
   tabText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
 
   // Tenant cards
-  tenantCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1 },
+  tenantCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   tenantName: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   tenantDates: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
 
@@ -1364,7 +1569,7 @@ const s = StyleSheet.create({
   modalSubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', paddingHorizontal: spacing.md, marginBottom: spacing.md },
   modalScroll: { paddingHorizontal: spacing.md },
   inputLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  input: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   textArea: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Manrope_400Regular', minHeight: 100 },
   helperText: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   sectionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -1404,7 +1609,7 @@ const s = StyleSheet.create({
   writeReviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, marginBottom: spacing.md },
   writeReviewBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   noReviewsText: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingVertical: spacing.md },
-  reviewCard: { borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm },
+  reviewCard: { padding: spacing.sm, marginBottom: spacing.sm },
   reviewCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   reviewStars: { flexDirection: 'row', gap: 1 },
   reviewDate: { fontSize: 11, fontFamily: 'Manrope_400Regular' },

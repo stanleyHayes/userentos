@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Dimensions } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -74,7 +75,7 @@ export default function GovPanelScreen() {
       </ScrollView>
 
       {/* Compliance Overview */}
-      <View style={[s.card, { backgroundColor: c.card }]}>
+      <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text }]}>Compliance Overview</Text>
         <View style={s.complianceRow}>
           <View style={[s.complianceItem, { backgroundColor: c.danger + '10' }]}>
@@ -95,7 +96,7 @@ export default function GovPanelScreen() {
       </View>
 
       {/* Regional Data */}
-      <View style={[s.card, { backgroundColor: c.card }]}>
+      <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text }]}>Regional Breakdown</Text>
         {regions.length === 0 ? (
           <Text style={[s.noData, { color: c.muted }]}>No regional data available</Text>
@@ -118,7 +119,7 @@ export default function GovPanelScreen() {
       </View>
 
       {/* Platform Summary */}
-      <View style={[s.card, { backgroundColor: c.card }]}>
+      <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text }]}>Platform Health</Text>
         <View style={s.summaryRow}>
           <SummaryPill label="Users" value={String(analytics.totalUsers ?? 0)} color={c.primary} c={c} />
@@ -161,7 +162,7 @@ function KPICard({ icon, label, value, color, c }: { icon: string; label: string
 
 function SummaryPill({ label, value, color, c }: { label: string; value: string; color: string; c: ReturnType<typeof useThemeColors> }) {
   return (
-    <View style={[s.pill, { backgroundColor: c.surface }]}>
+    <View style={[s.pill, neuInset(c)]}>
       <Text style={[s.pillValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       <Text style={[s.pillLabel, { color: c.muted }]}>{label}</Text>
     </View>
@@ -176,13 +177,13 @@ const s = StyleSheet.create({
 
   // KPI horizontal strip
   kpiStrip: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 10 },
-  kpi: { width: (screenW - 56) / 2.5, borderRadius: 14, borderWidth: 1, padding: 14, gap: 6 },
+  kpi: { width: (screenW - 56) / 2.5, borderRadius: 12, borderWidth: 1, padding: 14, gap: 6 },
   kpiIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   kpiValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
   kpiLabel: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
 
   // Cards
-  card: { marginHorizontal: spacing.md, borderRadius: 14, padding: spacing.md, marginTop: spacing.sm, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  card: { marginHorizontal: spacing.md, padding: spacing.md, marginTop: spacing.sm },
   cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', marginBottom: spacing.md },
   noData: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Manrope_400Regular' },
 
@@ -203,7 +204,7 @@ const s = StyleSheet.create({
 
   // Summary pills
   summaryRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  pill: { flex: 1, minWidth: 70, borderRadius: 10, padding: 12, alignItems: 'center', gap: 4 },
+  pill: { flex: 1, minWidth: 70, padding: 12, alignItems: 'center', gap: 4 },
   pillValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
   pillLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
 })

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator,
-  TouchableOpacity, TextInput, Modal,
+  TouchableOpacity, TextInput, Modal, Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
 interface Booking {
@@ -19,6 +20,7 @@ interface Booking {
   estimatedCost?: number
   finalCost?: number
   quoteAmount?: number
+  quoteProvided?: boolean
   quoteAccepted?: boolean
   paymentStatus: string
   rating?: number
@@ -54,6 +56,8 @@ export default function BookingsScreen() {
   const [noteModal, setNoteModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [noteText, setNoteText] = useState('')
+  const [quoteModal, setQuoteModal] = useState(false)
+  const [quoteAmount, setQuoteAmount] = useState('')
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['bookings', viewMode],
@@ -132,7 +136,7 @@ export default function BookingsScreen() {
           </View>
         ) : (
           filtered.map((b) => (
-            <View key={b.id ?? b._id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View key={b.id ?? b._id} style={[s.card, neuCard(c)]}>
               <View style={s.cardHeader}>
                 <View style={[s.statusBadge, { backgroundColor: STATUS_COLORS[b.status] + '18' }]}>
                   <Text style={[s.statusText, { color: STATUS_COLORS[b.status] }]}>
@@ -151,10 +155,17 @@ export default function BookingsScreen() {
                 {b.description}
               </Text>
 
-              {b.quoteAmount !== undefined && (
-                <Text style={[s.quoteText, { color: c.primary }]}>
-                  Quote: GHS {b.quoteAmount} {b.quoteAccepted ? '(Accepted)' : '(Pending)'}
-                </Text>
+              {(b.quoteProvided ?? b.quoteAmount !== undefined) && b.quoteAmount !== undefined && (
+                <View style={s.quoteRow}>
+                  <View style={[s.quoteBadge, { backgroundColor: c.primary + '12' }]}>
+                    <Text style={[s.quoteText, { color: c.primary }]}>Quote: GH₵{b.quoteAmount}</Text>
+                  </View>
+                  {b.quoteAccepted && (
+                    <View style={[s.quoteBadge, { backgroundColor: '#10b98118' }]}>
+                      <Text style={[s.quoteText, { color: '#10b981' }]}>Quote accepted</Text>
+                    </View>
+                  )}
+                </View>
               )}
 
               {b.rating !== undefined && (
@@ -169,6 +180,19 @@ export default function BookingsScreen() {
               <View style={s.actionsRow}>
                 {canActAsWorker ? (
                   <>
+                    {!(b.quoteProvided ?? b.quoteAmount !== undefined) &&
+                      ['pending', 'confirmed', 'in_progress'].includes(b.status) && (
+                        <TouchableOpacity
+                          style={[s.actionBtn, { backgroundColor: c.primary }]}
+                          onPress={() => {
+                            setSelectedBooking(b)
+                            setQuoteAmount('')
+                            setQuoteModal(true)
+                          }}
+                        >
+                          <Text style={s.actionBtnText}>Provide Quote</Text>
+                        </TouchableOpacity>
+                      )}
                     {b.status === 'pending' && (
                       <TouchableOpacity
                         style={[s.actionBtn, { backgroundColor: '#3b82f6' }]}
@@ -196,7 +220,50 @@ export default function BookingsScreen() {
                   </>
                 ) : (
                   <>
-                    {b.status === 'pending' && (
+                    {(b.quoteProvided ?? b.quoteAmount !== undefined) && !b.quoteAccepted &&
+                      b.status !== 'cancelled' && b.status !== 'completed' && (
+                        <>
+                          <TouchableOpacity
+                            style={[s.actionBtn, { backgroundColor: '#10b981' }]}
+                            onPress={() =>
+                              Alert.alert('Accept Quote', `Accept the quote of GH₵${b.quoteAmount}?`, [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Accept',
+                                  onPress: () =>
+                                    updateMutation.mutate(
+                                      { id: b.id ?? b._id!, body: { quoteAccepted: true } },
+                                      { onError: (e) => Alert.alert('Error', e.message) },
+                                    ),
+                                },
+                              ])
+                            }
+                          >
+                            <Text style={s.actionBtnText}>Accept Quote</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[s.actionBtn, { backgroundColor: '#ef4444' }]}
+                            onPress={() =>
+                              Alert.alert('Decline Quote', 'Declining will cancel this booking. Continue?', [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Decline',
+                                  style: 'destructive',
+                                  onPress: () =>
+                                    updateMutation.mutate(
+                                      { id: b.id ?? b._id!, body: { status: 'cancelled' } },
+                                      { onError: (e) => Alert.alert('Error', e.message) },
+                                    ),
+                                },
+                              ])
+                            }
+                          >
+                            <Text style={s.actionBtnText}>Decline</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    {b.status === 'pending' &&
+                      !((b.quoteProvided ?? b.quoteAmount !== undefined) && !b.quoteAccepted) && (
                       <TouchableOpacity
                         style={[s.actionBtn, { backgroundColor: '#ef4444' }]}
                         onPress={() => updateMutation.mutate({ id: b.id ?? b._id!, body: { status: 'cancelled' } })}
@@ -232,6 +299,49 @@ export default function BookingsScreen() {
         )}
       </ScrollView>
 
+      {/* Quote Modal (worker) */}
+      <Modal visible={quoteModal} animationType="slide" transparent>
+        <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[s.modalContent, { backgroundColor: c.card }]}>
+            <Text style={[s.modalTitle, { color: c.text }]}>Provide Quote</Text>
+            <TextInput
+              style={[s.input, neuInset(c), { color: c.text }]}
+              placeholder="Amount in GHS, e.g. 250"
+              placeholderTextColor={c.muted}
+              value={quoteAmount}
+              onChangeText={setQuoteAmount}
+              keyboardType="numeric"
+            />
+            <Text style={[s.hint, { color: c.muted }]}>
+              The requester will be able to accept or decline this quote.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: c.border }]} onPress={() => setQuoteModal(false)}>
+                <Text style={[s.modalBtnText, { color: c.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, { backgroundColor: c.primary }]}
+                onPress={() => {
+                  const amount = Number(quoteAmount)
+                  if (!Number.isFinite(amount) || amount <= 0) {
+                    Alert.alert('Invalid Amount', 'Please enter a valid quote amount.')
+                    return
+                  }
+                  updateMutation.mutate(
+                    { id: selectedBooking!.id ?? selectedBooking!._id!, body: { quoteAmount: amount } },
+                    { onError: (e) => Alert.alert('Error', e.message) },
+                  )
+                  setQuoteModal(false)
+                  setQuoteAmount('')
+                }}
+              >
+                <Text style={[s.modalBtnText, { color: '#fff' }]}>Send Quote</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Note / Rate Modal */}
       <Modal visible={noteModal} animationType="slide" transparent>
         <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
@@ -240,7 +350,7 @@ export default function BookingsScreen() {
               {selectedBooking?.status === 'completed' && selectedBooking?.rating === undefined ? 'Rate & Review' : 'Add Note'}
             </Text>
             <TextInput
-              style={[s.input, s.textarea, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+              style={[s.input, s.textarea, neuInset(c), { color: c.text }]}
               placeholder="Write your note..."
               placeholderTextColor={c.muted}
               value={noteText}
@@ -289,16 +399,18 @@ const s = StyleSheet.create({
   toggleText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   filterScroll: { marginTop: spacing.md },
   filterContent: { paddingHorizontal: spacing.lg, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginRight: 8 },
   filterChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   listContent: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  card: { padding: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
   dateText: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
   typeText: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   descText: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 18 },
+  quoteRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  quoteBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   quoteText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ratingText: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
@@ -312,9 +424,9 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
   emptySubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
   modalOverlay: { flex: 1, justifyContent: 'center', padding: spacing.lg },
-  modalContent: { borderRadius: 20, padding: spacing.lg },
+  modalContent: { borderRadius: 12, padding: spacing.lg },
   modalTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.md },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   textarea: { height: 80, textAlignVertical: 'top' },
   hint: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 },
   modalActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },

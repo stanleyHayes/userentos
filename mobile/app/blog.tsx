@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Ima
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
@@ -39,7 +40,7 @@ export default function BlogScreen() {
   function renderPost({ item }: { item: BlogPost }) {
     return (
       <TouchableOpacity
-        style={[s.card, { backgroundColor: c.white }]}
+        style={[s.card, neuCard(c)]}
         activeOpacity={0.7}
         onPress={() => router.push(`/blog-detail?id=${item.id}`)}
       >
@@ -99,12 +100,12 @@ export default function BlogScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.md, paddingBottom: 40 },
-  card: { borderRadius: 14, overflow: 'hidden' },
+  card: { overflow: 'hidden' },
   coverImage: { width: '100%', height: 160 },
   coverPlaceholder: { width: '100%', height: 120, justifyContent: 'center', alignItems: 'center' },
   cardBody: { padding: spacing.md, gap: 6 },
   tagRow: { flexDirection: 'row', gap: 6, marginBottom: 2 },
-  tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   tagText: { fontSize: 10, fontFamily: 'Manrope_600SemiBold', textTransform: 'capitalize' },
   title: { fontSize: 16, fontFamily: 'Manrope_700Bold', lineHeight: 22 },
   excerpt: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 19 },

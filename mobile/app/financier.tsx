@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -58,7 +59,31 @@ interface Contract {
 
 interface ItemsResponse<T> { items: T[] }
 
-type Tab = 'offers' | 'applications' | 'contracts'
+interface PortfolioStats {
+  totalDisbursed: number
+  totalRepaid: number
+  outstanding: number
+  activeContracts: number
+  settledContracts: number
+  defaultedContracts: number
+  inArrearsContracts: number
+  pendingApplications: number
+  contractCount: number
+  defaultRate: number
+}
+
+interface CollectionItem {
+  id: string
+  applicantId: string
+  applicantName?: string
+  status: string
+  principal: number
+  outstanding: number
+  daysOverdue: number
+  lastReminderAt?: string
+}
+
+type Tab = 'offers' | 'applications' | 'contracts' | 'collections'
 
 const productTypes = [
   { value: 'rent_advance', label: 'Rent advance' },
@@ -83,10 +108,20 @@ export default function FinancierScreen() {
     queryKey: ['financing-contracts'],
     queryFn: () => api.get<ItemsResponse<Contract>>('/financing/contracts'),
   })
+  const portfolioQ = useQuery({
+    queryKey: ['financing-portfolio'],
+    queryFn: () => api.get<PortfolioStats>('/financing/portfolio'),
+  })
+  const collectionsQ = useQuery({
+    queryKey: ['financing-collections'],
+    queryFn: () => api.get<ItemsResponse<CollectionItem>>('/financing/collections'),
+  })
 
   const offers = offersQ.data?.items ?? []
   const applications = appsQ.data?.items ?? []
   const contracts = contractsQ.data?.items ?? []
+  const portfolio = portfolioQ.data
+  const collections = collectionsQ.data?.items ?? []
 
   const activeOffers = offers.filter((o) => o.active).length
   const pendingApps = applications.filter((a) => a.status === 'submitted' || a.status === 'under_review').length
@@ -245,7 +280,33 @@ export default function FinancierScreen() {
     )
   }
 
-  const activeQuery = tab === 'offers' ? offersQ : tab === 'applications' ? appsQ : contractsQ
+  function remind(item: CollectionItem) {
+    Alert.alert(
+      'Send Reminder',
+      `Send a payment reminder to ${item.applicantName ?? 'the borrower'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remind',
+          onPress: async () => {
+            setBusyId(item.id)
+            try {
+              await api.post(`/financing/contracts/${item.id}/remind`, {})
+              qc.invalidateQueries({ queryKey: ['financing-collections'] })
+              qc.invalidateQueries({ queryKey: ['financing-portfolio'] })
+              Alert.alert('Reminder sent', 'The borrower has been notified')
+            } catch (e) {
+              Alert.alert('Error', (e as { message?: string }).message ?? 'Failed to send reminder')
+            } finally {
+              setBusyId(null)
+            }
+          },
+        },
+      ],
+    )
+  }
+
+  const activeQuery = tab === 'offers' ? offersQ : tab === 'applications' ? appsQ : tab === 'contracts' ? contractsQ : collectionsQ
   if (offersQ.isLoading && appsQ.isLoading && contractsQ.isLoading) {
     return (
       <View style={[s.center, { backgroundColor: c.background }]}>
@@ -275,7 +336,7 @@ export default function FinancierScreen() {
         {/* Stats */}
         <View style={s.statsRow}>
           {stats.map((stat) => (
-            <View key={stat.label} style={[s.stat, { backgroundColor: c.card, borderColor: c.border, borderLeftColor: stat.color }]}>
+            <View key={stat.label} style={[s.stat, neuCard(c), { borderLeftWidth: 3, borderLeftColor: stat.color }]}>
               <View style={[s.statIcon, { backgroundColor: stat.color + '18' }]}>
                 <Ionicons name={stat.icon} size={16} color={stat.color} />
               </View>
@@ -285,9 +346,30 @@ export default function FinancierScreen() {
           ))}
         </View>
 
+        {/* Portfolio stats */}
+        {portfolio && (
+          <View style={s.statsRow}>
+            {([
+              { icon: 'cash-outline' as const, label: 'Disbursed', caption: `${portfolio.contractCount} contracts`, value: formatCompact(portfolio.totalDisbursed), color: c.primary },
+              { icon: 'hourglass-outline' as const, label: 'Outstanding', caption: `${portfolio.activeContracts} active`, value: formatCompact(portfolio.outstanding), color: c.warning },
+              { icon: 'checkmark-done-outline' as const, label: 'Repaid', caption: `${portfolio.settledContracts} settled`, value: formatCompact(portfolio.totalRepaid), color: c.accent },
+              { icon: 'alert-circle-outline' as const, label: 'Default rate', caption: `${portfolio.defaultedContracts} defaulted`, value: `${portfolio.defaultRate}%`, color: portfolio.defaultRate > 5 ? c.danger : c.accent },
+            ]).map((stat) => (
+              <View key={stat.label} style={[s.stat, neuCard(c), { borderLeftWidth: 3, borderLeftColor: stat.color }]}>
+                <View style={[s.statIcon, { backgroundColor: stat.color + '18' }]}>
+                  <Ionicons name={stat.icon} size={16} color={stat.color} />
+                </View>
+                <Text style={[s.statValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
+                <Text style={[s.statLabel, { color: c.muted }]} numberOfLines={1}>{stat.label}</Text>
+                <Text style={[s.statCaption, { color: c.muted }]} numberOfLines={1}>{stat.caption}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Segments */}
-        <View style={[s.segment, { backgroundColor: c.surface, borderColor: c.border }]}>
-          {([['offers', 'Offers'], ['applications', 'Applications'], ['contracts', 'Contracts']] as [Tab, string][]).map(([key, label]) => (
+        <View style={[s.segment, neuInset(c)]}>
+          {([['offers', 'Offers'], ['applications', 'Applications'], ['contracts', 'Contracts'], ['collections', 'Collections']] as [Tab, string][]).map(([key, label]) => (
             <TouchableOpacity
               key={key}
               style={[s.segmentBtn, tab === key && { backgroundColor: c.card }]}
@@ -321,7 +403,7 @@ export default function FinancierScreen() {
               </View>
             ) : (
               offers.map((o) => (
-                <View key={o.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <View key={o.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{o.name}</Text>
@@ -394,7 +476,7 @@ export default function FinancierScreen() {
               const decidable = a.status === 'submitted' || a.status === 'under_review'
               const offer = offers.find((o) => o.id === a.offerId)
               return (
-                <View key={a.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <View key={a.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
@@ -478,7 +560,7 @@ export default function FinancierScreen() {
               const pct = cn.totalRepayable > 0 ? Math.min(100, Math.round((cn.amountRepaid / cn.totalRepayable) * 100)) : 0
               const disbursable = cn.status === 'pending_disbursement' && cn.signedByApplicant
               return (
-                <View key={cn.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <View key={cn.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
@@ -544,6 +626,64 @@ export default function FinancierScreen() {
             })
           )
         )}
+
+        {/* ── Collections ── */}
+        {tab === 'collections' && (
+          collectionsQ.isLoading ? (
+            <ActivityIndicator color={c.primary} style={{ marginTop: spacing.xl }} />
+          ) : collections.length === 0 ? (
+            <View style={s.empty}>
+              <Ionicons name="checkmark-circle-outline" size={48} color={c.muted} />
+              <Text style={[s.emptyText, { color: c.muted }]}>No overdue contracts</Text>
+              <Text style={[s.emptySub, { color: c.muted }]}>Contracts in grace, arrears, or default will appear here.</Text>
+            </View>
+          ) : (
+            collections.map((item) => {
+              const sc = contractStatusConfig[item.status] ?? contractStatusConfig.in_arrears
+              return (
+                <View key={item.id} style={[s.card, neuCard(c)]}>
+                  <View style={s.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
+                        {item.applicantName ?? `Applicant #${item.applicantId.slice(-6)}`}
+                      </Text>
+                      <Text style={[s.cardSub, { color: c.muted }]} numberOfLines={1}>
+                        {item.status.replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                    <View style={[s.badge, { backgroundColor: item.daysOverdue > 0 ? c.danger + '15' : sc.bg }]}>
+                      <View style={[s.badgeDot, { backgroundColor: item.daysOverdue > 0 ? c.danger : sc.text }]} />
+                      <Text style={[s.badgeText, { color: item.daysOverdue > 0 ? c.danger : sc.text }]}>
+                        {item.daysOverdue > 0 ? `${item.daysOverdue}d overdue` : item.status.replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={s.rows}>
+                    <Row label="Principal" value={formatCurrency(item.principal)} c={c} />
+                    <Row label="Outstanding" value={formatCurrency(item.outstanding)} c={c} />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[s.actionBtnOutline, { borderColor: c.warning }]}
+                    onPress={() => remind(item)}
+                    disabled={busyId === item.id}
+                    activeOpacity={0.85}
+                  >
+                    {busyId === item.id ? (
+                      <ActivityIndicator size="small" color={c.warning} />
+                    ) : (
+                      <>
+                        <Ionicons name="notifications-outline" size={16} color={c.warning} />
+                        <Text style={[s.actionBtnOutlineText, { color: c.warning }]}>Remind</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )
+            })
+          )
+        )}
       </ScrollView>
 
       {/* Create offer modal */}
@@ -560,7 +700,7 @@ export default function FinancierScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[s.label, { color: c.text }]}>Offer name</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={fName}
                 onChangeText={setFName}
                 placeholder="e.g. Quick Rent Advance"
@@ -588,7 +728,7 @@ export default function FinancierScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Description</Text>
               <TextInput
-                style={[s.input, s.textArea, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
                 multiline
                 numberOfLines={2}
                 value={fDesc}
@@ -600,44 +740,44 @@ export default function FinancierScreen() {
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Min amount (GHS)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fMinAmount} onChangeText={setFMinAmount} placeholder="50" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fMinAmount} onChangeText={setFMinAmount} placeholder="50" placeholderTextColor={c.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Max amount (GHS)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fMaxAmount} onChangeText={setFMaxAmount} placeholder="5000" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fMaxAmount} onChangeText={setFMaxAmount} placeholder="5000" placeholderTextColor={c.muted} />
                 </View>
               </View>
 
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Min tenure (mo)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fMinTenure} onChangeText={setFMinTenure} placeholder="1" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fMinTenure} onChangeText={setFMinTenure} placeholder="1" placeholderTextColor={c.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Max tenure (mo)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fMaxTenure} onChangeText={setFMaxTenure} placeholder="12" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fMaxTenure} onChangeText={setFMaxTenure} placeholder="12" placeholderTextColor={c.muted} />
                 </View>
               </View>
 
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>APR (%)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fRate} onChangeText={setFRate} placeholder="15" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fRate} onChangeText={setFRate} placeholder="15" placeholderTextColor={c.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Min credit score</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fMinCredit} onChangeText={setFMinCredit} placeholder="0" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fMinCredit} onChangeText={setFMinCredit} placeholder="0" placeholderTextColor={c.muted} />
                 </View>
               </View>
 
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Processing fee (%)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fFee} onChangeText={setFFee} placeholder="0" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fFee} onChangeText={setFFee} placeholder="0" placeholderTextColor={c.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Late fee (%)</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} keyboardType="numeric" value={fLateFee} onChangeText={setFLateFee} placeholder="0" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={fLateFee} onChangeText={setFLateFee} placeholder="0" placeholderTextColor={c.muted} />
                 </View>
               </View>
 
@@ -691,12 +831,13 @@ const s = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  stat: { flex: 1, borderRadius: 12, borderWidth: 1, borderLeftWidth: 3, padding: 10, gap: 3 },
+  stat: { flex: 1, padding: 10, gap: 3 },
   statIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   statValue: { fontSize: 15, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium' },
+  statCaption: { fontSize: 8, fontFamily: 'Manrope_400Regular' },
 
-  segment: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 3, marginBottom: spacing.md },
+  segment: { flexDirection: 'row', padding: 3, marginBottom: spacing.md },
   segmentBtn: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
   segmentText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
 
@@ -710,7 +851,7 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
   cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   cardSub: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 2, textTransform: 'capitalize' },
@@ -759,7 +900,7 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 17, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   textArea: { minHeight: 60, textAlignVertical: 'top' },
   fieldRow: { flexDirection: 'row', gap: spacing.sm },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },

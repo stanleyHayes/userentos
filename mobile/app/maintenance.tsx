@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatDate, formatCurrency } from '../lib/format'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
@@ -216,7 +217,7 @@ export default function MaintenanceScreen() {
             return (
               <TouchableOpacity
                 key={req.id}
-                style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}
+                style={[s.card, neuCard(c)]}
                 onPress={() => !isTenant && setSelectedReq(req)}
                 activeOpacity={0.7}
                 disabled={isTenant}
@@ -281,7 +282,7 @@ export default function MaintenanceScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[s.label, { color: c.text }]}>Property ID</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={propertyId}
                 onChangeText={setPropertyId}
                 placeholder="Property identifier"
@@ -290,7 +291,7 @@ export default function MaintenanceScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Title</Text>
               <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 value={title}
                 onChangeText={setTitle}
                 placeholder="e.g. Kitchen tap leaking"
@@ -299,7 +300,7 @@ export default function MaintenanceScreen() {
 
               <Text style={[s.label, { color: c.text }]}>Description</Text>
               <TextInput
-                style={[s.input, s.textArea, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                style={[s.input, s.textArea, neuInset(c), { color: c.text }]}
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Describe the issue in detail"
@@ -429,17 +430,18 @@ const s = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   newBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 12, borderRadius: 12, marginBottom: spacing.md,
+    paddingVertical: 12, borderRadius: 10, marginBottom: spacing.md,
   },
   newBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
   filterChip: {
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1,
   },
   filterChipText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  // Cards — depth comes from neuCard() at the call site
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   iconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
@@ -462,14 +464,15 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  // Inputs — pressed well comes from neuInset() at the call site
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
+    paddingVertical: 14, borderRadius: 10, marginTop: spacing.lg, marginBottom: spacing.md,
   },
   submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
 

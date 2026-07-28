@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator,
-  TouchableOpacity, Modal, TextInput, Alert,
+  TouchableOpacity, Modal, TextInput, Alert, Share,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import Constants from 'expo-constants'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact, formatDate } from '../lib/format'
 import { api } from '../lib/api'
+import { useAuthStore } from '../stores/authStore'
 
 interface EmployerProfile {
   id: string
@@ -63,7 +66,46 @@ interface PayrollRun {
 
 interface ItemsResponse<T> { items: T[] }
 
-type Tab = 'employees' | 'mandates' | 'payroll'
+interface DeductionsReport {
+  months: number
+  runsIncluded: number
+  grandTotal: number
+  employees: {
+    employeeId: string
+    employeeName: string
+    totalDeducted: number
+    runs: number
+    byType: Record<string, number>
+  }[]
+}
+
+interface RunReportLine {
+  employeeId: string
+  employeeName?: string
+  allocationType: string
+  amount: number
+  status: string
+  disbursementReference?: string
+  failureReason?: string
+}
+
+interface RunReport {
+  run: PayrollRun
+  employees: { employeeId: string; employeeName: string; total: number; lines: RunReportLine[] }[]
+  statusBreakdown: { disbursed: number; failed: number; queued: number; skipped: number }
+}
+
+type Tab = 'employees' | 'mandates' | 'payroll' | 'reports'
+
+// Mirrors the base-URL resolution in lib/api.ts (BASE_URL is module-private
+// there) so the CSV export can fetch text/csv outside the JSON api client.
+function resolveApiBaseUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL
+  if (envUrl) return `${envUrl}/api`
+  const hostUri = Constants.expoConfig?.hostUri
+  const host = hostUri ? hostUri.split(':')[0] : 'localhost'
+  return `http://${host}:3002/api`
+}
 
 const payrollCycles = [
   { value: 'weekly', label: 'Weekly' },
@@ -97,6 +139,21 @@ export default function EmployerScreen() {
     queryFn: () => api.get<ItemsResponse<PayrollRun>>('/employers/payroll/runs'),
     enabled: !!profile,
   })
+
+  // ── Payroll reports ──
+  const [reportMonths, setReportMonths] = useState(6)
+  const deductionsQ = useQuery({
+    queryKey: ['employer-deductions-report', reportMonths],
+    queryFn: () => api.get<DeductionsReport>(`/employers/reports/deductions?months=${reportMonths}`),
+    enabled: !!profile && tab === 'reports',
+  })
+  const [reportRunId, setReportRunId] = useState<string | null>(null)
+  const runReportQ = useQuery({
+    queryKey: ['employer-run-report', reportRunId],
+    queryFn: () => api.get<RunReport>(`/employers/payroll/runs/${reportRunId}/report`),
+    enabled: !!reportRunId,
+  })
+  const runReport = runReportQ.data ?? null
 
   const employees = employeesQ.data?.items ?? []
   const mandates = mandatesQ.data?.items ?? []
@@ -272,6 +329,30 @@ export default function EmployerScreen() {
     )
   }
 
+  // ── CSV export ──
+  const [exportingId, setExportingId] = useState<string | null>(null)
+
+  async function exportCsv(run: PayrollRun) {
+    setExportingId(run.id)
+    try {
+      const token = useAuthStore.getState().token
+      const res = await fetch(`${resolveApiBaseUrl()}/employers/payroll/runs/${run.id}/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error(`Export failed (${res.status})`)
+      const csv = await res.text()
+      try {
+        await Share.share({ message: csv, title: `payroll-${run.periodLabel}.csv` })
+      } catch {
+        // user dismissed the share sheet
+      }
+    } catch (e) {
+      Alert.alert('Export failed', (e as { message?: string }).message ?? 'Could not export CSV')
+    } finally {
+      setExportingId(null)
+    }
+  }
+
   const empStatusConfig: Record<string, { bg: string; text: string }> = {
     active: { bg: c.accent + '15', text: c.accent },
     pending: { bg: c.warning + '15', text: c.warning },
@@ -294,6 +375,12 @@ export default function EmployerScreen() {
     failed: { bg: c.danger + '15', text: c.danger },
     cancelled: { bg: c.danger + '15', text: c.danger },
   }
+  const lineStatusConfig: Record<string, { bg: string; text: string }> = {
+    disbursed: { bg: c.accent + '15', text: c.accent },
+    failed: { bg: c.danger + '15', text: c.danger },
+    queued: { bg: c.warning + '15', text: c.warning },
+    skipped: { bg: c.surface, text: c.muted },
+  }
 
   if (profileQ.isLoading) {
     return (
@@ -315,54 +402,54 @@ export default function EmployerScreen() {
             </Text>
           </View>
 
-          <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+          <View style={[s.card, neuCard(c)]}>
             <Text style={[s.formTitle, { color: c.text }]}>Employer Profile</Text>
 
             <Text style={[s.label, { color: c.text }]}>Legal name *</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={legalName} onChangeText={setLegalName} placeholder="Acme Ltd" placeholderTextColor={c.muted} />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={legalName} onChangeText={setLegalName} placeholder="Acme Ltd" placeholderTextColor={c.muted} />
 
             <Text style={[s.label, { color: c.text }]}>Trading name</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={tradingName} onChangeText={setTradingName} placeholder="Optional" placeholderTextColor={c.muted} />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={tradingName} onChangeText={setTradingName} placeholder="Optional" placeholderTextColor={c.muted} />
 
             <View style={s.fieldRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>TIN *</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={tin} onChangeText={setTin} placeholder="C0001234567" placeholderTextColor={c.muted} autoCapitalize="characters" />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={tin} onChangeText={setTin} placeholder="C0001234567" placeholderTextColor={c.muted} autoCapitalize="characters" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>SSNIT employer no.</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={ssnit} onChangeText={setSsnit} placeholder="Optional" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={ssnit} onChangeText={setSsnit} placeholder="Optional" placeholderTextColor={c.muted} />
               </View>
             </View>
 
             <Text style={[s.label, { color: c.text }]}>Industry</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={industry} onChangeText={setIndustry} placeholder="Optional" placeholderTextColor={c.muted} />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={industry} onChangeText={setIndustry} placeholder="Optional" placeholderTextColor={c.muted} />
 
             <Text style={[s.label, { color: c.text }]}>Street *</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={street} onChangeText={setStreet} placeholder="12 Independence Ave" placeholderTextColor={c.muted} />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={street} onChangeText={setStreet} placeholder="12 Independence Ave" placeholderTextColor={c.muted} />
 
             <View style={s.fieldRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>City *</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={city} onChangeText={setCity} placeholder="Accra" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={city} onChangeText={setCity} placeholder="Accra" placeholderTextColor={c.muted} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>Region *</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={region} onChangeText={setRegion} placeholder="Greater Accra" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={region} onChangeText={setRegion} placeholder="Greater Accra" placeholderTextColor={c.muted} />
               </View>
             </View>
 
             <Text style={[s.label, { color: c.text }]}>Digital address (GhanaPost GPS)</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={digitalAddress} onChangeText={setDigitalAddress} placeholder="GA-123-4567" placeholderTextColor={c.muted} autoCapitalize="characters" />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={digitalAddress} onChangeText={setDigitalAddress} placeholder="GA-123-4567" placeholderTextColor={c.muted} autoCapitalize="characters" />
 
             <View style={s.fieldRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>Contact email *</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={contactEmail} onChangeText={setContactEmail} placeholder="hr@acme.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={contactEmail} onChangeText={setContactEmail} placeholder="hr@acme.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.label, { color: c.text }]}>Contact phone *</Text>
-                <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={contactPhone} onChangeText={setContactPhone} placeholder="0302123456" placeholderTextColor={c.muted} keyboardType="phone-pad" />
+                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={contactPhone} onChangeText={setContactPhone} placeholder="0302123456" placeholderTextColor={c.muted} keyboardType="phone-pad" />
               </View>
             </View>
 
@@ -386,7 +473,7 @@ export default function EmployerScreen() {
             </View>
 
             <Text style={[s.label, { color: c.text }]}>Payday (day of month)</Text>
-            <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={payday} onChangeText={setPayday} placeholder="e.g. 28" placeholderTextColor={c.muted} keyboardType="numeric" />
+            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={payday} onChangeText={setPayday} placeholder="e.g. 28" placeholderTextColor={c.muted} keyboardType="numeric" />
 
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: c.primary }, savingProfile && s.submitDisabled]}
@@ -409,7 +496,7 @@ export default function EmployerScreen() {
     )
   }
 
-  const activeQuery = tab === 'employees' ? employeesQ : tab === 'mandates' ? mandatesQ : runsQ
+  const activeQuery = tab === 'employees' ? employeesQ : tab === 'mandates' ? mandatesQ : tab === 'payroll' ? runsQ : deductionsQ
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -424,7 +511,7 @@ export default function EmployerScreen() {
         }
       >
         {/* Profile header */}
-        <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.card, neuCard(c)]}>
           <View style={s.cardHeader}>
             <View style={[s.profileIcon, { backgroundColor: c.primary + '15' }]}>
               <Ionicons name="business" size={20} color={c.primary} />
@@ -450,8 +537,8 @@ export default function EmployerScreen() {
         </View>
 
         {/* Segments */}
-        <View style={[s.segment, { backgroundColor: c.surface, borderColor: c.border }]}>
-          {([['employees', 'Employees'], ['mandates', 'Mandates'], ['payroll', 'Payroll']] as [Tab, string][]).map(([key, label]) => (
+        <View style={[s.segment, neuInset(c)]}>
+          {([['employees', 'Employees'], ['mandates', 'Mandates'], ['payroll', 'Payroll'], ['reports', 'Reports']] as [Tab, string][]).map(([key, label]) => (
             <TouchableOpacity
               key={key}
               style={[s.segmentBtn, tab === key && { backgroundColor: c.card }]}
@@ -487,7 +574,7 @@ export default function EmployerScreen() {
               employees.map((e) => {
                 const sc = empStatusConfig[e.status] ?? empStatusConfig.pending
                 return (
-                  <View key={e.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                  <View key={e.id} style={[s.card, neuCard(c)]}>
                     <View style={s.cardHeader}>
                       <View style={[s.profileIcon, { backgroundColor: c.primary + '12' }]}>
                         <Ionicons name="person-outline" size={18} color={c.primary} />
@@ -530,7 +617,7 @@ export default function EmployerScreen() {
             mandates.map((m) => {
               const sc = mandateStatusConfig[m.status] ?? mandateStatusConfig.pending
               return (
-                <View key={m.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <View key={m.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
@@ -601,7 +688,7 @@ export default function EmployerScreen() {
                 const sc = runStatusConfig[r.status] ?? runStatusConfig.draft
                 const approvable = r.status === 'draft' || r.status === 'pending_approval'
                 return (
-                  <View key={r.id} style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                  <View key={r.id} style={[s.card, neuCard(c)]}>
                     <View style={s.cardHeader}>
                       <View style={{ flex: 1 }}>
                         <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{r.periodLabel}</Text>
@@ -619,6 +706,31 @@ export default function EmployerScreen() {
                       <Row label="Gross" value={formatCompact(r.totalGross)} c={c} />
                       <Row label="Deductions" value={formatCompact(r.totalDeductions)} c={c} />
                       <Row label="Net" value={formatCompact(r.totalNet)} c={c} />
+                    </View>
+                    <View style={s.runActions}>
+                      <TouchableOpacity
+                        style={[s.smallBtn, { borderColor: c.primary }]}
+                        onPress={() => setReportRunId(r.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="document-text-outline" size={14} color={c.primary} />
+                        <Text style={[s.smallBtnText, { color: c.primary }]}>Report</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[s.smallBtn, { borderColor: c.border }]}
+                        onPress={() => exportCsv(r)}
+                        disabled={exportingId === r.id}
+                        activeOpacity={0.8}
+                      >
+                        {exportingId === r.id ? (
+                          <ActivityIndicator size="small" color={c.text} />
+                        ) : (
+                          <>
+                            <Ionicons name="download-outline" size={14} color={c.text} />
+                            <Text style={[s.smallBtnText, { color: c.text }]}>Export CSV</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
                     </View>
                     {(approvable || r.status === 'approved') && (
                       <TouchableOpacity
@@ -643,6 +755,86 @@ export default function EmployerScreen() {
             )}
           </>
         )}
+
+        {/* ── Reports ── */}
+        {tab === 'reports' && (
+          <>
+            <View style={s.chipRow}>
+              {[3, 6, 12].map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[
+                    s.chip,
+                    { backgroundColor: c.surface, borderColor: c.border },
+                    reportMonths === m && { borderColor: c.primary, backgroundColor: c.primary + '08' },
+                  ]}
+                  onPress={() => setReportMonths(m)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.chipText, { color: reportMonths === m ? c.primary : c.muted }]}>
+                    {m} months
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {deductionsQ.isLoading ? (
+              <ActivityIndicator color={c.primary} style={{ marginTop: spacing.xl }} />
+            ) : !deductionsQ.data || deductionsQ.data.employees.length === 0 ? (
+              <View style={s.empty}>
+                <Ionicons name="analytics-outline" size={48} color={c.muted} />
+                <Text style={[s.emptyText, { color: c.muted }]}>No deductions recorded</Text>
+                <Text style={[s.emptySub, { color: c.muted }]}>
+                  Disbursed deductions from the last {reportMonths} months will appear here.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={[s.card, neuCard(c)]}>
+                  <View style={s.statRow}>
+                    <View style={s.statBox}>
+                      <Text style={[s.statValue, { color: c.text }]}>{formatCompact(deductionsQ.data.grandTotal)}</Text>
+                      <Text style={[s.statLabel, { color: c.muted }]}>Total deducted</Text>
+                    </View>
+                    <View style={s.statBox}>
+                      <Text style={[s.statValue, { color: c.text }]}>{deductionsQ.data.runsIncluded}</Text>
+                      <Text style={[s.statLabel, { color: c.muted }]}>Runs included</Text>
+                    </View>
+                    <View style={s.statBox}>
+                      <Text style={[s.statValue, { color: c.text }]}>{deductionsQ.data.employees.length}</Text>
+                      <Text style={[s.statLabel, { color: c.muted }]}>Employees</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {deductionsQ.data.employees.map((emp) => (
+                  <View key={emp.employeeId} style={[s.card, neuCard(c)]}>
+                    <View style={s.cardHeader}>
+                      <View style={[s.profileIcon, { backgroundColor: c.primary + '12' }]}>
+                        <Ionicons name="person-outline" size={18} color={c.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{emp.employeeName}</Text>
+                        <Text style={[s.cardSub, { color: c.muted }]} numberOfLines={1}>
+                          {emp.runs} run{emp.runs === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                      <Text style={[s.cardTitle, { color: c.text }]}>{formatCurrency(emp.totalDeducted)}</Text>
+                    </View>
+                    <View style={s.chipRow}>
+                      {Object.entries(emp.byType).map(([type, amount]) => (
+                        <View key={type} style={[s.typeChip, { backgroundColor: c.surface, borderColor: c.border }]}>
+                          <Text style={[s.typeChipLabel, { color: c.muted }]}>{type.replace(/_/g, ' ')}</Text>
+                          <Text style={[s.typeChipValue, { color: c.text }]}>{formatCompact(amount)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Add employee modal */}
@@ -661,24 +853,24 @@ export default function EmployerScreen() {
               </Text>
 
               <Text style={[s.label, { color: c.text }]}>Account email *</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={empEmail} onChangeText={setEmpEmail} placeholder="employee@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={empEmail} onChangeText={setEmpEmail} placeholder="employee@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
 
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Staff number</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={empStaffNumber} onChangeText={setEmpStaffNumber} placeholder="Optional" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={empStaffNumber} onChangeText={setEmpStaffNumber} placeholder="Optional" placeholderTextColor={c.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Job title</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={empJobTitle} onChangeText={setEmpJobTitle} placeholder="Optional" placeholderTextColor={c.muted} />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={empJobTitle} onChangeText={setEmpJobTitle} placeholder="Optional" placeholderTextColor={c.muted} />
                 </View>
               </View>
 
               <Text style={[s.label, { color: c.text }]}>Net monthly salary (GHS) *</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={empSalary} onChangeText={setEmpSalary} placeholder="0" placeholderTextColor={c.muted} keyboardType="numeric" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={empSalary} onChangeText={setEmpSalary} placeholder="0" placeholderTextColor={c.muted} keyboardType="numeric" />
 
               <Text style={[s.label, { color: c.text }]}>Start date *</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={empStartDate} onChangeText={setEmpStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={empStartDate} onChangeText={setEmpStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
 
               <TouchableOpacity
                 style={[s.submitBtn, { backgroundColor: c.primary }, addingEmployee && s.submitDisabled]}
@@ -716,21 +908,21 @@ export default function EmployerScreen() {
               </Text>
 
               <Text style={[s.label, { color: c.text }]}>Period label *</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={runLabel} onChangeText={setRunLabel} placeholder="e.g. January 2026" placeholderTextColor={c.muted} />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={runLabel} onChangeText={setRunLabel} placeholder="e.g. January 2026" placeholderTextColor={c.muted} />
 
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Period start *</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={runStart} onChangeText={setRunStart} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={runStart} onChangeText={setRunStart} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.label, { color: c.text }]}>Period end *</Text>
-                  <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={runEnd} onChangeText={setRunEnd} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={runEnd} onChangeText={setRunEnd} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
                 </View>
               </View>
 
               <Text style={[s.label, { color: c.text }]}>Scheduled pay date *</Text>
-              <TextInput style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]} value={runPayDate} onChangeText={setRunPayDate} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={runPayDate} onChangeText={setRunPayDate} placeholder="YYYY-MM-DD" placeholderTextColor={c.muted} autoCapitalize="none" />
 
               <TouchableOpacity
                 style={[s.submitBtn, { backgroundColor: c.primary }, creatingRun && s.submitDisabled]}
@@ -748,6 +940,82 @@ export default function EmployerScreen() {
                 )}
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Run report modal */}
+      <Modal visible={!!reportRunId} animationType="slide" transparent onRequestClose={() => setReportRunId(null)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text }]} numberOfLines={1}>
+                {runReport ? `Run Report — ${runReport.run.periodLabel}` : 'Run Report'}
+              </Text>
+              <TouchableOpacity onPress={() => setReportRunId(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={c.text} />
+              </TouchableOpacity>
+            </View>
+
+            {runReportQ.isLoading ? (
+              <ActivityIndicator color={c.primary} style={{ marginVertical: spacing.xl }} />
+            ) : !runReport ? (
+              <Text style={[s.hint, { color: c.muted }]}>Could not load this report.</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={s.chipRow}>
+                  {(Object.entries(runReport.statusBreakdown) as [keyof RunReport['statusBreakdown'], number][]).map(([status, count]) => {
+                    const sc = lineStatusConfig[status] ?? lineStatusConfig.skipped
+                    return (
+                      <View key={status} style={[s.typeChip, { backgroundColor: sc.bg, borderColor: sc.text + '30' }]}>
+                        <Text style={[s.typeChipLabel, { color: sc.text }]}>{status}</Text>
+                        <Text style={[s.typeChipValue, { color: sc.text }]}>{count}</Text>
+                      </View>
+                    )
+                  })}
+                </View>
+
+                {runReport.employees.length === 0 ? (
+                  <View style={s.empty}>
+                    <Ionicons name="receipt-outline" size={40} color={c.muted} />
+                    <Text style={[s.emptyText, { color: c.muted }]}>No deduction lines</Text>
+                  </View>
+                ) : (
+                  runReport.employees.map((emp) => (
+                    <View key={emp.employeeId} style={[s.reportEmp, { borderColor: c.border }]}>
+                      <View style={s.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>{emp.employeeName}</Text>
+                        </View>
+                        <Text style={[s.rowValue, { color: c.text }]}>{formatCurrency(emp.total)}</Text>
+                      </View>
+                      {emp.lines.map((line, i) => {
+                        const sc = lineStatusConfig[line.status] ?? lineStatusConfig.skipped
+                        return (
+                          <View key={`${line.allocationType}-${i}`} style={s.lineRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[s.rowLabel, { color: c.text, textTransform: 'capitalize' }]}>
+                                {line.allocationType.replace(/_/g, ' ')}
+                              </Text>
+                              {line.status === 'failed' && !!line.failureReason && (
+                                <Text style={[s.failText, { color: c.danger }]} numberOfLines={2}>
+                                  {line.failureReason}
+                                </Text>
+                              )}
+                            </View>
+                            <Text style={[s.rowValue, { color: c.text }]}>{formatCurrency(line.amount)}</Text>
+                            <View style={[s.badge, { backgroundColor: sc.bg }]}>
+                              <View style={[s.badgeDot, { backgroundColor: sc.text }]} />
+                              <Text style={[s.badgeText, { color: sc.text }]}>{line.status}</Text>
+                            </View>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -775,7 +1043,7 @@ const s = StyleSheet.create({
   formTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
   hint: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm, lineHeight: 18 },
 
-  segment: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 3, marginBottom: spacing.md },
+  segment: { flexDirection: 'row', padding: 3, marginBottom: spacing.md },
   segmentBtn: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
   segmentText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
 
@@ -789,7 +1057,7 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
   emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
+  card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
   cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
   cardSub: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 2, textTransform: 'capitalize' },
@@ -810,8 +1078,35 @@ const s = StyleSheet.create({
   },
   actionBtnSolidText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
 
+  runActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  smallBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 10, paddingVertical: 8, borderWidth: 1.5,
+  },
+  smallBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+
+  chipRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
+  chip: { borderRadius: 9, paddingVertical: 7, paddingHorizontal: spacing.md, borderWidth: 1.5 },
+  chipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+
+  statRow: { flexDirection: 'row' },
+  statBox: { flex: 1, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
+  statLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textAlign: 'center' },
+
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1,
+  },
+  typeChipLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
+  typeChipValue: { fontSize: 11, fontFamily: 'Manrope_700Bold' },
+
+  reportEmp: { borderTopWidth: 1, paddingTop: spacing.sm, marginTop: spacing.sm },
+  lineRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 5 },
+  failText: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
   fieldRow: { flexDirection: 'row', gap: spacing.sm },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   optionBtn: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },

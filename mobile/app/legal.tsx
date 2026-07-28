@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, 
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset, neuChip } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 
@@ -60,7 +61,7 @@ export default function LegalScreen() {
     <ScrollView style={[s.container, { backgroundColor: c.surface }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
 
       <View style={s.searchContainer}>
-        <View style={[s.searchBar, { backgroundColor: c.white, borderColor: c.border }]}>
+        <View style={[s.searchBar, neuInset(c)]}>
           <Ionicons name="search-outline" size={18} color={c.muted} />
           <TextInput style={[s.searchInput, { color: c.text }]} placeholder="Search rental laws, regulations..." placeholderTextColor={c.muted} value={search} onChangeText={setSearch} />
           {search.length > 0 && (
@@ -75,7 +76,7 @@ export default function LegalScreen() {
         {categories.map((cat) => (
           <TouchableOpacity
             key={cat}
-            style={[s.chip, { backgroundColor: c.white, borderColor: c.border }, selectedCategory === cat && { backgroundColor: c.primary, borderColor: c.primary }]}
+            style={[s.chip, neuChip(c), selectedCategory === cat && { backgroundColor: c.primary, borderColor: c.primary }]}
             onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
           >
             <Ionicons name="scale-outline" size={14} color={selectedCategory === cat ? '#ffffff' : c.primary} />
@@ -109,7 +110,7 @@ export default function LegalScreen() {
           {articles.map((article) => (
             <TouchableOpacity
               key={article.id}
-              style={[s.articleCard, { backgroundColor: c.white }]}
+              style={[s.articleCard, neuCard(c)]}
               onPress={() => setExpandedId(expandedId === article.id ? null : article.id)}
               activeOpacity={0.7}
             >
@@ -162,11 +163,11 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
   searchContainer: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 10, gap: spacing.sm, borderWidth: 1 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 10, gap: spacing.sm },
   searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_400Regular', padding: 0 },
   chipsScroll: { marginTop: spacing.md },
   chipsContainer: { paddingHorizontal: spacing.md, gap: spacing.sm },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
   chipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   aiButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 12 },
   aiButtonText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
@@ -177,7 +178,7 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
   emptySubText: { fontSize: 13, textAlign: 'center', fontFamily: 'Manrope_400Regular' },
   articleList: { paddingHorizontal: spacing.md, marginTop: spacing.sm, gap: spacing.sm },
-  articleCard: { borderRadius: 12, padding: spacing.md, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  articleCard: { padding: spacing.md },
   articleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   articleInfo: { flex: 1, marginRight: spacing.sm },
   articleTitle: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },

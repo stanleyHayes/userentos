@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
@@ -106,7 +107,7 @@ export default function ApplicationsScreen() {
     const isActing = actionLoading === item.id
 
     return (
-      <View style={[s.card, { backgroundColor: c.white }]}>
+      <View style={[s.card, neuCard(c)]}>
         {/* Top: status strip */}
         <View style={[s.strip, { backgroundColor: color + '10' }]}>
           <View style={[s.statusDot, { backgroundColor: color }]} />
@@ -252,7 +253,8 @@ const s = StyleSheet.create({
   filterChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5 },
   filterChipText: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
   list: { padding: spacing.md, gap: spacing.sm, paddingBottom: 40 },
-  card: { borderRadius: 14, overflow: 'hidden' },
+  // Cards — depth comes from neuCard() at the call site
+  card: { overflow: 'hidden' },
   strip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusLabel: { fontSize: 11, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },

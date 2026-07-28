@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../../lib/theme'
+import { neuCard, neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -120,7 +121,7 @@ export default function WorkerDetailScreen() {
         </View>
 
         {/* Stats */}
-        <View style={[s.statsCard, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.statsCard, neuCard(c)]}>
           <View style={s.statItem}>
             <Text style={[s.statValue, { color: c.primary }]}>{worker.rating.toFixed(1)}</Text>
             <Text style={[s.statLabel, { color: c.muted }]}>Rating</Text>
@@ -143,7 +144,7 @@ export default function WorkerDetailScreen() {
         </View>
 
         {/* Details */}
-        <View style={[s.section, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.text }]}>About</Text>
           <Text style={[s.bio, { color: c.textLight }]}>{worker.bio}</Text>
 
@@ -191,6 +192,7 @@ export default function WorkerDetailScreen() {
         <View>
           <Text style={[s.ctaLabel, { color: c.muted }]}>Hourly Rate</Text>
           <Text style={[s.ctaPrice, { color: c.text }]}>GHS {worker.hourlyRate}</Text>
+          <Text style={[s.ctaSub, { color: c.muted }]}>The worker will send a priced quote after your request</Text>
         </View>
         <TouchableOpacity
           style={[s.ctaBtn, { backgroundColor: c.primary }]}
@@ -213,7 +215,7 @@ export default function WorkerDetailScreen() {
             <ScrollView>
               <Text style={[s.label, { color: c.text }]}>Service Type</Text>
               <TextInput
-                style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="e.g. plumbing repair"
                 placeholderTextColor={c.muted}
                 value={type}
@@ -221,7 +223,7 @@ export default function WorkerDetailScreen() {
               />
               <Text style={[s.label, { color: c.text }]}>Description</Text>
               <TextInput
-                style={[s.input, s.textarea, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, s.textarea, neuInset(c), { color: c.text }]}
                 placeholder="Describe the work needed..."
                 placeholderTextColor={c.muted}
                 value={description}
@@ -231,7 +233,7 @@ export default function WorkerDetailScreen() {
               />
               <Text style={[s.label, { color: c.text }]}>Preferred Date (YYYY-MM-DD)</Text>
               <TextInput
-                style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="2026-06-15"
                 placeholderTextColor={c.muted}
                 value={scheduledDate}
@@ -239,7 +241,7 @@ export default function WorkerDetailScreen() {
               />
               <Text style={[s.label, { color: c.text }]}>Estimated Cost (GHS)</Text>
               <TextInput
-                style={[s.input, { color: c.text, borderColor: c.border, backgroundColor: c.surface }]}
+                style={[s.input, neuInset(c), { color: c.text }]}
                 placeholder="200"
                 placeholderTextColor={c.muted}
                 value={estimatedCost}
@@ -279,12 +281,12 @@ const s = StyleSheet.create({
   badgeRow: { flexDirection: 'row', gap: 8, marginTop: spacing.sm },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badgeText: { color: '#fff', fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
-  statsCard: { flexDirection: 'row', marginHorizontal: spacing.lg, marginTop: -20, borderRadius: 14, borderWidth: 1, paddingVertical: spacing.md, justifyContent: 'space-evenly' },
+  statsCard: { flexDirection: 'row', marginHorizontal: spacing.lg, marginTop: -20, paddingVertical: spacing.md, justifyContent: 'space-evenly' },
   statItem: { alignItems: 'center' },
   statValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
   statDivider: { width: 1, height: 32 },
-  section: { marginHorizontal: spacing.lg, marginTop: spacing.md, borderRadius: 14, borderWidth: 1, padding: spacing.md },
+  section: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.md },
   sectionTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
   bio: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: spacing.sm, lineHeight: 20 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
@@ -296,14 +298,15 @@ const s = StyleSheet.create({
   ctaBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderTopWidth: 1 },
   ctaLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
   ctaPrice: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
+  ctaSub: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2, maxWidth: 180 },
   ctaBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   ctaBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, maxHeight: '85%' },
+  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
   label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.md, marginBottom: 4 },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   textarea: { height: 80, textAlignVertical: 'top' },
   submitBtn: { marginTop: spacing.lg, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   submitBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },

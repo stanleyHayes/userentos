@@ -4,9 +4,11 @@ import {
   TouchableOpacity, TextInput, Modal, Linking,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Stack } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
+import { neuCard, neuInset } from '../lib/neu'
+import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
 
 type Category = 'furniture' | 'appliances' | 'internet' | 'moving' | 'cleaning' | 'other'
@@ -23,6 +25,8 @@ interface Business {
   city: string
   address?: string
   isVerified: boolean
+  ratingAvg?: number
+  reviewCount?: number
   createdAt: string
 }
 
@@ -41,6 +45,14 @@ interface Listing {
 interface BusinessEntry {
   business: Business
   listings: Listing[]
+}
+
+interface Review {
+  id: string
+  authorName: string
+  rating: number
+  review?: string
+  createdAt: string
 }
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -62,8 +74,13 @@ function formatPrice(n: number): string {
   return `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function LocalServicesScreen() {
   const c = useThemeColors()
+  const user = useAuthStore((st) => st.user)
   const [category, setCategory] = useState<Category | 'all'>('all')
   const [city, setCity] = useState('')
   const [search, setSearch] = useState('')
@@ -110,7 +127,7 @@ export default function LocalServicesScreen() {
       >
         <Text style={[s.subcopy, { color: c.muted }]}>Furniture, internet, moving & more near you</Text>
 
-        <View style={[s.searchWrap, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.searchWrap, neuInset(c)]}>
           <Ionicons name="search" size={18} color={c.muted} />
           <TextInput
             style={[s.searchInput, { color: c.text }]}
@@ -126,7 +143,7 @@ export default function LocalServicesScreen() {
           )}
         </View>
 
-        <View style={[s.searchWrap, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[s.searchWrap, neuInset(c)]}>
           <Ionicons name="location-outline" size={18} color={c.muted} />
           <TextInput
             style={[s.searchInput, { color: c.text }]}
@@ -198,72 +215,11 @@ export default function LocalServicesScreen() {
               </TouchableOpacity>
             </View>
             {selected && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={s.modalBadgeRow}>
-                  <View style={[s.catBadge, { backgroundColor: c.primary + '15' }]}>
-                    <Text style={[s.catText, { color: c.primary }]}>{CATEGORY_LABELS[selected.business.category]}</Text>
-                  </View>
-                  {selected.business.isVerified && (
-                    <View style={[s.catBadge, { backgroundColor: '#10b98115' }]}>
-                      <Ionicons name="shield-checkmark" size={11} color="#10b981" />
-                      <Text style={[s.catText, { color: '#10b981' }]}>Verified</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={s.modalMetaRow}>
-                  <Ionicons name="location-outline" size={13} color={c.muted} />
-                  <Text style={[s.modalMeta, { color: c.muted }]}>
-                    {selected.business.address ? `${selected.business.address}, ` : ''}{selected.business.city}
-                  </Text>
-                </View>
-
-                {selected.business.description ? (
-                  <Text style={[s.modalDesc, { color: c.text }]}>{selected.business.description}</Text>
-                ) : null}
-
-                <Text style={[s.sectionLabel, { color: c.muted }]}>LISTINGS</Text>
-                {selected.listings.length === 0 ? (
-                  <Text style={[s.modalMeta, { color: c.muted }]}>No active listings right now.</Text>
-                ) : (
-                  selected.listings.map((l) => (
-                    <View key={l.id} style={[s.modalListing, { backgroundColor: c.surface, borderColor: c.border }]}>
-                      <View style={s.listingRow}>
-                        <Ionicons name={TYPE_ICONS[l.type]} size={15} color={c.primary} />
-                        <Text style={[s.listingTitle, { color: c.text }]} numberOfLines={1}>{l.title}</Text>
-                        {l.type === 'discount' && l.promoText ? (
-                          <Text style={s.promoText} numberOfLines={1}>{l.promoText}</Text>
-                        ) : l.price != null ? (
-                          <Text style={[s.listingPrice, { color: c.text }]}>{formatPrice(l.price)}</Text>
-                        ) : null}
-                      </View>
-                      {l.description ? (
-                        <Text style={[s.listingDesc, { color: c.muted }]}>{l.description}</Text>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-
-                <Text style={[s.sectionLabel, { color: c.muted }]}>CONTACT</Text>
-                <TouchableOpacity
-                  style={[s.contactRow, { backgroundColor: c.surface, borderColor: c.border }]}
-                  onPress={() => Linking.openURL(`tel:${selected.business.phone}`)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="call-outline" size={16} color={c.primary} />
-                  <Text style={[s.contactText, { color: c.primary }]}>{selected.business.phone}</Text>
-                </TouchableOpacity>
-                {selected.business.email ? (
-                  <TouchableOpacity
-                    style={[s.contactRow, { backgroundColor: c.surface, borderColor: c.border }]}
-                    onPress={() => Linking.openURL(`mailto:${selected.business.email}`)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="mail-outline" size={16} color={c.primary} />
-                    <Text style={[s.contactText, { color: c.primary }]}>{selected.business.email}</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </ScrollView>
+              <BusinessDetail
+                entry={selected}
+                isOwner={selected.business.ownerId === user?.id}
+                c={c}
+              />
             )}
           </View>
         </View>
@@ -285,7 +241,7 @@ function BusinessCard({
 
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}
+      style={[s.card, neuCard(c)]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -304,6 +260,13 @@ function BusinessCard({
       <View style={s.cityRow}>
         <Ionicons name="location-outline" size={12} color={c.muted} />
         <Text style={[s.city, { color: c.muted }]}>{business.city}</Text>
+        {business.reviewCount ? (
+          <>
+            <Ionicons name="star" size={12} color="#f59e0b" style={{ marginLeft: 6 }} />
+            <Text style={[s.ratingValue, { color: c.text }]}>{(business.ratingAvg ?? 0).toFixed(1)}</Text>
+            <Text style={[s.ratingCount, { color: c.muted }]}>({business.reviewCount})</Text>
+          </>
+        ) : null}
       </View>
 
       {business.description ? (
@@ -311,7 +274,7 @@ function BusinessCard({
       ) : null}
 
       {preview.length > 0 && (
-        <View style={[s.listingsBox, { backgroundColor: c.surface }]}>
+        <View style={[s.listingsBox, neuInset(c)]}>
           {preview.map((l) => (
             <View key={l.id} style={s.listingRow}>
               <Ionicons name={TYPE_ICONS[l.type]} size={14} color={c.primary} />
@@ -338,6 +301,337 @@ function BusinessCard({
   )
 }
 
+function BusinessDetail({
+  entry, isOwner, c,
+}: {
+  entry: BusinessEntry
+  isOwner: boolean
+  c: ReturnType<typeof useThemeColors>
+}) {
+  const qc = useQueryClient()
+  const { business, listings } = entry
+
+  const [inquiryTarget, setInquiryTarget] = useState<{ listingId?: string } | null>(null)
+  const [reviewFormOpen, setReviewFormOpen] = useState(false)
+  const [rating, setRating] = useState(0)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [savingReview, setSavingReview] = useState(false)
+
+  const reviewsQuery = useQuery({
+    queryKey: ['business-reviews', business.id],
+    queryFn: () => api.get<{ items: Review[]; canReview: boolean }>(`/businesses/${business.id}/reviews`),
+  })
+  const reviews = reviewsQuery.data?.items ?? []
+
+  async function submitReview() {
+    if (rating < 1) {
+      setReviewError('Tap a star to choose a rating')
+      return
+    }
+    setSavingReview(true)
+    setReviewError(null)
+    try {
+      await api.post(`/businesses/${business.id}/reviews`, {
+        rating,
+        review: reviewText.trim() || undefined,
+      })
+      qc.invalidateQueries({ queryKey: ['business-reviews', business.id] })
+      qc.invalidateQueries({ queryKey: ['businesses'] })
+      setReviewFormOpen(false)
+      setRating(0)
+      setReviewText('')
+    } catch (e) {
+      setReviewError((e as { message?: string }).message ?? 'Failed to save review')
+    } finally {
+      setSavingReview(false)
+    }
+  }
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={s.modalBadgeRow}>
+        <View style={[s.catBadge, { backgroundColor: c.primary + '15' }]}>
+          <Text style={[s.catText, { color: c.primary }]}>{CATEGORY_LABELS[business.category]}</Text>
+        </View>
+        {business.isVerified && (
+          <View style={[s.catBadge, { backgroundColor: '#10b98115' }]}>
+            <Ionicons name="shield-checkmark" size={11} color="#10b981" />
+            <Text style={[s.catText, { color: '#10b981' }]}>Verified</Text>
+          </View>
+        )}
+        {business.reviewCount ? (
+          <View style={[s.catBadge, { backgroundColor: '#f59e0b15' }]}>
+            <Ionicons name="star" size={11} color="#f59e0b" />
+            <Text style={[s.catText, { color: '#f59e0b' }]}>
+              {(business.ratingAvg ?? 0).toFixed(1)} ({business.reviewCount})
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={s.modalMetaRow}>
+        <Ionicons name="location-outline" size={13} color={c.muted} />
+        <Text style={[s.modalMeta, { color: c.muted }]}>
+          {business.address ? `${business.address}, ` : ''}{business.city}
+        </Text>
+      </View>
+
+      {business.description ? (
+        <Text style={[s.modalDesc, { color: c.text }]}>{business.description}</Text>
+      ) : null}
+
+      {!isOwner && (
+        <TouchableOpacity
+          style={[s.quoteBtn, { backgroundColor: c.primary }]}
+          onPress={() => setInquiryTarget({})}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color="#fff" />
+          <Text style={s.quoteBtnText}>Request quote</Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={[s.sectionLabel, { color: c.muted }]}>LISTINGS</Text>
+      {listings.length === 0 ? (
+        <Text style={[s.modalMeta, { color: c.muted }]}>No active listings right now.</Text>
+      ) : (
+        listings.map((l) => (
+          <View key={l.id} style={[s.modalListing, neuInset(c)]}>
+            <View style={s.listingRow}>
+              <Ionicons name={TYPE_ICONS[l.type]} size={15} color={c.primary} />
+              <Text style={[s.listingTitle, { color: c.text }]} numberOfLines={1}>{l.title}</Text>
+              {l.type === 'discount' && l.promoText ? (
+                <Text style={s.promoText} numberOfLines={1}>{l.promoText}</Text>
+              ) : l.price != null ? (
+                <Text style={[s.listingPrice, { color: c.text }]}>{formatPrice(l.price)}</Text>
+              ) : null}
+            </View>
+            {l.description ? (
+              <Text style={[s.listingDesc, { color: c.muted }]}>{l.description}</Text>
+            ) : null}
+            {!isOwner && (
+              <TouchableOpacity
+                style={s.interestBtn}
+                onPress={() => setInquiryTarget({ listingId: l.id })}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Ionicons name="chatbubble-outline" size={12} color={c.primary} />
+                <Text style={[s.interestBtnText, { color: c.primary }]}>I'm interested</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))
+      )}
+
+      <Text style={[s.sectionLabel, { color: c.muted }]}>CONTACT</Text>
+      <TouchableOpacity
+        style={[s.contactRow, neuInset(c)]}
+        onPress={() => Linking.openURL(`tel:${business.phone}`)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="call-outline" size={16} color={c.primary} />
+        <Text style={[s.contactText, { color: c.primary }]}>{business.phone}</Text>
+      </TouchableOpacity>
+      {business.email ? (
+        <TouchableOpacity
+          style={[s.contactRow, neuInset(c)]}
+          onPress={() => Linking.openURL(`mailto:${business.email}`)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="mail-outline" size={16} color={c.primary} />
+          <Text style={[s.contactText, { color: c.primary }]}>{business.email}</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <Text style={[s.sectionLabel, { color: c.muted }]}>REVIEWS</Text>
+      {reviewsQuery.isLoading ? (
+        <ActivityIndicator color={c.primary} style={{ marginVertical: spacing.sm }} />
+      ) : reviews.length === 0 ? (
+        <Text style={[s.modalMeta, { color: c.muted }]}>No reviews yet.</Text>
+      ) : (
+        reviews.map((r) => (
+          <View key={r.id} style={[s.reviewCard, neuInset(c)]}>
+            <View style={s.reviewHeader}>
+              <Text style={[s.reviewAuthor, { color: c.text }]} numberOfLines={1}>{r.authorName}</Text>
+              <StarRow rating={r.rating} />
+              <Text style={[s.reviewDate, { color: c.muted }]}>{formatDate(r.createdAt)}</Text>
+            </View>
+            {r.review ? (
+              <Text style={[s.reviewBody, { color: c.text }]}>{r.review}</Text>
+            ) : null}
+          </View>
+        ))
+      )}
+      {!isOwner && (
+        reviewFormOpen ? (
+          <View style={[s.reviewCard, neuInset(c)]}>
+            <View style={s.starPicker}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => setRating(i)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Ionicons name={i <= rating ? 'star' : 'star-outline'} size={26} color="#f59e0b" />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={[s.inquiryInput, neuInset(c), { color: c.text }]}
+              placeholder="Share your experience (optional)"
+              placeholderTextColor={c.muted}
+              multiline
+              numberOfLines={3}
+              value={reviewText}
+              onChangeText={setReviewText}
+            />
+            {reviewError ? (
+              <Text style={[s.formError, { color: c.danger }]}>{reviewError}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={[s.quoteBtn, { backgroundColor: c.primary, marginTop: 0 }, savingReview && { opacity: 0.6 }]}
+              onPress={submitReview}
+              disabled={savingReview}
+              activeOpacity={0.85}
+            >
+              {savingReview ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.quoteBtnText}>Submit review</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[s.writeBtn, { borderColor: c.primary }]}
+            onPress={() => setReviewFormOpen(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={14} color={c.primary} />
+            <Text style={[s.writeBtnText, { color: c.primary }]}>Write a review</Text>
+          </TouchableOpacity>
+        )
+      )}
+
+      {inquiryTarget && (
+        <InquiryModal
+          businessId={business.id}
+          businessName={business.name}
+          listingId={inquiryTarget.listingId}
+          onClose={() => setInquiryTarget(null)}
+          c={c}
+        />
+      )}
+    </ScrollView>
+  )
+}
+
+function InquiryModal({
+  businessId, businessName, listingId, onClose, c,
+}: {
+  businessId: string
+  businessName: string
+  listingId?: string
+  onClose: () => void
+  c: ReturnType<typeof useThemeColors>
+}) {
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setSending(true)
+    setError(null)
+    try {
+      await api.post(`/businesses/${businessId}/inquiries`, {
+        listingId,
+        message: message.trim() || undefined,
+      })
+      setSent(true)
+    } catch (e) {
+      setError((e as { message?: string }).message ?? 'Failed to send inquiry')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <View style={[s.modalContent, { backgroundColor: c.card }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: c.text }]} numberOfLines={1}>
+              {sent ? 'Inquiry sent' : 'Request quote'}
+            </Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={c.text} />
+            </TouchableOpacity>
+          </View>
+          {sent ? (
+            <View style={s.sentWrap}>
+              <Ionicons name="checkmark-circle" size={44} color="#10b981" />
+              <Text style={[s.sentTitle, { color: c.text }]}>Inquiry sent to {businessName}</Text>
+              <Text style={[s.sentSub, { color: c.muted }]}>The business will contact you.</Text>
+              <TouchableOpacity
+                style={[s.quoteBtn, { backgroundColor: c.primary, alignSelf: 'stretch' }]}
+                onPress={onClose}
+                activeOpacity={0.85}
+              >
+                <Text style={s.quoteBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={[s.inquirySub, { color: c.muted }]}>
+                Let {businessName} know what you need — they'll reach out directly.
+              </Text>
+              <TextInput
+                style={[s.inquiryInput, neuInset(c), { color: c.text }]}
+                placeholder="Message (optional)"
+                placeholderTextColor={c.muted}
+                multiline
+                numberOfLines={3}
+                value={message}
+                onChangeText={setMessage}
+              />
+              {error ? (
+                <Text style={[s.formError, { color: c.danger }]}>{error}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={[s.quoteBtn, { backgroundColor: c.primary, marginTop: 0 }, sending && { opacity: 0.6 }]}
+                onPress={submit}
+                disabled={sending}
+                activeOpacity={0.85}
+              >
+                {sending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane-outline" size={15} color="#fff" />
+                    <Text style={s.quoteBtnText}>Send inquiry</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function StarRow({ rating, size = 12 }: { rating: number; size?: number }) {
+  return (
+    <View style={s.starRow}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Ionicons key={i} name={i <= Math.round(rating) ? 'star' : 'star-outline'} size={size} color="#f59e0b" />
+      ))}
+    </View>
+  )
+}
+
 function FilterChip({
   label, active, onPress, c,
 }: {
@@ -360,11 +654,11 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
   subcopy: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_400Regular' },
   filterScroll: { marginHorizontal: -spacing.lg },
   filterContent: { paddingHorizontal: spacing.lg, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   filterChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
   loadingWrap: { alignItems: 'center', marginTop: 40, gap: spacing.sm },
   loadingText: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
@@ -374,7 +668,7 @@ const s = StyleSheet.create({
   clearBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, marginTop: spacing.sm },
   clearBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
 
-  card: { borderRadius: 14, borderWidth: 1, padding: spacing.md, gap: 6 },
+  card: { padding: spacing.md, gap: 6 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
   name: { fontSize: 15, fontFamily: 'Manrope_700Bold', flexShrink: 1 },
@@ -383,7 +677,7 @@ const s = StyleSheet.create({
   cityRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   city: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
   desc: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17 },
-  listingsBox: { borderRadius: 8, padding: 10, gap: 6, marginTop: 2 },
+  listingsBox: { padding: 10, gap: 6, marginTop: 2 },
   listingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   listingTitle: { fontSize: 12, fontFamily: 'Manrope_500Medium', flex: 1 },
   listingPrice: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
@@ -401,8 +695,30 @@ const s = StyleSheet.create({
   modalMeta: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
   modalDesc: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 19, marginBottom: spacing.sm },
   sectionLabel: { fontSize: 9, fontFamily: 'Manrope_700Bold', letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.sm },
-  modalListing: { borderRadius: 8, borderWidth: 1, padding: 10, gap: 4, marginBottom: 6 },
+  modalListing: { padding: 10, gap: 4, marginBottom: 6 },
   listingDesc: { fontSize: 11, fontFamily: 'Manrope_400Regular', lineHeight: 16 },
-  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, borderWidth: 1, padding: 12, marginBottom: 6 },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginBottom: 6 },
   contactText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+
+  ratingValue: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
+  ratingCount: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  starRow: { flexDirection: 'row', gap: 2 },
+  starPicker: { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 4 },
+  quoteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, marginTop: spacing.sm },
+  quoteBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  interestBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, alignSelf: 'flex-start' },
+  interestBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  reviewCard: { padding: 10, gap: 6, marginBottom: 6 },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reviewAuthor: { fontSize: 12, fontFamily: 'Manrope_700Bold', flex: 1 },
+  reviewDate: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
+  reviewBody: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17 },
+  writeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, marginTop: 4 },
+  writeBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  inquirySub: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 19, marginBottom: spacing.sm },
+  inquiryInput: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular', minHeight: 70, textAlignVertical: 'top', marginBottom: spacing.sm },
+  formError: { fontSize: 12, fontFamily: 'Manrope_500Medium', marginBottom: spacing.sm },
+  sentWrap: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
+  sentTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', textAlign: 'center' },
+  sentSub: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center' },
 })

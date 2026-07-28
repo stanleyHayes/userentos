@@ -16,14 +16,19 @@ import {
   useCreateBusinessListing,
   useUpdateBusinessListing,
   useDeleteBusinessListing,
+  useMyBusinessInquiries,
+  useMyBusinessAnalytics,
+  useUpdateBusinessInquiry,
   businessCategoryLabel,
   BUSINESS_CATEGORY_OPTIONS,
   type Business,
   type BusinessCategory,
   type BusinessListing,
+  type BusinessInquiry,
+  type BusinessInquiryStatus,
 } from '@/hooks/useApi'
 import toast from 'react-hot-toast'
-import { Store, Package, Truck, Percent, Plus, Loader2, Trash2, MapPin, Phone, PackageCheck, Tag } from 'lucide-react'
+import { Store, Package, Truck, Percent, Plus, Loader2, Trash2, MapPin, Phone, PackageCheck, Tag, Inbox, Eye, TrendingUp, Mail, CheckCircle2, XCircle } from 'lucide-react'
 
 const LISTING_TYPE_OPTIONS: { value: BusinessListing['type']; label: string }[] = [
   { value: 'product', label: 'Product' },
@@ -180,6 +185,10 @@ function BusinessOverview({ business, listings }: { business: Business; listings
         }
       />
 
+      <BusinessAnalyticsCards fallbackListings={listings.length} />
+
+      <InquiryPipeline />
+
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
         <DashboardMetricCard label="Total Listings" value={String(listings.length)} sub={`${listings.filter((l) => l.isActive).length} active`} accent="#3b82f6" icon={<Package size={18} />} />
         <DashboardMetricCard label="Active Discounts" value={String(activeDiscounts)} sub="Promos visible to renters" accent="#f59e0b" icon={<Tag size={18} />} />
@@ -253,6 +262,98 @@ function BusinessOverview({ business, listings }: { business: Business; listings
         </div>
       </Modal>
     </div>
+  )
+}
+
+const INQUIRY_STATUS: { value: BusinessInquiryStatus; label: string; icon: React.ReactNode }[] = [
+  { value: 'new', label: 'New', icon: <Inbox size={13} /> },
+  { value: 'contacted', label: 'Contacted', icon: <Phone size={13} /> },
+  { value: 'won', label: 'Won', icon: <CheckCircle2 size={13} /> },
+  { value: 'lost', label: 'Lost', icon: <XCircle size={13} /> },
+]
+
+function BusinessAnalyticsCards({ fallbackListings }: { fallbackListings: number }) {
+  const { data } = useMyBusinessAnalytics()
+  return (
+    <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <DashboardMetricCard label="Profile Views" value={String(data?.profileViews ?? 0)} sub="Directory profile opens" accent="#3b82f6" icon={<Eye size={18} />} />
+      <DashboardMetricCard label="Listing Views" value={String(data?.listingViews ?? 0)} sub={`${fallbackListings} published listings`} accent="#8b5cf6" icon={<Package size={18} />} />
+      <DashboardMetricCard label="Inquiries" value={String(data?.totalInquiries ?? 0)} sub={`${data?.newInquiries ?? 0} need a response`} accent="#f59e0b" icon={<Inbox size={18} />} />
+      <DashboardMetricCard label="Conversion" value={`${data?.conversionRate ?? 0}%`} sub={`${data?.wonInquiries ?? 0} inquiries won`} accent="#10b981" icon={<TrendingUp size={18} />} />
+    </div>
+  )
+}
+
+function InquiryPipeline() {
+  const [filter, setFilter] = useState<BusinessInquiryStatus | ''>('')
+  const { data, isLoading } = useMyBusinessInquiries(filter)
+  const update = useUpdateBusinessInquiry()
+  const inquiries = data?.items ?? []
+
+  async function move(inquiry: BusinessInquiry, status: BusinessInquiryStatus) {
+    try {
+      await update.mutateAsync({ id: inquiry.id, status })
+      toast.success(`Inquiry marked ${status}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update inquiry')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-sm">Inquiry pipeline</CardTitle>
+            <p className="mt-1 text-xs text-muted dark:text-gray-400">Follow every renter request from first contact to a won opportunity.</p>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <button type="button" onClick={() => setFilter('')} className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${filter === '' ? 'bg-primary text-white' : 'neumorphic-icon text-muted'}`}>All</button>
+            {INQUIRY_STATUS.map((item) => (
+              <button key={item.value} type="button" onClick={() => setFilter(item.value)} className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${filter === item.value ? 'bg-primary text-white' : 'neumorphic-icon text-muted'}`}>
+                {item.icon}{item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-primary" /></div>
+        ) : inquiries.length === 0 ? (
+          <EmptyState preset="general" icon={<Inbox size={36} />} title="No inquiries here" description={filter ? `No ${filter} inquiries right now.` : 'New quote and interest requests from renters will appear here.'} compact />
+        ) : (
+          <div className="space-y-2">
+            {inquiries.map((inquiry) => (
+              <div key={inquiry.id} className="rounded-xl border border-border/70 p-3 dark:border-[#252a3a]">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-bold text-primary-dark dark:text-white">{inquiry.requesterName}</p>
+                      <Badge variant={inquiry.status === 'won' ? 'success' : inquiry.status === 'lost' ? 'danger' : inquiry.status === 'new' ? 'warning' : 'default'} className="text-[9px] capitalize">{inquiry.status}</Badge>
+                      {inquiry.listingTitle && <span className="text-[11px] text-muted">Re: {inquiry.listingTitle}</span>}
+                    </div>
+                    {inquiry.message && <p className="mt-1.5 text-xs leading-relaxed text-muted dark:text-gray-400">{inquiry.message}</p>}
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <a href={`tel:${inquiry.requesterPhone}`} className="flex items-center gap-1 font-semibold text-primary hover:underline"><Phone size={11} />{inquiry.requesterPhone}</a>
+                      {inquiry.requesterEmail && <a href={`mailto:${inquiry.requesterEmail}`} className="flex items-center gap-1 font-semibold text-primary hover:underline"><Mail size={11} />{inquiry.requesterEmail}</a>}
+                      <span className="text-muted">{new Date(inquiry.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1 lg:justify-end">
+                    {INQUIRY_STATUS.filter((item) => item.value !== inquiry.status).map((item) => (
+                      <button key={item.value} type="button" disabled={update.isPending} onClick={() => void move(inquiry, item.value)} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-semibold text-muted transition-colors hover:border-primary/50 hover:text-primary dark:border-[#252a3a]">
+                        {item.icon}{item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
