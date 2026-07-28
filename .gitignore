@@ -30,3 +30,4 @@ mobile/types/shared.ts
 venv/
 __pycache__/
 *.pyc
+.raven/
