@@ -190,39 +190,39 @@ function BreakdownPill({ label, value, color, c }: { label: string; value: strin
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
-  emptyTitle: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
-  emptyDesc: { fontSize: 13, textAlign: 'center', fontFamily: 'Manrope_400Regular' },
+  emptyTitle: { fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
+  emptyDesc: { fontSize: 13, textAlign: 'center', fontFamily: 'Outfit_400Regular' },
 
   // KPI horizontal strip
   kpiStrip: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 10 },
   kpi: { width: (screenW - 56) / 2.5, borderRadius: 14, borderWidth: 1, padding: 14, gap: 6 },
   kpiIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  kpiValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
-  kpiLabel: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
+  kpiValue: { fontSize: 18, fontFamily: 'Outfit_800ExtraBold' },
+  kpiLabel: { fontSize: 11, fontFamily: 'Outfit_500Medium' },
 
   // Cards — depth comes from neuCard() at the call site
   card: { marginHorizontal: spacing.md, padding: spacing.md, marginTop: spacing.sm },
-  cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', marginBottom: spacing.md },
-  noData: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Manrope_400Regular' },
+  cardTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold', marginBottom: spacing.md },
+  noData: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Outfit_400Regular' },
 
   // Chart
   chartWrap: { gap: 10 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  barMonth: { width: 42, fontSize: 10, fontFamily: 'Manrope_500Medium' },
+  barMonth: { width: 42, fontSize: 10, fontFamily: 'Outfit_500Medium' },
   barTrack: { flex: 1, height: 18, borderRadius: 9, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 9 },
-  barAmt: { width: 65, fontSize: 10, fontFamily: 'Manrope_600SemiBold', textAlign: 'right' },
+  barAmt: { width: 65, fontSize: 10, fontFamily: 'Outfit_600SemiBold', textAlign: 'right' },
 
   // Breakdown
   breakdownRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   pill: { flex: 1, minWidth: 70, padding: 12, alignItems: 'center', gap: 4 },
-  pillValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
-  pillLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
+  pillValue: { fontSize: 18, fontFamily: 'Outfit_800ExtraBold' },
+  pillLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
 
   // Progress
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  progressPct: { fontSize: 16, fontFamily: 'Manrope_800ExtraBold' },
+  progressPct: { fontSize: 16, fontFamily: 'Outfit_800ExtraBold' },
   progressTrack: { height: 10, borderRadius: 5, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 5 },
-  progressLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 6 },
+  progressLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 6 },
 })

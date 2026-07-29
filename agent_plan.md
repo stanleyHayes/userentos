@@ -6,6 +6,29 @@
 
 ---
 
+## Role Capabilities — Full Completion (2026-07-29, takeover lane)
+
+- [x] Reconciled Kimi's in-flight P2 work without discarding unrelated shared-worktree changes.
+- [x] Tenant: mobile passport/share flow, neighborhood-review insights, rental-history export.
+- [x] Landlord: renewal offers, Ghana Card verification/badge, subscription-aware bulk property import.
+- [x] Agent/property manager: public agency profile, scoped delegation enforcement, performance analytics.
+- [x] Service provider: portfolio media, recurring jobs, wallet payout requests, verification-tier ranking.
+- [x] Local business: orders, campaigns/new-mover targeting, featured subscriptions, stock and image catalogs.
+- [x] Financier: decisioning context, offer-targeting analytics, scoped BoG contract export.
+- [x] Employer: bulk employee import, housing-benefit workflows, processed-payroll compliance export.
+- [x] Government/admin: housing-demand dashboards, consent-gated tax aggregation, fraud watch, anonymized national export.
+- [x] Developer: dedicated role/registration, market and anonymized demographic analytics, off-plan workflows and public listings.
+- [x] Cross-cutting: web/mobile navigation, role typing, authorization, scoped workflow ledger, financial reversal safety, CSV auth, public routes, i18n, and focused capability-logic tests.
+- [x] Mobile redesign parity: retained the 59-screen neumorphic redesign, upgraded the tenant-passport capability surface, replaced raw role-route slugs with polished navigation titles, and aligned the responsive auth experience with web through Outfit typography, RentOS watermarks, raised/inset neumorphic surfaces, and reduced-motion-aware interaction animation.
+- [x] Auth action hierarchy: preserved a compact secondary Back action and a dominant Continue/Create action across web and mobile registration breakpoints.
+- [x] Verification: shared-type sync; server/client/mobile typechecks and lint; 61/61 server tests; client/server production build; Expo dependency compatibility; fresh web and Android mobile exports; `git diff --check`.
+- [x] Release E2E: 30/30 Playwright tests passed in one uninterrupted run, including role-capability authorization/workflows and post-splash mobile-auth visual gates at 390×844 and 1280×900 with explicit Outfit and zero horizontal overflow.
+- [x] Live runtime: configured MongoDB connected; health and public off-plan endpoints returned 200; protected workflows returned 401 without a session; developer market analytics returned 200 for a developer session and 403 for a tenant.
+
+**Coordination note:** This lane preserved the existing dirty worktree and Kimi's committed/uncommitted capability work, then completed and audited the shared server, web, mobile, type, and ledger surfaces in place.
+
+**Native runtime note:** Android and iOS bundles were verified through production exports. Local device capture was blocked below the app layer by a hanging Android emulator and an unavailable Xcode 26.5 simulator runtime; the responsive Expo-web auth runtime was therefore used for the two rendered viewport gates.
+
 ## Role Capabilities — P1 Complete (2026-07-28, kimi lane)
 
 - [x] P1.1 Local business depth: inquiries pipeline, verified-customer reviews, analytics (server+web+mobile).

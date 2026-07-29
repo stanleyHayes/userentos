@@ -210,7 +210,13 @@ export const propertyController = {
       return
     }
 
-    success(res, { ...property, id: (property._id as Types.ObjectId).toString() })
+    const landlord = await User.findById(property.landlordId).select('firstName lastName isVerified verificationStatus').lean()
+    success(res, {
+      ...property,
+      id: (property._id as Types.ObjectId).toString(),
+      landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
+      landlordVerified: landlord?.isVerified || landlord?.verificationStatus === 'verified',
+    })
   },
 
   create: async (req: Request, res: Response) => {
@@ -234,6 +240,23 @@ export const propertyController = {
 
     cache.invalidatePattern('semantic-search:*').catch(() => {})
     success(res, result.data, 'Property created', result.status)
+  },
+
+  bulkCreate: async (req: Request, res: Response) => {
+    const parsed = z.object({ items: z.array(createPropertySchema).min(1).max(100) }).safeParse(req.body)
+    if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const created: unknown[] = []
+    const failures: { row: number; error: string }[] = []
+    for (const [index, item] of parsed.data.items.entries()) {
+      const result = await propertyService.create(item, req.user!.userId)
+      if (result.error || !result.data) {
+        failures.push({ row: index + 2, error: result.error ?? 'Could not create property' })
+        if (result.status === 403) break
+      } else {
+        created.push(result.data)
+      }
+    }
+    success(res, { created, failures }, `${created.length} properties imported`, created.length ? 201 : 400)
   },
 
   update: async (req: Request, res: Response) => {

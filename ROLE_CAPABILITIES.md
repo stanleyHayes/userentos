@@ -1,21 +1,20 @@
 # RentOS — Role Capabilities
 
-Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
-(P2 = next, P3 = later). Statuses as of 2026-07-28 (commit `1c6796f`).
+Per-user-type capabilities and their shipped status as of 2026-07-29.
 
 ## Status at a glance
 
 | Role | P1 (this phase) | Remaining (P2/P3) |
 |---|---|---|
-| 👤 Tenant | ✅ Complete | 3 items |
-| 🏠 Landlord | ✅ Complete | 3 items |
-| 🏢 Agent / Property Manager | ✅ Complete | 3 items |
-| 🔧 Service Provider | ✅ Complete | 3 items |
-| 🛒 Local Business | ✅ Complete | 5 items |
-| 🏦 Financier | ✅ Complete | 3 items |
-| 🏢 Employer | ✅ Complete (bulk-invite UI pending) | 3 items |
-| 🏛 Government / Admin | 1 P1 item left | 3 items |
-| 🏗 Developer | Not started (marketing only) | 2 items |
+| 👤 Tenant | ✅ Complete | 0 |
+| 🏠 Landlord | ✅ Complete | 0 |
+| 🏢 Agent / Property Manager | ✅ Complete | 0 |
+| 🔧 Service Provider | ✅ Complete | 0 |
+| 🛒 Local Business | ✅ Complete | 0 |
+| 🏦 Financier | ✅ Complete | 0 |
+| 🏢 Employer | ✅ Complete | 0 |
+| 🏛 Government / Admin | ✅ Complete | 0 |
+| 🏗 Developer | ✅ Complete | 0 |
 
 ---
 
@@ -32,10 +31,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Local services directory
 - ✅ Move-in checklist driven by the agreement's city (web + mobile)
 
-**Left**
-- P2 Tenant passport share view on mobile (exists on web)
-- P2 Community reviews / neighborhood insights
-- P3 Rent reporting to credit bureaus (exportable rental history)
+- ✅ Tenant passport preview and secure share-link flow on mobile
+- ✅ Community neighborhood insights aggregated from verified property reviews
+- ✅ Exportable rental-history CSV for credit-bureau reporting
 
 ## 🏠 Landlord
 
@@ -50,10 +48,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Expense tracking per property (repairs, levies, utilities…)
 - ✅ Vacancy dashboard (occupancy %, days-on-market, uncollected rent)
 
-**Left**
-- P2 Automated rent escalation / renewal offers at term end
-- P2 Landlord verification badge flow (Ghana Card check exists — surface it)
-- P3 Bulk property import (CSV)
+- ✅ Automated renewal offers with proposed rent/end date and tenant accept/decline
+- ✅ Ghana Card verification request/review flow and verified landlord badge on listings
+- ✅ Bulk property import from CSV with row-level failures and subscription-limit enforcement
 
 ## 🏢 Property Manager / Agent
 
@@ -64,10 +61,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Viewing scheduler: renters book slots; agent confirms/completes
 - ✅ Commission tracking: record per deal, pending/paid summary
 
-**Left**
-- P2 Agency profile page (public, branded) + team members
-- P2 Client (landlord) accounts: owners delegate properties with scoped permissions
-- P3 Performance analytics (close rate, time-to-close, portfolio value)
+- ✅ Public branded agency profile with team members and available listings
+- ✅ Landlord delegation with scoped applications, maintenance, payments, editing, and leads access
+- ✅ Performance analytics: close rate, time-to-close, completed viewings, commission and portfolio value
 
 ## 🔧 Service Provider
 
@@ -79,10 +75,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Availability calendar editor
 - ✅ Quote flow: worker sends priced quote → customer accepts/declines
 
-**Left**
-- P2 Portfolio photos on profile (before/after work)
-- P2 Recurring jobs (weekly cleaning contracts)
-- P3 Payouts to MoMo wallet; provider verification tiers surfaced in search ranking
+- ✅ Before/after portfolio images on provider profiles (web + mobile)
+- ✅ Weekly, biweekly, and monthly recurring jobs with automatic next occurrence
+- ✅ Wallet-debited MoMo payout requests and verification-tier search ranking
 
 ## 🛒 Local Business
 
@@ -94,12 +89,11 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Reviews & ratings from verified customers (won inquiry required; one updatable review per customer)
 - ✅ Dashboard analytics: profile/listing views, inquiry totals + 30-day trend, wins, conversion
 
-**Left**
-- P2 Order/booking requests with fulfillment status (movers/cleaners: date scheduling; ISPs: installation slots)
-- P2 Targeted campaigns: discounts surfaced only to tenants who signed in the business's city in the last 30 days ("new homeowner reach")
-- P2 New-mover notifications: alert when a tenant signs in their city
-- P3 Subscription tiers for businesses (featured placement)
-- P3 Stock/product catalog with images
+- ✅ Order/booking requests with participant, scheduling, and fulfillment status ledger
+- ✅ New-mover-only offers, restricted to tenants with a lease signed in the business city within 30 days
+- ✅ Idempotent new-mover notifications to businesses when a nearby agreement activates
+- ✅ Wallet-paid featured subscription with 30-day placement and automatic expiry
+- ✅ Product stock quantities and image catalogs
 
 ## 🏦 Financier
 
@@ -110,10 +104,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Portfolio analytics: disbursed vs recovered, default rate, exposure
 - ✅ Collections queue: overdue contracts, reminder nudges (web + mobile)
 
-**Left**
-- P2 Credit decisioning assist: applicant rental history + credit score summary card
-- P2 Offer targeting analytics (min credit score, employment-required fields exist)
-- P3 Securitized reporting for banks (BoG-style export)
+- ✅ Credit decisioning card with live credit, rental, and payment history
+- ✅ Offer targeting analytics using minimum credit score and employment requirements
+- ✅ Financier-scoped BoG-style securitized contract export
 
 ## 🏢 Employer
 
@@ -123,10 +116,9 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Payroll runs: create → approve → process
 - ✅ Payroll reports: per-run breakdowns, per-employee deduction history, CSV export
 
-**Left**
-- P1 ⏳ Bulk employee invite **UI** (CSV endpoint exists on server; no screen yet)
-- P2 Employee housing benefit programs (subsidized rent advances via financier partners)
-- P3 SSNIT/tax report integration
+- ✅ Bulk employee CSV import UI with preview, validation, row results, and 500-row guard
+- ✅ Employee housing-benefit program workflows linked to participants/financier partners
+- ✅ SSNIT/tax-compatible processed-payroll deduction export
 
 ## 🏛 Government / Admin
 
@@ -135,22 +127,20 @@ Per-user-type capabilities: what's **done** (✅ shipped) and what's **left**
 - ✅ Feature flags, subscription package admin, insurance claims oversight
 - ✅ Policy simulation, audit logs (server), public registry
 
-**Left**
-- P1 ⏳ Housing-demand dashboard: rental price trends per region, vacancy rates (only remaining P1 item)
-- P2 Tax-compliance view: rent income reports per landlord (aggregated, consented)
-- P2 Fraud watch: duplicate listings, suspicious payment patterns
-- P3 National rental database export (anonymized)
+- ✅ Housing-demand dashboard: regional rent ranges, vacancy, applications, and six-month trends (web + mobile)
+- ✅ Consent-gated aggregated landlord rent-income reporting
+- ✅ Fraud watch for duplicate listings and suspicious failed-payment patterns
+- ✅ Anonymized national rental database CSV export
 
-## 🏗 Property Developer *(future role — currently marketing only)*
+## 🏗 Property Developer
 
-**Left**
-- P2 Market analytics: demand by location/type/price band, demographic insights
-- P3 Pre-sales/off-plan listings on the platform
+**Done**
+- ✅ Dedicated developer registration/role and advanced capability workspace
+- ✅ Market analytics by location/type/rent with anonymized household demographic segments
+- ✅ Pre-sales/off-plan workflow with public development listings
 
 ---
 
-## What's next (suggested order)
+## Completion
 
-1. **P1 leftovers** — government housing-demand dashboard; employer bulk-invite UI
-2. **P2 wave 1** — business order/fulfillment + new-mover notifications; provider portfolio photos; landlord rent renewal offers
-3. **P2 wave 2** — agent agency pages + landlord delegation; financier credit decisioning; tenant passport on mobile
+All capabilities originally listed in this document now have server contracts and user-facing surfaces. The shared implementation ledger and verification evidence are maintained in `agent_plan.md`.

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Pressable, Alert } from 'react-native'
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
-import { neuCard, neuInset } from '../../lib/neu'
+import { neuCard } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore, type User } from '../../stores/authStore'
-import { Logo } from '../../components/Logo'
+import { AuthShell, authInset } from '../../components/AuthShell'
+import { PressScale } from '../../components/Motion'
 import {
   authenticateWithBiometric,
   biometricIconName,
@@ -130,18 +131,19 @@ export default function LoginScreen() {
   const bioName = biometricLabel(capability?.primary ?? 'fingerprint')
 
   return (
-    <KeyboardAvoidingView style={[s.container, { backgroundColor: c.white }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.logo}>
-          <Logo size={48} theme="dark" />
-          <Text style={[s.subtitle, { color: c.muted }]}>Sign in to your account</Text>
-        </View>
-
+    <AuthShell
+      eyebrow="Ghana's connected rental operating system"
+      title="The keys to your housing world."
+      subtitle="Manage homes, payments, people, and services from one trusted workspace built for Ghana."
+      formEyebrow="Secure workspace access"
+      formTitle="Welcome back"
+      formSubtitle="Sign in to continue to your RentOS workspace."
+    >
         {error ? <View style={s.errorBox}><Text style={[s.errorText, { color: c.danger }]}>{error}</Text></View> : null}
 
         {showBio ? (
           <View style={s.bioPanel}>
-            <TouchableOpacity
+            <PressScale
               style={[s.bioButton, { backgroundColor: c.primary }]}
               onPress={() => runBiometricLogin(false)}
               disabled={bioLoading || loading}
@@ -156,7 +158,7 @@ export default function LoginScreen() {
                   <Text style={s.bioButtonText}>Sign in with {bioName}</Text>
                 </>
               )}
-            </TouchableOpacity>
+            </PressScale>
             <View style={s.divider}>
               <View style={[s.dividerLine, { backgroundColor: c.border }]} />
               <Text style={[s.dividerText, { color: c.muted }]}>or use password</Text>
@@ -167,21 +169,40 @@ export default function LoginScreen() {
 
         <View style={s.form}>
           <Text style={[s.label, { color: c.text }]}>Email</Text>
-          <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="you@example.com" placeholderTextColor={c.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          <View style={[s.inputWrap, authInset(c)]}>
+            <Ionicons name="mail-outline" size={18} color={c.muted} />
+            <TextInput
+              style={[s.input, { color: c.text }]}
+              placeholder="you@example.com"
+              placeholderTextColor={c.muted}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+          </View>
 
-          <Text style={[s.label, { color: c.text }]}>Password</Text>
-          <View style={[s.passwordWrap, neuInset(c)]}>
+          <View style={s.passwordLabelRow}>
+            <Text style={[s.label, { color: c.text }]}>Password</Text>
+            <Link href="/auth/forgot-password" style={[s.forgotLink, { color: c.primary }]}>Forgot password?</Link>
+          </View>
+          <View style={[s.passwordWrap, authInset(c)]}>
+            <Ionicons name="lock-closed-outline" size={18} color={c.muted} style={s.leadingIcon} />
             <TextInput style={[s.passwordInput, { color: c.text }]} placeholder="Enter your password" placeholderTextColor={c.muted} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
             <Pressable onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
               <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.muted} />
             </Pressable>
           </View>
 
-          <Link href="/auth/forgot-password" style={[s.forgotLink, { color: c.primary }]}>Forgot password?</Link>
-
-          <TouchableOpacity style={[s.button, { backgroundColor: c.primary }]} onPress={handleLogin} disabled={loading || bioLoading}>
-            {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={s.buttonText}>Sign In</Text>}
-          </TouchableOpacity>
+          <PressScale style={[s.button, { backgroundColor: c.primary }]} onPress={handleLogin} disabled={loading || bioLoading}>
+            {loading ? <ActivityIndicator color="#ffffff" /> : (
+              <>
+                <Text style={s.buttonText}>Sign in</Text>
+                <Ionicons name="arrow-forward" size={17} color="#ffffff" />
+              </>
+            )}
+          </PressScale>
 
           {capability?.available && !bioEnabled ? (
             <View style={[s.bioHint, neuCard(c)]}>
@@ -197,36 +218,34 @@ export default function LoginScreen() {
             <Link href="/auth/register" style={[s.link, { color: c.primary }]}>Create one</Link>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </AuthShell>
   )
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
-  logo: { alignItems: 'center', marginBottom: spacing.xl },
-  subtitle: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 12 },
   form: { gap: spacing.sm },
-  label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  label: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm },
+  inputWrap: { height: 54, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  input: { flex: 1, height: '100%', fontSize: 15, fontFamily: 'Outfit_400Regular' },
+  passwordLabelRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   passwordWrap: { flexDirection: 'row', alignItems: 'center', height: 52 },
-  passwordInput: { flex: 1, height: '100%', paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  leadingIcon: { marginLeft: spacing.md },
+  passwordInput: { flex: 1, height: '100%', paddingHorizontal: 10, fontSize: 15, fontFamily: 'Outfit_400Regular' },
   eyeBtn: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
-  button: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: spacing.md },
-  buttonText: { color: '#ffffff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  button: { height: 54, borderRadius: 12, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: spacing.md },
+  buttonText: { color: '#ffffff', fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg },
-  footerText: { fontSize: 14, fontFamily: 'Manrope_400Regular' },
-  link: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
-  forgotLink: { fontSize: 13, fontFamily: 'Manrope_500Medium', textAlign: 'right', marginTop: spacing.xs },
-  errorBox: { backgroundColor: '#fef2f2', borderRadius: 10, padding: spacing.md, marginBottom: spacing.md },
-  errorText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  footerText: { fontSize: 14, fontFamily: 'Outfit_400Regular' },
+  link: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
+  forgotLink: { fontSize: 12, fontFamily: 'Outfit_600SemiBold', marginBottom: 1 },
+  errorBox: { backgroundColor: 'rgba(239,68,68,0.09)', borderColor: 'rgba(239,68,68,0.2)', borderWidth: 1, borderRadius: 10, padding: spacing.md, marginBottom: spacing.md },
+  errorText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   bioPanel: { marginBottom: spacing.lg },
-  bioButton: { height: 64, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  bioButtonText: { color: '#ffffff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  bioButton: { height: 58, borderRadius: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  bioButtonText: { color: '#ffffff', fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
   divider: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
   dividerLine: { flex: 1, height: 1 },
-  dividerText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  dividerText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   bioHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, marginTop: spacing.md },
-  bioHintText: { flex: 1, fontSize: 13, fontFamily: 'Manrope_400Regular' },
+  bioHintText: { flex: 1, fontSize: 13, fontFamily: 'Outfit_400Regular' },
 })

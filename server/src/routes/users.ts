@@ -3,6 +3,7 @@ import { Types } from 'mongoose'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import { z } from 'zod'
 import { authenticate, requireRole, requirePermission, isSuperAdmin } from '../middleware/auth.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
@@ -152,6 +153,17 @@ router.get('/government', authenticate, requireRole('government', 'admin', 'supe
 // Get user info by ID. Sensitive fields (email, phone, roles, permissions) are
 // only returned for one's own record or to privileged staff — otherwise any
 // authenticated user could enumerate every account's PII by iterating ObjectIds.
+// Admin/government: list pending identity-verification requests.
+// NOTE: must precede GET /:id or 'verification-requests' is treated as an id.
+router.get('/verification-requests', authenticate, requireRole('government', 'admin', 'super_admin'), async (_req, res) => {
+  const users = await User.find({ verificationStatus: 'pending', deletedAt: null })
+    .select('firstName lastName email phone ghanaCardId roles createdAt')
+    .sort({ createdAt: 1 })
+    .limit(100)
+    .lean()
+  success(res, { items: users.map((u) => ({ ...u, id: (u._id as unknown as { toString(): string }).toString() })) })
+})
+
 router.get('/:id', authenticate, async (req, res) => {
   const isSelf = req.params.id === req.user!.userId
   const isPrivileged = req.user!.roles.some((r) => ['government', 'admin', 'super_admin', 'legal_officer'].includes(r))
@@ -244,6 +256,49 @@ router.post('/', authenticate, requirePermission('users:create'), async (req, re
     .catch((err) => console.warn('[users/create] achievement award failed:', err))
 
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe(), 'User created successfully', 201)
+})
+
+// Request identity verification — user must have a Ghana Card on file first.
+router.post('/me/request-verification', authenticate, async (req, res) => {
+  const user = await User.findById(req.user!.userId)
+  if (!user) { error(res, 'User not found', 404); return }
+  if (!user.ghanaCardId) { error(res, 'Add your Ghana Card ID to your profile first', 400); return }
+  if (user.verificationStatus === 'verified' || user.isVerified) { error(res, 'Already verified', 409); return }
+  if (user.verificationStatus === 'pending') { error(res, 'Verification already requested', 409); return }
+
+  user.verificationStatus = 'pending'
+  await user.save()
+  success(res, { verificationStatus: 'pending' }, 'Verification requested — our team will review your Ghana Card')
+})
+
+router.patch('/me/tax-reporting-consent', authenticate, requireRole('landlord'), async (req, res) => {
+  const parsed = z.object({ consent: z.boolean() }).safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  await User.findByIdAndUpdate(req.user!.userId, { taxReportingConsent: parsed.data.consent })
+  success(res, { taxReportingConsent: parsed.data.consent }, 'Tax reporting preference updated')
+})
+
+// Admin/government: approve identity verification → the verified badge shows
+router.post('/:id/verify-identity', authenticate, requireRole('government', 'admin', 'super_admin'), async (req, res) => {
+  const user = await User.findById(req.params.id)
+  if (!user) { error(res, 'User not found', 404); return }
+  if (user.verificationStatus !== 'pending') { error(res, 'No pending verification for this user', 409); return }
+
+  user.verificationStatus = 'verified'
+  user.isVerified = true
+  await user.save()
+  success(res, { verificationStatus: 'verified', isVerified: true }, 'User verified')
+})
+
+// Admin/government: reject a verification request
+router.post('/:id/reject-verification', authenticate, requireRole('government', 'admin', 'super_admin'), async (req, res) => {
+  const user = await User.findById(req.params.id)
+  if (!user) { error(res, 'User not found', 404); return }
+  if (user.verificationStatus !== 'pending') { error(res, 'No pending verification for this user', 409); return }
+
+  user.verificationStatus = 'none'
+  await user.save()
+  success(res, { verificationStatus: 'none' }, 'Verification rejected')
 })
 
 // Update a user's roles and permissions

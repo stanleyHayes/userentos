@@ -34,12 +34,12 @@ router.get('/', authenticate, async (req, res) => {
   if (minRating !== undefined) filter.rating = { $gte: minRating }
   if (verified) filter.verificationLevel = { $in: ['verified', 'premium'] }
 
+  const allWorkers = await Worker.find(filter).lean()
+  const verificationRank: Record<string, number> = { none: 0, basic: 1, verified: 2, premium: 3 }
+  allWorkers.sort((a, b) => (verificationRank[b.verificationLevel] ?? 0) - (verificationRank[a.verificationLevel] ?? 0) || b.rating - a.rating || b.completedJobs - a.completedJobs)
+  const total = allWorkers.length
   const skip = (page - 1) * limit
-  const [workers, total] = await Promise.all([
-    Worker.find(filter).sort({ rating: -1, completedJobs: -1 }).skip(skip).limit(limit).lean(),
-    Worker.countDocuments(filter),
-  ])
-
+  const workers = allWorkers.slice(skip, skip + limit)
   success(res, {
     items: workers,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
@@ -191,6 +191,7 @@ const updateSchema = z.object({
   }).optional(),
   status: z.enum(['available', 'busy', 'offline']).optional(),
   emergencyAvailable: z.boolean().optional(),
+  portfolio: z.array(z.string()).max(20).optional(),
 })
 
 router.patch('/:id', authenticate, async (req, res) => {

@@ -1948,6 +1948,8 @@ export interface Business {
   viewCount: number
   ratingAvg: number
   reviewCount: number
+  subscriptionTier: 'free' | 'featured' | 'growth'
+  featuredUntil?: string
   createdAt: string
 }
 
@@ -1960,6 +1962,9 @@ export interface BusinessListing {
   price?: number
   promoText?: string
   isActive: boolean
+  images: string[]
+  stockQuantity?: number
+  newMoverOnly: boolean
   createdAt: string
 }
 
@@ -2139,6 +2144,9 @@ export function useCreateBusinessListing() {
       type: BusinessListing['type']
       price?: number
       promoText?: string
+      images?: string[]
+      stockQuantity?: number
+      newMoverOnly?: boolean
     }) => api.post<BusinessListing>('/businesses/me/listings', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-business'] }),
   })

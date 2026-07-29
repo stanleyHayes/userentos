@@ -212,7 +212,7 @@ export default function TenantProfileScreen() {
                   <Text style={[
                     s.currencyChipText,
                     { color: c.muted },
-                    form.primaryCurrency === cur && { color: c.primary, fontFamily: 'Manrope_700Bold' },
+                    form.primaryCurrency === cur && { color: c.primary, fontFamily: 'Outfit_700Bold' },
                   ]}>
                     {cur}
                   </Text>
@@ -297,7 +297,7 @@ export default function TenantProfileScreen() {
                       <Text style={[
                         s.currencyChipSmallText,
                         { color: c.muted },
-                        (src.currency || 'GHS') === cur && { color: c.primary, fontFamily: 'Manrope_700Bold' },
+                        (src.currency || 'GHS') === cur && { color: c.primary, fontFamily: 'Outfit_700Bold' },
                       ]}>
                         {cur}
                       </Text>
@@ -427,7 +427,7 @@ function ChipMultiSelect({ label, options, selected, onChange, c }: {
               style={[s.optionChip, { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary : c.surface }]}
               onPress={() => toggle(opt)}
             >
-              <Text style={[s.optionChipText, { color: active ? '#ffffff' : c.muted }, active && { fontFamily: 'Manrope_600SemiBold' }]}>
+              <Text style={[s.optionChipText, { color: active ? '#ffffff' : c.muted }, active && { fontFamily: 'Outfit_600SemiBold' }]}>
                 {opt}
               </Text>
             </TouchableOpacity>
@@ -451,7 +451,7 @@ function OptionPicker({ label, value, options, onChange, c }: {
             style={[s.optionChip, { borderColor: c.border, backgroundColor: c.surface }, value === opt && { borderColor: c.primary, backgroundColor: c.primary + '10' }]}
             onPress={() => onChange(value === opt ? '' : opt)}
           >
-            <Text style={[s.optionChipText, { color: c.muted }, value === opt && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+            <Text style={[s.optionChipText, { color: c.muted }, value === opt && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
               {opt.replace(/_/g, ' ')}
             </Text>
           </TouchableOpacity>
@@ -466,46 +466,46 @@ const s = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
   scoreCard: { margin: spacing.md, padding: spacing.md },
   scoreHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  scoreTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
-  scoreValue: { fontSize: 20, fontFamily: 'Manrope_800ExtraBold' },
+  scoreTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
+  scoreValue: { fontSize: 20, fontFamily: 'Outfit_800ExtraBold' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
-  scoreHint: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: spacing.sm },
+  scoreHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: spacing.sm },
   sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  sectionTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  sectionTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
   fieldContainer: { marginBottom: spacing.md },
-  fieldLabel: { fontSize: 12, fontFamily: 'Manrope_600SemiBold', marginBottom: 6 },
-  fieldInput: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  fieldLabel: { fontSize: 12, fontFamily: 'Outfit_600SemiBold', marginBottom: 6 },
+  fieldInput: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Outfit_400Regular' },
   fieldInputMultiline: { minHeight: 80, textAlignVertical: 'top' },
   optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   optionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
-  optionChipText: { fontSize: 12, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
+  optionChipText: { fontSize: 12, fontFamily: 'Outfit_500Medium', textTransform: 'capitalize' },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 12 },
-  toggleLabel: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  toggleLabel: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   toggleTrack: { width: 44, height: 24, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 2 },
   toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ffffff' },
   toggleThumbActive: { transform: [{ translateX: 20 }] },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.lg, paddingVertical: 16, borderRadius: 10 },
-  saveButtonText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
+  saveButtonText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
   currencyChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
-  currencyChipSymbol: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  currencyChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  currencyChipSymbol: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  currencyChipText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   currencyChipSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  currencyChipSmallText: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
+  currencyChipSmallText: { fontSize: 11, fontFamily: 'Outfit_500Medium' },
   incomeSourcesBox: { padding: spacing.md, marginBottom: spacing.md },
-  incomeSourcesTitle: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
-  incomeSourcesHint: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm },
-  incomeSourcesEmpty: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingVertical: spacing.md },
+  incomeSourcesTitle: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  incomeSourcesHint: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginBottom: spacing.sm },
+  incomeSourcesEmpty: { fontSize: 13, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingVertical: spacing.md },
   incomeSourceCard: { padding: spacing.sm, marginBottom: spacing.sm },
-  incomeSourceCardLabel: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  incomeSourceCardLabel: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   addSourceButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', marginTop: spacing.sm },
 } as const)
 
 const s2 = StyleSheet.create({
-  addSourceButtonText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  addSourceButtonText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
   totalIncomeCard: { borderRadius: 12, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md, alignItems: 'center' as const, gap: spacing.sm },
-  totalIncomeLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  totalIncomeValue: { fontSize: 22, fontFamily: 'Manrope_800ExtraBold' },
-  totalIncomeBreakdown: { fontSize: 11, fontFamily: 'Manrope_400Regular', textAlign: 'center' as const },
+  totalIncomeLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  totalIncomeValue: { fontSize: 22, fontFamily: 'Outfit_800ExtraBold' },
+  totalIncomeBreakdown: { fontSize: 11, fontFamily: 'Outfit_400Regular', textAlign: 'center' as const },
 })

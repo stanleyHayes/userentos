@@ -150,12 +150,12 @@ export default function MessagesScreen() {
         </View>
         <View style={s.convBody}>
           <View style={s.convTop}>
-            <Text style={[s.convName, { color: c.text }, isUnread && { fontFamily: 'Manrope_700Bold', color: c.primaryDark }]} numberOfLines={1}>{item.otherUser.firstName} {item.otherUser.lastName}</Text>
-            {item.lastMessage && <Text style={[s.convTime, { color: c.muted }, isUnread && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{timeAgo(item.lastMessage.createdAt)}</Text>}
+            <Text style={[s.convName, { color: c.text }, isUnread && { fontFamily: 'Outfit_700Bold', color: c.primaryDark }]} numberOfLines={1}>{item.otherUser.firstName} {item.otherUser.lastName}</Text>
+            {item.lastMessage && <Text style={[s.convTime, { color: c.muted }, isUnread && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{timeAgo(item.lastMessage.createdAt)}</Text>}
           </View>
           {item.propertyTitle && <Text style={[s.propertyLabel, { color: c.primary }]} numberOfLines={1}>{item.propertyTitle}</Text>}
           <View style={s.convBottom}>
-            <Text style={[s.convPreview, { color: c.muted }, isUnread && { color: c.text, fontFamily: 'Manrope_500Medium' }]} numberOfLines={1}>{preview}</Text>
+            <Text style={[s.convPreview, { color: c.muted }, isUnread && { color: c.text, fontFamily: 'Outfit_500Medium' }]} numberOfLines={1}>{preview}</Text>
             {isUnread && (
               <View style={[s.badge, { backgroundColor: c.primary }]}>
                 <Text style={s.badgeText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
@@ -263,43 +263,43 @@ export default function MessagesScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: Platform.OS === 'ios' ? 12 : 8, gap: spacing.sm },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: 'Manrope_400Regular', paddingVertical: 0 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: 'Outfit_400Regular', paddingVertical: 0 },
   list: { paddingBottom: 100 },
   convItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 14 },
   avatarWrap: { position: 'relative', marginRight: spacing.md },
   avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#ffffff', fontSize: 16, fontFamily: 'Manrope_700Bold' },
+  avatarText: { color: '#ffffff', fontSize: 16, fontFamily: 'Outfit_700Bold' },
   onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#ffffff' },
   convBody: { flex: 1 },
   convTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  convName: { fontSize: 15, fontFamily: 'Manrope_500Medium', flex: 1, marginRight: spacing.sm },
-  convTime: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  propertyLabel: { fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2, opacity: 0.8 },
+  convName: { fontSize: 15, fontFamily: 'Outfit_500Medium', flex: 1, marginRight: spacing.sm },
+  convTime: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  propertyLabel: { fontSize: 12, fontFamily: 'Outfit_500Medium', marginTop: 2, opacity: 0.8 },
   convBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
-  convPreview: { flex: 1, fontSize: 13, fontFamily: 'Manrope_400Regular' },
+  convPreview: { flex: 1, fontSize: 13, fontFamily: 'Outfit_400Regular' },
   badge: { borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6, marginLeft: spacing.sm },
-  badgeText: { color: '#ffffff', fontSize: 11, fontFamily: 'Manrope_700Bold' },
+  badgeText: { color: '#ffffff', fontSize: 11, fontFamily: 'Outfit_700Bold' },
   separator: { height: 1, marginLeft: 78 },
   empty: { alignItems: 'center', paddingVertical: 80, gap: spacing.sm, paddingHorizontal: spacing.xl },
-  emptyTitle: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
-  emptySubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center' },
+  emptyTitle: { fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
+  emptySubtitle: { fontSize: 13, fontFamily: 'Outfit_400Regular', textAlign: 'center' },
   fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  inputLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
-  modalInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  inputLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: 6, marginTop: spacing.md },
+  modalInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_400Regular' },
   userSearchWrap: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 6, gap: 8, marginBottom: spacing.md },
-  userSearchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_400Regular', paddingVertical: 0 },
+  userSearchInput: { flex: 1, fontSize: 14, fontFamily: 'Outfit_400Regular', paddingVertical: 0 },
   userListLoading: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  userListLoadingText: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
-  userListEmpty: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingVertical: 40 },
+  userListLoadingText: { fontSize: 13, fontFamily: 'Outfit_400Regular' },
+  userListEmpty: { fontSize: 13, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingVertical: 40 },
   userItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
   userAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  userAvatarText: { color: '#ffffff', fontSize: 13, fontFamily: 'Manrope_700Bold' },
-  userName: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
-  userEmail: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+  userAvatarText: { color: '#ffffff', fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  userName: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
+  userEmail: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 1 },
   userRole: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  userRoleText: { fontSize: 10, fontFamily: 'Manrope_600SemiBold', textTransform: 'capitalize' },
+  userRoleText: { fontSize: 10, fontFamily: 'Outfit_600SemiBold', textTransform: 'capitalize' },
 })

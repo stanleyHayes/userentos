@@ -17,6 +17,8 @@ export interface IBusiness extends Document {
   viewCount: number
   ratingAvg: number
   reviewCount: number
+  subscriptionTier: 'free' | 'featured' | 'growth'
+  featuredUntil?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -35,6 +37,8 @@ const businessSchema = new Schema<IBusiness>(
     viewCount: { type: Number, default: 0 },
     ratingAvg: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
+    subscriptionTier: { type: String, enum: ['free', 'featured', 'growth'], default: 'free' },
+    featuredUntil: Date,
   },
   { timestamps: true },
 )

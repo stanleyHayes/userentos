@@ -117,34 +117,34 @@ const s = StyleSheet.create({
 
   // Brand
   brandSection: { alignItems: 'center', paddingVertical: spacing.xl },
-  brandName: { fontSize: 28, fontFamily: 'Manrope_800ExtraBold', marginTop: spacing.md, letterSpacing: -0.5 },
-  tagline: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  brandName: { fontSize: 28, fontFamily: 'Outfit_800ExtraBold', marginTop: spacing.md, letterSpacing: -0.5 },
+  tagline: { fontSize: 14, fontFamily: 'Outfit_400Regular', marginTop: 4 },
   versionBadge: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 10, marginTop: spacing.sm },
-  versionText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  versionText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   // Card
   card: { padding: spacing.md, marginBottom: spacing.sm },
-  cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
-  bodyText: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 20 },
+  cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+  bodyText: { fontSize: 13, fontFamily: 'Outfit_400Regular', lineHeight: 20 },
 
   // Features
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   featureIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  featureTitle: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  featureDesc: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  featureTitle: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  featureDesc: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 8 },
   statItem: { flex: 1, padding: 12, alignItems: 'center' },
-  statValue: { fontSize: 20, fontFamily: 'Manrope_800ExtraBold' },
-  statLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  statValue: { fontSize: 20, fontFamily: 'Outfit_800ExtraBold' },
+  statLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 
   // Links
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
-  linkText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  linkText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 
   // Footer
   footer: { alignItems: 'center', paddingTop: spacing.lg, gap: 4 },
-  footerText: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  footerTagline: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 8 },
+  footerText: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  footerTagline: { fontSize: 11, fontFamily: 'Outfit_500Medium', marginTop: 8 },
 })

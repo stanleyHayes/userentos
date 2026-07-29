@@ -129,6 +129,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   textWrap: { flex: 1 },
-  toastTitle: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
-  toastBody: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+  toastTitle: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
+  toastBody: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 1 },
 })

@@ -72,6 +72,7 @@ const createSchema = z.object({
   scheduledDate: z.string().optional(),
   scheduledTime: z.string().optional(),
   estimatedCost: z.number().positive().optional(),
+  recurrence: z.enum(['none', 'weekly', 'biweekly', 'monthly']).default('none'),
 })
 
 router.post('/', authenticate, async (req, res) => {
@@ -240,6 +241,30 @@ router.patch('/:id', authenticate, async (req, res) => {
   // inflate their stats (which drive search ranking) by repeating the request.
   if (parsed.data.status === 'completed' && !wasCompleted) {
     await Worker.findByIdAndUpdate(booking.workerId, { $inc: { completedJobs: 1 } })
+
+    // Recurring jobs: completing one schedules the next occurrence automatically.
+    if (booking.recurrence !== 'none' && booking.scheduledDate) {
+      const next = new Date(booking.scheduledDate)
+      if (booking.recurrence === 'weekly') next.setDate(next.getDate() + 7)
+      else if (booking.recurrence === 'biweekly') next.setDate(next.getDate() + 14)
+      else next.setMonth(next.getMonth() + 1)
+
+      await ServiceBooking.create({
+        requesterId: booking.requesterId,
+        requesterRole: booking.requesterRole,
+        workerId: booking.workerId,
+        workerUserId: booking.workerUserId,
+        propertyId: booking.propertyId,
+        maintenanceRequestId: booking.maintenanceRequestId,
+        type: booking.type,
+        description: booking.description,
+        status: 'confirmed',
+        scheduledDate: next.toISOString().slice(0, 10),
+        scheduledTime: booking.scheduledTime,
+        estimatedCost: booking.finalCost ?? booking.quoteAmount ?? booking.estimatedCost,
+        recurrence: booking.recurrence,
+      })
+    }
   }
 
   await booking.save()

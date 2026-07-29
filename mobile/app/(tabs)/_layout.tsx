@@ -23,10 +23,10 @@ export default function TabLayout() {
           paddingBottom: 24,
           paddingTop: 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+        tabBarLabelStyle: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
         headerStyle: { backgroundColor: c.card },
         headerTintColor: c.text,
-        headerTitleStyle: { fontFamily: 'Manrope_700Bold' },
+        headerTitleStyle: { fontFamily: 'Outfit_700Bold' },
         headerShadowVisible: false,
       }}
     >
@@ -51,7 +51,7 @@ export default function TabLayout() {
           title: 'Messages',
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
           tabBarBadge: unreadMessages > 0 ? (unreadMessages > 99 ? '99+' : unreadMessages) : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#ef4444', fontSize: 10, fontFamily: 'Manrope_700Bold', minWidth: 18, height: 18, lineHeight: 18, borderRadius: 9 },
+          tabBarBadgeStyle: { backgroundColor: '#ef4444', fontSize: 10, fontFamily: 'Outfit_700Bold', minWidth: 18, height: 18, lineHeight: 18, borderRadius: 9 },
         }}
       />
       <Tabs.Screen

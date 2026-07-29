@@ -55,6 +55,6 @@ export function Logo({ size = 32, variant = 'full', theme = 'dark' }: LogoProps)
 const styles = StyleSheet.create({
   container: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   textWrap: { justifyContent: 'center' },
-  brand: { fontFamily: 'Manrope_800ExtraBold', letterSpacing: -0.5 },
-  sub: { fontFamily: 'Manrope_700Bold', letterSpacing: 2, marginTop: -1 },
+  brand: { fontFamily: 'Outfit_800ExtraBold', letterSpacing: -0.5 },
+  sub: { fontFamily: 'Outfit_700Bold', letterSpacing: 2, marginTop: -1 },
 })

@@ -62,6 +62,7 @@ export function BookingModal({ worker, onClose, onSuccess, prefill }: BookingMod
     scheduledDate: '',
     scheduledTime: '',
     estimatedCost: undefined as number | undefined,
+    recurrence: 'none',
   })
 
   async function handleSubmit() {
@@ -79,6 +80,7 @@ export function BookingModal({ worker, onClose, onSuccess, prefill }: BookingMod
         scheduledTime: form.scheduledTime || undefined,
         estimatedCost: form.estimatedCost,
         maintenanceRequestId: prefill?.id,
+        recurrence: form.recurrence,
       })
       setSubmitted(true)
       onSuccess?.()
@@ -146,6 +148,19 @@ export function BookingModal({ worker, onClose, onSuccess, prefill }: BookingMod
             value={String(form.estimatedCost ?? '')}
             onChange={e => setForm(p => ({ ...p, estimatedCost: e.target.value ? Number(e.target.value) : undefined }))}
             placeholder="Optional"
+          />
+
+          <Select
+            id="booking-recurrence"
+            label="Repeat"
+            value={form.recurrence}
+            onChange={e => setForm(p => ({ ...p, recurrence: e.target.value }))}
+            options={[
+              { value: 'none', label: 'One-time job' },
+              { value: 'weekly', label: 'Every week' },
+              { value: 'biweekly', label: 'Every two weeks' },
+              { value: 'monthly', label: 'Every month' },
+            ]}
           />
 
           <div className="flex gap-3 pt-2">

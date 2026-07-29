@@ -4,6 +4,7 @@ import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
+import { hasDelegatedScope } from './delegation.js'
 
 interface CreatePropertyData {
   title: string
@@ -168,7 +169,7 @@ export class PropertyService {
     if (!property) {
       return { error: 'Property not found', status: 404 }
     }
-    if (property.landlordId !== userId) {
+    if (property.landlordId !== userId && !(await hasDelegatedScope(userId, id, 'edit'))) {
       this.logger.warn(`Unauthorized property update attempt: user ${userId} on property ${id}`)
       return { error: 'Not authorized', status: 403 }
     }

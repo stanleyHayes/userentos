@@ -138,7 +138,7 @@ export default function PropertiesScreen() {
               onPress={() => handleStatusFilter(f.value)}
               activeOpacity={0.7}
             >
-              <Text style={[s.filterText, { color: c.muted }, statusFilter === f.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{f.label}</Text>
+              <Text style={[s.filterText, { color: c.muted }, statusFilter === f.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{f.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -188,27 +188,27 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   searchContainer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1 },
   searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, height: 44, gap: 8 },
-  searchInput: { flex: 1, fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: 'Outfit_500Medium' },
   filterRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
-  filterText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  filterText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   list: { padding: spacing.md, gap: spacing.md },
   card: { overflow: 'hidden' },
   cardImage: { height: 120, justifyContent: 'center', alignItems: 'center' },
-  cardImageText: { fontSize: 40, fontFamily: 'Manrope_700Bold' },
+  cardImageText: { fontSize: 40, fontFamily: 'Outfit_700Bold' },
   cardBody: { padding: spacing.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: 8 },
+  cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: 8 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
   location: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
-  locationText: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  description: { fontSize: 13, lineHeight: 18, marginBottom: 8, fontFamily: 'Manrope_400Regular' },
+  locationText: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  description: { fontSize: 13, lineHeight: 18, marginBottom: 8, fontFamily: 'Outfit_400Regular' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  price: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  priceUnit: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  typeLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular', textTransform: 'capitalize', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  price: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  priceUnit: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  typeLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular', textTransform: 'capitalize', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   fab: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
 })

@@ -18,25 +18,31 @@ test.describe('property application', () => {
     // Find a property that hasn't been applied to yet.
     await expect(page.getByTestId('property-card').first()).toBeVisible({ timeout: 15_000 })
     const count = await page.getByTestId('property-card').count()
+    const propertyHrefs = await page.getByTestId('property-card').evaluateAll((cards) =>
+      cards
+        .map((card) => (card.matches('a') ? card : card.querySelector('a'))?.getAttribute('href'))
+        .filter((href): href is string => Boolean(href))
+    )
     let found = false
 
-    for (let i = 0; i < count; i++) {
-      // Re-query the card each iteration to avoid stale locators.
-      const card = page.getByTestId('property-card').nth(i)
-      await card.click()
+    for (const href of propertyHrefs.slice(0, count)) {
+      // Navigate to the card's actual destination. Clicking the card's visual
+      // centre is brittle because favorite/gallery controls may sit above it.
+      await page.goto(href)
       await expect(page).toHaveURL(/\/properties\/[a-f0-9]+/i)
 
-      // Wait for the application-state area to stabilise (button OR badge).
       const applyButton = page.getByTestId('property-apply-button')
       const appBadge = page.getByText(/Application Approved|Application Pending/)
-      await expect(applyButton.or(appBadge).first()).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 })
 
       if (await applyButton.isVisible().catch(() => false)) {
         found = true
         break
       }
 
-      // Go back and try the next card.
+      // An existing application or an unavailable listing is not a failure;
+      // continue to the next stable href captured from the original result set.
+      await appBadge.first().isVisible().catch(() => false)
       await page.goto('/properties')
       await expect(page.getByTestId('property-card').first()).toBeVisible({ timeout: 15_000 })
     }

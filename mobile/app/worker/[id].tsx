@@ -30,6 +30,7 @@ interface WorkerDetail {
   emergencyAvailable: boolean
   yearsExperience: number
   availability: Record<string, boolean>
+  portfolio?: string[]
 }
 
 export default function WorkerDetailScreen() {
@@ -43,6 +44,7 @@ export default function WorkerDetailScreen() {
   const [type, setType] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [estimatedCost, setEstimatedCost] = useState('')
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none')
 
   const { data: worker, isLoading } = useQuery({
     queryKey: ['worker', id],
@@ -59,6 +61,7 @@ export default function WorkerDetailScreen() {
         scheduledDate: scheduledDate || undefined,
         estimatedCost: estimatedCost ? Number(estimatedCost) : undefined,
         requesterRole: user?.activeRole ?? 'tenant',
+        recurrence,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bookings'] })
@@ -67,6 +70,7 @@ export default function WorkerDetailScreen() {
       setType('')
       setScheduledDate('')
       setEstimatedCost('')
+      setRecurrence('none')
       Alert.alert('Booking Sent', 'Your service request has been sent to the worker.')
     },
     onError: () => {
@@ -166,6 +170,10 @@ export default function WorkerDetailScreen() {
             ))}
           </View>
 
+          {!!worker.portfolio?.length && <>
+            <Text style={[s.sectionTitle, { color: c.text, marginTop: spacing.md }]}>Before & after portfolio</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>{worker.portfolio.map((image) => <Image key={image} source={{ uri: image }} style={{ width: 150, height: 120, borderRadius: 12, marginRight: 8 }} />)}</ScrollView>
+          </>}
           <Text style={[s.sectionTitle, { color: c.text, marginTop: spacing.md }]}>Availability</Text>
           <Text style={[s.bio, { color: c.textLight }]}>
             {availabilityDays.join(', ')} · {worker.location} ({worker.serviceRadius}km radius)
@@ -248,6 +256,10 @@ export default function WorkerDetailScreen() {
                 onChangeText={setEstimatedCost}
                 keyboardType="numeric"
               />
+              <Text style={[s.label, { color: c.text }]}>Repeat</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {(['none', 'weekly', 'biweekly', 'monthly'] as const).map((value) => <TouchableOpacity key={value} onPress={() => setRecurrence(value)} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: recurrence === value ? c.primary : c.surface }}><Text style={{ color: recurrence === value ? '#fff' : c.text, fontSize: 11 }}>{value}</Text></TouchableOpacity>)}
+              </View>
             </ScrollView>
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: c.primary }]}
@@ -277,37 +289,37 @@ const s = StyleSheet.create({
   header: { paddingTop: 56, paddingBottom: spacing.lg, alignItems: 'center', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   backBtn: { position: 'absolute', top: 56, left: spacing.lg, width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   photo: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
-  name: { color: '#fff', fontSize: 20, fontFamily: 'Manrope_800ExtraBold', marginTop: spacing.sm },
+  name: { color: '#fff', fontSize: 20, fontFamily: 'Outfit_800ExtraBold', marginTop: spacing.sm },
   badgeRow: { flexDirection: 'row', gap: 8, marginTop: spacing.sm },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { color: '#fff', fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  badgeText: { color: '#fff', fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   statsCard: { flexDirection: 'row', marginHorizontal: spacing.lg, marginTop: -20, paddingVertical: spacing.md, justifyContent: 'space-evenly' },
   statItem: { alignItems: 'center' },
-  statValue: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
-  statLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  statValue: { fontSize: 18, fontFamily: 'Outfit_800ExtraBold' },
+  statLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   statDivider: { width: 1, height: 32 },
   section: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.md },
-  sectionTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  bio: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: spacing.sm, lineHeight: 20 },
+  sectionTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  bio: { fontSize: 13, fontFamily: 'Outfit_400Regular', marginTop: spacing.sm, lineHeight: 20 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  chipText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   rateRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  rateLabel: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
-  rateValue: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
+  rateLabel: { fontSize: 13, fontFamily: 'Outfit_400Regular' },
+  rateValue: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   ctaBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderTopWidth: 1 },
-  ctaLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  ctaPrice: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold' },
-  ctaSub: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2, maxWidth: 180 },
+  ctaLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  ctaPrice: { fontSize: 18, fontFamily: 'Outfit_800ExtraBold' },
+  ctaSub: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 2, maxWidth: 180 },
   ctaBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  ctaBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  ctaBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_700Bold' },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.md, marginBottom: 4 },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.md, marginBottom: 4 },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Outfit_400Regular' },
   textarea: { height: 80, textAlignVertical: 'top' },
   submitBtn: { marginTop: spacing.lg, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  submitBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 })

@@ -8,6 +8,7 @@ import { param, escapeRegex } from '../utils/params.js'
 import { getProvider } from '../services/payments/index.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { round2 } from '../utils/money.js'
+import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 
 const MOBILE_MONEY_METHODS = new Set(['mtn_momo', 'telecel_cash', 'airteltigo_money'])
 
@@ -111,7 +112,9 @@ export const paymentController = {
   list: async (req: Request, res: Response) => {
     const userId = req.user!.userId
     const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
-    const filter: Record<string, unknown> = isAdmin ? {} : { $or: [{ tenantId: userId }, { landlordId: userId }] }
+    const delegated = await delegatedPropertyIds(userId, 'payments')
+    const delegatedAgreements = delegated.length ? await Agreement.find({ propertyId: { $in: delegated } }).select('_id').lean() : []
+    const filter: Record<string, unknown> = isAdmin ? {} : { $or: [{ tenantId: userId }, { landlordId: userId }, { agreementId: { $in: delegatedAgreements.map((item) => item._id.toString()) } }] }
 
     // Server-side filters (escaped — never raw $regex from user input)
     const { status, method, search, sort, order } = req.query
@@ -172,7 +175,9 @@ export const paymentController = {
 
     const userId = req.user!.userId
     const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
-    if (payment.tenantId !== userId && payment.landlordId !== userId && !isAdmin) {
+    const agreement = payment.agreementId ? await Agreement.findById(payment.agreementId).select('propertyId').lean() : null
+    const delegatedAccess = agreement ? await hasDelegatedScope(userId, agreement.propertyId, 'payments') : false
+    if (payment.tenantId !== userId && payment.landlordId !== userId && !isAdmin && !delegatedAccess) {
       error(res, 'Not authorized', 403)
       return
     }

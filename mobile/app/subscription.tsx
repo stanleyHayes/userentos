@@ -203,7 +203,7 @@ export default function SubscriptionScreen() {
                   style={[s.methodBtn, { backgroundColor: c.surface, borderColor: payMethod === m.value ? c.primary : c.border }]}
                   onPress={() => setPayMethod(m.value)}
                 >
-                  <Text style={{ fontSize: 12, color: payMethod === m.value ? c.primary : c.text, fontFamily: 'Manrope_600SemiBold' }}>{m.label}</Text>
+                  <Text style={{ fontSize: 12, color: payMethod === m.value ? c.primary : c.text, fontFamily: 'Outfit_600SemiBold' }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -248,33 +248,33 @@ const s = StyleSheet.create({
   currentPlan: { borderRadius: 12, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md },
   currentPlanRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   crownBadge: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  currentPlanName: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  currentPlanMeta: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  currentPlanName: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  currentPlanMeta: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   progressBar: { marginTop: 12 },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
   card: { padding: spacing.lg, marginBottom: spacing.md, position: 'relative', overflow: 'hidden' },
   popularBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  popularText: { color: '#fff', fontSize: 10, fontFamily: 'Manrope_700Bold' },
-  pkgName: { fontSize: 18, fontFamily: 'Manrope_800ExtraBold', marginBottom: 4 },
-  pkgPrice: { fontSize: 28, fontFamily: 'Manrope_800ExtraBold' },
-  pkgPeriod: { fontSize: 14, fontFamily: 'Manrope_400Regular' },
-  pkgLimit: { fontSize: 13, fontFamily: 'Manrope_500Medium', marginTop: 4, marginBottom: spacing.md },
+  popularText: { color: '#fff', fontSize: 10, fontFamily: 'Outfit_700Bold' },
+  pkgName: { fontSize: 18, fontFamily: 'Outfit_800ExtraBold', marginBottom: 4 },
+  pkgPrice: { fontSize: 28, fontFamily: 'Outfit_800ExtraBold' },
+  pkgPeriod: { fontSize: 14, fontFamily: 'Outfit_400Regular' },
+  pkgLimit: { fontSize: 13, fontFamily: 'Outfit_500Medium', marginTop: 4, marginBottom: spacing.md },
   features: { gap: 8, marginBottom: spacing.lg },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  featureText: { fontSize: 13, fontFamily: 'Manrope_500Medium', flex: 1 },
+  featureText: { fontSize: 13, fontFamily: 'Outfit_500Medium', flex: 1 },
   currentBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 2, borderRadius: 10, paddingVertical: 14 },
-  currentBtnText: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  currentBtnText: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
   subscribeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 14 },
-  subscribeBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  subscribeBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_700Bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6 },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: 6 },
   methodBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
   input: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: spacing.md },
   submitBtn: { marginTop: spacing.md, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  submitBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_700Bold' },
 })

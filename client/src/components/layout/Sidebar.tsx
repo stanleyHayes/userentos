@@ -7,7 +7,7 @@ import {
   MessageSquare, Lock, FileCheck, ClipboardCheck, Crown, Package,
   Banknote, FileSignature, Calendar, ShieldCheck, Award, Wrench, ShieldPlus,
   Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp, Store,
-  Receipt, Inbox, CalendarCheck, Coins,
+  Receipt, Inbox, CalendarCheck, Coins, Landmark, ContactRound, Layers3,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -23,9 +23,10 @@ interface NavItem { label: string; labelKey?: string; path: string; icon: React.
 interface NavGroup { label: string; labelKey?: string; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean }
 
 const navGroups: NavGroup[] = [
-  { label: 'Overview', labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business'], defaultOpen: true,
+  { label: 'Overview', labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'], defaultOpen: true,
     items: [
-      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business'] },
+      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
+      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
       { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin', 'financier'] },
     ],
   },
@@ -54,6 +55,7 @@ const navGroups: NavGroup[] = [
       { label: 'Leads', labelKey: 'nav.leads', path: '/agent/leads', icon: <Inbox size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'Viewings', labelKey: 'nav.viewings', path: '/agent/viewings', icon: <CalendarCheck size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'Commissions', labelKey: 'nav.commissions', path: '/agent/commissions', icon: <Coins size={20} />, roles: ['landlord', 'property_manager'] },
+      { label: 'Agency & Delegation', path: '/agent/agency', icon: <ContactRound size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'Expenses', labelKey: 'nav.expenses', path: '/landlord/expenses', icon: <Receipt size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'Vacancy', labelKey: 'nav.vacancy', path: '/landlord/vacancy', icon: <Building2 size={20} />, roles: ['landlord', 'property_manager'] },
     ],
@@ -99,6 +101,7 @@ const navGroups: NavGroup[] = [
       { label: 'Users', labelKey: 'nav.users', path: '/users', icon: <Users size={20} />, roles: ['government', 'admin', 'super_admin'] },
       { label: 'Government Panel', labelKey: 'nav.governmentPanel', path: '/government', icon: <Shield size={20} />, roles: ['government', 'admin', 'super_admin'] },
       { label: 'Property Reviews', labelKey: 'nav.propertyReviews', path: '/government/reviews', icon: <ClipboardCheck size={20} />, roles: ['government', 'admin', 'super_admin'] },
+      { label: 'Housing Demand', path: '/government/housing-demand', icon: <Landmark size={20} />, roles: ['government', 'admin', 'legal_officer'] },
       { label: 'Policy Simulation', labelKey: 'nav.policySimulation', path: '/government/simulation', icon: <FlaskConical size={20} />, roles: ['government', 'admin', 'super_admin'] },
       { label: 'Packages', labelKey: 'nav.packages', path: '/admin/packages', icon: <Package size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Insurance Claims', labelKey: 'nav.insuranceClaims', path: '/admin/insurance/claims', icon: <ShieldAlert size={20} />, roles: ['admin', 'super_admin'] },

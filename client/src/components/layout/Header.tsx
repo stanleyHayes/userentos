@@ -39,6 +39,7 @@ const roleLabels: Record<UserRole, string> = {
   employer: 'Employer',
   service_provider: 'Service Provider',
   business: 'Local Business',
+  developer: 'Property Developer',
 }
 
 function getGreeting(): string {

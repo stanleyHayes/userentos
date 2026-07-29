@@ -5,7 +5,8 @@ import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { User } from '../models/User.js'
-import { notifyAgreementSigned, notifyAgreementFullySigned } from '../services/notify.js'
+import { Business } from '../models/Business.js'
+import { notify, notifyAgreementSigned, notifyAgreementFullySigned } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
 import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
@@ -29,6 +30,25 @@ const signSchema = z.object({
   // The typed legal name is the e-signature — required so the record shows WHO signed.
   signatureName: z.string().trim().min(2).max(100),
 })
+
+async function notifyBusinessesOfNewMover(agreementId: string, propertyId: string) {
+  const claimed = await Agreement.findOneAndUpdate(
+    { _id: agreementId, moverBusinessesNotifiedAt: { $exists: false } },
+    { $set: { moverBusinessesNotifiedAt: new Date() } },
+    { new: true },
+  ).lean()
+  if (!claimed) return
+  const property = await Property.findById(propertyId).select('address.city').lean()
+  const city = property?.address?.city
+  if (!city) return
+  const businesses = await Business.find({ city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).select('ownerId').lean()
+  await Promise.allSettled(businesses.map((business) => notify({
+    userId: business.ownerId,
+    title: `New mover in ${city}`,
+    message: 'A tenant just activated a lease nearby. Create a new-mover offer to reach them while they settle in.',
+    actionUrl: '/role-capabilities',
+  })))
+}
 
 function checkCompliance(data: { advanceMonths: number; terms: string[] }) {
   const flags: { type: string; message: string; clause?: string; law?: string }[] = []
@@ -207,6 +227,7 @@ export const agreementController = {
       // Award first_lease (idempotent)
       checkAndAward(agreement.tenantId, 'lease_signed', { agreementId: agreement._id.toString() })
         .catch((err) => console.warn('[Agreement] checkAndAward failed:', err.message))
+      void notifyBusinessesOfNewMover(agreement._id.toString(), agreement.propertyId)
     } else {
       agreement.status = 'pending_signatures'
       // Notify the other party that one side signed
@@ -243,6 +264,7 @@ export const agreementController = {
       await fresh.save()
       notifyAgreementFullySigned(fresh.tenantId, propertyTitle)
         .catch((err) => console.warn('[Agreement] notify failed:', err))
+      void notifyBusinessesOfNewMover(fresh._id.toString(), fresh.propertyId)
       notifyAgreementFullySigned(fresh.landlordId, propertyTitle)
         .catch((err) => console.warn('[Agreement] notify failed:', err))
       dispatchWebhook('agreement.activated', { agreementId: fresh._id.toString(), propertyId: fresh.propertyId, tenantId: fresh.tenantId, landlordId: fresh.landlordId }, { userId: fresh.tenantId })

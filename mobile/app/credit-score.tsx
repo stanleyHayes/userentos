@@ -193,7 +193,7 @@ export default function CreditScoreScreen() {
               {lookupLoading ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="search" size={18} color="#fff" />}
             </TouchableOpacity>
           </View>
-          {lookupError ? <Text style={{ color: c.danger, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 8 }}>{lookupError}</Text> : null}
+          {lookupError ? <Text style={{ color: c.danger, fontSize: 12, fontFamily: 'Outfit_500Medium', marginTop: 8 }}>{lookupError}</Text> : null}
           {lookupData && (
             <View style={s.lookupResult}>
               <View style={s.lookupScoreRow}>
@@ -228,8 +228,8 @@ export default function CreditScoreScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
-  emptyTitle: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
-  emptyDesc: { fontSize: 13, textAlign: 'center', fontFamily: 'Manrope_400Regular' },
+  emptyTitle: { fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
+  emptyDesc: { fontSize: 13, textAlign: 'center', fontFamily: 'Outfit_400Regular' },
 
   // Score card
   scoreCard: { margin: spacing.md, padding: spacing.md },
@@ -238,42 +238,42 @@ const s = StyleSheet.create({
   circleBg: { position: 'absolute', width: 100, height: 100, borderRadius: 50, borderWidth: 8 },
   circleProgress: { position: 'absolute', width: 100, height: 100, borderRadius: 50, borderWidth: 8 },
   circleInner: { alignItems: 'center' },
-  scoreValue: { fontSize: 32, fontFamily: 'Manrope_800ExtraBold' },
-  scoreOutOf: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: -2 },
+  scoreValue: { fontSize: 32, fontFamily: 'Outfit_800ExtraBold' },
+  scoreOutOf: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: -2 },
   scoreInfo: { flex: 1, gap: 8 },
   labelBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
-  labelText: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
-  scoreDesc: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 18 },
-  lastUpdated: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
+  labelText: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  scoreDesc: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 18 },
+  lastUpdated: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
 
   // Sections
   sectionCard: { marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.md },
-  sectionTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', marginBottom: spacing.md },
+  sectionTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold', marginBottom: spacing.md },
 
   // Factors
   factorItem: { marginBottom: spacing.md },
   factorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   factorLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  factorName: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  factorScore: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
+  factorName: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  factorScore: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   barBg: { height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
-  factorDesc: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  factorDesc: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 4 },
 
   // Tips
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   tipNumber: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  tipNumberText: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
-  tipText: { flex: 1, fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 19 },
+  tipNumberText: { fontSize: 12, fontFamily: 'Outfit_700Bold' },
+  tipText: { flex: 1, fontSize: 13, fontFamily: 'Outfit_400Regular', lineHeight: 19 },
 
   // Lookup
   lookupRow: { flexDirection: 'row', gap: spacing.sm },
-  lookupInput: { flex: 1, height: 44, paddingHorizontal: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  lookupInput: { flex: 1, height: 44, paddingHorizontal: 12, fontSize: 14, fontFamily: 'Outfit_400Regular' },
   lookupBtn: { width: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   lookupResult: { marginTop: spacing.md, gap: spacing.sm },
   lookupScoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  lookupScore: { fontSize: 28, fontFamily: 'Manrope_800ExtraBold' },
+  lookupScore: { fontSize: 28, fontFamily: 'Outfit_800ExtraBold' },
   lookupFactor: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  lookupFactorLabel: { width: 90, fontSize: 10, fontFamily: 'Manrope_400Regular' },
-  lookupFactorValue: { width: 32, fontSize: 11, fontFamily: 'Manrope_700Bold', textAlign: 'right' },
+  lookupFactorLabel: { width: 90, fontSize: 10, fontFamily: 'Outfit_400Regular' },
+  lookupFactorValue: { width: 32, fontSize: 11, fontFamily: 'Outfit_700Bold', textAlign: 'right' },
 })

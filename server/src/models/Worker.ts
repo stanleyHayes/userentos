@@ -32,6 +32,8 @@ export interface IWorker extends Document {
   reviewCount: number
   completedJobs: number
   emergencyAvailable: boolean
+  /** Portfolio photos (before/after work) — image URLs from /upload. */
+  portfolio: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -65,6 +67,7 @@ const workerSchema = new Schema<IWorker>({
   reviewCount: { type: Number, default: 0 },
   completedJobs: { type: Number, default: 0 },
   emergencyAvailable: { type: Boolean, default: false },
+  portfolio: { type: [String], default: [] },
 }, { timestamps: true })
 
 workerSchema.index({ trades: 1 })

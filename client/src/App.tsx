@@ -83,6 +83,8 @@ const VacancyPage = lazy(() => import('@/pages/landlord/VacancyPage').then((m) =
 const AgentLeadsPage = lazy(() => import('@/pages/agent/AgentLeadsPage').then((m) => ({ default: m.AgentLeadsPage })))
 const AgentViewingsPage = lazy(() => import('@/pages/agent/AgentViewingsPage').then((m) => ({ default: m.AgentViewingsPage })))
 const AgentCommissionsPage = lazy(() => import('@/pages/agent/AgentCommissionsPage').then((m) => ({ default: m.AgentCommissionsPage })))
+const HousingDemandPage = lazy(() => import('@/pages/government/HousingDemandPage').then((m) => ({ default: m.HousingDemandPage })))
+const AgencyPage = lazy(() => import('@/pages/agent/AgencyPage').then((m) => ({ default: m.AgencyPage })))
 const TenantPassportPage = lazy(() => import('@/pages/TenantPassportPage').then((m) => ({ default: m.TenantPassportPage })))
 const PublicPassportPage = lazy(() => import('@/pages/PublicPassportPage').then((m) => ({ default: m.PublicPassportPage })))
 const MaintenancePage = lazy(() => import('@/pages/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
@@ -99,6 +101,9 @@ const AdminFinancingPage = lazy(() => import('@/pages/admin/AdminFinancingPage')
 const AdminEmployersPage = lazy(() => import('@/pages/admin/AdminEmployersPage').then((m) => ({ default: m.AdminEmployersPage })))
 const AdminMaintenancePage = lazy(() => import('@/pages/admin/AdminMaintenancePage').then((m) => ({ default: m.AdminMaintenancePage })))
 const AdminInsurancePoliciesPage = lazy(() => import('@/pages/admin/AdminInsurancePoliciesPage').then((m) => ({ default: m.AdminInsurancePoliciesPage })))
+const RoleCapabilitiesPage = lazy(() => import('@/pages/RoleCapabilitiesPage').then((m) => ({ default: m.RoleCapabilitiesPage })))
+const PublicAgencyPage = lazy(() => import('@/pages/PublicAgencyPage').then((m) => ({ default: m.PublicAgencyPage })))
+const PublicDevelopmentsPage = lazy(() => import('@/pages/PublicDevelopmentsPage').then((m) => ({ default: m.PublicDevelopmentsPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -150,6 +155,8 @@ export default function App() {
             <Route path="/registry" element={<PublicRegistryPage />} />
             <Route path="/registry/:id" element={<PublicRegistryDetailPage />} />
             <Route path="/passport/:token" element={<PublicPassportPage />} />
+            <Route path="/agency/:slug" element={<PublicAgencyPage />} />
+            <Route path="/developments" element={<PublicDevelopmentsPage />} />
           </Route>
 
           {/* Auth routes */}
@@ -180,6 +187,7 @@ export default function App() {
             <Route path="/government" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><GovernmentPanel /></RequireRole>} />
             <Route path="/government/simulation" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PolicySimulationPage /></RequireRole>} />
             <Route path="/government/reviews" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PropertyReviewPage /></RequireRole>} />
+            <Route path="/government/housing-demand" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><HousingDemandPage /></RequireRole>} />
             <Route path="/credit-score" element={<CreditScorePage />} />
             <Route path="/my-profile" element={<TenantProfilePage />} />
             <Route path="/blog/new" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><BlogEditorPage /></RequireRole>} />
@@ -221,6 +229,7 @@ export default function App() {
             <Route path="/agent/leads" element={<RequireRole roles={['landlord', 'property_manager']}><AgentLeadsPage /></RequireRole>} />
             <Route path="/agent/viewings" element={<RequireRole roles={['landlord', 'property_manager']}><AgentViewingsPage /></RequireRole>} />
             <Route path="/agent/commissions" element={<RequireRole roles={['landlord', 'property_manager']}><AgentCommissionsPage /></RequireRole>} />
+            <Route path="/agent/agency" element={<RequireRole roles={['landlord', 'property_manager']}><AgencyPage /></RequireRole>} />
             <Route path="/passport" element={<TenantPassportPage />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/ai-writer" element={<RequireRole roles={['landlord', 'property_manager', 'admin']}><AIWritingAssistantPage /></RequireRole>} />
@@ -232,6 +241,7 @@ export default function App() {
             <Route path="/insurance" element={<InsuranceMarketplacePage />} />
             <Route path="/local-services" element={<LocalServicesPage />} />
             <Route path="/achievements" element={<AchievementsPage />} />
+            <Route path="/role-capabilities" element={<RoleCapabilitiesPage />} />
             {/* Platform Admin — read-only views across all tenants */}
             <Route path="/admin/financing" element={<RequireRole roles={['admin']}><AdminFinancingPage /></RequireRole>} />
             <Route path="/admin/employers" element={<RequireRole roles={['admin']}><AdminEmployersPage /></RequireRole>} />

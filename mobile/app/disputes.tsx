@@ -194,7 +194,7 @@ export default function DisputesScreen() {
                       size={16}
                       color={category === cat.value ? c.primary : c.muted}
                     />
-                    <Text style={[s.categoryBtnText, { color: c.text }, category === cat.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                    <Text style={[s.categoryBtnText, { color: c.text }, category === cat.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                       {cat.label}
                     </Text>
                   </TouchableOpacity>
@@ -254,35 +254,35 @@ export default function DisputesScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.md, paddingVertical: 12, borderRadius: 10 },
-  createBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  createBtnText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
   list: { padding: spacing.md, gap: spacing.sm },
   // Cards — depth comes from neuCard() at the call site
   card: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
   cardIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   cardBody: { flex: 1 },
-  cardTitle: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  cardTitle: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  categoryText: { fontSize: 11, textTransform: 'capitalize', fontFamily: 'Manrope_400Regular' },
+  categoryText: { fontSize: 11, textTransform: 'capitalize', fontFamily: 'Outfit_400Regular' },
   dot: { fontSize: 11 },
-  dateText: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  dateText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
   // Inputs — pressed well comes from neuInset() at the call site
-  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 14, fontFamily: 'Outfit_500Medium' },
   textArea: { minHeight: 100, paddingTop: 14 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   categoryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1.5 },
-  categoryBtnText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  categoryBtnText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
+  submitBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
 })

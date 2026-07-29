@@ -97,6 +97,40 @@ interface RunReport {
 
 type Tab = 'employees' | 'mandates' | 'payroll' | 'reports'
 
+interface BulkImportResult {
+  created: number
+  skipped: number
+  errors: { row: number; email?: string; reason: string }[]
+}
+
+interface ParsedBulkRow {
+  row: number
+  email: string
+  netMonthlySalary: number
+  startDate: string
+  staffNumber?: string
+  jobTitle?: string
+  error?: string
+}
+
+// Parses one CSV row per line: email,salary,startDate[,staffNumber][,jobTitle]
+function parseBulkRows(text: string): ParsedBulkRow[] {
+  return text
+    .split('\n')
+    .map((line, i) => ({ line: line.trim(), row: i + 1 }))
+    .filter(({ line }) => line.length > 0)
+    .map(({ line, row }) => {
+      const [email = '', salaryRaw = '', startDate = '', staffNumber = '', jobTitle = ''] = line.split(',').map((p) => p.trim())
+      const salary = Number(salaryRaw)
+      let error: string | undefined
+      if (!email || !salaryRaw || !startDate) error = 'Expected email,salary,startDate'
+      else if (!/^\S+@\S+\.\S+$/.test(email)) error = 'Invalid email'
+      else if (!Number.isFinite(salary) || salary < 0) error = 'Invalid salary'
+      else if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) error = 'Start date must be YYYY-MM-DD'
+      return { row, email, netMonthlySalary: salary, startDate, staffNumber: staffNumber || undefined, jobTitle: jobTitle || undefined, error }
+    })
+}
+
 // Mirrors the base-URL resolution in lib/api.ts (BASE_URL is module-private
 // there) so the CSV export can fetch text/csv outside the JSON api client.
 function resolveApiBaseUrl(): string {
@@ -251,6 +285,48 @@ export default function EmployerScreen() {
       Alert.alert('Error', (e as { message?: string }).message ?? 'Failed to add employee')
     } finally {
       setAddingEmployee(false)
+    }
+  }
+
+  // ── Bulk employee invite modal ──
+  const [showBulk, setShowBulk] = useState(false)
+  const [bulkCsv, setBulkCsv] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkResult, setBulkResult] = useState<BulkImportResult | null>(null)
+
+  const bulkParsed = parseBulkRows(bulkCsv)
+  const bulkValid = bulkParsed.filter((r) => !r.error)
+
+  function resetBulk() {
+    setShowBulk(false)
+    setBulkCsv('')
+    setBulkResult(null)
+  }
+
+  async function submitBulk() {
+    if (bulkParsed.length === 0) { Alert.alert('No rows', 'Paste one CSV row per line: email,salary,startDate[,staffNumber][,jobTitle]'); return }
+    if (bulkValid.length === 0) { Alert.alert('No valid rows', 'Fix the highlighted rows and try again'); return }
+    setBulkBusy(true)
+    try {
+      const res = await api.post<BulkImportResult>('/employers/employees/bulk', {
+        rows: bulkValid.map((r) => ({
+          email: r.email,
+          netMonthlySalary: r.netMonthlySalary,
+          startDate: r.startDate,
+          staffNumber: r.staffNumber,
+          jobTitle: r.jobTitle,
+        })),
+      })
+      // Server row numbers index the submitted (valid-only) array — map them back to the pasted line numbers
+      setBulkResult({ ...res, errors: res.errors.map((e) => ({ ...e, row: bulkValid[e.row - 1]?.row ?? e.row })) })
+      if (res.created > 0) {
+        qc.invalidateQueries({ queryKey: ['employer-employees'] })
+        qc.invalidateQueries({ queryKey: ['employer-me'] })
+      }
+    } catch (e) {
+      Alert.alert('Error', (e as { message?: string }).message ?? 'Bulk import failed')
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -465,7 +541,7 @@ export default function EmployerScreen() {
                   ]}
                   onPress={() => setPayrollCycle(p.value)}
                 >
-                  <Text style={[s.optionText, { color: c.text }, payrollCycle === p.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                  <Text style={[s.optionText, { color: c.text }, payrollCycle === p.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                     {p.label}
                   </Text>
                 </TouchableOpacity>
@@ -553,14 +629,24 @@ export default function EmployerScreen() {
         {/* ── Employees ── */}
         {tab === 'employees' && (
           <>
-            <TouchableOpacity
-              style={[s.newBtn, { backgroundColor: c.primary }]}
-              onPress={() => setShowAddEmployee(true)}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="person-add-outline" size={18} color="#fff" />
-              <Text style={s.newBtnText}>Add Employee</Text>
-            </TouchableOpacity>
+            <View style={s.empActions}>
+              <TouchableOpacity
+                style={[s.newBtn, s.empActionBtn, { backgroundColor: c.primary }]}
+                onPress={() => setShowAddEmployee(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="person-add-outline" size={18} color="#fff" />
+                <Text style={s.newBtnText}>Add Employee</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.newBtn, s.empActionBtn, { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.primary }]}
+                onPress={() => setShowBulk(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="people-outline" size={18} color={c.primary} />
+                <Text style={[s.newBtnText, { color: c.primary }]}>Bulk Invite</Text>
+              </TouchableOpacity>
+            </View>
 
             {employeesQ.isLoading ? (
               <ActivityIndicator color={c.primary} style={{ marginTop: spacing.xl }} />
@@ -892,6 +978,97 @@ export default function EmployerScreen() {
         </View>
       </Modal>
 
+      {/* Bulk invite modal */}
+      <Modal visible={showBulk} animationType="slide" transparent onRequestClose={resetBulk}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text }]}>Bulk Invite Employees</Text>
+              <TouchableOpacity onPress={resetBulk} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={c.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[s.hint, { color: c.muted }]}>
+                One CSV row per line: email,salary,startDate[,staffNumber][,jobTitle]. Employees must already have a RentOS account.
+              </Text>
+
+              <TextInput
+                style={[s.input, s.bulkInput, neuInset(c), { color: c.text }]}
+                value={bulkCsv}
+                onChangeText={(t) => { setBulkCsv(t); setBulkResult(null) }}
+                placeholder={'ama@example.com,3200,2026-02-01,EMP-014,Analyst\nkofi@example.com,2800,2026-02-01'}
+                placeholderTextColor={c.muted}
+                multiline
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              {bulkParsed.length > 0 && (
+                <>
+                  <Text style={[s.label, { color: c.text }]}>
+                    Preview — {bulkValid.length} valid · {bulkParsed.length - bulkValid.length} invalid
+                  </Text>
+                  {bulkParsed.map((r) => (
+                    <View key={r.row} style={s.bulkRow}>
+                      <Ionicons
+                        name={r.error ? 'alert-circle' : 'checkmark-circle'}
+                        size={16}
+                        color={r.error ? c.danger : c.accent}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.bulkRowText, { color: c.text }]} numberOfLines={1}>
+                          {r.row}. {r.email || '(no email)'}
+                        </Text>
+                        <Text style={[s.bulkRowSub, { color: r.error ? c.danger : c.muted }]} numberOfLines={1}>
+                          {r.error ?? `${formatCompact(r.netMonthlySalary)}/mo · starts ${r.startDate}`}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {bulkResult && (
+                <View style={[s.bulkResult, { backgroundColor: c.primary + '08', borderColor: c.primary + '20' }]}>
+                  <Text style={[s.bulkResultTitle, { color: c.text }]}>
+                    {bulkResult.created} invited · {bulkResult.skipped} already linked · {bulkResult.errors.length} failed
+                  </Text>
+                  {bulkResult.errors.map((e, i) => (
+                    <Text key={i} style={[s.bulkResultError, { color: c.danger }]}>
+                      Row {e.row}{e.email ? ` (${e.email})` : ''}: {e.reason}
+                    </Text>
+                  ))}
+                </View>
+              )}
+
+              {bulkResult ? (
+                <TouchableOpacity style={[s.submitBtn, { backgroundColor: c.primary }]} onPress={resetBulk} activeOpacity={0.85}>
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                  <Text style={s.submitText}>Done</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[s.submitBtn, { backgroundColor: c.primary }, (bulkBusy || bulkValid.length === 0) && s.submitDisabled]}
+                  onPress={submitBulk}
+                  disabled={bulkBusy || bulkValid.length === 0}
+                  activeOpacity={0.85}
+                >
+                  {bulkBusy ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="people" size={16} color="#fff" />
+                      <Text style={s.submitText}>Invite {bulkValid.length} Employee{bulkValid.length === 1 ? '' : 's'}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Create payroll run modal */}
       <Modal visible={showCreateRun} animationType="slide" transparent onRequestClose={resetCreateRun}>
         <View style={s.modalOverlay}>
@@ -1039,89 +1216,100 @@ const s = StyleSheet.create({
     flexDirection: 'row', gap: spacing.sm, padding: spacing.md, borderRadius: 12,
     borderWidth: 1, marginBottom: spacing.md, alignItems: 'flex-start',
   },
-  bannerText: { flex: 1, fontSize: 12, fontFamily: 'Manrope_500Medium' },
-  formTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
-  hint: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm, lineHeight: 18 },
+  bannerText: { flex: 1, fontSize: 12, fontFamily: 'Outfit_500Medium' },
+  formTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+  hint: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginBottom: spacing.sm, lineHeight: 18 },
 
   segment: { flexDirection: 'row', padding: 3, marginBottom: spacing.md },
   segmentBtn: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
-  segmentText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  segmentText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   newBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 12, marginBottom: spacing.md,
   },
-  newBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  newBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
+
+  empActions: { flexDirection: 'row', gap: spacing.sm },
+  empActionBtn: { flex: 1 },
+
+  bulkInput: { height: 120, textAlignVertical: 'top', fontSize: 13 },
+  bulkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
+  bulkRowText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
+  bulkRowSub: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 1 },
+  bulkResult: { borderRadius: 10, borderWidth: 1, padding: spacing.md, marginTop: spacing.sm, gap: 4 },
+  bulkResultTitle: { fontSize: 12, fontFamily: 'Outfit_700Bold' },
+  bulkResultError: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
 
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
-  cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
-  cardSub: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 2, textTransform: 'capitalize' },
+  cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
+  cardSub: { fontSize: 11, fontFamily: 'Outfit_500Medium', marginTop: 2, textTransform: 'capitalize' },
   profileIcon: { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
 
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   rows: { gap: 4, marginBottom: spacing.xs },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  rowLabel: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  rowValue: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  rowLabel: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  rowValue: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   actionBtnSolid: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderRadius: 10, paddingVertical: 10, marginTop: spacing.sm,
   },
-  actionBtnSolidText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  actionBtnSolidText: { color: '#fff', fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   runActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   smallBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderRadius: 10, paddingVertical: 8, borderWidth: 1.5,
   },
-  smallBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  smallBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   chipRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
   chip: { borderRadius: 9, paddingVertical: 7, paddingHorizontal: spacing.md, borderWidth: 1.5 },
-  chipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  chipText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   statRow: { flexDirection: 'row' },
   statBox: { flex: 1, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
-  statLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textAlign: 'center' },
+  statValue: { fontSize: 16, fontFamily: 'Outfit_700Bold' },
+  statLabel: { fontSize: 10, fontFamily: 'Outfit_500Medium', textAlign: 'center' },
 
   typeChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1,
   },
-  typeChipLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
-  typeChipValue: { fontSize: 11, fontFamily: 'Manrope_700Bold' },
+  typeChipLabel: { fontSize: 10, fontFamily: 'Outfit_500Medium', textTransform: 'capitalize' },
+  typeChipValue: { fontSize: 11, fontFamily: 'Outfit_700Bold' },
 
   reportEmp: { borderTopWidth: 1, paddingTop: spacing.sm, marginTop: spacing.sm },
   lineRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 5 },
-  failText: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+  failText: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 1 },
 
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
   fieldRow: { flexDirection: 'row', gap: spacing.sm },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   optionBtn: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },
-  optionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  optionText: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
 
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.sm,
   },
   submitDisabled: { opacity: 0.6 },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 17, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
+  modalTitle: { fontSize: 17, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.md },
 })

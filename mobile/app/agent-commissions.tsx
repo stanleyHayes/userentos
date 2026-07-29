@@ -239,43 +239,43 @@ export default function AgentCommissionsScreen() {
 const s = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   statRow: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
   statBox: { flex: 1, padding: spacing.sm, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 13, fontFamily: 'Manrope_800ExtraBold', textAlign: 'center' },
-  statLabel: { fontSize: 10, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase' },
+  statValue: { fontSize: 13, fontFamily: 'Outfit_800ExtraBold', textAlign: 'center' },
+  statLabel: { fontSize: 10, fontFamily: 'Outfit_500Medium', textTransform: 'uppercase' },
 
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 10, marginBottom: spacing.md,
   },
-  addBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  addBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_700Bold' },
 
   card: { padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  cardTitle: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
-  cardSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
-  amount: { fontSize: 14, fontFamily: 'Manrope_800ExtraBold' },
+  cardTitle: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  cardSub: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
+  amount: { fontSize: 14, fontFamily: 'Outfit_800ExtraBold' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  statusText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   paidBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, paddingVertical: 9, borderRadius: 10,
   },
-  paidBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  paidBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.md, marginBottom: spacing.xs },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.md },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.md, marginBottom: spacing.xs },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
   },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 })

@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js'
 import { Lead } from '../models/Lead.js'
 import { Viewing } from '../models/Viewing.js'
 import { Commission } from '../models/Commission.js'
+import { Delegation } from '../models/Delegation.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
@@ -20,12 +21,17 @@ const idOf = <T extends { _id: unknown }>(doc: T) => ({
   id: (doc._id as Types.ObjectId).toString(),
 })
 
-/** Resolve the agent (owner or manager) who should receive leads for a property. */
+/** Resolve the agent (owner or manager) who should receive leads for a property.
+ *  An active delegation with the 'leads' scope takes precedence over the owner. */
 async function agentForProperty(propertyId: string) {
   const property = await Property.findById(propertyId).lean()
   if (!property) return null
   const p = property as unknown as { landlordId?: string; managerId?: string }
-  return { property, agentId: p.managerId ?? p.landlordId ?? null }
+  const ownerId = p.managerId ?? p.landlordId ?? null
+  if (!ownerId) return { property, agentId: null }
+
+  const delegation = await Delegation.findOne({ propertyId, status: 'active', scopes: 'leads' }).lean()
+  return { property, agentId: delegation?.delegateId ?? ownerId }
 }
 
 /* ================================================================

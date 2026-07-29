@@ -31,6 +31,25 @@ export async function loginViaUI(
   page: Page,
   user: { email: string; password: string } = TENANT_USER
 ): Promise<void> {
+  // Install this before the first application script executes. Waiting to
+  // dismiss the tour after login races with DashboardLayout's role effect and
+  // can leave the full-screen overlay intercepting the next test action.
+  await page.addInitScript(() => {
+    localStorage.setItem('rentos-onboarding', JSON.stringify({
+      completedTours: {
+        tenant: true,
+        landlord: true,
+        property_manager: true,
+        service_provider: true,
+        financier: true,
+        employer: true,
+        government: true,
+        business: true,
+        admin: true,
+        developer: true,
+      },
+    }))
+  })
   await page.goto('/login')
 
   // The LoginPage uses MUI TextField with id="email" and a PasswordInput with
@@ -52,15 +71,6 @@ export async function loginViaUI(
     })
     .not.toBeNull()
 
-  // Dismiss onboarding tour if it appears (first-login experience).
-  // The tour modal fades in after a short delay; wait for it then skip.
-  const skipTour = page.getByRole('button', { name: /skip tour/i })
-  try {
-    await skipTour.waitFor({ state: 'visible', timeout: 3_000 })
-    await skipTour.click()
-  } catch {
-    // Tour did not appear — okay to continue.
-  }
 }
 
 type AuthFixtures = {

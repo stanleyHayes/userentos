@@ -10,6 +10,7 @@ import { User } from '../models/User.js'
 import { notify } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 
 const router = Router()
 
@@ -95,8 +96,9 @@ router.get(
       // landlord sees requests for properties they own/manage
       const owned = await Property.find({ landlordId: userId.toString() }).select('_id').lean()
       const ownedIds = owned.map((p) => (p._id as Types.ObjectId).toString())
+      const delegatedIds = await delegatedPropertyIds(userId.toString(), 'maintenance')
       // include both: assigned landlordId OR property owned
-      filter.$or = [{ landlordId: userId.toString() }, { propertyId: { $in: ownedIds } }]
+      filter.$or = [{ landlordId: userId.toString() }, { propertyId: { $in: [...ownedIds, ...delegatedIds] } }]
     } else {
       filter.tenantId = userId.toString()
     }
@@ -273,7 +275,7 @@ router.patch(
     }
 
     const isLandlord =
-      request.landlordId === userId.toString() || isAdminRole(roles)
+      request.landlordId === userId.toString() || isAdminRole(roles) || await hasDelegatedScope(userId.toString(), request.propertyId, 'maintenance')
     const isTenant = request.tenantId === userId.toString()
 
     if (!isLandlord && !isTenant) {

@@ -67,10 +67,10 @@ export function AITextInput({ label, aiContext, value, onChangeText, style, ...p
 }
 
 const s = StyleSheet.create({
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: 6, marginTop: spacing.md },
   wrapper: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
-  input: { paddingHorizontal: spacing.md, paddingTop: 14, paddingBottom: 14, fontSize: 14, fontFamily: 'Manrope_500Medium', minHeight: 100 },
+  input: { paddingHorizontal: spacing.md, paddingTop: 14, paddingBottom: 14, fontSize: 14, fontFamily: 'Outfit_500Medium', minHeight: 100 },
   aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(0,0,0,0.06)', alignSelf: 'flex-end', borderRadius: 8, margin: 8, marginTop: 0 },
-  aiBtnText: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
-  hint: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  aiBtnText: { fontSize: 12, fontFamily: 'Outfit_700Bold' },
+  hint: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 4 },
 })

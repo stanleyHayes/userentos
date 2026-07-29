@@ -8,6 +8,8 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { CheckCircle2, X } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useState } from 'react'
+import { api } from '@/lib/api'
 
 const statusVariant = {
   draft: 'muted', submitted: 'warning', under_review: 'warning',
@@ -66,13 +68,16 @@ export function FinancingApplicationsPage() {
                   </div>
                 )}
                 {isFinancier && (a.status === 'submitted' || a.status === 'under_review') && (
-                  <div className="flex items-center justify-end gap-2 mt-3">
+                  <div className="mt-3">
+                    <DecisionAssist applicationId={a.id} />
+                    <div className="flex items-center justify-end gap-2 mt-3">
                     <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'reject', notes: 'Declined' }, { onError: (e) => addToast((e as Error).message, 'error') })}>
                       <X size={12} /> Reject
                     </Button>
                     <Button size="sm" variant="accent" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, action: 'approve' }, { onError: (e) => addToast((e as Error).message, 'error') })}>
                       <CheckCircle2 size={12} /> Approve & generate contract
                     </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -82,6 +87,21 @@ export function FinancingApplicationsPage() {
       )}
     </div>
   )
+}
+
+function DecisionAssist({ applicationId }: { applicationId: string }) {
+  const [data, setData] = useState<{ creditScore?: { score?: number }; rentalHistory?: { agreements: number; completed: number }; paymentHistory?: { total: number; completed: number; failed: number } } | null>(null)
+  const [loading, setLoading] = useState(false)
+  async function load() {
+    setLoading(true)
+    try { setData(await api.get(`/capabilities/financier/decision/${applicationId}`)) } finally { setLoading(false) }
+  }
+  if (!data) return <Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>{loading ? 'Loading…' : 'Credit decision assist'}</Button>
+  return <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface p-3 text-xs dark:bg-[#0c0e1a]">
+    <Stat label="Live credit" value={data.creditScore?.score ?? '—'} />
+    <Stat label="Rental records" value={data.rentalHistory?.agreements ?? 0} />
+    <Stat label="Payments / failed" value={`${data.paymentHistory?.completed ?? 0} / ${data.paymentHistory?.failed ?? 0}`} />
+  </div>
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {

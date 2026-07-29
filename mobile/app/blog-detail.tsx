@@ -39,12 +39,12 @@ export default function BlogDetailScreen() {
   }, [id])
 
   const mdStyles: Record<string, TextStyle | ViewStyle> = {
-    body: { color: c.text, fontSize: 15, lineHeight: 24, fontFamily: 'Manrope_400Regular' },
-    heading1: { color: c.primaryDark, fontSize: 24, fontFamily: 'Manrope_800ExtraBold', marginTop: 24, marginBottom: 8 },
-    heading2: { color: c.primaryDark, fontSize: 20, fontFamily: 'Manrope_700Bold', marginTop: 20, marginBottom: 8 },
-    heading3: { color: c.primaryDark, fontSize: 17, fontFamily: 'Manrope_700Bold', marginTop: 16, marginBottom: 6 },
+    body: { color: c.text, fontSize: 15, lineHeight: 24, fontFamily: 'Outfit_400Regular' },
+    heading1: { color: c.primaryDark, fontSize: 24, fontFamily: 'Outfit_800ExtraBold', marginTop: 24, marginBottom: 8 },
+    heading2: { color: c.primaryDark, fontSize: 20, fontFamily: 'Outfit_700Bold', marginTop: 20, marginBottom: 8 },
+    heading3: { color: c.primaryDark, fontSize: 17, fontFamily: 'Outfit_700Bold', marginTop: 16, marginBottom: 6 },
     paragraph: { marginBottom: 12, lineHeight: 24 },
-    strong: { fontFamily: 'Manrope_700Bold', color: c.primaryDark },
+    strong: { fontFamily: 'Outfit_700Bold', color: c.primaryDark },
     em: { fontStyle: 'italic' },
     link: { color: c.primary, textDecorationLine: 'underline' },
     blockquote: {
@@ -59,7 +59,7 @@ export default function BlogDetailScreen() {
     code_inline: {
       backgroundColor: dark ? '#334155' : '#f1f5f9',
       color: c.primary,
-      fontFamily: 'Manrope_500Medium',
+      fontFamily: 'Outfit_500Medium',
       paddingHorizontal: 4,
       paddingVertical: 1,
       borderRadius: 4,
@@ -74,7 +74,7 @@ export default function BlogDetailScreen() {
       marginVertical: 12,
     },
     code_block: {
-      fontFamily: 'Manrope_400Regular',
+      fontFamily: 'Outfit_400Regular',
       fontSize: 13,
       color: c.text,
     },
@@ -84,7 +84,7 @@ export default function BlogDetailScreen() {
     hr: { backgroundColor: c.border, height: 1, marginVertical: 16 },
     table: { borderWidth: 1, borderColor: c.border, borderRadius: 8, overflow: 'hidden' as const },
     thead: { backgroundColor: dark ? '#1e293b' : '#f1f5f9' },
-    th: { padding: 8, fontFamily: 'Manrope_700Bold', fontSize: 12, color: c.primaryDark },
+    th: { padding: 8, fontFamily: 'Outfit_700Bold', fontSize: 12, color: c.primaryDark },
     td: { padding: 8, fontSize: 12, borderTopWidth: 1, borderColor: c.border },
     tr: {},
   }
@@ -152,18 +152,18 @@ export default function BlogDetailScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
-  errorText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  errorText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   cover: { height: 220 },
   coverPlaceholder: { height: 160, justifyContent: 'center', alignItems: 'center' },
   content: { padding: spacing.md },
   tagRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.sm, flexWrap: 'wrap' },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  tagText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', textTransform: 'capitalize' },
-  title: { fontSize: 24, fontFamily: 'Manrope_800ExtraBold', lineHeight: 32, marginBottom: spacing.md },
+  tagText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold', textTransform: 'capitalize' },
+  title: { fontSize: 24, fontFamily: 'Outfit_800ExtraBold', lineHeight: 32, marginBottom: spacing.md },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.md },
   authorAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  authorAvatarText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  authorName: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  date: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+  authorAvatarText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  authorName: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  date: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 1 },
   divider: { height: 1, marginBottom: spacing.md },
 })

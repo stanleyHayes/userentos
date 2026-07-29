@@ -4,7 +4,7 @@ import { test, expect } from '../fixtures/auth'
  * AI Writing Assistant page loads and tabs are interactive.
  */
 test.describe('ai writing assistant', () => {
-  test('tenant can access AI writer page and see tabs', async ({ authedPage: page }) => {
+  test('landlord can access AI writer page and see tabs', async ({ authedLandlordPage: page }) => {
     await page.goto('/ai-writer')
     await expect(page).toHaveURL(/\/ai-writer/)
 
@@ -22,7 +22,7 @@ test.describe('ai writing assistant', () => {
     await expect(input).toBeVisible()
   })
 
-  test('listing generator tab works', async ({ authedPage: page }) => {
+  test('listing generator tab works', async ({ authedLandlordPage: page }) => {
     await page.goto('/ai-writer')
     await expect(page).toHaveURL(/\/ai-writer/)
 

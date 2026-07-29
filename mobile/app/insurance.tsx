@@ -190,7 +190,7 @@ function BrowseTab() {
             </View>
 
             <Text style={[s.coverageDetails, { color: c.muted }]} numberOfLines={3}>
-              <Text style={{ fontFamily: 'Manrope_700Bold' }}>Includes: </Text>
+              <Text style={{ fontFamily: 'Outfit_700Bold' }}>Includes: </Text>
               {p.coverageDetails}
             </Text>
 
@@ -480,68 +480,68 @@ const s = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   tabs: { flexDirection: 'row', borderBottomWidth: 1 },
   tabBtn: { paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  tabText: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
   filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  filterChipText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  filterChipText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   card: { padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  cardSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
-  policyNum: { fontSize: 10, fontFamily: 'Manrope_500Medium', marginTop: 2 },
+  cardTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  cardSub: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
+  policyNum: { fontSize: 10, fontFamily: 'Outfit_500Medium', marginTop: 2 },
   catBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  catText: { fontSize: 10, fontFamily: 'Manrope_700Bold' },
-  desc: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 18 },
+  catText: { fontSize: 10, fontFamily: 'Outfit_700Bold' },
+  desc: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 18 },
 
   statRow: { flexDirection: 'row', gap: 6 },
   statBox: { flex: 1, padding: 10, gap: 2 },
-  statBoxLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase' },
-  statBoxValue: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
+  statBoxLabel: { fontSize: 9, fontFamily: 'Outfit_500Medium', textTransform: 'uppercase' },
+  statBoxValue: { fontSize: 12, fontFamily: 'Outfit_700Bold' },
 
-  coverageDetails: { fontSize: 11, fontFamily: 'Manrope_400Regular', lineHeight: 16 },
+  coverageDetails: { fontSize: 11, fontFamily: 'Outfit_400Regular', lineHeight: 16 },
 
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' },
-  statusText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  statusText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   buyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 11, borderRadius: 10,
   },
-  buyBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  buyBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
 
   claimsBox: { padding: 10, gap: 4 },
-  claimsLabel: { fontSize: 9, fontFamily: 'Manrope_700Bold', letterSpacing: 0.5 },
+  claimsLabel: { fontSize: 9, fontFamily: 'Outfit_700Bold', letterSpacing: 0.5 },
   claimRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  claimDesc: { fontSize: 11, fontFamily: 'Manrope_500Medium', flex: 1 },
-  claimAmount: { fontSize: 11, fontFamily: 'Manrope_700Bold' },
+  claimDesc: { fontSize: 11, fontFamily: 'Outfit_500Medium', flex: 1 },
+  claimAmount: { fontSize: 11, fontFamily: 'Outfit_700Bold' },
 
   claimBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, paddingVertical: 9, borderRadius: 10,
   },
-  claimBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  claimBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.md },
   summaryBox: { padding: spacing.md, marginTop: spacing.md, gap: 6 },
   summaryRowItem: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryRowLabel: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
-  summaryRowValue: { fontSize: 12, fontFamily: 'Manrope_700Bold' },
+  summaryRowLabel: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
+  summaryRowValue: { fontSize: 12, fontFamily: 'Outfit_700Bold' },
   termsBox: { padding: spacing.md, marginTop: spacing.md, gap: 6 },
-  termsLabel: { fontSize: 9, fontFamily: 'Manrope_700Bold', letterSpacing: 0.5 },
-  termsText: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17 },
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.md, marginBottom: spacing.xs },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  termsLabel: { fontSize: 9, fontFamily: 'Outfit_700Bold', letterSpacing: 0.5 },
+  termsText: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.md, marginBottom: spacing.xs },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
   },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 })

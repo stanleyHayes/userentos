@@ -20,8 +20,10 @@ import { DoodleCircle } from '@/components/ui/Doodles'
 import { ROLE_DEFAULT_PERMISSIONS } from '@/types'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import toast from 'react-hot-toast'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
-const ALL_ROLES: UserRole[] = ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'super_admin']
+const ALL_ROLES: UserRole[] = ['tenant', 'landlord', 'property_manager', 'financier', 'employer', 'service_provider', 'business', 'developer', 'government', 'legal_officer', 'admin', 'super_admin']
 
 const PERMISSION_GROUPS: Record<string, Permission[]> = {
   Users: ['users:view', 'users:create', 'users:edit', 'users:delete', 'users:invite', 'users:manage_permissions'],
@@ -49,6 +51,7 @@ const roleVariant: Record<UserRole, 'default' | 'success' | 'warning' | 'muted' 
   employer: 'default',
   service_provider: 'default',
   business: 'default',
+  developer: 'warning',
 }
 
 const roleLabel: Record<UserRole, string> = {
@@ -63,6 +66,7 @@ const roleLabel: Record<UserRole, string> = {
   employer: 'Employer',
   service_provider: 'Service Provider',
   business: 'Local Business',
+  developer: 'Property Developer',
 }
 
 type Tab = 'users' | 'invitations'
@@ -194,6 +198,8 @@ export function UsersPage() {
           )}
         </div>
       </div>
+
+      <VerificationQueue />
 
       {/* Tabs */}
       <div ref={tabUnderlineAttach} className="relative isolate flex gap-1 border-b border-border dark:border-[#252a3a]">
@@ -496,6 +502,25 @@ export function UsersPage() {
       </Modal>
     </div>
   )
+}
+
+function VerificationQueue() {
+  const qc = useQueryClient()
+  const { data } = useQuery({
+    queryKey: ['verification-requests'],
+    queryFn: () => api.get<{ items: { id: string; firstName: string; lastName: string; ghanaCardId: string; roles: string[] }[] }>('/users/verification-requests'),
+  })
+  const decide = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) => api.post(`/users/${id}/${approve ? 'verify-identity' : 'reject-verification'}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['verification-requests'] }),
+  })
+  if (!data?.items.length) return null
+  return <Card><CardHeader><CardTitle>Identity verification queue</CardTitle></CardHeader><CardContent className="space-y-2">
+    {data.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+      <div><p className="text-sm font-bold">{item.firstName} {item.lastName}</p><p className="text-xs text-muted">{item.ghanaCardId} · {item.roles.join(', ')}</p></div>
+      <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => decide.mutate({ id: item.id, approve: false })}>Reject</Button><Button size="sm" onClick={() => decide.mutate({ id: item.id, approve: true })}>Verify</Button></div>
+    </div>)}
+  </CardContent></Card>
 }
 
 // ─── Sub-components ───

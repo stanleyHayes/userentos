@@ -5,7 +5,14 @@ import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
-import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope'
+import { useFonts } from 'expo-font'
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+  Outfit_800ExtraBold,
+} from '@expo-google-fonts/outfit'
 import * as ExpoSplashScreen from 'expo-splash-screen'
 import { AnimatedSplashScreen } from '../components/SplashScreen'
 import { useThemeColors } from '../lib/theme'
@@ -59,11 +66,11 @@ export default function RootLayout() {
   const router = useRouter()
 
   const [fontsLoaded] = useFonts({
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-    Manrope_800ExtraBold,
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    Outfit_800ExtraBold,
   })
 
   useEffect(() => {
@@ -85,7 +92,7 @@ export default function RootLayout() {
           headerShown: true,
           headerTintColor: c.text,
           headerStyle: { backgroundColor: c.card },
-          headerTitleStyle: { fontFamily: 'Manrope_700Bold', fontSize: 17 },
+          headerTitleStyle: { fontFamily: 'Outfit_700Bold', fontSize: 17 },
           headerShadowVisible: false,
           headerBackVisible: false,
           headerLeft: ({ canGoBack }) => canGoBack ? (
@@ -116,7 +123,22 @@ export default function RootLayout() {
           <Stack.Screen name="legal-assistant" options={{ title: 'AI Legal Assistant' }} />
           <Stack.Screen name="documents" options={{ title: 'Documents' }} />
           <Stack.Screen name="tenant-profile" options={{ title: 'My Profile' }} />
+          <Stack.Screen name="tenant-passport" options={{ title: 'Tenant Passport' }} />
           <Stack.Screen name="profile-access" options={{ title: 'Profile Access' }} />
+          <Stack.Screen name="local-services" options={{ title: 'Local Services' }} />
+          <Stack.Screen name="my-business" options={{ title: 'Business Portal' }} />
+          <Stack.Screen name="workers" options={{ title: 'Service Providers' }} />
+          <Stack.Screen name="worker/[id]" options={{ title: 'Provider Profile' }} />
+          <Stack.Screen name="bookings" options={{ title: 'Service Bookings' }} />
+          <Stack.Screen name="become-worker" options={{ title: 'Provider Profile' }} />
+          <Stack.Screen name="earnings" options={{ title: 'Provider Earnings' }} />
+          <Stack.Screen name="employer" options={{ title: 'Employer Portal' }} />
+          <Stack.Screen name="financier" options={{ title: 'Financier Portal' }} />
+          <Stack.Screen name="agent-leads" options={{ title: 'Lead Pipeline' }} />
+          <Stack.Screen name="agent-viewings" options={{ title: 'Viewing Schedule' }} />
+          <Stack.Screen name="agent-commissions" options={{ title: 'Commissions' }} />
+          <Stack.Screen name="landlord-expenses" options={{ title: 'Property Expenses' }} />
+          <Stack.Screen name="landlord-vacancy" options={{ title: 'Vacancy Overview' }} />
           <Stack.Screen name="help" options={{ title: 'Help & Support' }} />
           <Stack.Screen name="about" options={{ title: 'About RentOS' }} />
           <Stack.Screen name="gov-reviews" options={{ title: 'Property Reviews' }} />

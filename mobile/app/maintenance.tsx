@@ -324,7 +324,7 @@ export default function MaintenanceScreen() {
                     <Text style={[
                       s.chipText,
                       { color: c.text },
-                      category === cat && { color: c.primary, fontFamily: 'Manrope_700Bold' },
+                      category === cat && { color: c.primary, fontFamily: 'Outfit_700Bold' },
                     ]}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
@@ -345,7 +345,7 @@ export default function MaintenanceScreen() {
                     <Text style={[
                       s.chipText,
                       { color: c.text },
-                      priority === p && { color: PRIORITY_COLORS[p], fontFamily: 'Manrope_700Bold' },
+                      priority === p && { color: PRIORITY_COLORS[p], fontFamily: 'Outfit_700Bold' },
                     ]}>{p}</Text>
                   </TouchableOpacity>
                 ))}
@@ -432,49 +432,49 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 10, marginBottom: spacing.md,
   },
-  newBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  newBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
   filterChip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1,
   },
-  filterChipText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  filterChipText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
   // Cards — depth comes from neuCard() at the call site
   card: { padding: spacing.md, marginBottom: spacing.sm },
   cardRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   iconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
-  cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', flex: 1 },
+  cardTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold', flex: 1 },
   priorityBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  priorityText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase' },
-  cardMeta: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2, textTransform: 'capitalize' },
+  priorityText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'uppercase' },
+  cardMeta: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2, textTransform: 'capitalize' },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
-  statusLabel: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', textTransform: 'capitalize' },
-  timeLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
+  statusLabel: { fontSize: 11, fontFamily: 'Outfit_600SemiBold', textTransform: 'capitalize' },
+  timeLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
   metaFooter: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText: { fontSize: 10, fontFamily: 'Manrope_500Medium' },
-  costText: { fontSize: 11, fontFamily: 'Manrope_700Bold' },
+  metaText: { fontSize: 10, fontFamily: 'Outfit_500Medium' },
+  costText: { fontSize: 11, fontFamily: 'Outfit_700Bold' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
   // Inputs — pressed well comes from neuInset() at the call site
-  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
-  chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
+  chipText: { fontSize: 12, fontFamily: 'Outfit_500Medium', textTransform: 'capitalize' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 14, borderRadius: 10, marginTop: spacing.lg, marginBottom: spacing.md,
   },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 
   // Action Sheet
   actionSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, paddingBottom: spacing.xl },
@@ -483,9 +483,9 @@ const s = StyleSheet.create({
     paddingVertical: 12, paddingHorizontal: spacing.md, borderRadius: 10, borderWidth: 1, marginBottom: 6,
   },
   statusDotLarge: { width: 10, height: 10, borderRadius: 5 },
-  statusOptionText: { flex: 1, fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  statusOptionText: { flex: 1, fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
   cancelBtn: {
     paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', marginTop: spacing.md,
   },
-  cancelText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  cancelText: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
 })

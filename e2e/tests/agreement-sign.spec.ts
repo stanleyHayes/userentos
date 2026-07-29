@@ -29,22 +29,43 @@ test.describe('agreement signing', () => {
     })
     if (!kwameId) throw new Error('Could not read Kwame userId from localStorage JWT')
 
-    // ── 2. Log in as landlord (yaw@rentos.gh) via API ──
-    const loginRes = await request.post(`${API_BASE}/api/auth/login`, {
-      data: { email: 'yaw@rentos.gh', password: 'password123' },
+    // ── 2. Create an isolated landlord for this run ──
+    // Reusing a seeded landlord gradually consumes every available property as
+    // repeated local runs activate agreements. A unique account/property keeps
+    // the test repeatable without mutating fixture inventory.
+    const suffix = Date.now().toString()
+    const registerRes = await request.post(`${API_BASE}/api/auth/register`, {
+      data: {
+        email: `e2e-landlord-${suffix}@rentos.test`,
+        phone: `024${suffix.slice(-7)}`,
+        password: 'E2e!Password123',
+        firstName: 'E2E',
+        lastName: 'Landlord',
+        role: 'landlord',
+      },
     })
-    const loginData = await loginRes.json()
-    expect(loginRes.ok(), `Landlord login failed: ${JSON.stringify(loginData)}`).toBeTruthy()
-    const landlordToken: string = loginData.data.token
+    const registerData = await registerRes.json()
+    expect(registerRes.ok(), `Landlord registration failed: ${JSON.stringify(registerData)}`).toBeTruthy()
+    const landlordToken: string = registerData.data.token
 
-    // ── 3. Get one of yaw's properties ──
-    const propsRes = await request.get(`${API_BASE}/api/properties?mine=true`, {
+    // ── 3. Create a dedicated available property ──
+    const propertyRes = await request.post(`${API_BASE}/api/properties`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
+      data: {
+        title: `E2E agreement property ${suffix}`,
+        description: 'Isolated property used by the agreement signing release test.',
+        type: 'apartment',
+        address: { street: '1 E2E Lane', city: 'Accra', region: 'Greater Accra' },
+        rentAmount: 2000,
+        rentDurationMonths: 12,
+        advanceMonths: 2,
+        rules: [],
+        amenities: [],
+      },
     })
-    const propsData = await propsRes.json()
-    expect(propsRes.ok(), `Landlord properties request failed: ${JSON.stringify(propsData)}`).toBeTruthy()
-    const propertyId: string = propsData.data.items[0]?.id
-    if (!propertyId) throw new Error('No property found for landlord')
+    const propertyData = await propertyRes.json()
+    expect(propertyRes.ok(), `Property creation failed: ${JSON.stringify(propertyData)}`).toBeTruthy()
+    const propertyId: string = propertyData.data.id
 
     // ── 4. Create a draft agreement for Kwame ──
     const createRes = await request.post(`${API_BASE}/api/agreements`, {

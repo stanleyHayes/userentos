@@ -245,31 +245,31 @@ function FilterChip({
 const s = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  filterChipText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  filterChipText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   card: { padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  cardTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  cardSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  cardTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  cardSub: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' },
-  statusText: { fontSize: 10, fontFamily: 'Manrope_700Bold' },
+  statusText: { fontSize: 10, fontFamily: 'Outfit_700Bold' },
 
   contactRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   contactChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
   },
-  contactChipText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  contactChipText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
-  message: { fontSize: 12, fontFamily: 'Manrope_400Regular', lineHeight: 17, fontStyle: 'italic' },
+  message: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17, fontStyle: 'italic' },
 
   actionsRow: { flexDirection: 'row', gap: 8, marginTop: 2 },
   actionBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, borderRadius: 10, paddingVertical: 9,
   },
-  actionBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  actionBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 })

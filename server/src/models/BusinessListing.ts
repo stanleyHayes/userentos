@@ -11,6 +11,9 @@ export interface IBusinessListing extends Document {
   promoText?: string
   isActive: boolean
   viewCount: number
+  images: string[]
+  stockQuantity?: number
+  newMoverOnly: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -25,6 +28,9 @@ const businessListingSchema = new Schema<IBusinessListing>(
     promoText: String,
     isActive: { type: Boolean, default: true },
     viewCount: { type: Number, default: 0 },
+    images: { type: [String], default: [] },
+    stockQuantity: { type: Number, min: 0 },
+    newMoverOnly: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

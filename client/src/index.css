@@ -334,6 +334,59 @@ html {
 .dark .neumorphic-button { box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34); }
 .dark .neumorphic-button:hover { box-shadow: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4); }
 
+/* Signup wizard: the rail visually anchors the controls while preserving a
+   deliberately uneven hierarchy — compact secondary Back, dominant Continue. */
+.auth-nav-rail {
+  background: color-mix(in oklab, var(--rentos-card) 92%, transparent);
+  border: 1px solid var(--rentos-card-border);
+  box-shadow: var(--rentos-shadow-inset);
+}
+
+.auth-back-button {
+  box-shadow: 3px 3px 8px rgba(163, 177, 194, 0.2), -3px -3px 8px rgba(255, 255, 255, 0.7);
+}
+
+.auth-primary-action {
+  box-shadow: 7px 8px 18px rgba(15, 31, 51, 0.28), -4px -4px 11px rgba(255, 255, 255, 0.2);
+}
+
+.auth-primary-action:hover {
+  box-shadow: 9px 10px 22px rgba(15, 31, 51, 0.3), -5px -5px 13px rgba(255, 255, 255, 0.24);
+}
+
+.auth-primary-action:active {
+  box-shadow: inset 3px 3px 8px rgba(15, 31, 51, 0.3), inset -2px -2px 6px rgba(255, 255, 255, 0.16);
+}
+
+.dark .auth-back-button {
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4), -3px -3px 8px rgba(49, 63, 80, 0.28);
+}
+
+.dark .auth-primary-action {
+  box-shadow: 7px 8px 18px rgba(0, 0, 0, 0.52), -4px -4px 11px rgba(49, 63, 80, 0.3);
+}
+
+.auth-step-enter {
+  animation: auth-step-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes auth-step-in {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-step-enter {
+    animation: none;
+  }
+}
+
 /* Controls placed on permanently dark artwork must not inherit light-page
    neumorphic highlights when the site theme is light. */
 .dark-surface-control,

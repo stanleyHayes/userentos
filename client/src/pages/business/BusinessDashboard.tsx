@@ -365,6 +365,9 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
     price: '',
     promoText: '',
     description: '',
+    imageUrls: '',
+    stockQuantity: '',
+    newMoverOnly: false,
   })
 
   const canSubmit = form.title.trim().length >= 2 && (form.price === '' || Number(form.price) >= 0)
@@ -379,6 +382,9 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
         ...(form.price !== '' && Number(form.price) >= 0 ? { price: Number(form.price) } : {}),
         ...(form.promoText.trim() ? { promoText: form.promoText.trim() } : {}),
         ...(form.description.trim() ? { description: form.description.trim() } : {}),
+        ...(form.imageUrls.trim() ? { images: form.imageUrls.split(',').map((value) => value.trim()).filter(Boolean) } : {}),
+        ...(form.stockQuantity !== '' ? { stockQuantity: Number(form.stockQuantity) } : {}),
+        newMoverOnly: form.newMoverOnly,
       })
       toast.success('Listing created')
       onClose()
@@ -395,10 +401,18 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
           <Select id="listing-type" label="Type" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as BusinessListing['type'] }))} options={LISTING_TYPE_OPTIONS} />
           <TextField id="listing-price" label="Price (GHS, optional)" type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} fullWidth placeholder="Optional" slotProps={{ inputLabel: { shrink: true } }} />
         </div>
+        <label className="flex items-center gap-2 text-xs font-semibold text-muted">
+          <input type="checkbox" checked={form.newMoverOnly} onChange={(event) => setForm((f) => ({ ...f, newMoverOnly: event.target.checked }))} />
+          Show only to tenants who signed a lease in this city within 30 days
+        </label>
         {form.type === 'discount' && (
           <TextField id="listing-promo" label="Promo text" value={form.promoText} onChange={(e) => setForm((f) => ({ ...f, promoText: e.target.value }))} fullWidth placeholder="e.g. 15% off for new renters" slotProps={{ inputLabel: { shrink: true } }} />
         )}
         <TextField id="listing-description" label="Description (optional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} fullWidth multiline rows={3} slotProps={{ inputLabel: { shrink: true } }} />
+        <div className="grid grid-cols-2 gap-4">
+          <TextField id="listing-images" label="Image URLs" value={form.imageUrls} onChange={(e) => setForm((f) => ({ ...f, imageUrls: e.target.value }))} fullWidth placeholder="Comma-separated" slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField id="listing-stock" label="Stock quantity" type="number" value={form.stockQuantity} onChange={(e) => setForm((f) => ({ ...f, stockQuantity: e.target.value }))} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+        </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={!canSubmit || createListing.isPending}>

@@ -11,6 +11,7 @@ import { notifyApplicationReceived, notifyApplicationApproved, notifyApplication
 import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 
 const router = Router()
 
@@ -147,7 +148,8 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
   if (roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')) {
     // Admin/government see all applications
   } else if (roles.includes('landlord') || roles.includes('property_manager')) {
-    filter.landlordId = userId
+    const delegated = await delegatedPropertyIds(userId, 'applications')
+    filter.$or = [{ landlordId: userId }, { propertyId: { $in: delegated } }]
   } else {
     filter.tenantId = userId
   }
@@ -197,7 +199,7 @@ router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response
   if (!application) { error(res, 'Application not found', 404); return }
 
   const userId = req.user!.userId
-  if (application.tenantId !== userId && application.landlordId !== userId) {
+  if (application.tenantId !== userId && application.landlordId !== userId && !(await hasDelegatedScope(userId, application.propertyId, 'applications'))) {
     error(res, 'Not authorized', 403)
     return
   }
@@ -228,7 +230,7 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
   const application = await Application.findById(param(req.params.id))
   if (!application) { error(res, 'Application not found', 404); return }
 
-  if (application.landlordId !== req.user!.userId) {
+  if (application.landlordId !== req.user!.userId && !(await hasDelegatedScope(req.user!.userId, application.propertyId, 'applications'))) {
     error(res, 'Only the property owner can respond to applications', 403)
     return
   }

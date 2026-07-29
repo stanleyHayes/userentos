@@ -9,6 +9,7 @@ const roles: { value: UserRole; label: string; icon: React.ReactNode; desc: stri
   { value: 'financier', label: 'Financier', icon: <Banknote size={20} />, desc: 'Lend rent advance & deposit loans' },
   { value: 'employer', label: 'Employer', icon: <UsersIcon size={20} />, desc: 'Run payroll deductions for employees' },
   { value: 'business', label: 'Local Business', icon: <Store size={20} />, desc: 'Advertise products & services to renters' },
+  { value: 'developer', label: 'Property Developer', icon: <Building2 size={20} />, desc: 'Study demand and publish off-plan opportunities' },
 ]
 
 export function RoleStep({ value, onChange }: { value: UserRole; onChange: (role: UserRole) => void }) {
@@ -21,7 +22,7 @@ export function RoleStep({ value, onChange }: { value: UserRole; onChange: (role
             key={r.value}
             type="button"
             onClick={() => onChange(r.value)}
-            className={`min-h-[104px] rounded-2xl border p-3 flex flex-col items-center justify-center transition-all ${
+            className={`min-h-[104px] rounded-2xl border p-3 flex flex-col items-center justify-center transition-[transform,border-color,background-color,box-shadow,color] duration-200 active:scale-[0.97] motion-reduce:transform-none ${
               value === r.value
                 ? 'border-primary/35 bg-primary/8 text-primary shadow-[inset_3px_3px_8px_rgba(30,58,95,0.12)] dark:border-cyan-300/30 dark:bg-cyan-300/8 dark:text-cyan-300'
                 : 'neumorphic-icon border-border/70 hover:-translate-y-0.5 hover:border-primary/25 dark:hover:border-cyan-300/25'

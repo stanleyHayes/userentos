@@ -28,6 +28,7 @@ router.get('/pending-review', authenticate, requireRole('admin', 'super_admin'),
 router.get('/:id/qualify', authenticate, asyncHandler(propertyController.qualify))
 // NOTE: GET '/:id' is registered at the BOTTOM of this file so it does not shadow
 // the literal GET routes (/recommendations/smart, /nearby) defined later.
+router.post('/bulk', authenticate, requireRole('landlord', 'property_manager'), asyncHandler(propertyController.bulkCreate))
 router.post('/', authenticate, asyncHandler(propertyController.create))
 router.post('/:id/publish', authenticate, asyncHandler(propertyController.publish))
 // Approving/rejecting a listing is an admin moderation action.

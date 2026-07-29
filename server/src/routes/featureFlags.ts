@@ -8,7 +8,7 @@ import { success, error } from '../utils/response.js'
 
 const router = Router()
 
-const roleEnum = z.enum(['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'super_admin', 'financier', 'employer', 'service_provider', 'business'])
+const roleEnum = z.enum(['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'super_admin', 'financier', 'employer', 'service_provider', 'business', 'developer'])
 
 // GET /api/feature-flags/me — evaluated map for current user
 router.get('/me', authenticate, async (req, res) => {

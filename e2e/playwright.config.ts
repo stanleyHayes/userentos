@@ -28,6 +28,11 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${process.env.DEV_CLIENT_PORT || '5174'}`,
+    // CI normally uses Playwright's pinned Chromium. Local release checks can
+    // opt into an already-installed browser when the browser CDN is unavailable.
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : undefined,
     trace: 'on-first-retry',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',

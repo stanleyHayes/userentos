@@ -4,7 +4,7 @@
 
 // --- Enums ---
 
-export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'government' | 'legal_officer' | 'admin' | 'super_admin' | 'financier' | 'employer' | 'service_provider' | 'business'
+export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'government' | 'legal_officer' | 'admin' | 'super_admin' | 'financier' | 'employer' | 'service_provider' | 'business' | 'developer'
 
 // --- Permissions ---
 

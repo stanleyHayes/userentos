@@ -55,7 +55,10 @@ export default function ProfileScreen() {
         { icon: 'person-outline', label: 'Edit Profile', onPress: () => router.push('/settings') },
         { icon: 'card-outline', label: 'Payments', onPress: () => router.push('/payments') },
         { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
-        ...(isTenant ? [{ icon: 'person-circle-outline', label: 'Tenant Profile', onPress: () => router.push('/tenant-profile') }] : []),
+        ...(isTenant ? [
+          { icon: 'person-circle-outline', label: 'Tenant Profile', onPress: () => router.push('/tenant-profile') },
+          { icon: 'document-text-outline', label: 'Tenant Passport', onPress: () => router.push('/tenant-passport') },
+        ] : []),
         ...(isLandlord ? [{ icon: 'trophy-outline' as const, label: 'Subscription', onPress: () => router.push('/subscription' as string) }] : []),
       ],
     },
@@ -315,7 +318,7 @@ const s = StyleSheet.create({
   },
   topTitle: {
     fontSize: 17,
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: 'Outfit_700Bold',
     color: '#ffffff',
   },
   settingsBtn: {
@@ -346,9 +349,9 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { color: '#ffffff', fontSize: 26, fontFamily: 'Manrope_700Bold' },
-  name: { fontSize: 22, fontFamily: 'Manrope_800ExtraBold', color: '#ffffff', marginTop: 12 },
-  email: { fontSize: 13, fontFamily: 'Manrope_400Regular', color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  avatarText: { color: '#ffffff', fontSize: 26, fontFamily: 'Outfit_700Bold' },
+  name: { fontSize: 22, fontFamily: 'Outfit_800ExtraBold', color: '#ffffff', marginTop: 12 },
+  email: { fontSize: 13, fontFamily: 'Outfit_400Regular', color: 'rgba(255,255,255,0.55)', marginTop: 2 },
 
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   roleBadge: {
@@ -360,7 +363,7 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
   },
-  roleText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', color: '#ffffff', textTransform: 'capitalize' },
+  roleText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold', color: '#ffffff', textTransform: 'capitalize' },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,7 +373,7 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
   },
-  verifiedText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', color: '#10b981' },
+  verifiedText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold', color: '#10b981' },
 
   // Stats
   statsRow: {
@@ -384,7 +387,7 @@ const s = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' },
-  statValue: { fontSize: 13, fontFamily: 'Manrope_500Medium', color: 'rgba(255,255,255,0.7)' },
+  statValue: { fontSize: 13, fontFamily: 'Outfit_500Medium', color: 'rgba(255,255,255,0.7)' },
   statDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.12)' },
 
   // Role switcher — depth comes from neuCard() at the call site
@@ -393,7 +396,7 @@ const s = StyleSheet.create({
     marginTop: -12,
     padding: 12,
   },
-  roleSwitchLabel: { fontSize: 11, fontFamily: 'Manrope_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  roleSwitchLabel: { fontSize: 11, fontFamily: 'Outfit_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   roleRow: { flexDirection: 'row', gap: 8 },
   roleBtn: {
     flex: 1,
@@ -406,13 +409,13 @@ const s = StyleSheet.create({
     borderWidth: 1.5,
   },
   roleDot: { width: 6, height: 6, borderRadius: 3 },
-  roleBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold', textTransform: 'capitalize' },
+  roleBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold', textTransform: 'capitalize' },
 
   // Sections
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   sectionTitle: {
     fontSize: 11,
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: 'Outfit_700Bold',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -433,9 +436,9 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuLabel: { flex: 1, fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  menuLabel: { flex: 1, fontSize: 14, fontFamily: 'Outfit_500Medium' },
   menuBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  menuBadgeText: { fontSize: 10, fontFamily: 'Manrope_600SemiBold' },
+  menuBadgeText: { fontSize: 10, fontFamily: 'Outfit_600SemiBold' },
 
   // Theme
   themeRow: { flexDirection: 'row', gap: 8, padding: 10 },
@@ -447,7 +450,7 @@ const s = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
-  themeBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  themeBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   // Logout
   logoutBtn: {
@@ -460,6 +463,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     marginTop: spacing.md,
   },
-  logoutText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  version: { fontSize: 11, fontFamily: 'Manrope_400Regular', textAlign: 'center', marginTop: 12 },
+  logoutText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  version: { fontSize: 11, fontFamily: 'Outfit_400Regular', textAlign: 'center', marginTop: 12 },
 })

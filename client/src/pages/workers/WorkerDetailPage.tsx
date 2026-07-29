@@ -38,6 +38,7 @@ interface Worker {
   verificationLevel: 'none' | 'basic' | 'verified' | 'premium'
   rating: number
   reviewCount: number
+  portfolio?: string[]
   completedJobs: number
   emergencyAvailable: boolean
 }
@@ -215,6 +216,16 @@ export function WorkerDetailPage() {
           </div>
         </Card>
       </div>
+
+      {/* Contact / Book */}
+      {!!worker.portfolio?.length && (
+        <Card className="p-5 mt-4">
+          <h2 className="mb-3 font-semibold text-primary-dark dark:text-white">Before & after portfolio</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {worker.portfolio.map((image, index) => <img key={image} src={image} alt={`${worker.name} project ${index + 1}`} className="aspect-square w-full rounded-xl object-cover" />)}
+          </div>
+        </Card>
+      )}
 
       {/* Contact / Book */}
       <div className="flex gap-3 mt-4">

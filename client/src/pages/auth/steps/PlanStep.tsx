@@ -40,7 +40,7 @@ export function PlanStep({ packages, selectedId, onSelect, isLoading }: Props) {
               key={pkg.id}
               type="button"
               onClick={() => onSelect(pkg.id)}
-              className={`relative text-left rounded-2xl border p-4 transition-all ${
+              className={`relative text-left rounded-2xl border p-4 transition-[transform,border-color,background-color,box-shadow,color] duration-200 active:scale-[0.97] motion-reduce:transform-none ${
                 selected
                   ? 'border-primary/35 bg-primary/8 shadow-[inset_3px_3px_8px_rgba(30,58,95,0.12)] dark:border-cyan-300/30 dark:bg-cyan-300/8'
                   : 'neumorphic-icon border-border/70 hover:-translate-y-0.5 hover:border-primary/25 dark:hover:border-cyan-300/25'

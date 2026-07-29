@@ -163,11 +163,11 @@ export default function LoansScreen() {
                       <View style={s.progressFooter}>
                         <View style={s.progressStatRow}>
                           <Ionicons name="checkmark-circle-outline" size={13} color={c.accent} />
-                          <Text style={[s.progressStat, { color: c.muted }]}>Paid: <Text style={{ color: c.accent, fontFamily: 'Manrope_600SemiBold' }}>{formatCompact(loan.amountPaid)}</Text></Text>
+                          <Text style={[s.progressStat, { color: c.muted }]}>Paid: <Text style={{ color: c.accent, fontFamily: 'Outfit_600SemiBold' }}>{formatCompact(loan.amountPaid)}</Text></Text>
                         </View>
                         <View style={s.progressStatRow}>
                           <Ionicons name="hourglass-outline" size={13} color={dark ? '#f87171' : '#dc2626'} />
-                          <Text style={[s.progressStat, { color: c.muted }]}>Left: <Text style={{ color: dark ? '#f87171' : '#dc2626', fontFamily: 'Manrope_600SemiBold' }}>{formatCompact(remaining)}</Text></Text>
+                          <Text style={[s.progressStat, { color: c.muted }]}>Left: <Text style={{ color: dark ? '#f87171' : '#dc2626', fontFamily: 'Outfit_600SemiBold' }}>{formatCompact(remaining)}</Text></Text>
                         </View>
                       </View>
                       <View style={s.actionRow}>
@@ -225,7 +225,7 @@ export default function LoansScreen() {
                       style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, agreementId === a.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
                       onPress={() => setAgreementId(a.id)}
                     >
-                      <Text style={[s.optionText, { color: c.text }, agreementId === a.id && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                      <Text style={[s.optionText, { color: c.text }, agreementId === a.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                         {a.status} · {formatCurrency(a.rentAmount)}/mo · #{a.id.slice(-6)}
                       </Text>
                     </TouchableOpacity>
@@ -238,7 +238,7 @@ export default function LoansScreen() {
               <View style={s.optionsGroup}>
                 {tenureOptions.map((t) => (
                   <TouchableOpacity key={t.value} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, tenure === t.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => setTenure(t.value)}>
-                    <Text style={[s.optionText, { color: c.text }, tenure === t.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{t.label}</Text>
+                    <Text style={[s.optionText, { color: c.text }, tenure === t.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{t.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -267,64 +267,64 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   infoBanner: { flexDirection: 'row', gap: spacing.sm, borderWidth: 1, borderRadius: 12, padding: spacing.md, margin: spacing.md },
-  infoBannerText: { flex: 1, fontSize: 12, fontFamily: 'Manrope_400Regular' },
+  infoBannerText: { flex: 1, fontSize: 12, fontFamily: 'Outfit_400Regular' },
   newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, paddingVertical: 12, borderRadius: 10 },
-  newBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  newBtnText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
-  sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
+  sectionTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
 
   // Loan cards
   card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: spacing.sm },
   cardIconWrap: { width: 38, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
-  cardMeta: { fontSize: 11, marginTop: 2, fontFamily: 'Manrope_400Regular' },
+  cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
+  cardMeta: { fontSize: 11, marginTop: 2, fontFamily: 'Outfit_400Regular' },
 
   // Status badge
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   // Progress
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  progressPct: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
+  progressLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  progressPct: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
   progressFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   progressStatRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  progressStat: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  progressStat: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
 
   // Action buttons
   actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   repayBtnOutline: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10 },
-  repayBtnOutlineText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  repayBtnOutlineText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   repayBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, paddingVertical: 10 },
-  repayBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  repayBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
   disburseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 10, marginTop: spacing.sm },
-  disburseBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  disburseBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
 
   // Empty
   emptySection: { alignItems: 'center', paddingVertical: 40, gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
-  emptySubtext: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
+  emptySubtext: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Outfit_500Medium' },
   textArea: { height: 80, paddingTop: 14 },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   optionBtn: { borderRadius: 10, paddingVertical: 12, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },
-  optionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  optionText: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
   calcCard: { padding: spacing.md, marginTop: spacing.md },
-  calcRow: { fontSize: 13, fontFamily: 'Manrope_400Regular', marginBottom: 4 },
-  calcBold: { fontFamily: 'Manrope_700Bold' },
+  calcRow: { fontSize: 13, fontFamily: 'Outfit_400Regular', marginBottom: 4 },
+  calcBold: { fontFamily: 'Outfit_700Bold' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
+  submitBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
 })

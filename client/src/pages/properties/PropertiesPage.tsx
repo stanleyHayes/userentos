@@ -17,7 +17,9 @@ import {
   Plus, Search, MapPin, SlidersHorizontal,
   Bed, Bath, Car, Sofa, ArrowUpDown, Eye, Building2,
   Grid3X3, List, Send, Accessibility,
+  Upload,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { DoodleStars } from '@/components/ui/Doodles'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
@@ -76,6 +78,7 @@ const defaultFilters: Filters = {
 
 export function PropertiesPage() {
   const user = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
   const isLandlord = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager'
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -112,6 +115,34 @@ export function PropertiesPage() {
     queryFn: () => api.get<{ items: Property[] }>(`/properties${qs ? `?${qs}` : ''}`),
   })
   const properties = data?.items ?? []
+
+  async function importProperties(file?: File) {
+    if (!file) return
+    const lines = (await file.text()).split(/\r?\n/).filter(Boolean)
+    const headers = lines.shift()?.split(',').map((value) => value.trim()) ?? []
+    const rows = lines.map((line) => Object.fromEntries(line.split(',').map((value, index) => [headers[index], value.trim()])))
+    const items = rows.map((row) => ({
+      title: row.title,
+      description: row.description || row.title,
+      type: row.type || 'apartment',
+      stayType: row.stayType || 'long_stay',
+      address: { street: row.street || 'Not provided', city: row.city, region: row.region },
+      rentAmount: Number(row.rentAmount),
+      rentDurationMonths: Number(row.rentDurationMonths || 12),
+      advanceMonths: Number(row.advanceMonths || 1),
+      bedrooms: Number(row.bedrooms || 1),
+      bathrooms: Number(row.bathrooms || 1),
+      furnished: row.furnished?.toLowerCase() === 'true',
+      parkingSpaces: Number(row.parkingSpaces || 0),
+    }))
+    try {
+      const result = await api.post<{ created: unknown[]; failures: unknown[] }>('/properties/bulk', { items })
+      toast.success(`${result.created.length} properties imported${result.failures.length ? `, ${result.failures.length} skipped` : ''}`)
+      queryClient.invalidateQueries({ queryKey: ['properties'] })
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
 
   function uf<K extends keyof Filters>(field: K, value: Filters[K]) {
     setFilters((f) => ({ ...f, [field]: value }))
@@ -151,11 +182,15 @@ export function PropertiesPage() {
             {isLandlord ? 'Manage your rental portfolio' : `${properties.length} properties found`}
           </p>
         </div>
-        {isLandlord && (
+        {isLandlord && <div className="flex gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted hover:text-primary">
+            <Upload size={14} /> CSV
+            <input type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => void importProperties(event.target.files?.[0])} />
+          </label>
           <Link to="/properties/new">
             <Button className="shrink-0"><Plus size={14} /> <span className="hidden sm:inline">Add Property</span><span className="sm:hidden">Add</span></Button>
           </Link>
-        )}
+        </div>}
       </div>
 
       {/* Search bar + filter controls */}
@@ -494,4 +529,3 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
     </Link>
   )
 }
-

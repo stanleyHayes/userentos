@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Pressable, Alert } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
-import { neuInset } from '../../lib/neu'
+import { neuCard } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore, type User } from '../../stores/authStore'
-import { Logo } from '../../components/Logo'
+import { AuthShell, authInset } from '../../components/AuthShell'
+import { MotionReveal, PressScale } from '../../components/Motion'
 import type { UserRole } from '../../types/shared'
 
 type IconName = keyof typeof Ionicons.glyphMap
@@ -19,6 +20,7 @@ const roles: { value: UserRole; label: string; icon: IconName; desc: string }[] 
   { value: 'financier', label: 'Financier', icon: 'cash-outline', desc: 'Lend rent advances & loans' },
   { value: 'employer', label: 'Employer', icon: 'people-outline', desc: 'Run payroll deductions' },
   { value: 'business', label: 'Local Business', icon: 'storefront-outline', desc: 'Advertise products & services' },
+  { value: 'developer', label: 'Property Developer', icon: 'build-outline', desc: 'Study demand and publish off-plan projects' },
 ]
 
 const STEPS: { label: string; icon: IconName }[] = [
@@ -383,7 +385,7 @@ export default function RegisterScreen() {
       <View>
         <Text style={[s.label, { color: c.text }]}>{label}{opts?.required ? ' *' : ''}</Text>
         <TextInput
-          style={[s.input, neuInset(c), { color: c.text }, opts?.multiline && s.multilineInput]}
+          style={[s.input, authInset(c), { color: c.text }, opts?.multiline && s.multilineInput]}
           value={details[field] as string}
           onChangeText={(v) => updateDetails(field, v)}
           placeholder={opts?.placeholder}
@@ -402,13 +404,17 @@ export default function RegisterScreen() {
         {options.map((o) => {
           const active = Array.isArray(selected) ? selected.includes(o.value) : selected === o.value
           return (
-            <TouchableOpacity
+            <PressScale
               key={o.value}
-              style={[s.chip, { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary : c.surface }]}
+              style={[
+                s.chip,
+                active ? authInset(c) : neuCard(c, 10),
+                { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '12' : c.card },
+              ]}
               onPress={() => onPress(o.value)}
             >
-              <Text style={[s.chipText, { color: active ? '#ffffff' : c.textLight }]}>{o.label}</Text>
-            </TouchableOpacity>
+              <Text style={[s.chipText, { color: active ? c.primary : c.textLight }]}>{o.label}</Text>
+            </PressScale>
           )
         })}
       </View>
@@ -416,13 +422,15 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={[s.container, { backgroundColor: c.white }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.logo}>
-          <Logo size={40} theme="dark" />
-          <Text style={[s.subtitle, { color: c.muted }]}>Join RentOS Ghana</Text>
-        </View>
-
+    <AuthShell
+      eyebrow="A home for every housing workflow"
+      title="Build your housing workspace."
+      subtitle="Choose your role, verify your identity, and connect to Ghana's rental economy in minutes."
+      formEyebrow={`Create account · Step ${step + 1} of ${STEPS.length}`}
+      formTitle={step === 0 ? 'Choose your role' : step === 1 ? 'Your secure account' : step === 2 ? (heading?.title ?? 'Tell us more') : 'Choose your plan'}
+      formSubtitle={step === 0 ? 'We will shape your workspace around how you use RentOS.' : step === 1 ? 'Use details you can access securely on this device.' : step === 2 ? (heading?.hint ?? 'Add the details that make your workspace useful.') : 'Start free and upgrade whenever your portfolio grows.'}
+      icon={STEPS[step].icon}
+    >
         {/* Step indicator */}
         <View style={s.stepRow}>
           {STEPS.map((st, i) => (
@@ -440,6 +448,7 @@ export default function RegisterScreen() {
 
         {error ? <View style={s.errorBox}><Text style={[s.errorText, { color: c.danger }]}>{error}</Text></View> : null}
 
+        <MotionReveal key={step} distance={10}>
         {/* Step 1 — Role */}
         {step === 0 && (
           <View>
@@ -448,15 +457,19 @@ export default function RegisterScreen() {
               {roles.map((r) => {
                 const active = role === r.value
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={r.value}
-                    style={[s.roleCard, { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '10' : 'transparent' }]}
+                    style={[
+                      s.roleCard,
+                      active ? authInset(c) : neuCard(c, 14),
+                      { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '0D' : c.card },
+                    ]}
                     onPress={() => setRole(r.value)}
                   >
                     <Ionicons name={r.icon} size={20} color={active ? c.primary : c.muted} style={{ marginBottom: 6 }} />
                     <Text style={[s.roleCardLabel, { color: active ? c.primary : c.text }]}>{r.label}</Text>
                     <Text style={[s.roleCardDesc, { color: c.muted }]}>{r.desc}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 )
               })}
             </View>
@@ -469,22 +482,22 @@ export default function RegisterScreen() {
             <View style={s.row}>
               <View style={s.half}>
                 <Text style={[s.label, { color: c.text }]}>First Name</Text>
-                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.firstName} onChangeText={(v) => updateAccount('firstName', v)} placeholder="Kwame" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, authInset(c), { color: c.text }]} value={account.firstName} onChangeText={(v) => updateAccount('firstName', v)} placeholder="Kwame" placeholderTextColor={c.muted} />
               </View>
               <View style={s.half}>
                 <Text style={[s.label, { color: c.text }]}>Last Name</Text>
-                <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.lastName} onChangeText={(v) => updateAccount('lastName', v)} placeholder="Asante" placeholderTextColor={c.muted} />
+                <TextInput style={[s.input, authInset(c), { color: c.text }]} value={account.lastName} onChangeText={(v) => updateAccount('lastName', v)} placeholder="Asante" placeholderTextColor={c.muted} />
               </View>
             </View>
 
             <Text style={[s.label, { color: c.text }]}>Email</Text>
-            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.email} onChangeText={(v) => updateAccount('email', v)} placeholder="you@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={[s.input, authInset(c), { color: c.text }]} value={account.email} onChangeText={(v) => updateAccount('email', v)} placeholder="you@example.com" placeholderTextColor={c.muted} keyboardType="email-address" autoCapitalize="none" />
 
             <Text style={[s.label, { color: c.text }]}>Phone</Text>
-            <TextInput style={[s.input, neuInset(c), { color: c.text }]} value={account.phone} onChangeText={(v) => updateAccount('phone', v)} placeholder="024 XXX XXXX" placeholderTextColor={c.muted} keyboardType="phone-pad" />
+            <TextInput style={[s.input, authInset(c), { color: c.text }]} value={account.phone} onChangeText={(v) => updateAccount('phone', v)} placeholder="024 XXX XXXX" placeholderTextColor={c.muted} keyboardType="phone-pad" />
 
             <Text style={[s.label, { color: c.text }]}>Password</Text>
-            <View style={[s.passwordWrap, neuInset(c)]}>
+            <View style={[s.passwordWrap, authInset(c)]}>
               <TextInput style={[s.passwordInput, { color: c.text }]} value={account.password} onChangeText={(v) => updateAccount('password', v)} placeholder="Min 8 characters" placeholderTextColor={c.muted} secureTextEntry={!showPassword} autoCapitalize="none" />
               <Pressable onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={c.muted} />
@@ -590,9 +603,13 @@ export default function RegisterScreen() {
                 {packages.map((pkg) => {
                   const selected = pkg.id === effectivePackageId
                   return (
-                    <TouchableOpacity
+                    <PressScale
                       key={pkg.id}
-                      style={[s.pkgCard, { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primary + '10' : 'transparent' }]}
+                      style={[
+                        s.pkgCard,
+                        selected ? authInset(c) : neuCard(c, 14),
+                        { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primary + '0D' : c.card },
+                      ]}
                       onPress={() => setSelectedPackageId(pkg.id)}
                     >
                       <View style={s.pkgHeader}>
@@ -602,7 +619,7 @@ export default function RegisterScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={[s.pkgName, { color: selected ? c.primary : c.text }]}>{pkg.name}</Text>
                           <Text style={[s.pkgPrice, { color: c.muted }]}>
-                            <Text style={{ color: c.text, fontFamily: 'Manrope_700Bold' }}>{pkg.price === 0 ? 'Free' : formatCurrency(pkg.price)}</Text>
+                            <Text style={{ color: c.text, fontFamily: 'Outfit_700Bold' }}>{pkg.price === 0 ? 'Free' : formatCurrency(pkg.price)}</Text>
                             {pkg.price > 0 ? `/${pkg.billingCycle === 'yearly' ? 'year' : 'month'}` : ''}
                           </Text>
                         </View>
@@ -619,24 +636,25 @@ export default function RegisterScreen() {
                           <Text style={[s.pkgMeta, { color: c.muted }]}> · {pkg.benefits!.length} benefits</Text>
                         )}
                       </View>
-                    </TouchableOpacity>
+                    </PressScale>
                   )
                 })}
               </View>
             )}
           </View>
         )}
+        </MotionReveal>
 
         {/* Navigation */}
         <View style={s.navRow}>
-          <TouchableOpacity
+          <PressScale
             style={[s.backBtn, { borderColor: c.border }]}
             onPress={() => (step === 0 ? router.back() : setStep(step - 1))}
             disabled={loading}
           >
             <Ionicons name="arrow-back" size={16} color={c.text} />
             <Text style={[s.backBtnText, { color: c.text }]}>Back</Text>
-          </TouchableOpacity>
+          </PressScale>
 
           {step === 2 && role !== 'service_provider' && role !== 'business' && (
             <TouchableOpacity style={s.skipBtn} onPress={() => setStep(3)} disabled={loading}>
@@ -645,27 +663,27 @@ export default function RegisterScreen() {
           )}
 
           {step < STEPS.length - 1 ? (
-            <TouchableOpacity
+            <PressScale
               style={[s.continueBtn, { backgroundColor: c.primary }, !canProceed() && { opacity: 0.45 }]}
               onPress={() => canProceed() && setStep(step + 1)}
               disabled={!canProceed()}
             >
               <Text style={s.continueBtnText}>Continue</Text>
               <Ionicons name="arrow-forward" size={16} color="#ffffff" />
-            </TouchableOpacity>
+            </PressScale>
           ) : (
             <View style={s.finishCol}>
               <TouchableOpacity style={s.skipBtn} onPress={() => void finish(true)} disabled={loading}>
                 <Text style={[s.skipBtnText, { color: c.muted }]}>Skip — Starter (free)</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.continueBtn, { backgroundColor: c.primary }]} onPress={() => void finish(false)} disabled={loading || pkgLoading}>
+              <PressScale style={[s.continueBtn, { backgroundColor: c.primary }]} onPress={() => void finish(false)} disabled={loading || pkgLoading}>
                 {loading ? <ActivityIndicator color="#ffffff" /> : (
                   <>
                     <Text style={s.continueBtnText}>Create account</Text>
                     <Ionicons name="arrow-forward" size={16} color="#ffffff" />
                   </>
                 )}
-              </TouchableOpacity>
+              </PressScale>
             </View>
           )}
         </View>
@@ -674,74 +692,68 @@ export default function RegisterScreen() {
           <Text style={[s.footerText, { color: c.muted }]}>Already have an account? </Text>
           <Link href="/auth/login" style={[s.link, { color: c.primary }]}>Sign in</Link>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </AuthShell>
   )
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
-  logo: { alignItems: 'center', marginBottom: spacing.md },
-  subtitle: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 12 },
-
   // Step indicator
-  stepRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.md },
-  stepPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10 },
-  stepPillText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  stepRow: { flexDirection: 'row', gap: 5, marginBottom: spacing.lg },
+  stepPill: { flex: 1, minWidth: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 9 },
+  stepPillText: { fontSize: 10, fontFamily: 'Outfit_600SemiBold' },
 
   // Role grid
   roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
-  roleCard: { width: '48%', flexGrow: 1, minHeight: 104, borderWidth: 1.5, borderRadius: 14, padding: 12, justifyContent: 'center', alignItems: 'center' },
-  roleCardLabel: { fontSize: 13, fontFamily: 'Manrope_700Bold', textAlign: 'center' },
-  roleCardDesc: { fontSize: 10, fontFamily: 'Manrope_400Regular', textAlign: 'center', marginTop: 2 },
+  roleCard: { width: '47%', flexGrow: 1, minHeight: 108, borderWidth: 1.5, borderRadius: 14, padding: 12, justifyContent: 'center', alignItems: 'center' },
+  roleCardLabel: { fontSize: 13, fontFamily: 'Outfit_700Bold', textAlign: 'center' },
+  roleCardDesc: { fontSize: 10, fontFamily: 'Outfit_400Regular', textAlign: 'center', marginTop: 2 },
 
   // Form
   row: { flexDirection: 'row', gap: spacing.md },
   half: { flex: 1 },
-  label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
-  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  label: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm },
+  input: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Outfit_400Regular', marginTop: 4 },
   multilineInput: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
   passwordWrap: { flexDirection: 'row', alignItems: 'center', height: 52, marginTop: 4 },
-  passwordInput: { flex: 1, height: '100%', paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  passwordInput: { flex: 1, height: '100%', paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Outfit_400Regular' },
   eyeBtn: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
   reqList: { marginTop: spacing.sm, gap: 4 },
   reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reqText: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
+  reqText: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
 
   // Chips
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6, marginBottom: spacing.xs },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  chipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  chipText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
 
   // Details step
-  detailsTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
-  detailsHint: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  detailsTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold' },
+  detailsHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 
   // Plan step
   pkgList: { gap: spacing.sm, marginTop: spacing.sm },
   pkgCard: { borderWidth: 1.5, borderRadius: 14, padding: 14 },
   pkgHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   pkgIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  pkgName: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  pkgPrice: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 1 },
+  pkgName: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  pkgPrice: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 1 },
   pkgCheck: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   pkgMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
-  pkgMeta: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
+  pkgMeta: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
 
   // Navigation
   navRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 52, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5 },
-  backBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 46, paddingHorizontal: 12, borderRadius: 11, borderWidth: 1 },
+  backBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
   skipBtn: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, height: 52 },
-  skipBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  continueBtn: { flex: 1, flexDirection: 'row', height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 6 },
-  continueBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
+  skipBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  continueBtn: { flex: 1, flexDirection: 'row', minHeight: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 7, shadowColor: '#0f1f33', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
+  continueBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
   finishCol: { flex: 1, gap: 4 },
 
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg },
-  footerText: { fontSize: 14, fontFamily: 'Manrope_400Regular' },
-  link: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
-  errorBox: { backgroundColor: '#fef2f2', borderRadius: 10, padding: spacing.md, marginBottom: spacing.sm },
-  errorText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  footerText: { fontSize: 14, fontFamily: 'Outfit_400Regular' },
+  link: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
+  errorBox: { backgroundColor: 'rgba(239,68,68,0.09)', borderColor: 'rgba(239,68,68,0.2)', borderWidth: 1, borderRadius: 10, padding: spacing.md, marginBottom: spacing.sm },
+  errorText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 })

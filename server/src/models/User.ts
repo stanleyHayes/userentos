@@ -11,6 +11,9 @@ export interface IUser extends Document {
   permissions: string[]
   ghanaCardId?: string
   isVerified: boolean
+  /** Identity-verification workflow state: none → pending → verified (admin action). */
+  verificationStatus: 'none' | 'pending' | 'verified'
+  taxReportingConsent: boolean
   profileImage?: string
   subscriptionPackageId?: string
   subscriptionStartDate?: Date
@@ -45,6 +48,8 @@ const userSchema = new Schema<IUser>({
   permissions: { type: [String], default: [] },
   ghanaCardId: String,
   isVerified: { type: Boolean, default: false },
+  verificationStatus: { type: String, enum: ['none', 'pending', 'verified'], default: 'none' },
+  taxReportingConsent: { type: Boolean, default: false },
   profileImage: String,
   subscriptionPackageId: { type: String },
   subscriptionStartDate: { type: Date },

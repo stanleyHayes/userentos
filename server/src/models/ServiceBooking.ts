@@ -24,6 +24,8 @@ export interface IServiceBooking extends Document {
   quoteAccepted: boolean
   paymentStatus: 'pending' | 'partial' | 'paid'
   paymentAmount?: number
+  /** Recurring jobs — on completion the next occurrence is auto-created. */
+  recurrence: 'none' | 'weekly' | 'biweekly' | 'monthly'
   rating?: number
   review?: string
   images: string[]
@@ -60,6 +62,7 @@ const serviceBookingSchema = new Schema<IServiceBooking>({
   quoteAccepted: { type: Boolean, default: false },
   paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending' },
   paymentAmount: Number,
+  recurrence: { type: String, enum: ['none', 'weekly', 'biweekly', 'monthly'], default: 'none' },
   rating: Number,
   review: String,
   images: { type: [String], default: [] },

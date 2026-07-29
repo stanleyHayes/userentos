@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
+import { useRenewalOffers, useCreateRenewalOffer, useRespondToRenewal } from '@/hooks/useRenewals'
 import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
@@ -20,7 +21,7 @@ import type { AgreementStatus } from '@/types'
 import {
   ArrowLeft, FileText, CheckCircle, AlertTriangle, PenTool, Shield,
   Calendar, Building2, CreditCard, Clock, User, Edit2, XCircle,
-  Download, LogOut, Store,
+  Download, LogOut, Store, RefreshCw,
 } from 'lucide-react'
 
 const statusVariant: Record<AgreementStatus, 'muted' | 'warning' | 'success' | 'danger'> = {
@@ -49,6 +50,14 @@ export function AgreementDetailPage() {
   const { data: moveOutsData } = useMoveOuts()
   const signAgreement = useSignAgreement()
   const updateAgreement = useUpdateAgreement()
+  const createRenewalOffer = useCreateRenewalOffer()
+  const respondToRenewal = useRespondToRenewal()
+  // Tenants poll their pending offers; the one matching this agreement (if any)
+  // renders as the Renewal Offer card below.
+  const { data: tenantRenewalOffers } = useRenewalOffers(
+    { role: 'tenant', status: 'pending' },
+    { enabled: user?.activeRole === 'tenant' },
+  )
 
   const agreement = data?.items?.find((a) => a.id === id)
   const existingMoveOut = moveOutsData?.items?.find((m) => m.agreementId === id)
@@ -63,6 +72,8 @@ export function AgreementDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false)
   const [showSignModal, setShowSignModal] = useState(false)
+  const [showRenewalModal, setShowRenewalModal] = useState(false)
+  const [renewalForm, setRenewalForm] = useState({ proposedRent: '', proposedEndDate: '', message: '' })
   const [signatureName, setSignatureName] = useState('')
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -107,6 +118,14 @@ export function AgreementDetailPage() {
     !existingMoveOut &&
     Number.isFinite(endTs) &&
     daysUntilEnd <= 30
+
+  // Renewal offers: landlord proposes (active agreements only), tenant responds.
+  const isLandlordOwner = user?.id === agreement.landlordId
+  const canOfferRenewal = isLandlordOwner && agreement.status === 'active' && agreement.renewalStatus !== 'pending'
+  const pendingRenewalOffer = tenantRenewalOffers?.items?.find((o) => o.agreementId === agreement.id)
+  const renewalDiffPct = pendingRenewalOffer && agreement.rentAmount > 0
+    ? ((pendingRenewalOffer.proposedRent - agreement.rentAmount) / agreement.rentAmount) * 100
+    : 0
 
   const apiBase = import.meta.env.VITE_API_URL || '/api'
 
@@ -160,6 +179,41 @@ export function AgreementDetailPage() {
       await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim() })
       setShowSignModal(false)
       setSignatureName('')
+    } catch {
+      // Error is displayed via mutation.isError
+    }
+  }
+
+  function openRenewalModal() {
+    // Default the proposed term to endDate + 12 months at the current rent.
+    const base = agreement!.endDate ? new Date(agreement!.endDate) : new Date()
+    base.setMonth(base.getMonth() + 12)
+    setRenewalForm({
+      proposedRent: String(agreement!.rentAmount),
+      proposedEndDate: base.toISOString().slice(0, 10),
+      message: '',
+    })
+    setShowRenewalModal(true)
+  }
+
+  async function handleOfferRenewal() {
+    try {
+      await createRenewalOffer.mutateAsync({
+        agreementId: agreement!.id,
+        proposedRent: Number(renewalForm.proposedRent),
+        proposedEndDate: renewalForm.proposedEndDate,
+        message: renewalForm.message.trim() || undefined,
+      })
+      setShowRenewalModal(false)
+    } catch {
+      // Error is displayed via mutation.isError
+    }
+  }
+
+  async function handleRenewalResponse(accept: boolean) {
+    if (!pendingRenewalOffer) return
+    try {
+      await respondToRenewal.mutateAsync({ id: pendingRenewalOffer.id, accept })
     } catch {
       // Error is displayed via mutation.isError
     }
@@ -225,6 +279,20 @@ export function AgreementDetailPage() {
               </Badge>
             )
           })()}
+          {agreement.renewalStatus === 'renewed' && (
+            <Badge variant="success" className="text-xs px-3 py-1">Renewed</Badge>
+          )}
+          {agreement.renewalStatus === 'tenant_declined' && (
+            <Badge variant="muted" className="text-xs px-3 py-1">Renewal declined</Badge>
+          )}
+          {isLandlordOwner && agreement.status === 'active' && agreement.renewalStatus === 'pending' && (
+            <Badge variant="warning" className="text-xs px-3 py-1">Renewal offered</Badge>
+          )}
+          {canOfferRenewal && (
+            <Button variant="outline" size="sm" onClick={openRenewalModal}>
+              <RefreshCw size={14} /> Offer renewal
+            </Button>
+          )}
         </div>
       </div>
 
@@ -249,6 +317,117 @@ export function AgreementDetailPage() {
           </Link>
         </div>
       )}
+
+      {/* Tenant: pending renewal offer from the landlord */}
+      {pendingRenewalOffer && (
+        <Card className="border-primary/30 dark:border-blue-400/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <RefreshCw size={16} className="text-primary dark:text-blue-400" />
+              Renewal Offer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl bg-surface/50 dark:bg-[#0f172a]/40 border border-border/30 dark:border-[#334155]/30 p-4">
+                <p className="text-[10px] text-muted dark:text-gray-500 uppercase tracking-wider mb-1">Proposed Rent</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-primary-dark dark:text-white">
+                    {formatCurrency(pendingRenewalOffer.proposedRent)}/mo
+                  </p>
+                  {renewalDiffPct !== 0 && (
+                    <Badge variant={renewalDiffPct > 0 ? 'warning' : 'success'} className="text-[10px]">
+                      {renewalDiffPct > 0 ? '+' : ''}{renewalDiffPct.toFixed(1)}% vs current
+                    </Badge>
+                  )}
+                  {renewalDiffPct === 0 && (
+                    <Badge variant="muted" className="text-[10px]">Same as current</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl bg-surface/50 dark:bg-[#0f172a]/40 border border-border/30 dark:border-[#334155]/30 p-4">
+                <p className="text-[10px] text-muted dark:text-gray-500 uppercase tracking-wider mb-1">Proposed End Date</p>
+                <p className="text-sm font-semibold text-primary-dark dark:text-white">
+                  {formatDate(pendingRenewalOffer.proposedEndDate)}
+                </p>
+              </div>
+            </div>
+            {pendingRenewalOffer.message && (
+              <div className="rounded-xl bg-primary/5 dark:bg-blue-500/10 border border-primary/15 dark:border-blue-400/15 p-3">
+                <p className="text-[10px] text-muted dark:text-gray-500 uppercase tracking-wider mb-1">Message from your landlord</p>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{pendingRenewalOffer.message}</p>
+              </div>
+            )}
+            {respondToRenewal.isError && (
+              <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
+                {(respondToRenewal.error as Error).message}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleRenewalResponse(false)}
+                disabled={respondToRenewal.isPending}
+              >
+                Decline
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleRenewalResponse(true)}
+                disabled={respondToRenewal.isPending}
+              >
+                {respondToRenewal.isPending ? 'Responding...' : 'Accept renewal'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Landlord: offer renewal modal */}
+      <Modal open={showRenewalModal} onClose={() => setShowRenewalModal(false)} title="Offer Renewal">
+        <div className="flex flex-col gap-5">
+          <p className="text-xs text-muted dark:text-gray-400">
+            Propose a new term for this agreement. Your tenant can accept (the agreement is extended
+            at these terms) or decline.
+          </p>
+          <Input
+            id="renewal-rent"
+            label="Proposed rent (GHS/mo)"
+            type="number"
+            min="1"
+            value={renewalForm.proposedRent}
+            onChange={(e) => setRenewalForm((f) => ({ ...f, proposedRent: e.target.value }))}
+            required
+          />
+          <DatePicker
+            label="Proposed end date"
+            value={renewalForm.proposedEndDate}
+            onChange={(v) => setRenewalForm((f) => ({ ...f, proposedEndDate: v }))}
+          />
+          <Textarea
+            id="renewal-message"
+            label="Message to tenant (optional)"
+            value={renewalForm.message}
+            onChange={(e) => setRenewalForm((f) => ({ ...f, message: e.target.value.slice(0, 300) }))}
+            rows={3}
+          />
+          {createRenewalOffer.isError && (
+            <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
+              {(createRenewalOffer.error as Error).message}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowRenewalModal(false)}>Cancel</Button>
+            <Button
+              onClick={handleOfferRenewal}
+              disabled={!renewalForm.proposedRent || Number(renewalForm.proposedRent) <= 0 || !renewalForm.proposedEndDate || createRenewalOffer.isPending}
+            >
+              {createRenewalOffer.isPending ? 'Sending...' : 'Send Offer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Sign banner */}
       {canSign && (

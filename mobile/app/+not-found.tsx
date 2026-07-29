@@ -26,9 +26,9 @@ export default function NotFoundScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   iconWrap: { width: 80, height: 80, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-  code: { fontSize: 64, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -2 },
-  title: { fontSize: 20, fontFamily: 'Manrope_700Bold', marginTop: 8 },
-  desc: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginTop: 8 },
+  code: { fontSize: 64, fontFamily: 'Outfit_800ExtraBold', letterSpacing: -2 },
+  title: { fontSize: 20, fontFamily: 'Outfit_700Bold', marginTop: 8 },
+  desc: { fontSize: 14, fontFamily: 'Outfit_400Regular', marginTop: 8 },
   btn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginTop: 32 },
-  btnText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
+  btnText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
 })

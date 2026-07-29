@@ -23,6 +23,7 @@ import {
 } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import toast from 'react-hot-toast'
+import { api } from '@/lib/api'
 import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent, MessageSquare, Star, Loader2 } from 'lucide-react'
 
 const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
@@ -34,6 +35,7 @@ const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
 function ListingRow({ listing }: { listing: BusinessListing }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
+      {listing.images?.[0] && <img src={listing.images[0]} alt="" className="h-9 w-9 rounded-lg object-cover" />}
       <div className="flex items-center gap-2 min-w-0">
         <span className={cn('flex-shrink-0', listing.type === 'discount' ? 'text-amber-500' : 'text-muted dark:text-gray-500')}>
           {LISTING_TYPE_ICONS[listing.type]}
@@ -45,6 +47,7 @@ function ListingRow({ listing }: { listing: BusinessListing }) {
           ? (listing.promoText ?? 'Promo')
           : listing.price !== undefined ? formatCurrency(listing.price) : ''}
       </span>
+      {listing.stockQuantity !== undefined && <span className="text-[10px] text-muted">{listing.stockQuantity} in stock</span>}
     </div>
   )
 }
@@ -58,6 +61,7 @@ function BusinessCard({ item, onOpen }: { item: BusinessWithListings; onOpen: ()
           <h3 className="font-semibold text-primary-dark dark:text-white flex items-center gap-1.5 truncate">
             {business.name}
             {business.isVerified && <ShieldCheck size={14} className="flex-shrink-0 text-green-500" />}
+            {business.featuredUntil && new Date(business.featuredUntil) > new Date() && <Badge variant="warning" className="text-[9px]">Featured</Badge>}
           </h3>
           <p className="text-xs text-muted dark:text-gray-500 mt-0.5 flex items-center gap-1">
             <MapPin size={10} /> {business.city}
@@ -134,6 +138,20 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
     }
   }
 
+  async function placeOrder(listing: BusinessListing) {
+    try {
+      await api.post('/capabilities/workflows', {
+        kind: 'business_order',
+        participantId: business.ownerId,
+        status: 'requested',
+        data: { listingId: listing.id, title: listing.title, amount: listing.price ?? 0, fulfillment: listing.type === 'service' ? 'schedule_required' : 'delivery_required' },
+      })
+      toast.success('Order request sent to the business')
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title={business.name}>
       <div className="flex flex-col gap-4">
@@ -171,9 +189,10 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
                 <div key={l.id} className="flex items-center gap-2">
                   <div className="min-w-0 flex-1"><ListingRow listing={l} /></div>
                   {canContact && (
-                    <button type="button" onClick={() => setInquiryForm({ listingId: l.id, message: '' })} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold text-primary hover:border-primary/50 dark:border-[#252a3a]">
-                      Interested
-                    </button>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setInquiryForm({ listingId: l.id, message: '' })} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold text-primary hover:border-primary/50 dark:border-[#252a3a]">Interested</button>
+                      {l.type !== 'discount' && <button type="button" onClick={() => void placeOrder(l)} className="rounded-lg bg-primary px-2 py-1 text-[10px] font-semibold text-white">Order</button>}
+                    </div>
                   )}
                 </div>
               ))}

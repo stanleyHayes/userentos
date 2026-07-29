@@ -6,6 +6,8 @@ import { Business, BUSINESS_CATEGORIES, type BusinessCategory } from '../models/
 import { BusinessListing } from '../models/BusinessListing.js'
 import { BusinessInquiry } from '../models/BusinessInquiry.js'
 import { BusinessReview } from '../models/BusinessReview.js'
+import { Agreement } from '../models/Agreement.js'
+import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { escapeRegex, param } from '../utils/params.js'
@@ -44,9 +46,17 @@ router.get('/', authenticate, async (req, res) => {
     filter.$or = [{ name: rx }, { description: rx }]
   }
 
-  const businesses = await Business.find(filter).sort({ isVerified: -1, createdAt: -1 }).limit(60).lean()
+  await Business.updateMany({ featuredUntil: { $lte: new Date() } }, { $set: { subscriptionTier: 'free' }, $unset: { featuredUntil: 1 } })
+  const businesses = await Business.find(filter).sort({ featuredUntil: -1, isVerified: -1, createdAt: -1 }).limit(60).lean()
   const ids = businesses.map((b) => (b._id as Types.ObjectId).toString())
   const listings = await BusinessListing.find({ businessId: { $in: ids }, isActive: true }).sort({ createdAt: -1 }).lean()
+  const recentAgreements = await Agreement.find({
+    tenantId: req.user!.userId,
+    status: 'active',
+    createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+  }).select('propertyId').lean()
+  const recentProperties = await Property.find({ _id: { $in: recentAgreements.map((item) => item.propertyId) } }).select('address.city').lean()
+  const newMoverCities = new Set(recentProperties.map((item) => item.address.city.toLowerCase()))
 
   const byBusiness = new Map<string, typeof listings>()
   for (const l of listings) {
@@ -58,7 +68,9 @@ router.get('/', authenticate, async (req, res) => {
   success(res, {
     items: businesses.map((b) => ({
       business: idOf(b),
-      listings: (byBusiness.get((b._id as Types.ObjectId).toString()) ?? []).map(idOf),
+      listings: (byBusiness.get((b._id as Types.ObjectId).toString()) ?? [])
+        .filter((listing) => !listing.newMoverOnly || newMoverCities.has(b.city.toLowerCase()))
+        .map(idOf),
     })),
   })
 })
@@ -258,6 +270,9 @@ const listingSchema = z.object({
   type: z.enum(['product', 'service', 'discount']),
   price: z.number().min(0).optional(),
   promoText: z.string().max(200).optional(),
+  images: z.array(z.string().url()).max(8).optional(),
+  stockQuantity: z.number().int().min(0).optional(),
+  newMoverOnly: z.boolean().optional(),
 })
 
 async function loadMyBusiness(userId: string) {

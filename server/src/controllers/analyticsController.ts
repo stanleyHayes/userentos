@@ -671,4 +671,77 @@ export const analyticsController = {
     await cache.set(cacheKey, result, 3600) // 1 hour TTL
     success(res, result)
   },
+
+  /**
+   * Housing demand — rental price levels per region, vacancy rates, and a
+   * 6-month new-listing/rent trend. Government/admin only.
+   */
+  housingDemand: async (_req: Request, res: Response) => {
+    const cacheKey = 'analytics:housing-demand'
+    const cached = await cache.get(cacheKey)
+    if (cached) { success(res, cached); return }
+
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+    const [regionStats, rentTrend, applicationStats, occupiedCount] = await Promise.all([
+      Property.aggregate([
+        { $match: { 'address.region': { $exists: true, $ne: '' } } },
+        { $group: {
+          _id: '$address.region',
+          listings: { $sum: 1 },
+          avgRent: { $avg: '$rentAmount' },
+          minRent: { $min: '$rentAmount' },
+          maxRent: { $max: '$rentAmount' },
+          available: { $sum: { $cond: [{ $eq: ['$status', 'available'] }, 1, 0] } },
+        } },
+        { $sort: { listings: -1 } },
+      ]),
+      Property.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        { $group: {
+          _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+          newListings: { $sum: 1 },
+          avgRent: { $avg: '$rentAmount' },
+        } },
+        { $sort: { _id: 1 } },
+      ]),
+      Application.aggregate([
+        { $group: { _id: '$propertyId', apps: { $sum: 1 } } },
+        { $group: { _id: null, totalApplications: { $sum: '$apps' }, listingsWithApplications: { $sum: 1 } } },
+      ]),
+      Agreement.countDocuments({ status: 'active' }),
+    ])
+
+    const totalListings = regionStats.reduce((s: number, r: { listings: number }) => s + r.listings, 0)
+    const totalAvailable = regionStats.reduce((s: number, r: { available: number }) => s + r.available, 0)
+    const apps = applicationStats[0] ?? { totalApplications: 0, listingsWithApplications: 0 }
+
+    const result = {
+      regions: regionStats.map((r: { _id: string; listings: number; avgRent: number; minRent: number; maxRent: number; available: number }) => ({
+        region: r._id,
+        listings: r.listings,
+        avgRent: Math.round(r.avgRent ?? 0),
+        minRent: r.minRent ?? 0,
+        maxRent: r.maxRent ?? 0,
+        vacancyRate: r.listings ? Math.round((r.available / r.listings) * 100) : 0,
+      })),
+      rentTrend: rentTrend.map((m: { _id: string; newListings: number; avgRent: number }) => ({
+        month: m._id,
+        newListings: m.newListings,
+        avgRent: Math.round(m.avgRent ?? 0),
+      })),
+      summary: {
+        totalListings,
+        overallVacancyRate: totalListings ? Math.round((totalAvailable / totalListings) * 100) : 0,
+        activeAgreements: occupiedCount,
+        totalApplications: apps.totalApplications,
+        applicationsPerListing: apps.listingsWithApplications
+          ? Math.round((apps.totalApplications / apps.listingsWithApplications) * 10) / 10
+          : 0,
+      },
+    }
+    await cache.set(cacheKey, result, 3600)
+    success(res, result)
+  },
 }

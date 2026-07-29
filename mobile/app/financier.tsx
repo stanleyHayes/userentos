@@ -719,7 +719,7 @@ export default function FinancierScreen() {
                     ]}
                     onPress={() => setFType(t.value)}
                   >
-                    <Text style={[s.optionText, { color: c.text }, fType === t.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                    <Text style={[s.optionText, { color: c.text }, fType === t.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                       {t.label}
                     </Text>
                   </TouchableOpacity>
@@ -833,64 +833,64 @@ const s = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   stat: { flex: 1, padding: 10, gap: 3 },
   statIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  statValue: { fontSize: 15, fontFamily: 'Manrope_800ExtraBold' },
-  statLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium' },
-  statCaption: { fontSize: 8, fontFamily: 'Manrope_400Regular' },
+  statValue: { fontSize: 15, fontFamily: 'Outfit_800ExtraBold' },
+  statLabel: { fontSize: 9, fontFamily: 'Outfit_500Medium' },
+  statCaption: { fontSize: 8, fontFamily: 'Outfit_400Regular' },
 
   segment: { flexDirection: 'row', padding: 3, marginBottom: spacing.md },
   segmentBtn: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
-  segmentText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  segmentText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   newBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 12, marginBottom: spacing.md,
   },
-  newBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  newBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
 
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold' },
-  emptySub: { fontSize: 12, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold' },
+  emptySub: { fontSize: 12, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingHorizontal: spacing.xl },
 
   card: { padding: spacing.md, marginBottom: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
-  cardTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
-  cardSub: { fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 2, textTransform: 'capitalize' },
-  desc: { fontSize: 12, fontFamily: 'Manrope_400Regular', marginBottom: spacing.sm, lineHeight: 18 },
+  cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
+  cardSub: { fontSize: 11, fontFamily: 'Outfit_500Medium', marginTop: 2, textTransform: 'capitalize' },
+  desc: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginBottom: spacing.sm, lineHeight: 18 },
 
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   rows: { gap: 4, marginBottom: spacing.sm },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  rowLabel: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  rowValue: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  rowLabel: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  rowValue: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
 
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  tagText: { fontSize: 10, fontFamily: 'Manrope_600SemiBold' },
+  tagText: { fontSize: 10, fontFamily: 'Outfit_600SemiBold' },
 
   toggleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, borderRadius: 10, paddingVertical: 9, marginTop: 2,
   },
-  toggleBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  toggleBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: 2 },
   actionBtnOutline: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, borderRadius: 10, paddingVertical: 10,
   },
-  actionBtnOutlineText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  actionBtnOutlineText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
   actionBtnSolid: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderRadius: 10, paddingVertical: 10,
   },
-  actionBtnSolidText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  actionBtnSolidText: { color: '#fff', fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  progressPct: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
+  progressLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  progressPct: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: spacing.sm },
   progressFill: { height: '100%', borderRadius: 4 },
 
@@ -898,21 +898,21 @@ const s = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '88%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  modalTitle: { fontSize: 17, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.md },
-  label: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  modalTitle: { fontSize: 17, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.md },
+  label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm, marginBottom: spacing.xs },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
   textArea: { minHeight: 60, textAlignVertical: 'top' },
   fieldRow: { flexDirection: 'row', gap: spacing.sm },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   optionBtn: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: spacing.md, alignItems: 'center', borderWidth: 1.5 },
-  optionText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  optionText: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  checkboxLabel: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  checkboxLabel: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg, marginBottom: spacing.md,
   },
   submitDisabled: { opacity: 0.6 },
-  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  submitText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 })

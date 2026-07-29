@@ -77,13 +77,6 @@ const resources = {
         expenses: 'Expenses',
         vacancy: 'Vacancy',
         payrollReports: 'Payroll Reports',
-        portfolio: 'Portfolio',
-        leads: 'Leads',
-        viewings: 'Viewings',
-        commissions: 'Commissions',
-        expenses: 'Expenses',
-        vacancy: 'Vacancy',
-        payrollReports: 'Payroll Reports',
       },
       common: { search: 'Search', save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', create: 'Create', view: 'View', loading: 'Loading...', noData: 'No data found', confirm: 'Confirm', back: 'Back' },
       auth: {

@@ -406,6 +406,7 @@ export const tourScripts: Record<UserRole, TourScript> = {
   employer,
   service_provider,
   business,
+  developer: business,
   admin: adminScript,
   super_admin,
 }

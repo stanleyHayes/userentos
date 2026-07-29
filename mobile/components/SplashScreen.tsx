@@ -107,14 +107,14 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontSize: 26,
-    fontFamily: 'Manrope_800ExtraBold',
+    fontFamily: 'Outfit_800ExtraBold',
     textAlign: 'center',
     letterSpacing: -0.5,
   },
   brandAccent: {},
   tagline: {
     fontSize: 14,
-    fontFamily: 'Manrope_400Regular',
+    fontFamily: 'Outfit_400Regular',
     textAlign: 'center',
     marginTop: 6,
   },

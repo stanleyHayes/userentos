@@ -141,7 +141,7 @@ export default function ApplicationsScreen() {
               <Text style={[s.chipText, { color: c.text }]}>{item.duration ?? '—'} months</Text>
             </View>
             <View style={[s.chip, { backgroundColor: c.primary + '08' }]}>
-              <Text style={[s.chipText, { color: c.primary, fontFamily: 'Manrope_700Bold' }]}>
+              <Text style={[s.chipText, { color: c.primary, fontFamily: 'Outfit_700Bold' }]}>
                 {formatCurrency(item.offeredRent ?? item.propertyRent ?? 0)}/mo
               </Text>
             </View>
@@ -224,7 +224,7 @@ export default function ApplicationsScreen() {
             style={[s.filterChip, { borderColor: c.border }, statusFilter === f.key && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
             onPress={() => setStatusFilter(f.key)}
           >
-            <Text style={[s.filterChipText, { color: c.muted }, statusFilter === f.key && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{f.label}</Text>
+            <Text style={[s.filterChipText, { color: c.muted }, statusFilter === f.key && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -251,34 +251,34 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   filterBar: { flexDirection: 'row', gap: 6, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1 },
   filterChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5 },
-  filterChipText: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
+  filterChipText: { fontSize: 11, fontFamily: 'Outfit_500Medium' },
   list: { padding: spacing.md, gap: spacing.sm, paddingBottom: 40 },
   // Cards — depth comes from neuCard() at the call site
   card: { overflow: 'hidden' },
   strip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusLabel: { fontSize: 11, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
-  dateLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginLeft: 'auto' },
+  statusLabel: { fontSize: 11, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
+  dateLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginLeft: 'auto' },
   body: { padding: 14, gap: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  propertyTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold', flex: 1 },
+  propertyTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold', flex: 1 },
   tenantRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: -4 },
-  tenantText: { fontSize: 11, fontFamily: 'Manrope_400Regular', flex: 1 },
+  tenantText: { fontSize: 11, fontFamily: 'Outfit_400Regular', flex: 1 },
   detailsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  chipText: { fontSize: 11, fontFamily: 'Manrope_500Medium' },
+  chipText: { fontSize: 11, fontFamily: 'Outfit_500Medium' },
   sectionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   sectionChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
-  sectionChipText: { fontSize: 9, fontFamily: 'Manrope_600SemiBold' },
+  sectionChipText: { fontSize: 9, fontFamily: 'Outfit_600SemiBold' },
   notesBox: { borderRadius: 8, padding: 8 },
-  notesText: { fontSize: 11, fontFamily: 'Manrope_400Regular', lineHeight: 16 },
+  notesText: { fontSize: 11, fontFamily: 'Outfit_400Regular', lineHeight: 16 },
   actions: { flexDirection: 'row', gap: 8 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
   approveBtn: { borderWidth: 0 },
-  actionBtnText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
+  actionBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   approvedNote: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  approvedNoteText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  approvedNoteText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   empty: { alignItems: 'center', paddingTop: 80, gap: spacing.sm, paddingHorizontal: spacing.lg },
-  emptyTitle: { fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
-  emptySubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center' },
+  emptyTitle: { fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
+  emptySubtitle: { fontSize: 13, fontFamily: 'Outfit_400Regular', textAlign: 'center' },
 })

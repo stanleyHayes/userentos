@@ -270,40 +270,41 @@ export function RegisterPage() {
         </div>
       )}
 
-      <div>
+      <div key={step} className="auth-step-enter">
         {step === 0 && <RoleStep value={role} onChange={setRole} />}
         {step === 1 && <AccountStep form={account} update={updateAccount} />}
         {step === 2 && <RoleDetailsStep role={role} details={details} update={updateDetails} toggleTrade={toggleTrade} />}
         {step === 3 && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
 
         {/* Navigation */}
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+        <div className="auth-nav-rail mt-5 flex items-center gap-2.5 rounded-2xl p-2 sm:gap-3">
           <Button
             type="button"
             variant="outline"
+            size="sm"
             disabled={loading}
-            className="whitespace-nowrap w-full sm:w-auto"
+            className="auth-back-button h-9 shrink-0 whitespace-nowrap px-3.5"
             onClick={() => (step === 0 ? navigate('/login') : setStep(step - 1))}
           >
             <ArrowLeft size={14} /> Back
           </Button>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
             {step === 2 && role !== 'service_provider' && role !== 'business' && (
-              <Button type="button" variant="ghost" className="whitespace-nowrap w-full sm:w-auto" onClick={() => setStep(3)}>
+              <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" onClick={() => setStep(3)}>
                 Skip for now
               </Button>
             )}
             {step < STEPS.length - 1 ? (
-              <Button type="button" className="whitespace-nowrap w-full sm:w-auto" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
+              <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-44 sm:flex-none" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
                 Continue <ArrowRight size={14} />
               </Button>
             ) : (
               <>
-                <Button type="button" variant="ghost" className="whitespace-nowrap w-full sm:w-auto" disabled={loading} onClick={() => void finish(true)}>
+                <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" disabled={loading} onClick={() => void finish(true)}>
                   Skip — Starter (free)
                 </Button>
-                <Button type="button" className="whitespace-nowrap w-full sm:w-auto" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
+                <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-48 sm:flex-none" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
                   {loading ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
@@ -314,6 +315,16 @@ export function RegisterPage() {
             )}
           </div>
         </div>
+        {step === 2 && role !== 'service_provider' && role !== 'business' && (
+          <button type="button" className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary sm:hidden" onClick={() => setStep(3)}>
+            Skip details for now
+          </button>
+        )}
+        {step === STEPS.length - 1 && (
+          <button type="button" disabled={loading} className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary disabled:opacity-50 sm:hidden" onClick={() => void finish(true)}>
+            Continue with Starter (free)
+          </button>
+        )}
       </div>
 
       <div className="animate-fade-up" style={{ animationDelay: '0.35s' }}>

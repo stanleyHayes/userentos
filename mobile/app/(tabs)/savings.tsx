@@ -196,7 +196,7 @@ export default function SavingsScreen() {
             onPress={() => handleTabPress(tab)}
             activeOpacity={0.7}
           >
-            <Text style={[s.tabText, { color: c.muted }, activeTab === tab && { fontFamily: 'Manrope_700Bold', color: c.primary }]}>{tab}</Text>
+            <Text style={[s.tabText, { color: c.muted }, activeTab === tab && { fontFamily: 'Outfit_700Bold', color: c.primary }]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -363,7 +363,7 @@ export default function SavingsScreen() {
                     style={[s.optionBtn, neuInset(c), frequency === f.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
                     onPress={() => setFrequency(f.value)}
                   >
-                    <Text style={[s.optionText, { color: c.text }, frequency === f.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{f.label}</Text>
+                    <Text style={[s.optionText, { color: c.text }, frequency === f.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{f.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -436,7 +436,7 @@ export default function SavingsScreen() {
                   style={[s.optionBtn, neuInset(c), { flex: 0, paddingHorizontal: 14, paddingVertical: 10 }, walletMethod === m.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
                   onPress={() => setWalletMethod(m.value)}
                 >
-                  <Text style={[s.optionText, { fontSize: 12, color: c.text }, walletMethod === m.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>{m.label}</Text>
+                  <Text style={[s.optionText, { fontSize: 12, color: c.text }, walletMethod === m.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -482,7 +482,7 @@ const s = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   tabBar: { flexDirection: 'row', paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs, borderBottomWidth: 1 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  tabText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 
   // Wallet Card
   walletCard: { margin: spacing.md, borderRadius: 20, overflow: 'hidden', position: 'relative' },
@@ -490,71 +490,71 @@ const s = StyleSheet.create({
   walletContent: { padding: spacing.lg, position: 'relative' },
   walletHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   walletIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  walletLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontFamily: 'Manrope_500Medium' },
-  walletBalance: { color: '#ffffff', fontSize: 34, fontFamily: 'Manrope_800ExtraBold', marginBottom: 4 },
+  walletLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontFamily: 'Outfit_500Medium' },
+  walletBalance: { color: '#ffffff', fontSize: 34, fontFamily: 'Outfit_800ExtraBold', marginBottom: 4 },
   walletStats: { flexDirection: 'row', gap: 10, marginBottom: spacing.md },
   walletStatChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  walletStatText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'Manrope_500Medium' },
+  walletStatText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'Outfit_500Medium' },
   walletActions: { flexDirection: 'row', gap: 12 },
   walletBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingVertical: 11 },
   walletBtnOutline: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  walletBtnText: { color: '#ffffff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  walletBtnText: { color: '#ffffff', fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   // New Plan
   newPlanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.md, paddingVertical: 12, borderRadius: 12 },
-  newPlanBtnText: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  newPlanBtnText: { fontSize: 15, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
 
   // Section
   section: { paddingHorizontal: spacing.md, marginTop: spacing.md },
-  sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
+  sectionTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
 
   // Plan Cards — depth comes from neuCard() at the call site
   planCard: { padding: spacing.md, marginBottom: spacing.sm },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   planHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   planIconWrap: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  planName: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  planMeta: { fontSize: 11, marginTop: 2, textTransform: 'capitalize', fontFamily: 'Manrope_400Regular' },
+  planName: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  planMeta: { fontSize: 11, marginTop: 2, textTransform: 'capitalize', fontFamily: 'Outfit_400Regular' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontSize: 10, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   // Progress
   progressSection: { marginTop: 4 },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  progressLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  progressPct: { fontSize: 13, fontFamily: 'Manrope_700Bold' },
+  progressLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  progressPct: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
   planFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  planSaved: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
-  planTarget: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
+  planSaved: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
+  planTarget: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
   planContribRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1 },
-  planContribText: { fontSize: 11, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' },
+  planContribText: { fontSize: 11, fontFamily: 'Outfit_500Medium', textTransform: 'capitalize' },
 
   // Empty
   emptySection: { alignItems: 'center', paddingVertical: 40, gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 
   // Transactions
   txItem: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, marginBottom: spacing.xs },
   txIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   txBody: { flex: 1 },
-  txDesc: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
-  txDate: { fontSize: 11, marginTop: 2, fontFamily: 'Manrope_400Regular' },
-  txAmount: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
+  txDesc: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
+  txDate: { fontSize: 11, marginTop: 2, fontFamily: 'Outfit_400Regular' },
+  txAmount: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
 
   // Modal — depth + top radius come from neuCard(c, 20) at the call site
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Outfit_500Medium' },
   optionsGroup: { flexDirection: 'row', gap: spacing.sm },
   optionBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-  optionText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  optionText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
+  submitBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
 })

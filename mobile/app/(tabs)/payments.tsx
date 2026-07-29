@@ -200,7 +200,7 @@ export default function PaymentsScreen() {
                         if (ag.rentAmount) setAmount(String(ag.rentAmount))
                       }}
                     >
-                      <Text style={[s.optionText, { color: c.text }, selectedAgreement === ag.id && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                      <Text style={[s.optionText, { color: c.text }, selectedAgreement === ag.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                         {ag.property?.title ?? `Agreement #${ag.id.slice(0, 8)}`}
                       </Text>
                       {ag.rentAmount > 0 && (
@@ -239,7 +239,7 @@ export default function PaymentsScreen() {
                         size={18}
                         color={selectedMethod === method.value ? c.primary : c.muted}
                       />
-                      <Text style={[s.optionText, { color: c.text }, selectedMethod === method.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' }]}>
+                      <Text style={[s.optionText, { color: c.text }, selectedMethod === method.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                         {method.label}
                       </Text>
                     </View>
@@ -291,21 +291,21 @@ const s = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   summaryCard: { flexDirection: 'row', margin: spacing.md, padding: spacing.md },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  summaryValue: { fontSize: 20, fontFamily: 'Manrope_700Bold', marginTop: 4 },
+  summaryLabel: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  summaryValue: { fontSize: 20, fontFamily: 'Outfit_700Bold', marginTop: 4 },
   divider: { width: 1 },
   list: { paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: 100 },
   item: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
   itemIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   itemBody: { flex: 1 },
-  itemRef: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
-  itemDate: { fontSize: 11, marginTop: 2, textTransform: 'capitalize', fontFamily: 'Manrope_400Regular' },
+  itemRef: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
+  itemDate: { fontSize: 11, marginTop: 2, textTransform: 'capitalize', fontFamily: 'Outfit_400Regular' },
   itemRight: { alignItems: 'flex-end', gap: 4 },
-  itemAmount: { fontSize: 15, fontFamily: 'Manrope_700Bold' },
+  itemAmount: { fontSize: 15, fontFamily: 'Outfit_700Bold' },
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  badgeText: { fontSize: 9, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 9, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
 
   // FAB
   fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
@@ -314,16 +314,16 @@ const s = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  fieldLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
-  noDataText: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Manrope_400Regular' },
-  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Manrope_500Medium' },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  fieldLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm, marginTop: spacing.md },
+  noDataText: { fontSize: 13, textAlign: 'center', paddingVertical: spacing.md, fontFamily: 'Outfit_400Regular' },
+  input: { paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, fontFamily: 'Outfit_500Medium' },
   optionsGroup: { gap: spacing.sm },
   optionBtn: { borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 14, borderWidth: 1.5 },
-  optionText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
-  optionSub: { fontSize: 12, marginTop: 2, fontFamily: 'Manrope_400Regular' },
+  optionText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
+  optionSub: { fontSize: 12, marginTop: 2, fontFamily: 'Outfit_400Regular' },
   methodRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 16, marginTop: spacing.lg, marginBottom: spacing.md },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: '#ffffff' },
+  submitBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
 })

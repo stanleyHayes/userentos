@@ -36,6 +36,8 @@ import { TenantReviewSection } from './components/TenantReviewSection'
 import type { Property, Application, RentalAgreement, Conversation, PropertyStatus } from '@/types'
 import type { PaginatedResponse } from '@/types'
 
+type PropertyDetail = Property & { landlordName?: string; landlordVerified?: boolean }
+
 // Map amenity names to icons
 const amenityIcons: Record<string, React.ReactNode> = {
   'Water': <Droplets size={16} />, 'Electricity': <Zap size={16} />, 'WiFi': <Wifi size={16} />,
@@ -72,7 +74,13 @@ export function PropertyDetailPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [messagingReviewer, setMessagingReviewer] = useState(false)
 
-  const { data: property, isLoading } = useQuery({ queryKey: ['property', id], queryFn: () => api.get<Property>(`/properties/${id}`), enabled: !!id })
+  const { data: property, isLoading } = useQuery({ queryKey: ['property', id], queryFn: () => api.get<PropertyDetail>(`/properties/${id}`), enabled: !!id })
+  const neighborhoodCity = property?.address?.city
+  const { data: neighborhood } = useQuery({
+    queryKey: ['neighborhood-insights', neighborhoodCity],
+    queryFn: () => api.get<{ reviewCount: number; avgNeighborhood: number; avgOverall: number; recommendPct: number }>(`/reviews/neighborhood/${encodeURIComponent(neighborhoodCity!)}`),
+    enabled: !!neighborhoodCity,
+  })
   const { data: agreementsData } = useQuery({ queryKey: ['property-agreements', id], queryFn: () => api.get<PaginatedResponse<RentalAgreement>>('/agreements'), enabled: !!id && !!user })
   const isFavorited = useFavoritesStore((s) => s.ids.includes(id!))
   const isToggling = useFavoritesStore((s) => s.toggling.has(id!))
@@ -217,6 +225,7 @@ export function PropertyDetailPage() {
                   <MapPin size={13} className="mt-0.5 flex-shrink-0" />
                   <span>{p.address?.street}, {p.address?.city}, {p.address?.region}</span>
                 </div>
+                {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · Verified landlord' : ''}</p>}
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">Listed rent</p>
                   <div className="mt-1 flex items-baseline gap-1">
@@ -428,6 +437,17 @@ export function PropertyDetailPage() {
 
           {/* Tenants & Reviews tabs */}
           <TenantReviewSection propertyId={id!} pastAgreements={pastAgreements} />
+          {neighborhood && (
+            <Card>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted">Neighborhood insights · {p.address.city}</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <ListingSignal icon={<Star size={13} />} label="Neighborhood" value={`${neighborhood.avgNeighborhood}/5`} />
+                <ListingSignal icon={<Star size={13} />} label="Overall" value={`${neighborhood.avgOverall}/5`} />
+                <ListingSignal icon={<CheckCircle2 size={13} />} label="Recommend" value={`${neighborhood.recommendPct}%`} />
+                <ListingSignal icon={<MessageSquare size={13} />} label="Community reviews" value={String(neighborhood.reviewCount)} />
+              </div>
+            </Card>
+          )}
         </div>
 
       <ContactLandlordModal open={showContact} onClose={() => setShowContact(false)} title={p.title} />

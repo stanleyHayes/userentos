@@ -51,7 +51,7 @@ export default function ResetPasswordScreen() {
         <Text style={[s.title, { color: c.primaryDark }]}>Reset Password</Text>
         <Text style={[s.subtitle, { color: c.muted }]}>Create a new password for your account.</Text>
 
-        {error ? <View style={[s.errorBox, { backgroundColor: c.danger + '10' }]}><Text style={{ color: c.danger, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>{error}</Text></View> : null}
+        {error ? <View style={[s.errorBox, { backgroundColor: c.danger + '10' }]}><Text style={{ color: c.danger, fontSize: 13, fontFamily: 'Outfit_500Medium' }}>{error}</Text></View> : null}
 
         <View style={s.form}>
           <Text style={[s.label, { color: c.text }]}>New Password</Text>
@@ -81,7 +81,7 @@ export default function ResetPasswordScreen() {
           {confirm.length > 0 && (
             <View style={s.matchRow}>
               <Ionicons name={password === confirm ? 'checkmark-circle' : 'close-circle'} size={14} color={password === confirm ? c.accent : c.danger} />
-              <Text style={{ color: password === confirm ? c.accent : c.danger, fontSize: 11, fontFamily: 'Manrope_500Medium' }}>
+              <Text style={{ color: password === confirm ? c.accent : c.danger, fontSize: 11, fontFamily: 'Outfit_500Medium' }}>
                 {password === confirm ? 'Passwords match' : 'Passwords do not match'}
               </Text>
             </View>
@@ -100,18 +100,18 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
-  title: { fontSize: 28, fontFamily: 'Manrope_800ExtraBold', marginBottom: spacing.xs },
-  subtitle: { fontSize: 14, fontFamily: 'Manrope_400Regular', marginBottom: spacing.lg },
-  successTitle: { fontSize: 22, fontFamily: 'Manrope_800ExtraBold' },
-  successDesc: { fontSize: 14, fontFamily: 'Manrope_400Regular', textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: 28, fontFamily: 'Outfit_800ExtraBold', marginBottom: spacing.xs },
+  subtitle: { fontSize: 14, fontFamily: 'Outfit_400Regular', marginBottom: spacing.lg },
+  successTitle: { fontSize: 22, fontFamily: 'Outfit_800ExtraBold' },
+  successDesc: { fontSize: 14, fontFamily: 'Outfit_400Regular', textAlign: 'center', lineHeight: 22 },
   form: { gap: spacing.sm },
-  label: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: spacing.sm },
+  label: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm },
   inputWrap: { height: 52, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center' },
-  input: { flex: 1, fontSize: 15, fontFamily: 'Manrope_400Regular' },
-  inputPlain: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Manrope_400Regular' },
+  input: { flex: 1, fontSize: 15, fontFamily: 'Outfit_400Regular' },
+  inputPlain: { height: 52, paddingHorizontal: spacing.md, fontSize: 15, fontFamily: 'Outfit_400Regular' },
   matchRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   button: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: spacing.md },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  buttonText: { color: '#fff', fontSize: 16, fontFamily: 'Outfit_600SemiBold' },
   errorBox: { borderRadius: 10, padding: spacing.md, marginBottom: spacing.md },
 })

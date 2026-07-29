@@ -7,5 +7,6 @@ const router = Router()
 
 router.get('/me', authenticate, asyncHandler(analyticsController.me))
 router.get('/platform', authenticate, requireRole('government', 'admin', 'legal_officer'), asyncHandler(analyticsController.platform))
+router.get('/housing-demand', authenticate, requireRole('government', 'admin', 'legal_officer'), asyncHandler(analyticsController.housingDemand))
 
 export default router

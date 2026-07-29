@@ -1129,7 +1129,7 @@ export default function PropertyDetailScreen() {
                 })}
               </View>
               {applySharedSections.length === 0 && (
-                <Text style={{ color: c.danger, fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 4 }}>Select at least one section</Text>
+                <Text style={{ color: c.danger, fontSize: 11, fontFamily: 'Outfit_500Medium', marginTop: 4 }}>Select at least one section</Text>
               )}
 
               <Text style={[s.inputLabel, { color: c.text }]}>Desired Move-in Date *</Text>
@@ -1156,7 +1156,7 @@ export default function PropertyDetailScreen() {
                     <Text style={[
                       s.durationText,
                       { color: c.muted },
-                      applyDuration === opt.value && { color: c.primary, fontFamily: 'Manrope_600SemiBold' },
+                      applyDuration === opt.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' },
                     ]}>
                       {opt.label}
                     </Text>
@@ -1475,148 +1475,148 @@ function PrefTag({ label, icon, c, negative }: { label: string; icon: string; c:
 const s = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
-  emptyText: { fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
   imagePlaceholder: { height: 260, justifyContent: 'center', alignItems: 'center' },
-  imagePlaceholderText: { fontSize: 14, marginTop: spacing.sm, textTransform: 'capitalize', fontFamily: 'Manrope_500Medium' },
+  imagePlaceholderText: { fontSize: 14, marginTop: spacing.sm, textTransform: 'capitalize', fontFamily: 'Outfit_500Medium' },
 
   // Image carousel
   paginationDots: { position: 'absolute', bottom: 12, alignSelf: 'center', flexDirection: 'row', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotActive: { width: 18 },
   viewsBadge: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
-  viewsBadgeText: { fontSize: 10, color: '#fff', fontFamily: 'Manrope_600SemiBold' },
+  viewsBadgeText: { fontSize: 10, color: '#fff', fontFamily: 'Outfit_600SemiBold' },
   imageActions: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', gap: 8 },
   imageActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
 
   section: { padding: spacing.md, marginTop: spacing.sm },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  title: { fontSize: 20, fontFamily: 'Manrope_700Bold', flex: 1, marginRight: spacing.sm },
+  title: { fontSize: 20, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.sm },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  badgeText: { fontSize: 11, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
   location: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.sm },
-  locationText: { fontSize: 13, fontFamily: 'Manrope_400Regular' },
-  price: { fontSize: 24, fontFamily: 'Manrope_800ExtraBold' },
-  priceUnit: { fontSize: 14, fontFamily: 'Manrope_400Regular' },
+  locationText: { fontSize: 13, fontFamily: 'Outfit_400Regular' },
+  price: { fontSize: 24, fontFamily: 'Outfit_800ExtraBold' },
+  priceUnit: { fontSize: 14, fontFamily: 'Outfit_400Regular' },
   detailsCard: { flexDirection: 'row', marginTop: spacing.sm, paddingVertical: spacing.md },
   detailItem: { flex: 1, alignItems: 'center', gap: 4 },
-  detailValue: { fontSize: 16, fontFamily: 'Manrope_700Bold' },
-  detailLabel: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  detailValue: { fontSize: 16, fontFamily: 'Outfit_700Bold' },
+  detailLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
 
   // Detail strip
   detailStrip: { flexDirection: 'row', marginTop: spacing.sm },
   detailCellItem: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center' },
-  detailCellLabel: { fontSize: 9, fontFamily: 'Manrope_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
-  detailCellValue: { fontSize: 13, fontFamily: 'Manrope_700Bold', textTransform: 'capitalize' },
+  detailCellLabel: { fontSize: 9, fontFamily: 'Outfit_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
+  detailCellValue: { fontSize: 13, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, marginTop: spacing.sm },
   statItem: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 2 },
   statIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
-  statValue: { fontSize: 14, fontFamily: 'Manrope_800ExtraBold' },
-  statLabel: { fontSize: 10, fontFamily: 'Manrope_400Regular' },
+  statValue: { fontSize: 14, fontFamily: 'Outfit_800ExtraBold' },
+  statLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
 
-  sectionTitle: { fontSize: 16, fontFamily: 'Manrope_700Bold', marginBottom: spacing.sm },
-  descriptionText: { fontSize: 14, lineHeight: 22, fontFamily: 'Manrope_400Regular' },
+  sectionTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+  descriptionText: { fontSize: 14, lineHeight: 22, fontFamily: 'Outfit_400Regular' },
   tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  tagText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  tagText: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
-  ruleText: { fontSize: 13, flex: 1, fontFamily: 'Manrope_400Regular' },
+  ruleText: { fontSize: 13, flex: 1, fontFamily: 'Outfit_400Regular' },
 
   // Preferences
   prefTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  prefTagText: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  prefTagText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
 
   // Map
   mapPlaceholder: { marginTop: spacing.sm, padding: spacing.md, alignItems: 'center', gap: 4 },
-  mapPlaceholderText: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
-  digitalAddress: { fontSize: 11, fontFamily: 'Manrope_600SemiBold' },
+  mapPlaceholderText: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
+  digitalAddress: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
 
   // Actions
   actionSection: { padding: spacing.md },
   actionRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12 },
-  primaryBtnText: { fontSize: 16, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  primaryBtnText: { fontSize: 16, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
   outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5 },
-  outlineBtnText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  outlineBtnText: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
   compactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
-  compactBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  compactBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
   favoriteBtn: { width: 52, height: 52, justifyContent: 'center', alignItems: 'center' },
 
   // Applied badge
   appliedBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12 },
-  appliedBadgeText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  appliedBadgeText: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
 
   // Report
   reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: spacing.md },
-  reportBtnText: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  reportBtnText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
 
   // Tabs
   tabBar: { flexDirection: 'row', borderBottomWidth: 1 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  tabText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  tabText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
 
   // Tenant cards
   tenantCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-  tenantName: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  tenantDates: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  tenantName: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  tenantDates: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 
   // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%', paddingTop: spacing.md },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, marginBottom: 4 },
-  modalTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold' },
-  modalSubtitle: { fontSize: 13, fontFamily: 'Manrope_400Regular', paddingHorizontal: spacing.md, marginBottom: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold' },
+  modalSubtitle: { fontSize: 13, fontFamily: 'Outfit_400Regular', paddingHorizontal: spacing.md, marginBottom: spacing.md },
   modalScroll: { paddingHorizontal: spacing.md },
-  inputLabel: { fontSize: 13, fontFamily: 'Manrope_600SemiBold', marginBottom: 6, marginTop: spacing.md },
-  input: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Manrope_400Regular' },
-  textArea: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Manrope_400Regular', minHeight: 100 },
-  helperText: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 },
+  inputLabel: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginBottom: 6, marginTop: spacing.md },
+  input: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Outfit_400Regular' },
+  textArea: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Outfit_400Regular', minHeight: 100 },
+  helperText: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 4 },
   sectionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   sectionChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
-  sectionChipText: { fontSize: 12, fontFamily: 'Manrope_500Medium' },
+  sectionChipText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   durationRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   durationBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
-  durationText: { fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  durationText: { fontSize: 13, fontFamily: 'Outfit_500Medium' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, marginTop: spacing.lg },
-  submitBtnText: { fontSize: 16, fontFamily: 'Manrope_600SemiBold', color: '#ffffff' },
+  submitBtnText: { fontSize: 16, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
 
   // Qualification styles
   qualBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: spacing.sm },
-  qualBannerTitle: { fontSize: 14, fontFamily: 'Manrope_700Bold' },
-  qualBannerSub: { fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  qualBannerTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  qualBannerSub: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   qualProgressBg: { height: 5, borderRadius: 3, marginBottom: spacing.md, overflow: 'hidden' as const },
   qualProgressFill: { height: 5, borderRadius: 3 },
   qualCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: spacing.xs },
-  qualCheckReq: { fontSize: 12, fontFamily: 'Manrope_600SemiBold' },
-  qualCheckDetail: { fontSize: 10, fontFamily: 'Manrope_400Regular', marginTop: 2 },
+  qualCheckReq: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
+  qualCheckDetail: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   qualInfoNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: spacing.sm },
-  qualInfoText: { fontSize: 10, fontFamily: 'Manrope_400Regular', flex: 1 },
+  qualInfoText: { fontSize: 10, fontFamily: 'Outfit_400Regular', flex: 1 },
   qualApplyWarning: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6 },
-  qualApplyWarningText: { fontSize: 10, fontFamily: 'Manrope_500Medium' },
+  qualApplyWarningText: { fontSize: 10, fontFamily: 'Outfit_500Medium' },
 
   // Listing status / rejection styles
   rejectionBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
-  rejectionTitle: { fontSize: 12, fontFamily: 'Manrope_700Bold', marginBottom: 2 },
-  rejectionText: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 20 },
+  rejectionTitle: { fontSize: 12, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+  rejectionText: { fontSize: 13, fontFamily: 'Outfit_400Regular', lineHeight: 20 },
 
   // Reviews styles
   reviewsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   avgRatingWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  avgRatingValue: { fontSize: 16, fontFamily: 'Manrope_800ExtraBold' },
+  avgRatingValue: { fontSize: 16, fontFamily: 'Outfit_800ExtraBold' },
   starsRow: { flexDirection: 'row', gap: 1 },
-  reviewCount: { fontSize: 12, fontFamily: 'Manrope_400Regular' },
+  reviewCount: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
   writeReviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, marginBottom: spacing.md },
-  writeReviewBtnText: { fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  noReviewsText: { fontSize: 13, fontFamily: 'Manrope_400Regular', textAlign: 'center', paddingVertical: spacing.md },
+  writeReviewBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
+  noReviewsText: { fontSize: 13, fontFamily: 'Outfit_400Regular', textAlign: 'center', paddingVertical: spacing.md },
   reviewCard: { padding: spacing.sm, marginBottom: spacing.sm },
   reviewCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   reviewStars: { flexDirection: 'row', gap: 1 },
-  reviewDate: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
+  reviewDate: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
   anonymousRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  anonymousText: { fontSize: 11, fontFamily: 'Manrope_400Regular' },
-  reviewComment: { fontSize: 13, fontFamily: 'Manrope_400Regular', lineHeight: 20, marginBottom: 6 },
+  anonymousText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  reviewComment: { fontSize: 13, fontFamily: 'Outfit_400Regular', lineHeight: 20, marginBottom: 6 },
   prosConsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 4 },
-  prosConsText: { fontSize: 12, fontFamily: 'Manrope_400Regular', flex: 1 },
+  prosConsText: { fontSize: 12, fontFamily: 'Outfit_400Regular', flex: 1 },
   starSelector: { flexDirection: 'row', gap: 8, paddingVertical: spacing.sm },
 })

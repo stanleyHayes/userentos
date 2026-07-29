@@ -45,9 +45,13 @@ function parseCsv(text: string): ParsedRow[] {
       out.push({ rowNumber, raw, error: 'Missing required column (email, netMonthlySalary, or startDate)' })
       continue
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      out.push({ rowNumber, raw, error: 'Invalid email format' })
+      continue
+    }
     const salary = Number(netMonthlySalary)
-    if (Number.isNaN(salary) || salary < 0) {
-      out.push({ rowNumber, raw, error: 'netMonthlySalary must be a non-negative number' })
+    if (Number.isNaN(salary) || salary <= 0) {
+      out.push({ rowNumber, raw, error: 'netMonthlySalary must be a positive number' })
       continue
     }
     out.push({
@@ -143,7 +147,7 @@ export function EmployerEmployeesPage() {
           <p className="text-sm text-muted dark:text-gray-500">{employees.length} on payroll</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}><Upload size={14} /> Bulk Import (CSV)</Button>
+          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}><Upload size={14} /> Bulk Invite</Button>
           <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> Add Employee</Button>
         </div>
       </div>
@@ -212,7 +216,7 @@ export function EmployerEmployeesPage() {
         </div>
       </Modal>
 
-      <Modal open={bulkOpen} onClose={resetBulk} title="Bulk Import Employees" className="max-w-2xl">
+      <Modal open={bulkOpen} onClose={resetBulk} title="Bulk Invite Employees" className="max-w-2xl">
         <div className="space-y-4">
           <div className="text-xs text-muted dark:text-gray-500 space-y-1">
             <p>Paste CSV or upload a file. Columns: <code className="font-mono text-[11px]">{CSV_HEADERS.join(',')}</code> — header row optional.</p>

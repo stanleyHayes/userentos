@@ -23,6 +23,7 @@ export interface IAgreement extends Document {
   renewalStatus: 'none' | 'landlord_declined' | 'tenant_declined' | 'pending' | 'renewed'
   renewalDeclinedBy?: string
   renewalDeclinedAt?: Date
+  moverBusinessesNotifiedAt?: Date
   /** ISO timestamp of last lease-expiry reminder (idempotency for scheduler) */
   lastLeaseReminderAt?: string
 }
@@ -54,6 +55,7 @@ const agreementSchema = new Schema<IAgreement>({
   renewalStatus: { type: String, enum: ['none', 'landlord_declined', 'tenant_declined', 'pending', 'renewed'], default: 'none' },
   renewalDeclinedBy: String,
   renewalDeclinedAt: Date,
+  moverBusinessesNotifiedAt: Date,
   lastLeaseReminderAt: String,
 }, { timestamps: true })
 
