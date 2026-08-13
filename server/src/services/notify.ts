@@ -5,7 +5,7 @@
 
 import { Notification } from '../models/Notification.js'
 import { User } from '../models/User.js'
-import { sendEmail } from './email.js'
+import { sendEmail, absoluteUrl } from './email.js'
 import { sendPushNotification } from './push.js'
 import { getIO } from './socket.js'
 
@@ -73,12 +73,15 @@ export async function notify(opts: NotifyOptions) {
         // plain-text contexts and stay unescaped.
         const safeTitle = escapeHtml(title)
         const safeMessage = escapeHtml(message)
-        const safeActionUrl = actionUrl ? escapeHtml(actionUrl) : undefined
+        // Link targets must be absolute and environment-aware — this used to
+        // hardcode https://rentos.gh, so every staging/dev notification pointed
+        // at production.
+        const safeActionUrl = actionUrl ? escapeHtml(absoluteUrl(actionUrl)) : undefined
         sendEmail({
           to: user.email,
           subject: title,
           text: message,
-          html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="https://rentos.gh${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}`,
+          html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}`,
         }).catch((err) => console.warn('[Notify] Email failed:', err.message))
       }
     }).catch((err) => console.warn('[Notify] User lookup failed:', err.message))
