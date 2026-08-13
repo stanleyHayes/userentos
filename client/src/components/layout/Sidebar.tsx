@@ -312,7 +312,7 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
 
       <div className={cn('grid transition-[grid-template-rows,opacity] duration-200 ease-in-out', isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
         <div className="min-h-0 overflow-hidden">
-          <ul className="relative mt-1 space-y-1 rounded-2xl border border-border/50 bg-surface/35 px-1.5 py-2 before:absolute before:left-[23px] before:top-5 before:bottom-5 before:w-px before:bg-border dark:border-white/10 dark:bg-white/[0.025] dark:before:bg-white/10">
+          <ul className="relative mt-1 space-y-1 rounded-2xl bg-surface/35 px-1.5 py-2 before:absolute before:left-[23px] before:top-5 before:bottom-5 before:w-px before:bg-border dark:bg-white/[0.025] dark:before:bg-white/10">
             {group.items.map((item) => (
               <li key={item.path}>
                 <NavLink to={item.path} end onClick={onItemClick}
