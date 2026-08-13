@@ -10,9 +10,37 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
+import { buildInviteUrl, sendInvitationEmail } from '../services/email.js'
 import { checkAndAward } from '../services/achievements.js'
 
 const router = Router()
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Mail the invite link. Best-effort: a mail failure must not lose the
+ * invitation, so the caller reports `emailSent` and falls back to the link.
+ */
+async function mailInvite(invitation: { email: string; roles: string[]; expiresAt: Date }, rawToken: string, invitedByName?: string) {
+  try {
+    return await sendInvitationEmail(invitation.email, {
+      inviteUrl: buildInviteUrl(rawToken),
+      roles: invitation.roles,
+      invitedByName,
+      expiresAt: invitation.expiresAt,
+    })
+  } catch (err) {
+    console.error('[invitations] invite email failed:', (err as Error).message)
+    return false
+  }
+}
+
+/** Display name of the inviter, for the email body. */
+async function inviterName(userId: string): Promise<string | undefined> {
+  const user = await User.findById(userId).select('firstName lastName').lean()
+  if (!user) return undefined
+  return `${user.firstName} ${user.lastName}`.trim() || undefined
+}
 
 /** Delegation guard: you may only hand out access you hold yourself. */
 function canDelegate(req: Parameters<typeof isSuperAdmin>[0], roles: string[], permissions: string[]): string | null {
@@ -77,7 +105,7 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
   }
 
   const rawToken = crypto.randomBytes(32).toString('hex')
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS)
 
   const invitation = await Invitation.create({
     email: email.toLowerCase(),
@@ -88,13 +116,42 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
     expiresAt,
   })
 
-  // Invitation emails are not wired up yet, so the raw token is returned to
-  // the inviter for manual sharing — safe to do so because the delegation
-  // guard above means it can only grant access the inviter already holds.
+  const emailSent = await mailInvite(invitation, rawToken, await inviterName(req.user!.userId))
+
+  // The raw token also goes back to the inviter so they can share the link by
+  // hand when mail bounces — safe because the delegation guard above means it
+  // can only grant access the inviter already holds. This is the only moment
+  // the raw token exists outside the invitee's inbox; only its hash is stored.
   success(res, {
     ...inviteView(invitation),
-    inviteUrl: `/register?invite=${rawToken}`,
-  }, 'Invitation sent', 201)
+    inviteUrl: buildInviteUrl(rawToken),
+    emailSent,
+  }, emailSent ? 'Invitation emailed' : 'Invitation created — email could not be sent, share the link instead', 201)
+})
+
+/**
+ * Public invite lookup — lets the accept screen show who and what the invite is
+ * for before asking for a password. Returns only the invitee's own email and
+ * the roles offered; the 256-bit token makes enumeration infeasible.
+ */
+router.get('/verify', async (req, res) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : ''
+  if (!token) { error(res, 'Missing invitation token', 400); return }
+
+  const invitation = await Invitation.findOne({ token: hashInviteToken(token), status: 'pending' }).lean()
+  if (!invitation) { error(res, 'This invitation is invalid, already used, or was revoked', 404); return }
+
+  if (invitation.expiresAt < new Date()) {
+    await Invitation.updateOne({ _id: invitation._id }, { status: 'expired' })
+    error(res, 'This invitation has expired', 410)
+    return
+  }
+
+  success(res, {
+    email: invitation.email,
+    roles: invitation.roles,
+    expiresAt: invitation.expiresAt,
+  })
 })
 
 // Accept an invitation (public — no auth required)
@@ -196,14 +253,17 @@ router.post('/:id/resend', authenticate, requirePermission('users:invite'), asyn
 
   const rawToken = crypto.randomBytes(32).toString('hex')
   invitation.token = hashInviteToken(rawToken)
-  invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  invitation.expiresAt = new Date(Date.now() + INVITE_TTL_MS)
   invitation.status = 'pending'
   await invitation.save()
 
+  const emailSent = await mailInvite(invitation, rawToken, await inviterName(req.user!.userId))
+
   success(res, {
     ...inviteView(invitation),
-    inviteUrl: `/register?invite=${rawToken}`,
-  }, 'Invitation resent')
+    inviteUrl: buildInviteUrl(rawToken),
+    emailSent,
+  }, emailSent ? 'Invitation emailed' : 'Invitation regenerated — email could not be sent, share the link instead')
 })
 
 export default router

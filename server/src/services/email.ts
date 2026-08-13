@@ -88,3 +88,72 @@ export function sendDisputeNotification(to: string, disputeTitle: string, status
     html: `<h2>Dispute Update</h2><p>Your dispute "<strong>${disputeTitle}</strong>" has been updated to: <strong>${status.replace('_', ' ')}</strong>.</p><p><a href="${PUBLIC_BASE_URL}/disputes">View Details</a></p>`,
   })
 }
+
+/** Escape user-controlled values before interpolating into email HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  tenant: 'Tenant',
+  landlord: 'Landlord',
+  property_manager: 'Property Manager',
+  government: 'Government Official',
+  legal_officer: 'Legal Officer',
+  admin: 'Administrator',
+  super_admin: 'Super Administrator',
+  financier: 'Financier',
+  employer: 'Employer',
+  service_provider: 'Service Provider',
+  business: 'Local Business',
+  developer: 'Property Developer',
+  agent: 'Agent',
+}
+
+/** Human-readable role list for an invitation ("Government Official and Legal Officer"). */
+export function describeRoles(roles: string[]): string {
+  const labels = roles.map((r) => ROLE_LABELS[r] || r.replace(/_/g, ' '))
+  if (labels.length <= 1) return labels[0] || 'RentOS user'
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+}
+
+/**
+ * Absolute URL for an in-app path. Built here because this module owns
+ * PUBLIC_BASE_URL — set it in the environment or recipients get links to the
+ * default production host.
+ */
+export function absoluteUrl(path: string): string {
+  return `${PUBLIC_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/** Absolute link an invitee follows to claim their account. */
+export function buildInviteUrl(rawToken: string): string {
+  return absoluteUrl(`/accept-invite?token=${encodeURIComponent(rawToken)}`)
+}
+
+export function sendInvitationEmail(to: string, opts: {
+  inviteUrl: string
+  roles: string[]
+  invitedByName?: string
+  expiresAt: Date
+}) {
+  const roleText = describeRoles(opts.roles)
+  const invitedBy = opts.invitedByName ? `${opts.invitedByName} has invited you` : 'You have been invited'
+  const expires = opts.expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  return sendEmail({
+    to,
+    subject: `You have been invited to RentOS Ghana as ${roleText}`,
+    text: `${invitedBy} to join RentOS Ghana as ${roleText}.\n\nAccept your invitation and set your password here:\n\n${opts.inviteUrl}\n\nThis invitation is for ${to} only and expires on ${expires}.\n\nIf you were not expecting this invitation, you can ignore this email — the link cannot be used until someone completes the form.\n\nThe RentOS Team`,
+    html: `<h2>You have been invited to RentOS Ghana</h2>`
+      + `<p>${escapeHtml(invitedBy)} to join <strong>RentOS Ghana</strong> as <strong>${escapeHtml(roleText)}</strong>.</p>`
+      + `<p><a href="${opts.inviteUrl}" style="background:#1e3a5f;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Accept Invitation</a></p>`
+      + `<p><small>Or paste this link into your browser:<br>${escapeHtml(opts.inviteUrl)}</small></p>`
+      + `<p><small>This invitation is for ${escapeHtml(to)} only and expires on ${escapeHtml(expires)}. If you were not expecting it, you can ignore this email.</small></p>`,
+  })
+}

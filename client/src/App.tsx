@@ -16,6 +16,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { AcceptInvitePage } from '@/pages/auth/AcceptInvitePage'
 import { ScrollToTop } from '@/components/ScrollToTop'
 import { PortalContext, portalValue } from '@/hooks/usePortal'
 import { ConfettiBurstPortal } from '@/components/celebrations/ConfettiBurst'
@@ -166,6 +167,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route path="/register" element={<RegisterPage />} />
           </Route>
 

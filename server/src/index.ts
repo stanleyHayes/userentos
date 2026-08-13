@@ -21,7 +21,7 @@ import { runBootstrap } from './models/BootstrapState.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
 import './openapi/endpoints.js'
-import { publicLimiter, writeLimiter, apiLimiter } from './middleware/rateLimit.js'
+import { publicLimiter, writeLimiter, apiLimiter, registerLimiter } from './middleware/rateLimit.js'
 import { requestId, securityHeaders, notFoundHandler } from './middleware/security.js'
 import { sanitizeRequest } from './middleware/sanitize.js'
 
@@ -153,6 +153,19 @@ app.use('/api/tenant-passport/shared', publicLimiter)
 app.use((req, _res, next) => {
   if (req.method === 'POST' && req.path === '/api/tenant-passport/share') {
     return publicLimiter(req, _res, next)
+  }
+  next()
+})
+
+// Unauthenticated invitation endpoints. Accepting an invite creates an account,
+// so it earns the same limiter as registration; the lookup that powers the
+// accept screen is IP-limited like any other public read.
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.path === '/api/invitations/verify') {
+    return publicLimiter(req, res, next)
+  }
+  if (req.method === 'POST' && req.path === '/api/invitations/accept') {
+    return registerLimiter(req, res, next)
   }
   next()
 })
@@ -369,7 +382,11 @@ async function start() {
     const allowSeed = process.env.SEED_DEMO === 'true'
       || (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO !== 'false')
     if (!allowSeed) {
-      logger.info('Seed skipped in production (set SEED_DEMO=true to force demo seeding).')
+      logger.info(
+        process.env.SEED_DEMO === 'false'
+          ? 'Demo seed disabled by SEED_DEMO=false.'
+          : 'Demo seed skipped in production (set SEED_DEMO=true to force it).',
+      )
     } else {
       if (process.env.NODE_ENV === 'production') {
         logger.warn('SEED_DEMO=true in production — demo accounts with default passwords will be created. Rotate them immediately.')

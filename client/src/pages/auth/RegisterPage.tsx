@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
@@ -126,6 +126,7 @@ function pickFreePackage(packages: SubscriptionPackage[]): SubscriptionPackage |
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const login = useAuthStore((s) => s.login)
   const { data: packagesData, isLoading: pkgLoading } = useSubscriptionPackages()
   const packages = packagesData?.items ?? []
@@ -143,6 +144,11 @@ export function RegisterPage() {
   // Free Starter plan is preselected — derived (not synced state) so the user
   // can still override it before packages finish loading.
   const effectivePackageId = selectedPackageId ?? (packages.length > 0 ? (pickFreePackage(packages)?.id ?? packages[0].id) : null)
+
+  // Invitations issued before the accept screen existed pointed here as
+  // /register?invite=<token>. Self-service signup can't honour the invited role,
+  // so hand those links to the accept flow instead.
+  const legacyInviteToken = searchParams.get('invite')
 
   function updateAccount(field: keyof AccountForm, value: string) {
     setAccount((prev) => ({ ...prev, [field]: value }))
@@ -226,6 +232,10 @@ export function RegisterPage() {
     }
 
     navigate(dest)
+  }
+
+  if (legacyInviteToken) {
+    return <Navigate to={`/accept-invite?token=${encodeURIComponent(legacyInviteToken)}`} replace />
   }
 
   return (

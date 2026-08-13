@@ -542,11 +542,20 @@ export function useInvitations() {
   })
 }
 
+/**
+ * Create/resend responses carry the one-time invite link and whether the email
+ * went out, so the inviter can fall back to sharing it by hand.
+ */
+export interface InvitationResult extends Invitation {
+  inviteUrl: string
+  emailSent: boolean
+}
+
 export function useSendInvitation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { email: string; roles: UserRole[]; permissions?: Permission[] }) =>
-      api.post<Invitation>('/invitations', body),
+      api.post<InvitationResult>('/invitations', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invitations'] }),
   })
 }
@@ -562,7 +571,7 @@ export function useRevokeInvitation() {
 export function useResendInvitation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.post<Invitation>(`/invitations/${id}/resend`, {}),
+    mutationFn: (id: string) => api.post<InvitationResult>(`/invitations/${id}/resend`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invitations'] }),
   })
 }

@@ -5,7 +5,9 @@ import { Modal } from '@/components/ui/Modal'
 import {
   useUsers, useCreateUser, useUpdateUserPermissions, useDeleteUser,
   useInvitations, useSendInvitation, useRevokeInvitation, useResendInvitation,
+  type InvitationResult,
 } from '@/hooks/useApi'
+import { describeRoles } from '@/lib/roles'
 import { formatDate } from '@/lib/utils'
 import { Search, Plus, Mail, Shield, Trash2, RotateCw, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
@@ -104,6 +106,7 @@ export function UsersPage() {
 
   // Invite form
   const [inviteForm, setInviteForm] = useState({ email: '', roles: [] as UserRole[], permissions: [] as Permission[] })
+  const [inviteResult, setInviteResult] = useState<InvitationResult | null>(null)
 
   // Permissions editor
   const [editRoles, setEditRoles] = useState<UserRole[]>([])
@@ -136,13 +139,29 @@ export function UsersPage() {
       return
     }
     sendInvitation.mutate(inviteForm, {
-      onSuccess: () => {
-        toast.success('Invitation sent')
-        setShowInviteModal(false)
-        setInviteForm({ email: '', roles: [], permissions: [] })
+      // The modal stays open on success: the invite link is shown once and
+      // never again, so closing here would strand the inviter if mail failed.
+      onSuccess: (result) => {
+        setInviteResult(result)
+        toast.success(result.emailSent ? `Invitation emailed to ${result.email}` : 'Invitation created — email failed, copy the link')
       },
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to send invitation'),
     })
+  }
+
+  function closeInviteModal() {
+    setShowInviteModal(false)
+    setInviteResult(null)
+    setInviteForm({ email: '', roles: [], permissions: [] })
+  }
+
+  async function copyInviteLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Invite link copied')
+    } catch {
+      toast.error('Could not copy — select the link and copy it manually')
+    }
   }
 
   function openEditPermissions(user: User) {
@@ -380,7 +399,17 @@ export function UsersPage() {
                           <div className="flex gap-1 justify-end">
                             {(inv.status === 'pending' || inv.status === 'expired') && (
                               <button
-                                onClick={() => resendInvitation.mutate(inv.id, { onSuccess: () => toast.success('Invitation resent'), onError: () => toast.error('Failed') })}
+                                onClick={() => resendInvitation.mutate(inv.id, {
+                                  // A resend mints a new token and invalidates the
+                                  // old link, so surface the replacement the same
+                                  // way a fresh invite is surfaced.
+                                  onSuccess: (result) => {
+                                    setInviteResult(result)
+                                    setShowInviteModal(true)
+                                    toast.success(result.emailSent ? `Invitation re-emailed to ${result.email}` : 'New link issued — email failed, copy it')
+                                  },
+                                  onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to resend'),
+                                })}
                                 className="p-1.5 rounded-full hover:bg-surface dark:hover:bg-[#0c0e1a] text-muted hover:text-primary dark:hover:text-blue-400 transition-colors"
                                 title="Resend"
                               >
@@ -443,7 +472,42 @@ export function UsersPage() {
       </Modal>
 
       {/* Invite User Modal */}
-      <Modal open={showInviteModal} onClose={() => setShowInviteModal(false)} title="Send Invitation" className="max-w-2xl">
+      <Modal open={showInviteModal} onClose={closeInviteModal} title={inviteResult ? 'Invitation Sent' : 'Send Invitation'} className="max-w-2xl">
+        {inviteResult ? (
+          <div className="flex flex-col gap-4">
+            <div className={`rounded-xl p-4 text-sm ${inviteResult.emailSent ? 'bg-accent/10 text-accent' : 'bg-warning/10 text-warning'}`}>
+              {inviteResult.emailSent
+                ? `Emailed to ${inviteResult.email} — they have 7 days to accept and set a password.`
+                : `The invitation was created, but the email could not be sent to ${inviteResult.email}. Share the link below instead.`}
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-primary-dark dark:text-white">
+                Invited as {describeRoles(inviteResult.roles)}
+              </p>
+              <p className="text-xs text-muted dark:text-gray-400 mt-1">
+                This link is shown once — it is stored hashed and cannot be retrieved again. Use Resend to issue a fresh one.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <TextField
+                value={inviteResult.inviteUrl}
+                size="small"
+                fullWidth
+                slotProps={{ htmlInput: { readOnly: true }, inputLabel: { shrink: true } }}
+                label="Invite link"
+                onFocus={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button variant="outline" onClick={() => copyInviteLink(inviteResult.inviteUrl)}>Copy</Button>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-2">
+              <Button variant="outline" onClick={() => setInviteResult(null)}>Invite Someone Else</Button>
+              <Button onClick={closeInviteModal}>Done</Button>
+            </div>
+          </div>
+        ) : (
         <div className="flex flex-col gap-4">
           <TextField label="Email" type="email" value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} size="small" required slotProps={{ inputLabel: { shrink: true } }} />
 
@@ -462,12 +526,13 @@ export function UsersPage() {
           <PermissionEditor value={inviteForm.permissions} onChange={(permissions) => setInviteForm((f) => ({ ...f, permissions }))} />
 
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowInviteModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeInviteModal}>Cancel</Button>
             <Button onClick={handleSendInvitation} disabled={sendInvitation.isPending}>
               {sendInvitation.isPending ? 'Sending...' : 'Send Invitation'}
             </Button>
           </div>
         </div>
+        )}
       </Modal>
 
       {/* Edit Permissions Modal */}

@@ -18,6 +18,7 @@ import { usePortal } from '@/hooks/usePortal'
 import { useSidebarStore } from '@/stores/sidebarStore'
 import { api } from '@/lib/api'
 import { useOnboardingStore } from '@/stores/onboardingStore'
+import { ROLE_LABELS } from '@/lib/roles'
 import type { UserRole } from '@/types'
 
 const LANGUAGES: { code: string; label: string }[] = [
@@ -27,20 +28,7 @@ const LANGUAGES: { code: string; label: string }[] = [
   { code: 'ee', label: 'Ewe' },
 ]
 
-const roleLabels: Record<UserRole, string> = {
-  tenant: 'Tenant',
-  landlord: 'Landlord',
-  property_manager: 'Property Manager',
-  government: 'Government Official',
-  legal_officer: 'Legal Officer',
-  admin: 'Admin',
-  super_admin: 'Super Admin',
-  financier: 'Financier',
-  employer: 'Employer',
-  service_provider: 'Service Provider',
-  business: 'Local Business',
-  developer: 'Property Developer',
-}
+const roleLabels = ROLE_LABELS
 
 function getGreeting(): string {
   const hour = new Date().getHours()
