@@ -4,15 +4,18 @@ import { defineConfig, devices } from '@playwright/test'
  * RentOS end-to-end Playwright configuration.
  *
  * The webServer block spawns the root `npm run e2e:dev` script which starts
- * both the Vite client (dedicated port 5174 to avoid collisions with other
- * Vite projects) and the Express API server (port 3002). The server seeds the
- * e2e database on first boot, so tests can assume the standard demo accounts
- * (e.g. `kwame@rentos.gh / password123`) exist.
+ * both the Vite client (on `DEV_CLIENT_PORT`, default 5174, to avoid
+ * collisions with other Vite projects) and the Express API server (port
+ * 3002). The server seeds the e2e database on first boot, so tests can
+ * assume the standard demo accounts (e.g. `kwame@rentos.gh / password123`)
+ * exist.
  *
  * `PLAYWRIGHT_REUSE_SERVER=1` lets an externally-started server be reused
  * (used by `npm run test:local` which auto-detects the port via detect-port.js).
  * By default Playwright always starts a fresh isolated dev server for you.
  */
+const clientPort = process.env.DEV_CLIENT_PORT || '5174'
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -27,7 +30,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${process.env.DEV_CLIENT_PORT || '5174'}`,
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${clientPort}`,
     // CI normally uses Playwright's pinned Chromium. Local release checks can
     // opt into an already-installed browser when the browser CDN is unavailable.
     launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
@@ -49,10 +52,15 @@ export default defineConfig({
 
   webServer: {
     // Run from the monorepo root; this script boots both the Vite client and
-    // the Express API via concurrently, using the e2e database and a dedicated
-    // client port (5174) to avoid collisions with other Vite dev servers.
-    command: 'cd .. && DEV_CLIENT_PORT=5174 npm run e2e:dev',
-    url: `http://localhost:${process.env.DEV_CLIENT_PORT || '5174'}`,
+    // the Express API via concurrently, using the e2e database and the
+    // DEV_CLIENT_PORT client port (default 5174) to avoid collisions with
+    // other Vite dev servers.
+    command: `cd .. && DEV_CLIENT_PORT=${clientPort} npm run e2e:dev`,
+    // Probe the API health endpoint through the client's /api proxy: the URL
+    // only returns 2xx once BOTH the Vite client and the Express API are up,
+    // so tests never start against a half-booted stack (login would fail with
+    // "Failed to fetch" while the API is still connecting to MongoDB).
+    url: `http://localhost:${clientPort}/api/health`,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     timeout: 180_000,
     stdout: 'pipe',
