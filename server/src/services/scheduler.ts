@@ -27,6 +27,7 @@ import { CreditScore } from '../models/CreditScore.js'
 import { Review } from '../models/Review.js'
 import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
+import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
 // Ghana timezone (UTC+0, no DST). cron defaults to server time, but we set tz explicitly
 // for clarity/portability since the requirement specifies Ghana time.
@@ -533,6 +534,85 @@ export function startScheduler() {
     }
   })
 
+  // ─── Daily 10:00 Ghana time: subscription lifecycle ───
+  // (a) remind landlords 7 days before subscriptionEndDate;
+  // (b) downgrade expired PAID subscriptions back to the default package.
+  cron.schedule('0 10 * * *', async () => {
+    if (!(await acquireCronLock('subscription-lifecycle', LOCK_TTL_DAILY))) return
+    logger.info('[Scheduler] Running subscription lifecycle check...')
+    const now = new Date()
+
+    // (a) Renewal reminders — end date falls 7 days out (24h window, daily job).
+    try {
+      const windowStart = new Date(now); windowStart.setDate(windowStart.getDate() + 7)
+      const windowEnd = new Date(windowStart); windowEnd.setDate(windowEnd.getDate() + 1)
+      const expiring = await User.find({
+        subscriptionEndDate: { $gte: windowStart, $lt: windowEnd },
+      }).select('_id subscriptionPackageId subscriptionEndDate').lean()
+
+      // Free packages renew at no cost — no renewal nudge for a GHS 0 plan.
+      const pkgIds = [...new Set(expiring.map((u) => u.subscriptionPackageId).filter((id): id is string => !!id))]
+      const pkgs = pkgIds.length
+        ? await SubscriptionPackage.find({ _id: { $in: pkgIds } }).select('price').lean()
+        : []
+      const paidPkgIds = new Set(pkgs.filter((p) => p.price > 0).map((p) => p._id.toString()))
+
+      let reminded = 0
+      for (const u of expiring) {
+        if (!u.subscriptionPackageId || !paidPkgIds.has(u.subscriptionPackageId)) continue
+        reminded += 1
+        notify({
+          userId: (u._id as Types.ObjectId).toString(),
+          title: 'Subscription Expiring Soon',
+          message: `Your subscription expires on ${new Date(u.subscriptionEndDate!).toISOString().slice(0, 10)}. Renew to keep your listing limits.`,
+          actionUrl: '/subscriptions',
+        }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
+      }
+      if (reminded) logger.info(`[Scheduler] Sent ${reminded} subscription renewal reminder(s)`)
+    } catch (err) {
+      logger.error('[Scheduler] Subscription reminder error:', err)
+    }
+
+    // (b) Downgrade expired paid subscriptions to the default (free) package.
+    try {
+      const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
+      if (!defaultPkg) {
+        logger.warn('[Scheduler] No default subscription package configured — skipping expiry downgrades')
+        return
+      }
+      const expiredUsers = await User.find({
+        subscriptionPackageId: { $exists: true, $ne: null },
+        subscriptionEndDate: { $lt: now },
+      }).select('_id subscriptionPackageId').lean()
+
+      for (const u of expiredUsers) {
+        const uid = (u._id as Types.ObjectId).toString()
+        // Only downgrade PAID packages — a free default-package sub with a stray
+        // end date just has the date cleared.
+        const pkg = u.subscriptionPackageId
+          ? await SubscriptionPackage.findById(u.subscriptionPackageId).select('price name').lean()
+          : null
+        if (pkg && pkg.price > 0 && u.subscriptionPackageId !== defaultPkg._id.toString()) {
+          await User.updateOne(
+            { _id: uid },
+            { $set: { subscriptionPackageId: defaultPkg._id.toString(), subscriptionStartDate: now }, $unset: { subscriptionEndDate: 1 } },
+          )
+          notify({
+            userId: uid,
+            title: 'Subscription Expired',
+            message: `Your ${pkg.name} subscription has expired and your account was moved to the free ${defaultPkg.name} plan. Resubscribe to restore your previous limits.`,
+            actionUrl: '/subscriptions',
+          }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
+          logger.info(`[Scheduler] Downgraded expired subscription for user ${uid.slice(0, 8)}...`)
+        } else {
+          await User.updateOne({ _id: uid }, { $unset: { subscriptionEndDate: 1 } })
+        }
+      }
+    } catch (err) {
+      logger.error('[Scheduler] Subscription expiry error:', err)
+    }
+  }, { timezone: GHANA_TZ })
+
   // ─── Data retention: purge audit logs older than 2 years ───
   cron.schedule('0 3 * * *', async () => {
     if (!(await acquireCronLock('audit-purge', LOCK_TTL_DAILY))) return
@@ -582,5 +662,5 @@ export function startScheduler() {
     }
   }, { timezone: GHANA_TZ })
 
-  logger.info('[Scheduler] Started. Auto-debit at 8am, reminders + arrears at 9am Ghana time. Payment reconcile every 5min. Audit purge at 3am. GDPR cleanup at 4am.')
+  logger.info('[Scheduler] Started. Auto-debit at 8am, reminders + arrears at 9am, subscription lifecycle at 10am Ghana time. Payment reconcile every 5min. Audit purge at 3am. GDPR cleanup at 4am.')
 }

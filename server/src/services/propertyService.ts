@@ -151,6 +151,16 @@ export class PropertyService {
           return { error: `Your ${pkg.name} package allows up to ${pkg.maxProperties} propert${pkg.maxProperties === 1 ? 'y' : 'ies'}. Upgrade to add more.`, status: 403 }
         }
       }
+    } else {
+      // No package assigned — fall back to the default (free) package limits
+      // instead of skipping enforcement entirely (previously a bypass).
+      const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
+      if (defaultPkg && defaultPkg.maxProperties !== -1) {
+        const count = await this.propertyRepo.count({ landlordId: userId })
+        if (count >= defaultPkg.maxProperties) {
+          return { error: `Your free ${defaultPkg.name} package allows up to ${defaultPkg.maxProperties} propert${defaultPkg.maxProperties === 1 ? 'y' : 'ies'}. Subscribe to a paid plan to add more.`, status: 403 }
+        }
+      }
     }
 
     const property = await this.propertyRepo.create({

@@ -33,11 +33,19 @@ export const paymentController = {
     }
 
     // Idempotency: a retried request returns the original payment instead of
-    // creating a duplicate pending one.
+    // creating a duplicate pending one. Scoped to the caller, and only a
+    // short-circuit when the retry carries the SAME payload — a key reused
+    // for a different agreement/amount is a conflict.
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined
     if (idempotencyKey) {
-      const existing = await Payment.findOne({ idempotencyKey }).lean()
+      const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
       if (existing) {
+        const samePayload = existing.agreementId === agreementId
+          && (requestedAmount === undefined || round2(requestedAmount) === existing.amount)
+        if (!samePayload) {
+          error(res, 'Idempotency-Key was already used for a different payment', 409)
+          return
+        }
         success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
         return
       }
@@ -99,7 +107,7 @@ export const paymentController = {
     } catch (err) {
       // Lost the idempotency race — another request created it first.
       if (idempotencyKey && (err as { code?: number }).code === 11000) {
-        const existing = await Payment.findOne({ idempotencyKey }).lean()
+        const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
         if (existing) {
           success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
           return

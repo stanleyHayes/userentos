@@ -8,6 +8,8 @@ import { notifyWelcome } from './notify.js'
 import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
 import { BiometricToken } from '../models/BiometricToken.js'
+import { User } from '../models/User.js'
+import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
 import QRCode from 'qrcode'
 
@@ -81,6 +83,24 @@ export class AuthService {
     })
 
     await this.walletRepo.create({ userId: user._id.toString(), balance: 0, transactions: [] })
+
+    // Landlords/managers list properties, which are gated by subscription
+    // packages — assign the default (free Starter) package up front so the
+    // listing limit applies from day one. No end date: the free tier doesn't
+    // expire.
+    if (role === 'landlord' || role === 'property_manager') {
+      try {
+        const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
+        if (defaultPkg) {
+          await User.updateOne(
+            { _id: user._id },
+            { $set: { subscriptionPackageId: defaultPkg._id.toString(), subscriptionStartDate: new Date() } },
+          )
+        }
+      } catch (err) {
+        this.logger.warn(`Default package assignment failed for ${email}: ${(err as Error).message}`)
+      }
+    }
 
     const payload: AuthPayload = { userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
     const token = this.signAccessToken(payload)

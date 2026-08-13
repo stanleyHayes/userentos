@@ -21,7 +21,8 @@ router.delete('/packages/:id', authenticate, requirePermission('subscriptions:ma
 
 // Landlord/Manager: subscription management
 router.get('/my-subscription', authenticate, asyncHandler(subscriptionController.mySubscription))
-router.post('/subscribe', authenticate, asyncHandler(subscriptionController.subscribe))
+// Packages gate property listings — only roles that list properties can subscribe.
+router.post('/subscribe', authenticate, requireRole('landlord', 'property_manager'), asyncHandler(subscriptionController.subscribe))
 
 // Admin: assign package to user
 router.post('/assign', authenticate, requirePermission('subscriptions:manage'), asyncHandler(subscriptionController.assignPackage))
