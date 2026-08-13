@@ -131,19 +131,45 @@ docker compose down -v
 
 ## Database
 
-### Seeding
+Production runs against the **`rentos_production`** database — the database name
+at the end of `MONGO_URI`. Keep demo and local work on a different name
+(`rentos_dev`, `rentos_e2e`) so the demo seed can never touch live data.
+
+### Production seeding
+
+```bash
+npm run seed:production              # idempotent — safe to re-run
+npm run seed:production -- --reset   # DROPS every collection first
+```
+
+Runs `src/seedProduction.ts`, which plants:
+
+- the single owner super-admin from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+  (plus its wallet)
+- reference data only — subscription packages, Ghana rental-law articles,
+  educational blog posts, feature flags, partner insurance products
+
+No fake users, properties, agreements, payments, or disputes. It also claims the
+`seedDatabase` bootstrap marker, so the demo seed can never fire against this
+database on a later boot. Set `SEED_DEMO=false` in the environment as a second
+guard — without it, a server booted with `NODE_ENV=development` would seed demo
+data into whatever database `MONGO_URI` points at.
+
+### Demo seeding
 
 ```bash
 npm run reseed
 ```
 
-Runs `src/reseed.ts` to seed the database with initial data.
+Runs `src/reseed.ts`: drops every collection, then plants the full demo dataset
+(18 fixed-credential accounts, ~180 properties, fake payments and disputes).
+Development databases only.
 
 ### MongoDB Atlas (Production)
 
 1. Create a free M0 cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
 2. Whitelist `0.0.0.0/0` for Render access (or use Render's static IPs)
-3. Copy the connection string to `MONGO_URI`
+3. Copy the connection string to `MONGO_URI`, ending it with `/rentos_production`
 
 ## Graceful Shutdown
 
