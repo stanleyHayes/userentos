@@ -58,6 +58,19 @@ export const writeLimiter = rateLimit({
 })
 
 /**
+ * Baseline API limiter — generous (300 req/min per IP in production), applied
+ * to all /api routes so currently-unlimited authenticated GET endpoints aren't
+ * wide open. Stricter limiters above still apply on top of this one.
+ */
+export const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: isProd ? 300 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests. Please slow down.' },
+})
+
+/**
  * AI/LLM limiter — strict, because each request triggers a paid Claude/OpenAI
  * call. Without this, a scripted loop runs up unbounded provider bills and can
  * exhaust quota for everyone. Keyed by user when authenticated, else by IP.

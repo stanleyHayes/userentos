@@ -15,6 +15,7 @@ import { Review } from '../models/Review.js'
 import { Message } from '../models/Conversation.js'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { AuditLog } from '../models/AuditLog.js'
+import { recordAudit } from '../utils/audit.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { success, error } from '../utils/response.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
@@ -287,6 +288,7 @@ router.post('/:id/verify-identity', authenticate, requireRole('government', 'adm
   user.verificationStatus = 'verified'
   user.isVerified = true
   await user.save()
+  await recordAudit(req, 'users.verify_identity', 'User', user._id.toString())
   success(res, { verificationStatus: 'verified', isVerified: true }, 'User verified')
 })
 
@@ -298,6 +300,7 @@ router.post('/:id/reject-verification', authenticate, requireRole('government', 
 
   user.verificationStatus = 'none'
   await user.save()
+  await recordAudit(req, 'users.reject_verification', 'User', user._id.toString(), { reason: req.body?.reason })
   success(res, { verificationStatus: 'none' }, 'Verification rejected')
 })
 

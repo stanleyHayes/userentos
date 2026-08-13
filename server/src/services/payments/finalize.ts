@@ -20,11 +20,24 @@ import { notifyPaymentConfirmed, notifyPaymentReceived } from '../notify.js'
 import { checkAndAward } from '../achievements.js'
 import { dispatchWebhook } from '../webhooks.js'
 import { creditWallet } from './walletLedger.js'
+import { AuditLog } from '../../models/AuditLog.js'
+import { logger } from '../../utils/logger.js'
 import type { WebhookEvent } from './types.js'
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'refunded'])
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Best-effort audit entry for terminal payment transitions. */
+function auditPayment(action: string, payment: { _id: unknown; tenantId: string; reference: string; amount: number }, details: Record<string, unknown>) {
+  AuditLog.create({
+    userId: payment.tenantId,
+    action,
+    entityType: 'Payment',
+    entityId: String(payment._id),
+    details: JSON.stringify({ reference: payment.reference, amount: payment.amount, ...details }),
+  }).catch((err) => logger.warn('[Payments] audit log failed:', (err as Error).message))
+}
 
 /** Activate a paid subscription after its payment is verified. */
 async function activateSubscription(userId: string, packageId?: string): Promise<void> {
@@ -68,7 +81,7 @@ export async function finalizePayment(
       : null
 
   if (!payment) {
-    console.warn(`[Payments:${opts.source}] no Payment found for ref=${event.reference} providerRef=${event.providerRef}`)
+    logger.warn(`[Payments:${opts.source}] no Payment found for ref=${event.reference} providerRef=${event.providerRef}`)
     return false
   }
 
@@ -101,6 +114,7 @@ export async function finalizePayment(
       { new: true },
     )
     if (!failed) return false // lost the race — already terminal
+    auditPayment('payment.failed', failed, { source: opts.source, reason: failed.failureReason })
     dispatchWebhook('payment.failed', { paymentId: failed._id.toString(), reference: failed.reference, amount: failed.amount }, { userId: failed.tenantId })
     console.log(`[Payments:${opts.source}] marked ${failed.reference} FAILED (${failed.failureReason ?? 'unknown'})`)
     return true
@@ -116,7 +130,7 @@ export async function finalizePayment(
       { new: true },
     )
     if (flagged) {
-      console.warn(`[Payments:${opts.source}] AMOUNT MISMATCH on ${payment.reference}: provider=${event.amount} expected=${payment.amount} — held in 'processing' for manual review`)
+      logger.warn(`[Payments:${opts.source}] AMOUNT MISMATCH on ${payment.reference}: provider=${event.amount} expected=${payment.amount} — held in 'processing' for manual review`)
     }
     return false
   }
@@ -128,6 +142,7 @@ export async function finalizePayment(
     { new: true },
   )
   if (!completed) return false // lost the race — another worker already finalized
+  auditPayment('payment.completed', completed, { source: opts.source, purpose: completed.purpose })
 
   // Funds are verified — apply what the payment was FOR.
   if (completed.purpose === 'wallet_deposit') {
@@ -164,7 +179,7 @@ export async function finalizePayment(
       await notifyPaymentConfirmed(completed.tenantId, completed.amount, completed.reference)
     }
   } catch (err) {
-    console.warn('[Payments] notify failed:', (err as Error).message)
+    logger.warn('[Payments] notify failed:', (err as Error).message)
   }
 
   dispatchWebhook('payment.completed', {
@@ -178,7 +193,7 @@ export async function finalizePayment(
 
   // Achievements / streaks (best-effort)
   checkAndAward(completed.tenantId, 'payment_completed', { paymentId: completed._id.toString() })
-    .catch((err) => console.warn('[Payments] checkAndAward failed:', (err as Error).message))
+    .catch((err) => logger.warn('[Payments] checkAndAward failed:', (err as Error).message))
 
   console.log(`[Payments:${opts.source}] marked ${completed.reference} COMPLETED`)
   return true
