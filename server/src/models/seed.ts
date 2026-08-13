@@ -29,6 +29,7 @@ import { SubscriptionPackage } from './SubscriptionPackage.js'
 import { FinancingOffer } from './FinancingOffer.js'
 import { FinancingApplication } from './FinancingApplication.js'
 import { FinancingContract } from './FinancingContract.js'
+import { FinancierProfile } from './FinancierProfile.js'
 import { Employer } from './Employer.js'
 import { Employment } from './Employment.js'
 import { DeductionMandate } from './DeductionMandate.js'
@@ -42,6 +43,7 @@ import { MoveOut } from './MoveOut.js'
 import { PaymentStreak } from './PaymentStreak.js'
 import { Achievement } from './Achievement.js'
 import { buildAmortizationSchedule } from '../services/financing.js'
+import { SUBSCRIPTION_PACKAGES, LEGAL_ARTICLES, BLOG_POSTS } from '../data/referenceData.js'
 import crypto2 from 'crypto'
 
 // ─── Helpers ───
@@ -200,44 +202,7 @@ export async function seedDatabase() {
   // SUBSCRIPTION PACKAGES
   // ════════════════════════════════════════════
 
-  const packages = await SubscriptionPackage.insertMany([
-    {
-      name: 'Starter',
-      slug: 'starter',
-      description: 'Perfect for individual landlords just getting started',
-      price: 0,
-      billingCycle: 'monthly',
-      maxProperties: 3,
-      benefits: ['List up to 3 properties', 'Basic analytics', 'Email support', 'Standard listing visibility'],
-      isActive: true,
-      isDefault: true,
-      sortOrder: 0,
-    },
-    {
-      name: 'Professional',
-      slug: 'professional',
-      description: 'For growing landlords managing multiple properties',
-      price: 50,
-      billingCycle: 'monthly',
-      maxProperties: 10,
-      benefits: ['List up to 10 properties', 'Advanced analytics', 'Priority support', 'Featured listings', 'Tenant screening tools'],
-      isActive: true,
-      isDefault: false,
-      sortOrder: 1,
-    },
-    {
-      name: 'Enterprise',
-      slug: 'enterprise',
-      description: 'Unlimited properties for property management companies',
-      price: 150,
-      billingCycle: 'monthly',
-      maxProperties: -1,
-      benefits: ['Unlimited properties', 'Full analytics suite', 'Dedicated account manager', 'API access', 'Custom branding', 'Bulk operations'],
-      isActive: true,
-      isDefault: false,
-      sortOrder: 2,
-    },
-  ])
+  const packages = await SubscriptionPackage.insertMany(SUBSCRIPTION_PACKAGES)
 
   const [starterPkg, proPkg, enterprisePkg] = packages
   const subStart = new Date()
@@ -749,16 +714,7 @@ export async function seedDatabase() {
   // LEGAL ARTICLES — 8 comprehensive articles
   // ════════════════════════════════════════════
 
-  await LegalArticle.insertMany([
-    { title: 'Rent Act, 1963 (Act 220)', content: 'The Rent Act, 1963 establishes the Rent Control Department and provides for the regulation of rents and related matters. Key provisions include:\n\n1. Establishment of the Rent Control Department under the Ministry of Works and Housing\n2. Powers to fix standard rents for premises\n3. Prohibition of demanding premiums or key money\n4. Protection against unlawful eviction\n5. Right of tenants to a receipt for rent paid\n6. Penalties for non-compliance\n\nThe Act applies to all residential and commercial premises in Ghana. Any disputes arising under this Act are handled by the Rent Assessment Committee or the courts.', simplifiedContent: 'This law created the Rent Control office in Ghana. It controls how much landlords can charge for rent and protects tenants from unfair practices. Your landlord must give you a receipt every time you pay rent.', category: 'Rent Control Act', lawReference: 'Act 220', effectiveDate: '1963-01-01', tags: ['rent control', 'tenant protection', 'landlord regulation'], language: 'en' },
-    { title: 'Rent Advance Limits', content: 'Under current regulations, landlords in Ghana are not permitted to demand more than six months rent advance from tenants. This regulation was introduced to address the widespread practice of demanding one to two years of rent upfront, which placed enormous financial burden on tenants.\n\nKey points:\n- Maximum rent advance: 6 months for residential properties\n- The landlord cannot evict you for refusing to pay more than 6 months advance\n- Violations can be reported to the Rent Control Department\n- Any excess advance collected is considered illegal and must be refunded\n- The tenant has the right to pay rent monthly after the advance period expires', simplifiedContent: 'Your landlord cannot ask you to pay more than 6 months of rent upfront. If they do, you can report them to the Rent Control Department and they must refund the excess.', category: 'Rent Advance Limits', lawReference: 'Rent Act Amendment (2024)', effectiveDate: '2024-01-01', tags: ['rent advance', 'tenant rights', 'payment'], language: 'en' },
-    { title: 'Tenant Eviction Process', content: 'A landlord must provide adequate notice before evicting a tenant. The notice period depends on the type of tenancy:\n\n- Weekly tenancy: 1 week notice\n- Monthly tenancy: 1 month notice\n- Yearly tenancy: 3 months notice\n- Fixed-term lease: Cannot evict before expiry unless for breach\n\nValid grounds for eviction include:\n1. Non-payment of rent\n2. Breach of tenancy agreement\n3. Use of property for illegal purposes\n4. Causing a nuisance\n5. Landlord requires property for personal use (with adequate compensation)\n\nThe eviction must be carried out through the courts. Self-help eviction (changing locks, disconnecting utilities) is illegal.', simplifiedContent: 'Your landlord must give you proper notice before asking you to leave. For monthly tenants, this is one month. They cannot change your locks or cut your utilities to force you out.', category: 'Eviction Laws', lawReference: 'Rent Act, 1963 S.17', effectiveDate: '1963-01-01', tags: ['eviction', 'notice period', 'tenant rights'], language: 'en' },
-    { title: 'Landlord Maintenance Obligations', content: 'The landlord is responsible for keeping the rental premises in a habitable condition. This includes:\n\n1. Structural repairs (walls, roof, foundation)\n2. Major plumbing and electrical repairs\n3. Ensuring adequate water supply where provided\n4. Maintaining common areas in multi-unit buildings\n5. Pest control for structural infestations\n\nThe tenant is generally responsible for:\n1. Minor repairs caused by normal wear and tear\n2. Keeping the premises clean\n3. Reporting maintenance issues promptly\n4. Not making unauthorized modifications\n\nFailure to maintain the property can be grounds for rent reduction or lease termination.', simplifiedContent: 'Your landlord must keep the building safe and in good condition. They must fix major things like plumbing, electricity, and the roof. You are responsible for keeping it clean and reporting problems quickly.', category: 'Landlord Obligations', lawReference: 'Rent Act, 1963 S.12', effectiveDate: '1963-01-01', tags: ['maintenance', 'landlord duties', 'habitability'], language: 'en' },
-    { title: 'Security Deposit Rules in Ghana', content: 'Security deposits in Ghana are governed by a combination of the Rent Act and common practice:\n\n1. Amount: Typically 1-2 months rent, though no strict statutory limit\n2. Purpose: To cover damages beyond normal wear and tear\n3. Return: Must be returned within 30 days of move-out\n4. Deductions: Landlord must provide itemized list of deductions\n5. Disputes: Can be reported to Rent Control Department\n\nTenants should:\n- Get a receipt for the security deposit\n- Document the property condition at move-in (photos/video)\n- Conduct a joint inspection at move-out\n- Request the deposit in writing if not returned', simplifiedContent: 'Your security deposit should be returned within 30 days after you move out. Take photos when you move in and when you leave. If your landlord takes deductions, they must show you exactly what for.', category: 'Tenant Rights', lawReference: 'Rent Act, 1963 S.14', effectiveDate: '1963-01-01', tags: ['security deposit', 'tenant rights', 'move-out'], language: 'en' },
-    { title: 'Dispute Resolution Mechanisms', content: 'Ghana offers several channels for resolving rental disputes:\n\n1. Direct Negotiation: Always try to resolve issues directly first\n2. Rent Control Department: Free mediation service for rental disputes\n3. Alternative Dispute Resolution (ADR): Professional mediation\n4. District Court: For legal action when mediation fails\n5. RentOS Platform: Digital dispute filing with mediation support\n\nCommon disputes include:\n- Rent increases during contract period\n- Maintenance failures\n- Security deposit refund issues\n- Eviction notices\n- Utility disconnection\n- Breach of agreement terms', simplifiedContent: 'If you have a problem with your landlord, first try talking it out. If that does not work, go to the Rent Control Department — their mediation service is free. You can also file a dispute on RentOS.', category: 'Dispute Resolution', lawReference: 'ADR Act, 2010 (Act 798)', effectiveDate: '2010-01-01', tags: ['disputes', 'mediation', 'rent control', 'resolution'], language: 'en' },
-    { title: 'Rights of Subletting', content: 'Subletting is a common practice in Ghana, but tenants should be aware of the legal implications:\n\n1. Written consent from landlord is generally required\n2. The original tenant remains liable for rent and damages\n3. The sub-tenant has no direct relationship with the landlord\n4. Unauthorized subletting can be grounds for eviction\n5. Some agreements explicitly prohibit subletting\n\nIf you want to sublet:\n- Check your agreement for subletting clauses\n- Get written permission from your landlord\n- Draft a separate agreement with the sub-tenant\n- Remain responsible for the property', simplifiedContent: 'You can sublet your room or apartment, but you usually need written permission from your landlord. If your agreement says no subletting, you cannot do it or you risk eviction.', category: 'Tenant Rights', lawReference: 'Rent Act, 1963 S.8', effectiveDate: '1963-01-01', tags: ['subletting', 'tenant rights', 'agreement'], language: 'en' },
-    { title: 'Property Inspection Rights', content: 'Both landlords and tenants have inspection rights:\n\nLandlord inspection rights:\n- Must give at least 24 hours notice\n- Can only inspect during reasonable hours (8am-6pm)\n- Cannot enter without permission except in emergencies\n- Must provide reason for inspection\n\nTenant inspection rights:\n- Right to inspect before signing lease\n- Right to document condition at move-in\n- Right to request repairs identified during inspection\n- Right to be present during landlord inspections\n- Right to privacy — landlord cannot install surveillance in private areas', simplifiedContent: 'Your landlord must give you 24 hours notice before coming to inspect your room. They cannot enter without your permission unless there is an emergency. You have the right to be there during any inspection.', category: 'Landlord Obligations', lawReference: 'Rent Act, 1963 S.15', effectiveDate: '1963-01-01', tags: ['inspection', 'privacy', 'landlord access'], language: 'en' },
-  ])
+  await LegalArticle.insertMany(LEGAL_ARTICLES)
 
   // ════════════════════════════════════════════
   // DOCUMENTS — sample uploads linked to agreements/properties
@@ -809,18 +765,7 @@ export async function seedDatabase() {
   // BLOG POSTS — 10 educational articles
   // ════════════════════════════════════════════
 
-  await BlogPost.insertMany([
-    { title: 'Understanding the Rent Advance Cap in Ghana', slug: 'rent-advance-cap', coverImage: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800', excerpt: 'Learn about the legal limits on how much rent advance a landlord can demand in Ghana.', content: '## What Is the Rent Advance Cap?\n\nIn Ghana, the rent advance cap is one of the **most important protections** for tenants. Under current regulations, landlords are not permitted to demand more than **six months** of rent as advance payment.\n\nThis rule was introduced to address the widespread practice of landlords demanding one to two years of rent upfront, which placed enormous financial burden on tenants, particularly young professionals and families.\n\n## Key Points to Remember\n\n- **Maximum advance:** 6 months for all residential properties\n- **Violations** can be reported to the Rent Control Department\n- The landlord **cannot evict you** for refusing to pay more than 6 months advance\n- Any excess advance collected is considered **illegal** and must be refunded\n\n## What to Do if Your Landlord Demands More\n\n> If your landlord is demanding more than the legal limit, you have options.\n\n1. **Negotiate directly** with your landlord and cite the law\n2. **File a complaint** with the Rent Control Department\n3. **Use the RentOS dispute resolution** system for digital mediation\n\n## Reference\n\nThis regulation is based on the **Rent Act Amendment (2024)**, which updated the original Rent Act, 1963 (Act 220).', author: 'RentOS Team', tags: ['tenant rights', 'rent advance', 'legal guide'], published: true },
-    { title: 'How to Save for Rent Using RentGuard', slug: 'rentguard-savings-guide', coverImage: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=800', excerpt: 'A step-by-step guide to using the RentGuard savings system to plan for your next rent payment.', content: '## What Is RentGuard?\n\n**RentGuard** is a powerful savings tool built into RentOS that helps tenants save gradually towards their rent payments. Instead of scrambling to pay a large lump sum, you can build up your rent money over time.\n\n## Getting Started in 5 Steps\n\n### Step 1: Create a Savings Plan\n\nGo to the **RentGuard** section and click **"New Savings Plan"**. Set your:\n- Target amount (your rent)\n- Contribution frequency (daily, weekly, or monthly)\n- Target date\n\n### Step 2: Fund Your Wallet\n\nDeposit money into your RentGuard wallet via:\n- **MTN MoMo**\n- **Telecel Cash**\n- **AirtelTigo Money**\n- **Bank Transfer**\n\n### Step 3: Enable Auto-Debit\n\nFor hands-free saving, enable **auto-debit**. The system will automatically transfer your contribution amount from your mobile money to your savings plan on schedule.\n\n### Step 4: Track Progress\n\nWatch your progress bar grow! You will receive **notifications** when you hit milestones like 25%, 50%, and 75%.\n\n### Step 5: Pay Rent\n\nWhen your plan reaches its target, you can pay your landlord **directly from your RentGuard wallet** — no extra steps needed.\n\n> **Pro tip:** Start saving immediately after your last rent payment. Even small daily contributions add up!', author: 'RentOS Team', tags: ['savings', 'rentguard', 'financial tips'], published: true },
-    { title: '5 Things Every Tenant Should Know Before Signing a Lease', slug: 'tenant-lease-checklist', coverImage: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=800', excerpt: 'Essential things to check in your rental agreement before you sign.', content: '## Before You Sign\n\nSigning a rental agreement is a **serious commitment**. Before you put pen to paper (or finger to screen), make sure you have checked these five things.\n\n### 1. Rent Advance Compliance\n\nThe agreement should **not require more than 6 months advance**. If it does, this is a red flag and potentially illegal under the Rent Act Amendment (2024).\n\n### 2. Notice Period\n\nCheck what **notice period** is required for both parties.\n\n### 3. Maintenance Responsibilities\n\nWho is responsible for repairs? The landlord is **legally required** to maintain the property in habitable condition, but the agreement should clarify specifics.\n\n### 4. Utility Arrangements\n\nAre utilities included? Who pays for water, electricity, internet? Get this in writing.\n\n### 5. Dispute Resolution\n\nDoes the agreement specify how disputes will be resolved? Using the **RentOS platform** for digital agreements automatically includes compliance checking.\n\n> **Bottom line:** Never rush into signing. Take 24 hours to review, and use RentOS compliance checking for peace of mind.', author: 'RentOS Team', tags: ['tenant rights', 'agreements', 'tips'], published: true },
-    { title: "A Landlord's Guide to Digital Rental Agreements", slug: 'landlord-digital-agreements', coverImage: 'https://images.unsplash.com/photo-1554224154-22dec7ec8818?w=800', excerpt: 'Why digital agreements are better for landlords and how to create them on RentOS.', content: '## Why Go Digital?\n\nDigital rental agreements offer significant advantages over paper contracts.\n\n## Benefits of Digital Agreements\n\n- **Automatic compliance checking** catches illegal clauses before signing\n- **Digital signatures** are legally binding and tamper-proof\n- **Version history** tracks all changes\n- Both parties get **instant access** to the agreement\n- Disputes are easier to resolve with **digital evidence**\n\n## How to Create One on RentOS\n\n1. Go to **Agreements > New Agreement**\n2. Select the property and enter the tenant details\n3. Set the rent amount, duration, and advance\n4. Add your terms and conditions\n5. The system will **flag any compliance issues**\n6. Send to the tenant for signature\n\n> **Tip:** Properties with digital agreements on RentOS get a **verified badge**, increasing tenant trust and inquiry rates.', author: 'RentOS Team', tags: ['landlord guide', 'agreements', 'digital'], published: true },
-    { title: 'How Your Rental Credit Score Works on RentOS', slug: 'rental-credit-score', coverImage: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800', excerpt: 'Understanding the factors that make up your RentOS credit score and how to improve it.', content: '## What Is Your Rental Credit Score?\n\nYour RentOS credit score is a **0-100 rating** that helps landlords assess your reliability as a tenant. A higher score means better housing options and faster approvals.\n\n## Score Breakdown\n\n| Factor | Max Points | What It Measures |\n|---|---|---|\n| Payment History | **40** | Consistent, on-time rent payments |\n| Savings Consistency | **20** | Regular RentGuard contributions |\n| Agreement Compliance | **20** | Following your lease terms |\n| Dispute Record | **10** | Fewer disputes = higher score |\n| Account Age | **10** | Longer history = more trust |\n\n## Tips to Improve Your Score\n\n- **Always pay rent on time** — this is worth the most points\n- **Save regularly** with RentGuard, even small amounts\n- **Keep your profile 100% complete** with verified documents\n- **Resolve disputes amicably** through mediation\n\n> A score above **70** qualifies you for micro-loans and priority listings.', author: 'RentOS Team', tags: ['credit score', 'financial tips', 'tenant guide'], published: true },
-    { title: 'Navigating Rent Disputes in Ghana: A Practical Guide', slug: 'rent-dispute-guide', coverImage: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800', excerpt: 'Step-by-step guide on how to handle common rental disputes in Ghana using legal channels.', content: '## Disputes Happen — Here Is How to Handle Them\n\nRental disputes are common but manageable if you know the right steps.\n\n## Step 1: Document Everything\n\nKeep records of **all communications, payments, and agreements**. Take photos of any property damage or maintenance issues.\n\n## Step 2: Communicate in Writing\n\nAlways follow up verbal discussions in writing — text messages, email, or the RentOS messaging system.\n\n## Step 3: Use the RentOS Dispute System\n\nFile a formal dispute on RentOS. The system will record your complaint, notify the other party, and assign a mediator.\n\n## Step 4: Rent Control Department\n\nIf mediation fails, visit your local Rent Control office. Their services are completely free.\n\n## Step 5: Legal Action\n\nAs a last resort, small claims court handles disputes under GHS 20,000.\n\n> **Prevention is better than cure** — use RentOS digital agreements with compliance checking to avoid disputes before they start.', author: 'RentOS Team', tags: ['disputes', 'legal guide', 'tenant rights'], published: true },
-    { title: 'Investing Your Rent Savings: Treasury Bills and Government Bonds', slug: 'investing-rent-savings', coverImage: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800', excerpt: 'How to grow your idle savings with low-risk investments available through the RentOS platform.', content: '## Why Let Your Money Sit Idle?\n\nIf you are saving towards rent with RentGuard, your money does not have to just sit in your wallet. Through our investment partners, you can earn returns.\n\n## Investment Options on RentOS\n\n### Treasury Bills\n\n| Tenure | Typical Rate | Risk Level |\n|---|---|---|\n| 91 days | 28-30% | Very Low |\n| 182 days | 27-29% | Very Low |\n| 364 days | 26-28% | Very Low |\n\n### Government Bonds\n\n- 2-year bonds: 22-24% annual return\n- 3-year bonds: 23-25% annual return\n\n## Important Disclaimers\n\n> All investments carry risk. Past performance does not guarantee future returns.', author: 'RentOS Team', tags: ['investments', 'financial tips', 'savings'], published: true },
-    { title: 'Micro-Loans: Bridging the Rent Gap', slug: 'micro-loans-rent-gap', coverImage: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=800', excerpt: 'When savings fall short, RentOS micro-loans can help bridge the gap so you never miss a rent payment.', content: '## What Are Micro-Loans on RentOS?\n\nRentOS micro-loans are small, short-term loans designed specifically to help tenants cover rent when their savings fall short.\n\n## Who Qualifies?\n\n- An active rental agreement on RentOS\n- A credit score of 50 or above\n- A verified RentOS account with payment history\n\n## Loan Terms\n\n| Feature | Details |\n|---|---|\n| Maximum amount | GHS 10,000 |\n| Interest rate | 15% annual |\n| Repayment period | 1-12 months |\n| Disbursement | Instant to RentGuard wallet |\n\n> **Warning:** Defaulting on a micro-loan will significantly reduce your credit score.', author: 'RentOS Team', tags: ['micro-loans', 'financial tips', 'tenant guide'], published: true },
-    { title: 'The Complete Guide to Ghana Rent Control Department', slug: 'ghana-rent-control-guide', coverImage: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800', excerpt: 'Everything you need to know about the Rent Control Department and how it protects both tenants and landlords.', content: '## What Is the Rent Control Department?\n\nThe Rent Control Department is a government agency established under the Rent Act, 1963 (Act 220). It operates under the Ministry of Works and Housing.\n\n## Services Offered\n\n### For Tenants\n- Free mediation for rental disputes\n- Rent assessment to determine fair rent\n- Protection from illegal eviction\n- Enforcement of the rent advance cap\n\n### For Landlords\n- Legal rent recovery assistance\n- Eviction processes through proper channels\n- Tenant background information\n- Lease registration services\n\n## Office Locations\n\n| Region | Address |\n|---|---|\n| Greater Accra | Barnes Road, Accra |\n| Ashanti | Adum, Kumasi |\n| Western | Market Circle, Takoradi |\n| Northern | Tamale Central |', author: 'RentOS Team', tags: ['rent control', 'legal guide', 'government'], published: true },
-    { title: 'Mobile Money and Rent Payments: A Modern Guide', slug: 'mobile-money-rent-payments', coverImage: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800', excerpt: 'How to use MTN MoMo, Telecel Cash, and AirtelTigo Money for secure rent payments on RentOS.', content: '## The Rise of Digital Rent Payments\n\nGhana leads Africa in mobile money adoption, and rental payments are no exception. On RentOS, over 80% of rent payments are made via mobile money.\n\n## Supported Payment Methods\n\n### MTN Mobile Money (MoMo)\n- Most popular payment method in Ghana\n- Instant processing, available 24/7\n\n### Telecel Cash\n- Growing user base, competitive fees\n\n### AirtelTigo Money\n- Good coverage in northern regions\n\n### Bank Transfer\n- Best for large payments\n- Takes 1-2 business days\n\n## Security Tips\n\n- Never share your mobile money PIN\n- Always pay through the RentOS platform for a verified receipt\n- Enable transaction notifications on your phone\n\n> Every payment made through RentOS contributes to your rental credit score.', author: 'RentOS Team', tags: ['payments', 'mobile money', 'guide'], published: true },
-  ])
+  await BlogPost.insertMany(BLOG_POSTS)
 
   // ════════════════════════════════════════════
   // CONVERSATIONS & MESSAGES — 8 conversations
@@ -1107,6 +1052,31 @@ export async function seedDatabase() {
   // FINANCING — offers, applications, contracts
   // ════════════════════════════════════════════
 
+  // Financier org profiles, pre-approved so the demo financier accounts aren't
+  // blocked by the KYC gate (new self-service profiles land as 'pending').
+  await FinancierProfile.insertMany([
+    {
+      userId: financier1._id.toString(),
+      institutionName: 'Bloom Capital',
+      licenseNumber: 'GH-BOG-MFI-0042',
+      contactEmail: 'bloom@rentos.gh',
+      contactPhone: '0302456789',
+      approvalStatus: 'approved',
+      approvedBy: superAdmin._id.toString(),
+      approvedAt: now,
+    },
+    {
+      userId: financier2._id.toString(),
+      institutionName: 'RentPlus Finance',
+      licenseNumber: 'GH-BOG-MFI-0087',
+      contactEmail: 'rentplus@rentos.gh',
+      contactPhone: '0302987654',
+      approvalStatus: 'approved',
+      approvedBy: superAdmin._id.toString(),
+      approvedAt: now,
+    },
+  ])
+
   const financingOffers = await FinancingOffer.insertMany([
     {
       financierId: financier1._id.toString(),
@@ -1337,7 +1307,7 @@ export async function seedDatabase() {
       bio: 'Certified plumber with 8 years experience. Specializes in residential plumbing repairs and bathroom renovations. Available for emergencies.',
       location: 'Accra', serviceRadius: 15, hourlyRate: 80,
       fixedRates: { 'pipe_repair': 200, 'bathroom_install': 2500, 'water_heater': 600 },
-      rating: 4.7, reviewCount: 23, completedJobs: 45, verificationLevel: 'verified', emergencyAvailable: true,
+      rating: 4.7, reviewCount: 23, completedJobs: 45, verificationLevel: 'verified', emergencyAvailable: true, approvalStatus: 'approved',
       status: 'available', availability: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: false },
       yearsExperience: 8, idType: 'ghana_card', idNumber: 'GHA-123456789-0',
     },
@@ -1347,7 +1317,7 @@ export async function seedDatabase() {
       bio: 'Licensed electrician serving Accra and Tema. Expert in both residential and commercial electrical work. Safety-first approach.',
       location: 'Accra', serviceRadius: 20, hourlyRate: 100,
       fixedRates: { 'wiring': 1500, 'breaker_repair': 300, 'generator_install': 3500 },
-      rating: 4.5, reviewCount: 18, completedJobs: 32, verificationLevel: 'verified', emergencyAvailable: true,
+      rating: 4.5, reviewCount: 18, completedJobs: 32, verificationLevel: 'verified', emergencyAvailable: true, approvalStatus: 'approved',
       status: 'available', availability: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false },
       yearsExperience: 6, idType: 'ghana_card', idNumber: 'GHA-234567890-1',
     },
@@ -1357,7 +1327,7 @@ export async function seedDatabase() {
       bio: 'Master carpenter and painter with 12 years of craftsmanship. Creates custom furniture and handles all woodwork repairs.',
       location: 'Kumasi', serviceRadius: 10, hourlyRate: 60,
       fixedRates: { 'door_install': 400, 'furniture_repair': 350, 'room_painting': 800 },
-      rating: 4.9, reviewCount: 31, completedJobs: 58, verificationLevel: 'verified', emergencyAvailable: false,
+      rating: 4.9, reviewCount: 31, completedJobs: 58, verificationLevel: 'verified', emergencyAvailable: false, approvalStatus: 'approved',
       status: 'available', availability: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: true },
       yearsExperience: 12, idType: 'voters_id', idNumber: 'VOTER-987654321-0',
     },
@@ -1367,7 +1337,7 @@ export async function seedDatabase() {
       bio: 'Professional pest control specialist and cleaner. Licensed fumigator with eco-friendly solutions.',
       location: 'Tema', serviceRadius: 12, hourlyRate: 55,
       fixedRates: { 'fumigation': 600, 'deep_clean': 400, 'termite_treatment': 1200 },
-      rating: 4.3, reviewCount: 15, completedJobs: 27, verificationLevel: 'basic', emergencyAvailable: false,
+      rating: 4.3, reviewCount: 15, completedJobs: 27, verificationLevel: 'basic', emergencyAvailable: false, approvalStatus: 'approved',
       status: 'available', availability: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: false },
       yearsExperience: 4, idType: 'ghana_card', idNumber: 'GHA-345678901-2',
     },
@@ -1383,12 +1353,12 @@ export async function seedDatabase() {
     {
       ownerId: businessOwner1._id.toString(), name: 'Adom Furnishings', category: 'furniture',
       description: 'Quality home and office furniture made in Ghana. Beds, sofas, dining sets and full move-in packages for new renters.',
-      phone: '0244331000', email: 'furniture@rentos.gh', city: 'Accra', address: '12 Spintex Road, Accra', isVerified: true,
+      phone: '0244331000', email: 'furniture@rentos.gh', city: 'Accra', address: '12 Spintex Road, Accra', isVerified: true, approvalStatus: 'approved',
     },
     {
       ownerId: businessOwner2._id.toString(), name: 'SwiftLink Ghana', category: 'internet',
       description: 'Fast fibre and 4G home internet. Same-week installation for new tenants across Greater Accra and Tema.',
-      phone: '0244332000', email: 'internet@rentos.gh', city: 'Tema', isVerified: true,
+      phone: '0244332000', email: 'internet@rentos.gh', city: 'Tema', isVerified: true, approvalStatus: 'approved',
     },
   ])
 

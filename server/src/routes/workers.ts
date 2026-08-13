@@ -27,7 +27,8 @@ router.get('/', authenticate, async (req, res) => {
 
   const { trade, location, emergency, minRating, verified, page, limit } = parsed.data
 
-  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] } }
+  // Public directory lists admin-approved workers only (KYC gate).
+  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] }, approvalStatus: 'approved' }
   if (trade) filter.trades = { $in: [trade] }
   if (location) filter.location = { $regex: new RegExp(escapeRegex(location), 'i') }
   if (emergency) filter.emergencyAvailable = true
@@ -118,6 +119,14 @@ router.get('/me/earnings', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
   const worker = await Worker.findById(req.params.id).lean()
   if (!worker) { error(res, 'Worker not found', 404); return }
+  // Unapproved profiles are hidden from the public — only the owner and
+  // admins can view them (the owner needs access to edit while pending).
+  const isOwner = worker.userId === req.user?.userId
+  const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('super_admin')
+  if (worker.approvalStatus !== 'approved' && !isOwner && !isAdmin) {
+    error(res, 'Worker not found', 404)
+    return
+  }
   success(res, worker)
 })
 
@@ -202,11 +211,19 @@ router.patch('/:id', authenticate, async (req, res) => {
   if (!worker) { error(res, 'Worker not found', 404); return }
 
   // Only allow updating own profile or admin
-  if (worker.userId !== req.user?.userId && !req.user?.roles?.includes('admin') && !req.user?.roles?.includes('super_admin')) {
+  const isOwner = worker.userId === req.user?.userId
+  if (!isOwner && !req.user?.roles?.includes('admin') && !req.user?.roles?.includes('super_admin')) {
     error(res, 'Unauthorized', 403); return
   }
 
   Object.assign(worker, parsed.data)
+  // Owner self-edits to an approved profile re-queue it for admin review (same
+  // pattern as financiers/insurance providers). Admin corrections don't.
+  if (isOwner && worker.approvalStatus === 'approved') {
+    worker.approvalStatus = 'pending'
+    worker.approvedBy = undefined
+    worker.approvedAt = undefined
+  }
   await worker.save()
   success(res, worker)
 })

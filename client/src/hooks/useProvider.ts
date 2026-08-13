@@ -24,6 +24,8 @@ export interface MyWorkerProfile {
   completedJobs: number
   hourlyRate?: number
   verificationLevel?: string
+  approvalStatus?: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string
   availability?: WorkerAvailability
 }
 
@@ -47,6 +49,8 @@ export function useMyWorker() {
       const data = await api.get<{ worker: MyWorkerProfile | null }>('/workers/me')
       return data.worker
     },
+    // Poll while the profile awaits admin approval so the banner clears itself.
+    refetchInterval: (query) => (query.state.data?.approvalStatus === 'pending' ? 30000 : false),
   })
 }
 

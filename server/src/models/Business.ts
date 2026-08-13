@@ -14,6 +14,11 @@ export interface IBusiness extends Document {
   city: string
   address?: string
   isVerified: boolean
+  /** Admin KYC approval gate — new profiles land as 'pending'. */
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  approvedBy?: string
+  approvedAt?: Date
+  rejectionReason?: string
   viewCount: number
   ratingAvg: number
   reviewCount: number
@@ -34,6 +39,10 @@ const businessSchema = new Schema<IBusiness>(
     city: { type: String, required: true, index: true },
     address: String,
     isVerified: { type: Boolean, default: false },
+    approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+    approvedBy: String,
+    approvedAt: Date,
+    rejectionReason: String,
     viewCount: { type: Number, default: 0 },
     ratingAvg: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },

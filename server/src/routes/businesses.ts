@@ -12,6 +12,7 @@ import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { escapeRegex, param } from '../utils/params.js'
 import { notify } from '../services/notify.js'
+import { requireApprovedEntity } from '../middleware/entityApproval.js'
 import { logger } from '../utils/logger.js'
 import { summarizeInquiryStatuses } from '../services/businessAnalytics.js'
 
@@ -38,7 +39,8 @@ router.get('/', authenticate, async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const { category, city, search } = parsed.data
 
-  const filter: Record<string, unknown> = {}
+  // Public directory lists admin-approved businesses only (KYC gate).
+  const filter: Record<string, unknown> = { approvalStatus: 'approved' }
   if (category) filter.category = category
   if (city) filter.city = new RegExp(`^${escapeRegex(city)}$`, 'i')
   if (search) {
@@ -105,6 +107,13 @@ router.post('/me', authenticate, requireRole('business'), async (req, res) => {
   const existing = await Business.findOne({ ownerId: req.user!.userId })
   if (existing) {
     Object.assign(existing, parsed.data)
+    // Editing an approved profile re-queues it for admin review (same pattern
+    // as financiers/insurance providers).
+    if (existing.approvalStatus === 'approved') {
+      existing.approvalStatus = 'pending'
+      existing.approvedBy = undefined
+      existing.approvedAt = undefined
+    }
     await existing.save()
     success(res, idOf(existing.toObject()))
     return
@@ -180,8 +189,17 @@ router.get('/me/analytics', authenticate, requireRole('business'), async (req, r
    (increments the public profile view counter)
    ================================================================ */
 router.get('/:id', authenticate, async (req, res) => {
-  const business = await Business.findByIdAndUpdate(param(req.params.id), { $inc: { viewCount: 1 } }, { new: true }).lean()
+  const business = await Business.findById(param(req.params.id)).lean()
   if (!business) { error(res, 'Business not found', 404); return }
+  // Unapproved profiles are hidden from the public — only the owner and
+  // admins can view them (the owner needs access to edit while pending).
+  const isOwner = business.ownerId === req.user!.userId
+  const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
+  if (business.approvalStatus !== 'approved' && !isOwner && !isAdmin) {
+    error(res, 'Business not found', 404)
+    return
+  }
+  await Business.updateOne({ _id: business._id }, { $inc: { viewCount: 1 } })
   await BusinessListing.updateMany({ businessId: business._id.toString(), isActive: true }, { $inc: { viewCount: 1 } })
   const listings = await BusinessListing.find({ businessId: business._id.toString(), isActive: true }).sort({ createdAt: -1 }).lean()
   success(res, { business: idOf(business), listings: listings.map(idOf) })
@@ -279,7 +297,7 @@ async function loadMyBusiness(userId: string) {
   return Business.findOne({ ownerId: userId })
 }
 
-router.post('/me/listings', authenticate, requireRole('business'), async (req, res) => {
+router.post('/me/listings', authenticate, requireRole('business'), requireApprovedEntity('business'), async (req, res) => {
   const parsed = listingSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const business = await loadMyBusiness(req.user!.userId)
@@ -289,7 +307,7 @@ router.post('/me/listings', authenticate, requireRole('business'), async (req, r
   success(res, idOf(listing.toObject()), 'Listing created', 201)
 })
 
-router.patch('/me/listings/:id', authenticate, requireRole('business'), async (req, res) => {
+router.patch('/me/listings/:id', authenticate, requireRole('business'), requireApprovedEntity('business'), async (req, res) => {
   const parsed = listingSchema.partial().extend({ isActive: z.boolean() }).safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const business = await loadMyBusiness(req.user!.userId)
@@ -301,7 +319,7 @@ router.patch('/me/listings/:id', authenticate, requireRole('business'), async (r
   success(res, idOf(listing.toObject()), 'Listing updated')
 })
 
-router.delete('/me/listings/:id', authenticate, requireRole('business'), async (req, res) => {
+router.delete('/me/listings/:id', authenticate, requireRole('business'), requireApprovedEntity('business'), async (req, res) => {
   const business = await loadMyBusiness(req.user!.userId)
   const listing = await BusinessListing.findById(param(req.params.id))
   if (!business || !listing || listing.businessId !== business._id.toString()) { error(res, 'Listing not found', 404); return }

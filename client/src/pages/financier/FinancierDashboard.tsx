@@ -12,7 +12,9 @@ import {
   useMyFinancingOffers,
   useDecideFinancingApplication,
   useDisburseFinancingContract,
+  useMyFinancierProfile,
 } from '@/hooks/useApi'
+import { ApprovalStatusBanner } from '@/components/ApprovalStatusBanner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   Banknote, FileSignature, TrendingUp, AlertTriangle, CheckCircle2,
@@ -25,6 +27,7 @@ export function FinancierDashboard() {
   const { data: applicationsData } = useFinancingApplications()
   const { data: contractsData } = useFinancingContracts()
   const { data: offersData } = useMyFinancingOffers()
+  const { data: financierProfile } = useMyFinancierProfile()
   const decide = useDecideFinancingApplication()
   const disburse = useDisburseFinancingContract()
   const addToast = useToastStore((s) => s.addToast)
@@ -53,6 +56,8 @@ export function FinancierDashboard() {
           </Link>
         }
       />
+
+      <ApprovalStatusBanner status={financierProfile?.approvalStatus} rejectionReason={financierProfile?.rejectionReason} entityLabel="financier profile" />
 
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard label="Disbursed" value={formatCurrency(portfolio?.totalDisbursed ?? 0)} sub={`${portfolio?.contractCount ?? 0} contracts`} accent="#10b981" icon={<Banknote size={18} />} href="/financing/contracts" />

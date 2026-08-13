@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { useAuthStore } from '@/stores/authStore'
 import { useMyWorker, useMyEarnings, useUpdateWorker, type WorkerAvailability } from '@/hooks/useProvider'
+import { ApprovalStatusBanner } from '@/components/ApprovalStatusBanner'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Wrench, Star, CheckCircle2, Calendar, Banknote, Plus, Loader2, Wallet, Briefcase, Pencil, X, Check } from 'lucide-react'
 
@@ -155,6 +156,8 @@ export function ServiceProviderDashboard() {
           </Badge>
         }
       />
+
+      <ApprovalStatusBanner status={worker.approvalStatus} rejectionReason={worker.rejectionReason} entityLabel="worker profile" />
 
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard label="Rating" value={worker.rating > 0 ? worker.rating.toFixed(1) : '-'} sub={worker.rating > 0 ? 'From completed jobs' : 'No ratings yet'} accent="#f59e0b" icon={<Star size={18} />} href="/bookings" />

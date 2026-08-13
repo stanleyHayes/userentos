@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useToastStore } from '@/stores/toastStore'
 import type {
@@ -1945,6 +1945,8 @@ export interface Business {
   city: string
   address?: string
   isVerified: boolean
+  approvalStatus?: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string
   viewCount: number
   ratingAvg: number
   reviewCount: number
@@ -2086,6 +2088,8 @@ export function useMyBusiness() {
   return useQuery({
     queryKey: ['my-business'],
     queryFn: () => api.get<{ business: Business | null; listings: BusinessListing[] }>('/businesses/me'),
+    // Poll while the profile awaits admin approval so the banner clears itself.
+    refetchInterval: (query) => (query.state.data?.business?.approvalStatus === 'pending' ? 30000 : false),
   })
 }
 
@@ -2166,5 +2170,187 @@ export function useDeleteBusinessListing() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/businesses/me/listings/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-business'] }),
+  })
+}
+
+
+// ─────────────────────────────────────────────
+// ADMIN ENTITY APPROVALS (KYC gate)
+// ─────────────────────────────────────────────
+
+export type ApprovalEntityType = 'worker' | 'business' | 'financier' | 'insurance_provider'
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export interface ApprovalItemUser {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+}
+
+/** Entity profile row from GET /admin/approvals — shape varies by type, so
+ * type-specific fields are optional and the union is intentionally loose. */
+export interface ApprovalItem {
+  _id: string
+  approvalStatus: ApprovalStatus
+  rejectionReason?: string
+  approvedAt?: string
+  createdAt?: string
+  user?: ApprovalItemUser
+  // Worker
+  name?: string
+  trades?: string[]
+  location?: string
+  // Business
+  category?: string
+  city?: string
+  // Financier / Insurance provider
+  institutionName?: string
+  licenseNumber?: string
+  contactEmail?: string
+  contactPhone?: string
+  companyRegistrationNo?: string
+}
+
+export interface ApprovalsResult {
+  items: ApprovalItem[]
+  total: number
+  page: number
+  limit: number
+}
+
+export function useApprovals(type: ApprovalEntityType, status: ApprovalStatus = 'pending', page = 1, limit = 20, enabled = true) {
+  const query = new URLSearchParams({ type, status, page: String(page), limit: String(limit) })
+  return useQuery({
+    queryKey: ['admin-approvals', type, status, page, limit],
+    queryFn: () => api.get<ApprovalsResult>(`/admin/approvals?${query.toString()}`),
+    placeholderData: keepPreviousData, // keep previous page visible while fetching the next
+    enabled,
+  })
+}
+
+export function useApproveEntity() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ type, id }: { type: ApprovalEntityType; id: string }) =>
+      api.post<void>(`/admin/approvals/${type}/${id}/approve`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-approvals'] }),
+  })
+}
+
+export function useRejectEntity() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ type, id, reason }: { type: ApprovalEntityType; id: string; reason: string }) =>
+      api.post<void>(`/admin/approvals/${type}/${id}/reject`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-approvals'] }),
+  })
+}
+
+// ─────────────────────────────────────────────
+// ENTITY SELF-SERVICE PROFILES (approval status)
+// ─────────────────────────────────────────────
+
+export interface EntityOrgProfile {
+  _id: string
+  institutionName: string
+  licenseNumber?: string
+  contactEmail?: string
+  contactPhone?: string
+  companyRegistrationNo?: string
+  approvalStatus: ApprovalStatus
+  rejectionReason?: string
+  approvedAt?: string
+}
+
+/** The logged-in financier's org profile (null when not created yet). */
+export function useMyFinancierProfile() {
+  return useQuery({
+    queryKey: ['financiers', 'me'],
+    queryFn: async () => {
+      const data = await api.get<{ profile: EntityOrgProfile | null }>('/financiers/me')
+      return data.profile
+    },
+    // Poll while the profile awaits admin approval so the banner clears itself.
+    refetchInterval: (query) => (query.state.data?.approvalStatus === 'pending' ? 30000 : false),
+  })
+}
+
+/** The logged-in user's insurance provider profile (null when not created yet). */
+export function useMyInsuranceProviderProfile() {
+  return useQuery({
+    queryKey: ['insurance-providers', 'me'],
+    queryFn: async () => {
+      const data = await api.get<{ profile: EntityOrgProfile | null }>('/insurance/providers/me')
+      return data.profile
+    },
+    // Poll while the profile awaits admin approval so the banner clears itself.
+    refetchInterval: (query) => (query.state.data?.approvalStatus === 'pending' ? 30000 : false),
+  })
+}
+
+export interface InsuranceProviderProfileInput {
+  institutionName: string
+  licenseNumber?: string
+  companyRegistrationNo?: string
+  contactEmail: string
+  contactPhone: string
+  address?: string
+}
+
+/** Create or update the caller's insurance provider profile (re-queues approved profiles). */
+export function useUpsertInsuranceProviderProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: InsuranceProviderProfileInput) =>
+      api.post<{ profile: EntityOrgProfile }>('/insurance/providers/me', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-providers', 'me'] }),
+  })
+}
+
+// ─── Insurance provider self-service products (approval-gated server-side) ───
+
+export interface ProviderProductInput {
+  productName: string
+  category: InsuranceCategory
+  description: string
+  coverageDetails: string
+  monthlyPremium: number
+  coverageLimit: number
+  excessAmount?: number
+  terms?: string
+  active?: boolean
+}
+
+/** Products owned by the caller's approved insurance provider profile. */
+export function useMyInsuranceProducts(enabled = true) {
+  return useQuery({
+    queryKey: ['insurance-provider-products'],
+    queryFn: () => api.get<{ items: InsuranceProduct[]; total: number }>('/insurance/providers/me/products'),
+    enabled,
+  })
+}
+
+export function useCreateMyInsuranceProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ProviderProductInput) =>
+      api.post<InsuranceProduct>('/insurance/providers/me/products', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['insurance-provider-products'] })
+      qc.invalidateQueries({ queryKey: ['insurance-products'] })
+    },
+  })
+}
+
+export function useUpdateMyInsuranceProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<ProviderProductInput> & { id: string }) =>
+      api.patch<InsuranceProduct>(`/insurance/providers/me/products/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['insurance-provider-products'] })
+      qc.invalidateQueries({ queryKey: ['insurance-products'] })
+    },
   })
 }

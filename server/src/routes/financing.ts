@@ -14,6 +14,7 @@ import { Wallet } from '../models/Wallet.js'
 import { approveApplication, disburseContract, applyRepayment } from '../services/financing.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { requireApprovedEntity } from '../middleware/entityApproval.js'
 
 const router = Router()
 
@@ -35,8 +36,8 @@ router.get('/offers/mine', authenticate, requireRole('financier'), async (req, r
   success(res, { items: offers.map(idOf), total: offers.length, page: 1, pageSize: offers.length, totalPages: 1 })
 })
 
-// Financier: create offer
-router.post('/offers', authenticate, requireRole('financier'), requirePermission('financing:offer'), async (req, res) => {
+// Financier: create offer (requires an admin-approved financier profile)
+router.post('/offers', authenticate, requireRole('financier'), requirePermission('financing:offer'), requireApprovedEntity('financier'), async (req, res) => {
   const schema = z.object({
     name: z.string().min(3),
     productType: z.enum(['rent_advance', 'deposit_loan', 'rent_to_own']),
@@ -61,8 +62,8 @@ router.post('/offers', authenticate, requireRole('financier'), requirePermission
   success(res, idOf(offer.toObject()), 'Offer created', 201)
 })
 
-// Financier: toggle offer active flag
-router.patch('/offers/:id', authenticate, requireRole('financier'), async (req, res) => {
+// Financier: toggle offer active flag (requires an admin-approved financier profile)
+router.patch('/offers/:id', authenticate, requireRole('financier'), requireApprovedEntity('financier'), async (req, res) => {
   const offer = await FinancingOffer.findById(param(req.params.id))
   if (!offer || offer.financierId !== req.user!.userId) { error(res, 'Offer not found', 404); return }
   if (typeof req.body.active === 'boolean') offer.active = req.body.active
@@ -157,7 +158,7 @@ router.get('/applications/:id', authenticate, async (req, res) => {
 })
 
 // Financier: approve
-router.post('/applications/:id/approve', authenticate, requireRole('financier'), requirePermission('financing:approve'), async (req, res) => {
+router.post('/applications/:id/approve', authenticate, requireRole('financier'), requirePermission('financing:approve'), requireApprovedEntity('financier'), async (req, res) => {
   try {
     // Verify ownership BEFORE approveApplication, which persists the decision and
     // creates a contract — previously the 403 fired only after those side effects,
@@ -174,7 +175,7 @@ router.post('/applications/:id/approve', authenticate, requireRole('financier'),
 })
 
 // Financier: reject
-router.post('/applications/:id/reject', authenticate, requireRole('financier'), requirePermission('financing:approve'), async (req, res) => {
+router.post('/applications/:id/reject', authenticate, requireRole('financier'), requirePermission('financing:approve'), requireApprovedEntity('financier'), async (req, res) => {
   const app = await FinancingApplication.findById(param(req.params.id))
   if (!app || app.financierId !== req.user!.userId) { error(res, 'Application not found', 404); return }
   // State guard: only an undecided application can be rejected — "rejecting" an
@@ -237,7 +238,7 @@ router.post('/contracts/:id/sign', authenticate, async (req, res) => {
 })
 
 // Financier: disburse
-router.post('/contracts/:id/disburse', authenticate, requireRole('financier'), requirePermission('financing:disburse'), async (req, res) => {
+router.post('/contracts/:id/disburse', authenticate, requireRole('financier'), requirePermission('financing:disburse'), requireApprovedEntity('financier'), async (req, res) => {
   const contract = await FinancingContract.findById(param(req.params.id))
   if (!contract || contract.financierId !== req.user!.userId) { error(res, 'Contract not found', 404); return }
   try {
@@ -377,7 +378,7 @@ router.get('/collections', authenticate, requireRole('financier'), requirePermis
   success(res, { items, total: items.length })
 })
 
-router.post('/contracts/:id/remind', authenticate, requireRole('financier'), requirePermission('financing:collect'), async (req, res) => {
+router.post('/contracts/:id/remind', authenticate, requireRole('financier'), requirePermission('financing:collect'), requireApprovedEntity('financier'), async (req, res) => {
   const c = await FinancingContract.findById(param(req.params.id))
   if (!c || c.financierId !== req.user!.userId) { error(res, 'Contract not found', 404); return }
   const now = Date.now()
@@ -393,7 +394,7 @@ router.post('/contracts/:id/remind', authenticate, requireRole('financier'), req
   success(res, idOf(c.toObject()))
 })
 
-router.post('/contracts/:id/mark-defaulted', authenticate, requireRole('financier'), requirePermission('financing:default_manage'), async (req, res) => {
+router.post('/contracts/:id/mark-defaulted', authenticate, requireRole('financier'), requirePermission('financing:default_manage'), requireApprovedEntity('financier'), async (req, res) => {
   const c = await FinancingContract.findById(param(req.params.id))
   if (!c || c.financierId !== req.user!.userId) { error(res, 'Contract not found', 404); return }
   // State guard: only an active contract can default — flipping a settled or

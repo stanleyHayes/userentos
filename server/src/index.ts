@@ -21,8 +21,9 @@ import { runBootstrap } from './models/BootstrapState.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
 import './openapi/endpoints.js'
-import { publicLimiter, writeLimiter } from './middleware/rateLimit.js'
+import { publicLimiter, writeLimiter, apiLimiter } from './middleware/rateLimit.js'
 import { requestId, securityHeaders, notFoundHandler } from './middleware/security.js'
+import { sanitizeRequest } from './middleware/sanitize.js'
 
 import authRoutes from './routes/auth.js'
 import userRoutes from './routes/users.js'
@@ -67,10 +68,14 @@ import publicRegistryRoutes from './routes/publicRegistry.js'
 import tenantPassportRoutes from './routes/tenantPassport.js'
 import maintenanceRoutes from './routes/maintenance.js'
 import insuranceRoutes from './routes/insurance.js'
+import insuranceProviderRoutes from './routes/insuranceProviders.js'
+import financierRoutes from './routes/financiers.js'
+import adminApprovalsRoutes from './routes/adminApprovals.js'
 import { bootstrapInsurance } from './bootstrapInsurance.js'
 import achievementRoutes from './routes/achievements.js'
 import featureFlagRoutes from './routes/featureFlags.js'
 import { bootstrapFeatureFlags } from './bootstrapFeatureFlags.js'
+import { bootstrapEntityApprovals } from './bootstrapEntityApprovals.js'
 import adminViewsRoutes from './routes/adminViews.js'
 import biometricAuthRoutes from './routes/biometricAuth.js'
 import paymentWebhookRoutes from './routes/paymentWebhooks.js'
@@ -126,7 +131,11 @@ app.use(
 // so signature verification can hash the exact bytes the provider sent.
 app.use('/api/webhooks/payments', paymentWebhookRoutes)
 
-app.use(express.json())
+app.use(express.json({ limit: '100kb' }))
+
+// NoSQL injection guard — strip $-prefixed / dotted keys from all input
+// before any route can feed them into a Mongoose query.
+app.use(sanitizeRequest)
 
 // ─── Simulator → finalize bridge ───
 // In `PAYMENTS_PROVIDER_MODE !== 'live'`, the simulator dispatches a completion
@@ -194,6 +203,21 @@ app.use((req, res, next) => {
   next()
 })
 
+// Health probe — mounted BEFORE the apiLimiter so readiness checks (and the
+// e2e playwright webServer probe) are never throttled. Returns 503 when the
+// DB is down so "server is up" only passes once MongoDB is connected.
+app.get('/api/health', (_req, res) => {
+  const dbUp = mongoose.connection.readyState === 1
+  res.status(dbUp ? 200 : 503).json(
+    dbUp
+      ? { status: 'ok', service: 'RentOS API', version: '0.2.0', db: 'connected' }
+      : { status: 'degraded', service: 'RentOS API', version: '0.2.0', db: 'disconnected' },
+  )
+})
+
+// Baseline limiter for everything else under /api — generous, so legitimate
+// use is unaffected but unauthenticated scraping loops are capped.
+app.use('/api', apiLimiter)
 // Request logging middleware. Query strings are stripped: they can carry
 // credentials (e.g. ?token= on download links) and must never hit log files.
 app.use((req, res, next) => {
@@ -222,10 +246,6 @@ app.use(
     },
   }),
 )
-
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'RentOS API', version: '0.2.0', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' })
-})
 
 // Routes
 app.use('/api/auth', authRoutes)
@@ -270,9 +290,14 @@ app.use('/api/capabilities', capabilityRoutes)
 app.use('/api/public/properties', publicRegistryRoutes)
 app.use('/api/tenant-passport', tenantPassportRoutes)
 app.use('/api/maintenance', maintenanceRoutes)
+// Mounted BEFORE /api/insurance so the provider self-service routes win.
+app.use('/api/insurance/providers', insuranceProviderRoutes)
 app.use('/api/insurance', insuranceRoutes)
+app.use('/api/financiers', financierRoutes)
 app.use('/api/achievements', achievementRoutes)
 app.use('/api/feature-flags', featureFlagRoutes)
+// Mounted BEFORE /api/admin so the approvals router wins over admin views.
+app.use('/api/admin/approvals', adminApprovalsRoutes)
 app.use('/api/admin', adminViewsRoutes)
 app.use('/api/auth/biometric', biometricAuthRoutes)
 app.use('/api/move-outs', moveOutRoutes)
@@ -331,13 +356,18 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 async function start() {
   try {
     await mongoose.connect(config.mongoUri)
-    logger.info(`Connected to MongoDB: ${config.mongoUri}`)
+    // Never log config.mongoUri itself — it can embed user:password credentials.
+    logger.info(`Connected to MongoDB: ${mongoose.connection.host}/${mongoose.connection.name}`)
 
     // Demo seeding plants fixed-credential accounts (including super_admin /
     // admin with a well-known password). Only run it outside production, or when
     // explicitly opted in via SEED_DEMO=true, so an empty PRODUCTION database can
     // never silently acquire publicly-known admin credentials.
-    const allowSeed = process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO === 'true'
+    // SEED_DEMO=false opts out in every environment — that is what keeps a live
+    // database (seeded via `npm run seed:production`) free of fake data even
+    // when the server happens to boot with NODE_ENV=development.
+    const allowSeed = process.env.SEED_DEMO === 'true'
+      || (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO !== 'false')
     if (!allowSeed) {
       logger.info('Seed skipped in production (set SEED_DEMO=true to force demo seeding).')
     } else {
@@ -359,6 +389,11 @@ async function start() {
       logger.info('Bootstrap: bootstrapFeatureFlags completed.')
     } else {
       logger.info('Bootstrap: bootstrapFeatureFlags already ran on this database — skipping.')
+    }
+    if (await runBootstrap('bootstrapEntityApprovals', bootstrapEntityApprovals)) {
+      logger.info('Bootstrap: bootstrapEntityApprovals completed.')
+    } else {
+      logger.info('Bootstrap: bootstrapEntityApprovals already ran on this database — skipping.')
     }
     startScheduler()
 

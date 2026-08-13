@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -72,6 +73,12 @@ export function InsuranceMarketplacePage() {
             Protect your home, belongings, and rental income with policies from trusted partners.
           </p>
         </div>
+        <Link
+          to="/insurance/provider"
+          className="shrink-0 self-center rounded-xl border border-border/60 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 dark:border-[#252a3a] dark:text-blue-400 dark:hover:bg-blue-400/10"
+        >
+          Provider portal
+        </Link>
       </div>
 
       {/* Tabs */}

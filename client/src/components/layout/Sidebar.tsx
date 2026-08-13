@@ -105,6 +105,7 @@ const navGroups: NavGroup[] = [
       { label: 'Policy Simulation', labelKey: 'nav.policySimulation', path: '/government/simulation', icon: <FlaskConical size={20} />, roles: ['government', 'admin', 'super_admin'] },
       { label: 'Packages', labelKey: 'nav.packages', path: '/admin/packages', icon: <Package size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Insurance Claims', labelKey: 'nav.insuranceClaims', path: '/admin/insurance/claims', icon: <ShieldAlert size={20} />, roles: ['admin', 'super_admin'] },
+      { label: 'Approvals', labelKey: 'nav.approvals', path: '/admin/approvals', icon: <ShieldCheck size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Feature Flags', labelKey: 'nav.featureFlags', path: '/admin/feature-flags', icon: <FlaskConical size={20} />, roles: ['super_admin'] },
     ],
   },

@@ -63,6 +63,7 @@ const PublicRegistryDetailPage = lazy(() => import('@/pages/PublicRegistryDetail
 const PackagesPage = lazy(() => import('@/pages/admin/PackagesPage').then((m) => ({ default: m.PackagesPage })))
 const PackageEditorPage = lazy(() => import('@/pages/admin/PackageEditorPage').then((m) => ({ default: m.PackageEditorPage })))
 const InsuranceClaimsPage = lazy(() => import('@/pages/admin/InsuranceClaimsPage').then((m) => ({ default: m.InsuranceClaimsPage })))
+const ApprovalsPage = lazy(() => import('@/pages/admin/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })))
 const FinancierOffersPage = lazy(() => import('@/pages/financier/OffersPage').then((m) => ({ default: m.FinancierOffersPage })))
 const OfferEditorPage = lazy(() => import('@/pages/financier/OfferEditorPage').then((m) => ({ default: m.OfferEditorPage })))
@@ -95,6 +96,7 @@ const WorkerDetailPage = lazy(() => import('@/pages/workers/WorkerDetailPage').t
 const MyBookingsPage = lazy(() => import('@/pages/workers/MyBookingsPage').then((m) => ({ default: m.MyBookingsPage })))
 const BecomeWorkerPage = lazy(() => import('@/pages/workers/BecomeWorkerPage').then((m) => ({ default: m.BecomeWorkerPage })))
 const InsuranceMarketplacePage = lazy(() => import('@/pages/insurance/InsuranceMarketplacePage').then((m) => ({ default: m.InsuranceMarketplacePage })))
+const ProviderProductsPage = lazy(() => import('@/pages/insurance/ProviderProductsPage').then((m) => ({ default: m.ProviderProductsPage })))
 const LocalServicesPage = lazy(() => import('@/pages/business/LocalServicesPage').then((m) => ({ default: m.LocalServicesPage })))
 const AchievementsPage = lazy(() => import('@/pages/AchievementsPage').then((m) => ({ default: m.AchievementsPage })))
 const AdminFinancingPage = lazy(() => import('@/pages/admin/AdminFinancingPage').then((m) => ({ default: m.AdminFinancingPage })))
@@ -207,6 +209,7 @@ export default function App() {
             <Route path="/admin/packages/new" element={<RequireRole roles={['admin']}><PackageEditorPage /></RequireRole>} />
             <Route path="/admin/packages/edit/:id" element={<RequireRole roles={['admin']}><PackageEditorPage /></RequireRole>} />
             <Route path="/admin/insurance/claims" element={<RequireRole roles={['admin']}><InsuranceClaimsPage /></RequireRole>} />
+            <Route path="/admin/approvals" element={<RequireRole roles={['admin']}><ApprovalsPage /></RequireRole>} />
             {/* Financing — financier + applicants */}
             <Route path="/financing" element={<FinancingOffersPage />} />
             <Route path="/financing/offers" element={<RequireRole roles={['financier']}><FinancierOffersPage /></RequireRole>} />
@@ -239,6 +242,7 @@ export default function App() {
             <Route path="/workers/join" element={<BecomeWorkerPage />} />
             <Route path="/bookings" element={<MyBookingsPage />} />
             <Route path="/insurance" element={<InsuranceMarketplacePage />} />
+            <Route path="/insurance/provider" element={<ProviderProductsPage />} />
             <Route path="/local-services" element={<LocalServicesPage />} />
             <Route path="/achievements" element={<AchievementsPage />} />
             <Route path="/role-capabilities" element={<RoleCapabilitiesPage />} />

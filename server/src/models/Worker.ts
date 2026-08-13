@@ -2,6 +2,7 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export type WorkerStatus = 'available' | 'busy' | 'offline'
 export type WorkerVerificationLevel = 'none' | 'basic' | 'verified' | 'premium'
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 
 export interface IWorker extends Document {
   userId?: string
@@ -28,6 +29,11 @@ export interface IWorker extends Document {
   status: WorkerStatus
   verificationLevel: WorkerVerificationLevel
   verifiedAt?: Date
+  /** Admin KYC approval gate — new profiles land as 'pending'. */
+  approvalStatus: ApprovalStatus
+  approvedBy?: string
+  approvedAt?: Date
+  rejectionReason?: string
   rating: number
   reviewCount: number
   completedJobs: number
@@ -63,6 +69,10 @@ const workerSchema = new Schema<IWorker>({
   status: { type: String, enum: ['available', 'busy', 'offline'], default: 'available' },
   verificationLevel: { type: String, enum: ['none', 'basic', 'verified', 'premium'], default: 'none' },
   verifiedAt: Date,
+  approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  approvedBy: String,
+  approvedAt: Date,
+  rejectionReason: String,
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   completedJobs: { type: Number, default: 0 },

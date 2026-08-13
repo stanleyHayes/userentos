@@ -28,6 +28,7 @@ import {
   type BusinessInquiryStatus,
 } from '@/hooks/useApi'
 import toast from 'react-hot-toast'
+import { ApprovalStatusBanner } from '@/components/ApprovalStatusBanner'
 import { Store, Package, Truck, Percent, Plus, Loader2, Trash2, MapPin, Phone, PackageCheck, Tag, Inbox, Eye, TrendingUp, Mail, CheckCircle2, XCircle } from 'lucide-react'
 
 const LISTING_TYPE_OPTIONS: { value: BusinessListing['type']; label: string }[] = [
@@ -184,6 +185,8 @@ function BusinessOverview({ business, listings }: { business: Business; listings
           </Badge>
         }
       />
+
+      <ApprovalStatusBanner status={business.approvalStatus} rejectionReason={business.rejectionReason} entityLabel="business profile" />
 
       <BusinessAnalyticsCards fallbackListings={listings.length} />
 

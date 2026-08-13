@@ -82,6 +82,13 @@ router.post('/', authenticate, async (req, res) => {
   const worker = await Worker.findById(parsed.data.workerId)
   if (!worker) { error(res, 'Worker not found', 404); return }
 
+  // KYC gate: only admin-approved workers can receive bookings. Profiles land
+  // as 'pending' on creation and unlock once an admin approves them.
+  if (worker.approvalStatus !== 'approved' && !isAdminUser(req.user?.roles)) {
+    error(res, 'This worker is not yet approved to receive bookings', 403)
+    return
+  }
+
   // No self-dealing: booking your own worker profile lets you self-confirm →
   // self-complete → self-rate, inflating the marketplace ranking stats.
   if (worker.userId === req.user!.userId) {
