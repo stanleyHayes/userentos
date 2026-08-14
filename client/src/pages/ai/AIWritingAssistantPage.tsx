@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -251,23 +252,19 @@ export function AIWritingAssistantPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 overflow-hidden rounded-2xl border border-border/60 bg-white p-5 shadow-sm dark:border-[#252a3a]/60 dark:bg-[#161927] sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="flex items-center gap-2 font-display text-2xl font-extrabold text-primary-dark dark:text-white">
-              <Sparkles className="text-primary" size={24} />
-              AI Writing Assistant
-            </h1>
-            <p className="mt-1 text-sm text-muted">Generate, polish, translate, and score your property listings with AI.</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-primary dark:text-blue-400">Listing</span>
-            <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-600 dark:text-emerald-400">Translate</span>
-            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-700 dark:text-amber-400">Quality</span>
-          </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Listings"
+        title="AI Writing Assistant"
+        description="Generate, polish, translate, and score your property listings with AI."
+        icon={<Sparkles size={22} />}
+      >
+        <div className="flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+          <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">Listing</span>
+          <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-emerald-300">Translate</span>
+          <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-amber-300">Quality</span>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Tabs */}
       <div ref={pillAttach} className="relative isolate mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-border/70 bg-white/70 p-2 [-webkit-overflow-scrolling:touch] dark:border-[#252a3a]/80 dark:bg-white/[0.03]">

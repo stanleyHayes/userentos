@@ -41,13 +41,13 @@ export function sendOTP(to: string, code: string) {
 }
 
 export function sendPaymentSMS(to: string, amount: number, reference: string) {
-  return sendSMS(to, `RentOS: Payment of GHS ${amount.toFixed(2)} confirmed. Ref: ${reference}. View details at rentos.gh/payments`)
+  return sendSMS(to, `RentOS: Payment of GHS ${amount.toFixed(2)} confirmed. Ref: ${reference}. View details at userentos.com/payments`)
 }
 
 export function sendRentReminderSMS(to: string, amount: number, dueDate: string) {
-  return sendSMS(to, `RentOS: Reminder - Your rent of GHS ${amount.toFixed(2)} is due on ${dueDate}. Pay now at rentos.gh/payments`)
+  return sendSMS(to, `RentOS: Reminder - Your rent of GHS ${amount.toFixed(2)} is due on ${dueDate}. Pay now at userentos.com/payments`)
 }
 
 export function sendDisputeSMS(to: string, title: string, status: string) {
-  return sendSMS(to, `RentOS: Your dispute "${title}" status updated to: ${status.replace('_', ' ')}. View at rentos.gh/disputes`)
+  return sendSMS(to, `RentOS: Your dispute "${title}" status updated to: ${status.replace('_', ' ')}. View at userentos.com/disputes`)
 }

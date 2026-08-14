@@ -7,7 +7,7 @@ import {
   MessageSquare, Lock, FileCheck, ClipboardCheck, Crown, Package,
   Banknote, FileSignature, Calendar, ShieldCheck, Award, Wrench, ShieldPlus,
   Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp, Store,
-  Receipt, Inbox, CalendarCheck, Coins, Landmark, ContactRound, Layers3,
+  Receipt, Inbox, CalendarCheck, Coins, Landmark, ContactRound, Layers3, Map,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,7 @@ const navGroups: NavGroup[] = [
   { label: 'Rentals', labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,
     items: [
       { label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
+      { label: 'Property Map', path: '/properties/map', icon: <Map size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'government'] },
       { label: 'Discover', labelKey: 'nav.discover', path: '/discover', icon: <Sparkles size={20} />, roles: ['tenant'] },
       { label: 'Saved', labelKey: 'nav.saved', path: '/saved', icon: <Heart size={20} />, roles: ['tenant'] },
       { label: 'Tenants', labelKey: 'nav.tenants', path: '/tenants', icon: <Users size={20} />, roles: ['landlord', 'property_manager'] },
@@ -206,21 +207,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           )}
         </div>
 
-        {!isCollapsed && (
-          <div className="px-3 py-3">
-            <div className="rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/10 to-accent/5 px-3 py-3 dark:border-blue-400/10 dark:from-blue-400/10 dark:to-accent/10">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-primary shadow-sm dark:bg-white/10 dark:text-blue-300">
-                  <Sparkles size={16} />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-primary-dark dark:text-white">RentOS workspace</p>
-                  <p className="truncate text-[11px] capitalize text-muted dark:text-gray-500">{activeRole.replace('_', ' ')}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Nav */}
         <nav className={cn('flex-1 overflow-y-auto overflow-x-hidden py-3', isCollapsed ? 'px-1.5' : 'px-2')}>

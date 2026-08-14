@@ -1,0 +1,14 @@
+{
+  "name": "RentOS Ghana — Digital Rental Housing",
+  "short_name": "RentOS",
+  "description": "Find properties, sign compliant agreements, pay rent by mobile money, and know your rights.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1e3a5f",
+  "lang": "en-GH",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/og-image.png", "sizes": "1200x630", "type": "image/png" }
+  ]
+}

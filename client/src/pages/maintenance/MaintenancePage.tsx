@@ -1,4 +1,5 @@
 import { useMemo, useState, type DragEvent, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -139,14 +140,14 @@ export function MaintenancePage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-            <Wrench size={22} className="text-primary dark:text-blue-400" /> Maintenance
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-500 mt-1">
-            {isTenant
+          <PageHeader
+            eyebrow="Upkeep"
+            title="Maintenance"
+            description={isTenant
               ? 'Report and track maintenance issues at your rental.'
               : 'Triage and resolve tenant maintenance requests.'}
-          </p>
+            icon={<Wrench size={22} />}
+          />
         </div>
         <Button onClick={() => setShowCreate(true)} className="gap-1.5">
           <Plus size={14} /> New Request

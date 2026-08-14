@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 // import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -9,8 +10,6 @@ import { useSubscriptionPackages, useMySubscription, useSubscribe } from '@/hook
 import { formatCurrency } from '@/lib/utils'
 import { Check, Crown, Package, Building2, ArrowRight } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
-import { DoodleStars } from '@/components/ui/Doodles'
-import { IconWatermark } from '@/components/ui/Watermark'
 import { EmptyState } from '@/components/ui/EmptyState'
 import toast from 'react-hot-toast'
 
@@ -68,12 +67,12 @@ export function SubscriptionPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden">
-        <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-        <IconWatermark icon={Crown} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Subscription Plans</h1>
-        <p className="text-sm text-muted mt-1">Choose a plan that fits your property portfolio</p>
-      </div>
+      <PageHeader
+        eyebrow="Billing"
+        title="Subscription Plans"
+        description="Choose a plan that fits your property portfolio."
+        icon={<Crown size={22} />}
+      />
 
       {/* Current Plan Summary */}
       {sub?.package && (

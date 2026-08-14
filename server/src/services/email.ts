@@ -14,7 +14,7 @@ function getResend(): Resend {
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev'
 const FROM_NAME = 'RentOS Ghana'
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://rentos.gh'
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://userentos.com'
 
 interface EmailOptions {
   to: string

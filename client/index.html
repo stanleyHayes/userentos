@@ -17,10 +17,10 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://rentosgh.vercel.app/" />
+    <meta property="og:url" content="__SITE_URL__/" />
     <meta property="og:title" content="RentOS Ghana — National Digital Rental Housing Platform" />
     <meta property="og:description" content="Find properties, sign legally compliant agreements, pay rent via mobile money, build your credit score, and resolve disputes — all in one platform." />
-    <meta property="og:image" content="https://rentosgh.vercel.app/og-image.png" />
+    <meta property="og:image" content="__SITE_URL__/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:site_name" content="RentOS Ghana" />
@@ -28,18 +28,69 @@
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://rentosgh.vercel.app/" />
+    <meta name="twitter:url" content="__SITE_URL__/" />
     <meta name="twitter:title" content="RentOS Ghana — National Digital Rental Housing Platform" />
     <meta name="twitter:description" content="Find properties, sign legally compliant agreements, pay rent via mobile money, build your credit score, and resolve disputes — all in one platform." />
-    <meta name="twitter:image" content="https://rentosgh.vercel.app/og-image.png" />
+    <meta name="twitter:image" content="__SITE_URL__/og-image.png" />
 
     <!-- WhatsApp / General -->
     <meta itemprop="name" content="RentOS Ghana" />
     <meta itemprop="description" content="Ghana's digital infrastructure for rental housing. Pay rent, save, invest, and know your rights." />
-    <meta itemprop="image" content="https://rentosgh.vercel.app/og-image.png" />
+    <meta itemprop="image" content="__SITE_URL__/og-image.png" />
 
     <!-- Canonical -->
-    <link rel="canonical" href="https://rentosgh.vercel.app/" />
+    <link rel="canonical" href="__SITE_URL__/" />
+
+    <!-- Crawling -->
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <!-- Installable / mobile -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="RentOS" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Explicit image type and alt text: several crawlers skip an og:image
+         without a declared MIME type, and alt text is what assistive tech reads
+         out on a shared card. -->
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="RentOS Ghana — digital rental housing for Ghana" />
+    <meta name="twitter:image:alt" content="RentOS Ghana — digital rental housing for Ghana" />
+
+    <!-- Structured data: lets search engines show the site name and a search box
+         rather than guessing both from the page title. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "__SITE_URL__/#organization",
+            "name": "RentOS Ghana",
+            "url": "__SITE_URL__/",
+            "logo": "__SITE_URL__/og-image.png",
+            "description": "Ghana's digital infrastructure for rental housing.",
+            "areaServed": { "@type": "Country", "name": "Ghana" }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "__SITE_URL__/#website",
+            "url": "__SITE_URL__/",
+            "name": "RentOS Ghana",
+            "publisher": { "@id": "__SITE_URL__/#organization" },
+            "inLanguage": "en-GH",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "__SITE_URL__/properties?search={search_term_string}"
+              },
+              "query-input": "required name=search_term_string"
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
