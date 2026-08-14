@@ -164,6 +164,25 @@ export async function finalizePayment(
     } catch (err) {
       console.error(`[Payments:${opts.source}] CRITICAL: subscription payment ${completed.reference} completed but activation failed: ${(err as Error).message}`)
     }
+  } else if (completed.purpose === 'rent' && completed.landlordId) {
+    // Rent is collected into the platform's merchant account, so the landlord's
+    // claim on it only exists as a wallet balance — which they then withdraw
+    // through the payout rail. Skipping this would leave rent collected with
+    // no record of who it belongs to.
+    //
+    // The conditional status update above is what makes this safe to run here:
+    // exactly one caller wins the transition to 'completed', so a retried
+    // webhook cannot credit the landlord twice.
+    try {
+      await creditWallet(completed.landlordId, completed.amount, {
+        type: 'rent_payment',
+        reference: completed.reference,
+        description: 'Rent received',
+      })
+      console.log(`[Payments:${opts.source}] landlord credited for rent ${completed.reference}`)
+    } catch (err) {
+      console.error(`[Payments:${opts.source}] CRITICAL: rent ${completed.reference} completed but the landlord credit failed: ${(err as Error).message}`)
+    }
   }
 
   // Notifications (best-effort)
