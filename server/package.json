@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "reseed": "tsx --env-file=.env src/reseed.ts",
     "seed:production": "tsx --env-file=.env src/seedProduction.ts",
+    "backfill:coordinates": "tsx --env-file=.env src/backfillCoordinates.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

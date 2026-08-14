@@ -44,6 +44,7 @@ import { PaymentStreak } from './PaymentStreak.js'
 import { Achievement } from './Achievement.js'
 import { buildAmortizationSchedule } from '../services/financing.js'
 import { SUBSCRIPTION_PACKAGES, LEGAL_ARTICLES, BLOG_POSTS } from '../data/referenceData.js'
+import { resolveCoordinates } from '../data/ghanaPlaces.js'
 import crypto2 from 'crypto'
 
 // ─── Helpers ───
@@ -303,7 +304,7 @@ export async function seedDatabase() {
   // PROPERTIES — 30 diverse listings across Ghana (all with images)
   // ════════════════════════════════════════════
 
-  const props = await Property.insertMany([
+  const handWrittenProperties = [
     // ── Landlord 1 — Yaw Boateng (8 properties) ──
 
     { landlordId: l1, title: '2-Bedroom Apartment in East Legon', description: 'Spacious 2-bedroom apartment with modern finishes, tiled floors, and a large balcony overlooking the garden. Gated community with 24-hour security.', type: 'apartment', status: 'under_dispute', listingStatus: 'approved', images: ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800', 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800'], address: { street: '14 Jungle Road', city: 'Accra', region: 'Greater Accra', digitalAddress: 'GA-456-7890', neighborhood: 'East Legon' }, rentAmount: 3000, rentDurationMonths: 12, advanceMonths: 3, bedrooms: 2, bathrooms: 2, furnished: false, floorArea: 95, parkingSpaces: 1, yearBuilt: 2019, rules: ['No pets allowed', 'No loud music after 10pm', 'Visitors must sign in at reception'], amenities: ['Water', 'Electricity', 'Parking', 'Security', '24hr Water', 'Balcony'], views: 342, inquiries: 28, favorites: 15, preferences: { minCreditScore: 50, minIncomeMultiple: 3, maxOccupants: 4, allowSmokers: false, allowPets: false, allowChildren: true, preferredEmployment: [], preferredGender: 'any', minAge: 22, maxAge: 55, requireReferences: true, requireEmploymentProof: true, requireProfileComplete: true } },
@@ -375,7 +376,17 @@ export async function seedDatabase() {
     { landlordId: pm2, title: '2-Bedroom Apartment at Kasoa New Market', description: 'Newly constructed 2-bedroom apartment near Kasoa New Market. Ground floor unit with private porch. Tiled throughout with fitted kitchen cabinets.', type: 'apartment', status: 'occupied', listingStatus: 'approved', images: ['https://images.unsplash.com/photo-1600573472592-401b489a3cdc?w=800', 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800', 'https://images.unsplash.com/photo-1536376072261-38c75010e6c9?w=800'], address: { street: '102 Market Street', city: 'Kasoa', region: 'Central', neighborhood: 'New Market' }, rentAmount: 950, rentDurationMonths: 12, advanceMonths: 2, bedrooms: 2, bathrooms: 1, furnished: false, floorArea: 68, parkingSpaces: 0, yearBuilt: 2023, rules: ['No subletting', 'Compound cleaning rotation'], amenities: ['Water', 'Electricity', 'Security'], views: 589, inquiries: 44, favorites: 22, preferences: { minCreditScore: 15, minIncomeMultiple: 2, maxOccupants: 4, allowSmokers: true, allowPets: false, allowChildren: true, preferredEmployment: [], preferredGender: 'any', minAge: 20, maxAge: 100, requireReferences: false, requireEmploymentProof: false, requireProfileComplete: false } },
 
     { landlordId: pm2, title: '1-Bedroom at Teshie-Nungua', description: 'Cozy 1-bedroom apartment at Teshie-Nungua with ocean breeze. Close to the beach and local markets. Ideal for singles or couples.', type: 'apartment', status: 'available', listingStatus: 'approved', images: ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800', 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800', 'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800'], address: { street: '24 Beach Lane', city: 'Accra', region: 'Greater Accra', neighborhood: 'Teshie-Nungua' }, rentAmount: 750, rentDurationMonths: 12, advanceMonths: 2, bedrooms: 1, bathrooms: 1, furnished: false, floorArea: 40, parkingSpaces: 0, yearBuilt: 2018, rules: ['No pets', 'Keep compound clean'], amenities: ['Water', 'Electricity'], views: 423, inquiries: 33, favorites: 17, preferences: { minCreditScore: 0, minIncomeMultiple: 2, maxOccupants: 2, allowSmokers: true, allowPets: false, allowChildren: false, preferredEmployment: [], preferredGender: 'any', minAge: 18, maxAge: 100, requireReferences: false, requireEmploymentProof: false, requireProfileComplete: false } },
-  ])
+  ]
+
+  // Give every hand-written listing a pin derived from its address, so the
+  // property map has something to plot straight after a seed. The generated
+  // bulk properties further down already carry their own coordinates.
+  const props = await Property.insertMany(
+    handWrittenProperties.map((property) => ({
+      ...property,
+      coordinates: resolveCoordinates(property.address, property.title) ?? undefined,
+    })),
+  )
 
   // ════════════════════════════════════════════
   // AGREEMENTS — 12 contracts in various states
