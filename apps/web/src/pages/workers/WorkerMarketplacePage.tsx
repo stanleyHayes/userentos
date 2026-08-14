@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -111,18 +112,16 @@ export function WorkerMarketplacePage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
-            <Wrench className="text-primary" size={24} />
-            Essential Worker Marketplace
-          </h1>
-          <p className="text-muted text-sm mt-1">Find verified tradespeople for maintenance, repairs, and emergency services.</p>
-        </div>
-        <Button size="sm" variant="ghost" onClick={() => navigate('/workers/join')}>
-          <Briefcase size={14} className="mr-1" /> Become a Worker
+      <PageHeader
+        eyebrow="Services"
+        title="Essential Worker Marketplace"
+        description="Find verified tradespeople for maintenance, repairs, and emergency services."
+        icon={<Wrench size={22} />}
+      >
+        <Button size="sm" variant="outline" onClick={() => navigate('/workers/join')}>
+          <Briefcase size={14} /> Become a Worker
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Filters — the three inputs share a row, then the toggles and the
           search action get their own, so the checkboxes are not squeezed into a

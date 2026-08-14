@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import { Card } from '@/components/ui/Card'
@@ -126,17 +127,15 @@ export function AgentCommissionsPage() {
   const summary = data?.summary ?? { pending: 0, paid: 0, count: 0 }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-primary-dark dark:text-white">
-            <Banknote className="text-primary" size={24} />
-            Commissions
-          </h1>
-          <p className="mt-1 text-sm text-muted">Track what you've earned on closed deals and what's still owed to you.</p>
-        </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Commissions"
+        description="Track what you've earned on closed deals and what's still owed to you."
+        icon={<Banknote size={22} />}
+      >
         <Button onClick={() => setShowRecord(true)}><Plus size={14} /> Record commission</Button>
-      </div>
+      </PageHeader>
 
       <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
         <DashboardMetricCard label="Pending" value={formatCurrency(summary.pending)} sub="Awaiting payment" accent="#f59e0b" icon={<Wallet size={18} />} />

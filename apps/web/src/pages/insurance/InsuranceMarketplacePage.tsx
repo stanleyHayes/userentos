@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -63,23 +64,19 @@ export function InsuranceMarketplacePage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-            <ShieldPlus size={24} className="text-primary dark:text-blue-400" />
-            Insurance Marketplace
-          </h1>
-          <p className="text-xs sm:text-sm text-muted dark:text-gray-400 mt-0.5">
-            Protect your home, belongings, and rental income with policies from trusted partners.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Protection"
+        title="Insurance Marketplace"
+        description="Protect your home, belongings, and rental income with policies from trusted partners."
+        icon={<ShieldPlus size={22} />}
+      >
         <Link
           to="/insurance/provider"
           className="shrink-0 self-center rounded-xl border border-border/60 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 dark:border-[#252a3a] dark:text-blue-400 dark:hover:bg-blue-400/10"
         >
           Provider portal
         </Link>
-      </div>
+      </PageHeader>
 
       {/* Tabs */}
       <div ref={tabIndicatorAttach} className="relative flex gap-1 border-b border-border/40 dark:border-[#252a3a]/40">

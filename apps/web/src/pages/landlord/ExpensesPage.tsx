@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -91,19 +92,16 @@ export function ExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-            <Receipt size={22} className="text-primary dark:text-blue-400" /> Expenses
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-500 mt-1">
-            Track repairs, levies and other costs across your properties.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Expenses"
+        description="Track repairs, levies and other costs across your properties."
+        icon={<Receipt size={22} />}
+      >
         <Button onClick={() => setShowCreate(true)} className="gap-1.5">
           <Plus size={14} /> Record Expense
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Period filter */}
       <div className="flex items-center gap-2">

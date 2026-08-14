@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -7,7 +8,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useEmployees, useAddEmployee, useUpdateEmployee, useBulkImportEmployees, type BulkImportRow, type BulkImportResult } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, UserMinus, UserCheck, Upload } from 'lucide-react'
+import { Plus, UserMinus, UserCheck, Upload, Users } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -141,16 +142,18 @@ export function EmployerEmployeesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Employees</h1>
-          <p className="text-sm text-muted dark:text-gray-500">{employees.length} on payroll</p>
-        </div>
+      <PageHeader
+        eyebrow="Workforce"
+        title="Employees"
+        description="Everyone on your payroll, and the rent deductions attached to them."
+        meta={`${employees.length} on payroll`}
+        icon={<Users size={22} />}
+      >
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}><Upload size={14} /> Bulk Invite</Button>
           <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> Add Employee</Button>
         </div>
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <ListSkeleton rows={5} />

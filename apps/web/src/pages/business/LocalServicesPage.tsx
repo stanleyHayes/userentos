@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { Card } from '@/components/ui/Card'
@@ -269,13 +270,12 @@ export function LocalServicesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
-          <Store className="text-primary" size={24} />
-          Local Services
-        </h1>
-        <p className="text-muted text-sm mt-1">Furniture, appliances, internet, moving and cleaning offers near you.</p>
-      </div>
+      <PageHeader
+        eyebrow="Services"
+        title="Local Services"
+        description="Furniture, appliances, internet, moving and cleaning offers near you."
+        icon={<Store size={22} />}
+      />
 
       {/* Category chips */}
       <div className="flex flex-wrap gap-1.5 mb-4">

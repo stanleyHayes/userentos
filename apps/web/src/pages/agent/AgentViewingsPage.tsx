@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -94,14 +95,13 @@ export function AgentViewingsPage() {
   const items = data?.items ?? []
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-primary-dark dark:text-white">
-          <CalendarDays className="text-primary" size={24} />
-          Viewings
-        </h1>
-        <p className="mt-1 text-sm text-muted">Confirm, complete or cancel viewings on your listings — or track the slots you requested yourself.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Viewings"
+        description="Confirm, complete or cancel viewings on your listings — or track the slots you requested yourself."
+        icon={<CalendarDays size={22} />}
+      />
 
       {/* Segment toggle */}
       <div className="mb-4 inline-flex gap-1 rounded-xl border border-border/70 p-1 neumorphic-inset">

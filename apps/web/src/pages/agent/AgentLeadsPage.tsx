@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -104,14 +105,13 @@ export function AgentLeadsPage() {
   const items = data?.items ?? []
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-primary-dark dark:text-white">
-          <Handshake className="text-primary" size={24} />
-          Leads
-        </h1>
-        <p className="mt-1 text-sm text-muted">People interested in your listings — work each lead through the pipeline.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Leads"
+        description="People interested in your listings — work each lead through the pipeline."
+        icon={<Handshake size={22} />}
+      />
 
       <div className="mb-6 flex flex-wrap gap-1.5">
         {STATUS_FILTERS.map((f) => (

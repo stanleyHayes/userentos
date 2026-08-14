@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -47,15 +48,12 @@ export function ProviderProductsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-          <Building2 size={24} className="text-primary dark:text-blue-400" />
-          Insurance Provider Portal
-        </h1>
-        <p className="text-xs sm:text-sm text-muted dark:text-gray-400 mt-0.5">
-          Register your company, pass admin review, and list your insurance products on the marketplace.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Protection"
+        title="Insurance Provider Portal"
+        description="Register your company, pass admin review, and list your insurance products on the marketplace."
+        icon={<Building2 size={22} />}
+      />
 
       <ApprovalStatusBanner
         status={profile?.approvalStatus}

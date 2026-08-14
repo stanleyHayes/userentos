@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -11,7 +12,6 @@ import {
   Building2, MapPin, Image, Calendar, User,
   Eye, ClipboardCheck,
 } from 'lucide-react'
-import { DoodleCircle } from '@/components/ui/Doodles'
 
 export function PropertyReviewPage() {
   const { data, isLoading } = useQuery({
@@ -24,15 +24,12 @@ export function PropertyReviewPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="relative">
-        <DoodleCircle className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-        <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-          Property Reviews
-        </h1>
-        <p className="text-sm text-muted dark:text-gray-400 mt-1">
-          Review and approve property listings before they become visible to tenants
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Government"
+        title="Property Reviews"
+        description="Review and approve property listings before they become visible to tenants."
+        icon={<ClipboardCheck size={22} />}
+      />
 
       {/* Stats */}
       <div className="flex items-center gap-3">

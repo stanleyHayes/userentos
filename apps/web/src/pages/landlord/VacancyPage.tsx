@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -28,16 +29,12 @@ export function VacancyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-            <DoorOpen size={22} className="text-primary dark:text-blue-400" /> Vacancy
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-500 mt-1">
-            Occupancy across your portfolio and how long units sit on the market.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Vacancy"
+        description="Occupancy across your portfolio and how long units sit on the market."
+        icon={<DoorOpen size={22} />}
+      />
 
       {isLoading ? (
         <ListSkeleton />

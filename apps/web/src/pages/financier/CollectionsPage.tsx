@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -7,7 +8,6 @@ import { Modal } from '@/components/ui/Modal'
 import { Textarea } from '@/components/ui/Textarea'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { DoodleUnderline } from '@/components/ui/Doodles'
 import {
   useFinancierCollections,
   useSendCollectionsReminder,
@@ -101,11 +101,13 @@ export function CollectionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Collections</h1>
-        <DoodleUnderline className="text-primary/10 dark:text-blue-400/10 w-32 pointer-events-none" />
-        <p className="text-sm text-muted mt-1">Manage borrowers in grace, arrears, or default.</p>
-      </div>
+      <PageHeader
+        eyebrow="Lending"
+        title="Collections"
+        description="Manage borrowers in grace, arrears, or default."
+        icon={<AlertTriangle size={22} />}
+        accent="#f59e0b"
+      />
 
       {/* Filter chips */}
       <div ref={pillAttach} className="relative isolate flex flex-wrap gap-2">

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { api } from '@/lib/api'
@@ -8,10 +9,8 @@ import { ListSkeleton } from '@/components/ui/Skeleton'
 import TextField from '@mui/material/TextField'
 import {
   ShieldCheck, TrendingUp, TrendingDown, Activity, Building2, Users,
-  Calculator, BarChart3, AlertTriangle, DollarSign, Clock, Gauge,
-} from 'lucide-react'
+  Calculator, BarChart3, AlertTriangle, DollarSign, Clock, Gauge,  FlaskConical } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
-import { DoodleZigzag } from '@/components/ui/Doodles'
 
 // --- Types ---
 
@@ -54,11 +53,12 @@ interface MarketHealthData {
 export function PolicySimulationPage() {
   return (
     <div className="space-y-6">
-      <div className="relative">
-        <DoodleZigzag className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Policy Simulation</h1>
-        <p className="text-sm text-muted mt-1">Model the impact of regulatory changes on the rental market</p>
-      </div>
+      <PageHeader
+        eyebrow="Government"
+        title="Policy Simulation"
+        description="Model the impact of regulatory changes on the rental market."
+        icon={<FlaskConical size={22} />}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <RentCapSimulator />
