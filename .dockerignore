@@ -1,23 +1,32 @@
-node_modules
-*/node_modules
-dist
-*/dist
-.env
-*/.env
-.env.e2e
-*/.env.e2e
+# Dependencies and build output at ANY depth. The previous `*/node_modules`
+# only matched one level, so after the move to apps/* the api's macOS-built
+# node_modules were copied into the image over the container's own install.
+**/node_modules
+**/dist
+**/.turbo
+
+# Secrets and local state
+**/.env
+**/.env.*
+!**/.env.example
 credentials.txt
-*/credentials.txt
+**/credentials.txt
+**/logs
+uploads/*
+!uploads/.gitkeep
+
+# Repo tooling
 .git
 .gitignore
 .github
 .vscode
+**/.impeccable
+**/.DS_Store
 *.md
 !DEPLOYMENT.md
-uploads/*
-!uploads/.gitkeep
+
+# Other apps — the image only needs the API and the shared packages
+apps/web
+apps/mobile
+apps/ml-service
 e2e
-mobile
-client
-.turbo
-.DS_Store
