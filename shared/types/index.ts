@@ -195,6 +195,8 @@ export interface Property {
   reviewedAt?: string
   publishedAt?: string
   address: Address
+  /** Map pin. Absent until a landlord sets one — such listings never appear on the property map. */
+  coordinates?: { lat: number; lng: number }
   rentAmount: number
   rentDurationMonths: number
   advanceMonths: number

@@ -25,6 +25,7 @@ interface UpdatePropertyData {
   status?: string
   rules?: string[]
   amenities?: string[]
+  coordinates?: { lat: number; lng: number }
 }
 
 interface ListFilters {
@@ -198,6 +199,23 @@ export class PropertyService {
     if (data.status) property.status = data.status
     if (data.rules) property.rules = data.rules
     if (data.amenities) property.amenities = data.amenities
+
+    // Pinning a location is how a listing gets onto the map. It refines the
+    // address already on the listing rather than changing it, so it is
+    // deliberately NOT treated as a content change — otherwise correcting a pin
+    // would pull an approved listing back into the moderation queue and
+    // landlords would simply never do it.
+    if (data.coordinates) {
+      const { lat, lng } = data.coordinates
+      if (
+        typeof lat !== 'number' || typeof lng !== 'number'
+        || !Number.isFinite(lat) || !Number.isFinite(lng)
+        || lat < -90 || lat > 90 || lng < -180 || lng > 180
+      ) {
+        return { error: 'Coordinates must be a valid latitude and longitude', status: 400 }
+      }
+      property.coordinates = { lat, lng }
+    }
     if (contentChanged && property.listingStatus === 'approved') {
       property.listingStatus = 'pending_review'
       this.logger.info(`Property ${id} content changed — returned to pending_review`)

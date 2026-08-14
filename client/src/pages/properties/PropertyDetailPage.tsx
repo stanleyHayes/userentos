@@ -276,6 +276,7 @@ export function PropertyDetailPage() {
                 <OwnerActions
                   propertyId={id!}
                   listingStatus={p.listingStatus}
+                  coordinates={p.coordinates}
                   rejectionReason={p.rejectionReason}
                   publishErrors={publishErrors}
                   onPublish={() => publishMutation.mutate()}

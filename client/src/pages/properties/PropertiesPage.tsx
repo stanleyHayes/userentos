@@ -182,15 +182,22 @@ export function PropertiesPage() {
             {isLandlord ? 'Manage your rental portfolio' : `${properties.length} properties found`}
           </p>
         </div>
-        {isLandlord && <div className="flex gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted hover:text-primary">
-            <Upload size={14} /> CSV
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => void importProperties(event.target.files?.[0])} />
-          </label>
-          <Link to="/properties/new">
-            <Button className="shrink-0"><Plus size={14} /> <span className="hidden sm:inline">Add Property</span><span className="sm:hidden">Add</span></Button>
+        <div className="flex gap-2">
+          <Link to="/properties/map">
+            <Button variant="outline" className="shrink-0">
+              <MapPin size={14} /> <span className="hidden sm:inline">Map view</span><span className="sm:hidden">Map</span>
+            </Button>
           </Link>
-        </div>}
+          {isLandlord && <>
+            <label className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted hover:text-primary">
+              <Upload size={14} /> CSV
+              <input type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => void importProperties(event.target.files?.[0])} />
+            </label>
+            <Link to="/properties/new">
+              <Button className="shrink-0"><Plus size={14} /> <span className="hidden sm:inline">Add Property</span><span className="sm:hidden">Add</span></Button>
+            </Link>
+          </>}
+        </div>
       </div>
 
       {/* Search bar + filter controls */}

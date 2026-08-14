@@ -172,6 +172,78 @@ router.get('/nearby', asyncHandler(async (req, res) => {
   success(res, { items: scored, total: scored.length, center: { lat, lng }, radiusKm })
 }))
 
+// ─── Map pins ───
+// A deliberately tiny projection: the map plots every approved listing at once,
+// so returning full property documents (descriptions, amenities, embeddings)
+// would move megabytes to draw a few hundred dots. Only what a marker and its
+// popup need is selected here.
+router.get('/map/pins', asyncHandler(async (req, res) => {
+  const schema = z.object({
+    type: z.string().optional(),
+    city: z.string().optional(),
+    minRent: z.coerce.number().optional(),
+    maxRent: z.coerce.number().optional(),
+    // Bounding box, when the client only wants what is on screen.
+    north: z.coerce.number().optional(),
+    south: z.coerce.number().optional(),
+    east: z.coerce.number().optional(),
+    west: z.coerce.number().optional(),
+    limit: z.coerce.number().int().min(1).max(2000).default(1000),
+  })
+
+  const parsed = schema.safeParse(req.query)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const { type, city, minRent, maxRent, north, south, east, west, limit } = parsed.data
+
+  const filter: Record<string, unknown> = {
+    listingStatus: 'approved',
+    isActive: { $ne: false },
+    // A property with no coordinates cannot be drawn — exclude it here rather
+    // than shipping nulls the client has to filter out.
+    'coordinates.lat': { $ne: null },
+    'coordinates.lng': { $ne: null },
+  }
+  if (type) filter.type = type
+  if (city) filter['address.city'] = { $regex: escapeRegex(city), $options: 'i' }
+  if (minRent != null || maxRent != null) {
+    filter.rentAmount = {
+      ...(minRent != null ? { $gte: minRent } : {}),
+      ...(maxRent != null ? { $lte: maxRent } : {}),
+    }
+  }
+  if (north != null && south != null && east != null && west != null) {
+    filter['coordinates.lat'] = { $gte: south, $lte: north }
+    filter['coordinates.lng'] = { $gte: west, $lte: east }
+  }
+
+  const cacheKey = `property-pins:${JSON.stringify({ type, city, minRent, maxRent, north, south, east, west, limit })}`
+  const cached = await cache.get<{ items: unknown[]; total: number }>(cacheKey)
+  if (cached) { success(res, cached); return }
+
+  const properties = await Property.find(filter)
+    .select('title type rentAmount status address.city images coordinates')
+    .limit(limit)
+    .lean()
+
+  const items = properties.map((p) => ({
+    id: (p._id as Types.ObjectId).toString(),
+    title: p.title,
+    type: p.type,
+    rentAmount: p.rentAmount,
+    status: p.status,
+    city: p.address?.city,
+    image: p.images?.[0],
+    lat: p.coordinates!.lat,
+    lng: p.coordinates!.lng,
+  }))
+
+  const payload = { items, total: items.length, limit }
+  // Listings change slowly; five minutes keeps a busy map off the database
+  // without the pins going visibly stale.
+  await cache.set(cacheKey, payload, 300).catch(() => {})
+  success(res, payload)
+}))
+
 // Registered last so the param route does not shadow the literal GET routes above.
 router.get('/:id', optionalAuth, asyncHandler(propertyController.getById))
 

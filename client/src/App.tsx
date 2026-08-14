@@ -37,6 +37,9 @@ const GovernmentPanel = lazy(() => import('@/pages/government/GovernmentPanel').
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const PropertyDetailPage = lazy(() => import('@/pages/properties/PropertyDetailPage').then((m) => ({ default: m.PropertyDetailPage })))
 const AddPropertyPage = lazy(() => import('@/pages/properties/AddPropertyPage').then((m) => ({ default: m.AddPropertyPage })))
+// Lazy on purpose: Leaflet plus the clustering plugin is a heavy chunk that
+// only the map route needs.
+const PropertyMapPage = lazy(() => import('@/pages/properties/PropertyMapPage').then((m) => ({ default: m.PropertyMapPage })))
 const AnalyticsPage = lazy(() => import('@/pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })))
 const UsersPage = lazy(() => import('@/pages/UsersPage').then((m) => ({ default: m.UsersPage })))
 const BlogPage = lazy(() => import('@/pages/BlogPage').then((m) => ({ default: m.BlogPage })))
@@ -177,6 +180,7 @@ export default function App() {
             <Route path="/properties" element={<PropertiesPage />} />
             <Route path="/discover" element={<SwipeFeedPage />} />
             <Route path="/properties/new" element={<AddPropertyPage />} />
+            <Route path="/properties/map" element={<PropertyMapPage />} />
             <Route path="/properties/:id" element={<PropertyDetailPage />} />
             <Route path="/agreements" element={<AgreementsPage />} />
             <Route path="/agreements/:id" element={<AgreementDetailPage />} />

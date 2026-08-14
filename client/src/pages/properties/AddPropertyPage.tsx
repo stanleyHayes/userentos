@@ -1,4 +1,5 @@
 import { useState, useRef, type FormEvent } from 'react'
+import { LocationPicker } from '@/components/map/LocationPicker'
 import { useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -49,6 +50,7 @@ export function AddPropertyPage() {
     title: '', description: '', type: 'apartment',
     // Location
     street: '', city: '', region: 'Greater Accra', neighborhood: '', digitalAddress: '',
+    coordinates: undefined as { lat: number; lng: number } | undefined,
     // Pricing
     rentAmount: '', rentDurationMonths: '12', advanceMonths: '3',
     // Details
@@ -122,6 +124,7 @@ export function AddPropertyPage() {
             neighborhood: form.neighborhood || undefined,
             digitalAddress: form.digitalAddress || undefined,
           },
+          coordinates: form.coordinates,
           rentAmount: Number(form.rentAmount),
           rentDurationMonths: Number(form.rentDurationMonths),
           advanceMonths: Number(form.advanceMonths),
@@ -258,6 +261,11 @@ export function AddPropertyPage() {
                 <Input id="neighborhood" label="Neighborhood" value={form.neighborhood} onChange={(e) => u('neighborhood', e.target.value)} placeholder="e.g. East Legon, Osu" />
                 <Input id="gps" label="Ghana Post GPS / Digital Address" value={form.digitalAddress} onChange={(e) => u('digitalAddress', e.target.value)} placeholder="GA-XXX-XXXX" />
               </FormGrid>
+              <LocationPicker
+                value={form.coordinates}
+                onChange={(coordinates) => setForm((f) => ({ ...f, coordinates }))}
+                hint="Tap the map to drop a pin. Listings without one are searchable but never appear on the property map."
+              />
             </CardContent>
           </Card>
         )}

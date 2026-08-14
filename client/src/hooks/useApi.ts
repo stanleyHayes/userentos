@@ -75,6 +75,36 @@ export function useUpdateProfile() {
 }
 
 // Properties
+export interface PropertyPin {
+  id: string
+  title: string
+  type: string
+  rentAmount: number
+  status?: string
+  city?: string
+  image?: string
+  lat: number
+  lng: number
+}
+
+/**
+ * Map pins for every approved listing that has coordinates. Separate from
+ * useProperties because the map plots them all at once and only needs enough
+ * for a marker and its popup.
+ */
+export function usePropertyPins(params?: { type?: string; city?: string; maxRent?: number }) {
+  const query = new URLSearchParams()
+  if (params?.type) query.set('type', params.type)
+  if (params?.city) query.set('city', params.city)
+  if (params?.maxRent) query.set('maxRent', String(params.maxRent))
+  const qs = query.toString()
+  return useQuery({
+    queryKey: ['property-pins', params],
+    queryFn: () => api.get<{ items: PropertyPin[]; total: number }>(`/properties/map/pins${qs ? `?${qs}` : ''}`),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useProperties(params?: { status?: string; type?: string; city?: string; mine?: boolean }) {
   const query = new URLSearchParams()
   if (params?.mine) query.set('mine', 'true')

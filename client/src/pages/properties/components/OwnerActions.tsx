@@ -1,13 +1,15 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { useUploadPropertyImages } from '@/hooks/useApi'
-import { Send, MessageSquare } from 'lucide-react'
+import { Send, MessageSquare, MapPin } from 'lucide-react'
+import { SetLocationModal } from './SetLocationModal'
 import type { ListingStatus } from '@/types'
 
 interface OwnerActionsProps {
   propertyId: string
   listingStatus: ListingStatus
+  coordinates?: { lat: number; lng: number }
   rejectionReason?: string
   publishErrors: { field: string; message: string }[]
   onPublish: () => void
@@ -16,10 +18,11 @@ interface OwnerActionsProps {
   messagingReviewer: boolean
 }
 
-export function OwnerActions({ propertyId, listingStatus, rejectionReason, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
+export function OwnerActions({ propertyId, listingStatus, coordinates, rejectionReason, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
   const qc = useQueryClient()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const uploadImages = useUploadPropertyImages()
+  const [locationOpen, setLocationOpen] = useState(false)
 
   return (
     <div className="space-y-2">
@@ -69,6 +72,22 @@ export function OwnerActions({ propertyId, listingStatus, rejectionReason, publi
           <MessageSquare size={14} /> {messagingReviewer ? 'Opening chat...' : 'Message Reviewer'}
         </Button>
       )}
+
+      <Button variant="outline" className="w-full" onClick={() => setLocationOpen(true)}>
+        <MapPin size={14} /> {coordinates ? 'Move Map Pin' : 'Set Map Location'}
+      </Button>
+      {!coordinates && (
+        <p className="text-center text-xs text-muted dark:text-gray-500">
+          Not on the property map yet — drop a pin so tenants can find it.
+        </p>
+      )}
+
+      <SetLocationModal
+        open={locationOpen}
+        onClose={() => setLocationOpen(false)}
+        propertyId={propertyId}
+        current={coordinates}
+      />
     </div>
   )
 }
