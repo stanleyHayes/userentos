@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -15,7 +16,6 @@ import {
   Search, AlertTriangle,
 } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
-import { DoodleUnderline } from '@/components/ui/Doodles'
 
 interface TenantAgreement {
   id: string
@@ -70,17 +70,17 @@ export function TenantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative">
-          <DoodleUnderline className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">My Tenants</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">Manage your current and past tenants</p>
-        </div>
+      <PageHeader
+        eyebrow="Portfolio"
+        title="My Tenants"
+        description="Manage your current and past tenants."
+        icon={<Users size={22} />}
+      >
         <div className="flex items-center gap-2">
           <Users size={18} className="text-primary dark:text-blue-400" />
           <span className="text-sm font-bold text-primary-dark dark:text-white">{tenants.length}</span>
         </div>
-      </div>
+      </PageHeader>
 
       {/* KPI Stats */}
       {!isLoading && tenants.length > 0 && (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,7 +12,6 @@ import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
-import { DoodleArrow } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import {
   FileCheck, Calendar, Clock, DollarSign, User, Building2,
@@ -89,25 +89,15 @@ export function ApplicationsPage() {
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="relative">
-          <DoodleArrow className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-            {isTenant ? 'My Applications' : 'Property Applications'}
-          </h1>
-          <p className="text-xs text-muted dark:text-gray-400 mt-1">
-            {isTenant
-              ? 'Track the status of your rental applications'
-              : 'Review and respond to tenant applications'}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <FileCheck size={18} className="text-primary dark:text-blue-400" />
-          <span className="text-sm font-bold text-primary-dark dark:text-white">
-            {applications.length}
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title={isTenant ? 'My Applications' : 'Property Applications'}
+        description={isTenant
+          ? 'Track the status of your rental applications.'
+          : 'Review and respond to tenant applications.'}
+        meta={`${applications.length} application${applications.length === 1 ? '' : 's'}`}
+        icon={<FileCheck size={22} />}
+      />
 
       {/* KPI Stats */}
       {applications.length > 0 && (() => {

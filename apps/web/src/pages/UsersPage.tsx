@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -18,7 +19,6 @@ import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import InputAdornment from '@mui/material/InputAdornment'
 import type { UserRole, Permission, User, Invitation } from '@/types'
-import { DoodleCircle } from '@/components/ui/Doodles'
 import { ROLE_DEFAULT_PERMISSIONS } from '@/types'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import toast from 'react-hot-toast'
@@ -200,10 +200,13 @@ export function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="relative">
-        <DoodleCircle className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white">User Management</h1>
-        <p className="text-sm text-muted dark:text-gray-400 mt-1">Manage platform users, roles, and permissions</p>
+      <PageHeader
+        eyebrow="Platform admin"
+        title="User Management"
+        description="Manage platform users, roles, and permissions."
+        icon={<Shield size={22} />}
+      />
+      <div>
         <div className="flex gap-2 mt-3">
           {canInvite && (
             <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowInviteModal(true)}>

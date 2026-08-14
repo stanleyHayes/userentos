@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -11,8 +12,6 @@ import {
   Heart, Building2, MapPin, Bed, Bath, Car, Sofa, ExternalLink,
 } from 'lucide-react'
 import type { Property, PropertyStatus } from '@/types'
-import { DoodleStars } from '@/components/ui/Doodles'
-import { IconWatermark } from '@/components/ui/Watermark'
 
 const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
   available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
@@ -51,12 +50,12 @@ export function SavedPropertiesPage() {
   if (isLoading) {
     return (
       <div className="space-y-5">
-        <div className="relative overflow-hidden">
-          <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <IconWatermark icon={Heart} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Saved Properties</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">Your bookmarked listings</p>
-        </div>
+        <PageHeader
+          eyebrow="Rentals"
+          title="Saved Properties"
+          description="Your bookmarked listings."
+          icon={<Heart size={22} />}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="animate-pulse rounded-2xl border border-border/40 dark:border-[#252a3a]/40 bg-white dark:bg-[#161927] p-5 space-y-3">
@@ -72,21 +71,19 @@ export function SavedPropertiesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="relative overflow-hidden">
-          <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <IconWatermark icon={Heart} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Saved Properties</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">
-            {items.length > 0 ? `${items.length} saved listing${items.length !== 1 ? 's' : ''}` : 'Your bookmarked listings'}
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title="Saved Properties"
+        description="Your bookmarked listings."
+        meta={items.length > 0 ? `${items.length} saved listing${items.length !== 1 ? 's' : ''}` : undefined}
+        icon={<Heart size={22} />}
+      >
         <Link to="/properties">
           <Button variant="outline" size="sm">
             <Building2 size={14} /> Browse Listings
           </Button>
         </Link>
-      </div>
+      </PageHeader>
 
       {items.length === 0 ? (
         <EmptyState

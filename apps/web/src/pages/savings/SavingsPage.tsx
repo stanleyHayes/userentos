@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -14,7 +15,6 @@ import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { Switch } from '@/components/ui/Switch'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
-import { DoodleSpiral } from '@/components/ui/Doodles'
 import { InvestmentsTab } from './InvestmentsTab'
 import { LoansTab } from './LoansTab'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
@@ -49,17 +49,17 @@ export function SavingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative">
-          <DoodleSpiral className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white">RentGuard</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">Save, invest, and protect your rent</p>
-        </div>
+      <PageHeader
+        eyebrow="Financial"
+        title="RentGuard"
+        description="Save, invest, and protect your rent."
+        icon={<PiggyBank size={22} />}
+      >
         <Button onClick={() => setShowNewPlan(true)} className="w-full sm:w-auto">
           <Plus size={16} />
           New Savings Plan
         </Button>
-      </div>
+      </PageHeader>
 
       <div ref={pillAttach} className="relative isolate flex gap-1 bg-white dark:bg-[#0c0e1a] rounded-full border border-border dark:border-[#252a3a] p-1">
         <span
