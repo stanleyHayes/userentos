@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -154,7 +155,12 @@ export function SwipeFeedPage() {
   if (user?.activeRole && user.activeRole !== 'tenant') {
     return (
       <div className="space-y-5">
-        <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Discover</h1>
+        <PageHeader
+          eyebrow="Rentals"
+          title="Discover"
+          description="Swipe through listings matched to what you are looking for."
+          icon={<Sparkles size={22} />}
+        />
         <EmptyState
           preset="properties"
           title="Tenant-only feature"
@@ -166,21 +172,19 @@ export function SwipeFeedPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[820px]">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-            <Sparkles size={20} className="text-primary dark:text-blue-400" />
-            Discover
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">
-            Swipe right to save · left to pass · up for details
-          </p>
-        </div>
-        <Link to="/properties">
-          <Button variant="outline" size="sm">
-            <Building2 size={14} /> All listings
-          </Button>
-        </Link>
+      <div className="mb-4">
+        <PageHeader
+          eyebrow="Rentals"
+          title="Discover"
+          description="Swipe right to save · left to pass · up for details."
+          icon={<Sparkles size={22} />}
+        >
+          <Link to="/properties">
+            <Button variant="outline" size="sm">
+              <Building2 size={14} /> All listings
+            </Button>
+          </Link>
+        </PageHeader>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center">

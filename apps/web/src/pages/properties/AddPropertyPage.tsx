@@ -1,4 +1,5 @@
 import { useState, useRef, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { LocationPicker } from '@/components/map/LocationPicker'
 import { useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -12,7 +13,6 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import { FormGrid } from '@/components/ui/FormGrid'
 import { useCreateProperty, useUploadPropertyImages, useMySubscription } from '@/hooks/useApi'
 import type { Property, PropertyType } from '@/types'
-import { DoodleArrow } from '@/components/ui/Doodles'
 import {
   ArrowLeft, ArrowRight, Upload, X, ImagePlus, Check,
   Building2, MapPin, DollarSign, Bed, Users, ScrollText, Loader2, AlertTriangle, Crown,
@@ -197,10 +197,13 @@ export function AddPropertyPage() {
         >
           <ArrowLeft size={20} />
         </button>
-        <div className="relative">
-          <DoodleArrow className="absolute top-0 right-0 text-primary/10 dark:text-blue-400/10 w-20 pointer-events-none" />
-          <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Add New Property</h1>
-          <p className="text-xs sm:text-sm text-muted dark:text-gray-400 mt-0.5">Fill in the details for your rental listing</p>
+        <div className="min-w-0 flex-1">
+          <PageHeader
+            eyebrow="Rentals"
+            title="Add New Property"
+            description="Fill in the details for your rental listing."
+            icon={<Building2 size={22} />}
+          />
         </div>
       </div>
 

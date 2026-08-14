@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -20,7 +21,6 @@ import {
   Upload,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { DoodleStars } from '@/components/ui/Doodles'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
 
@@ -174,14 +174,13 @@ export function PropertiesPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 relative">
-          <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Properties</h1>
-          <p className="text-xs sm:text-sm text-muted dark:text-gray-400 mt-0.5 sm:mt-1">
-            {isLandlord ? 'Manage your rental portfolio' : `${properties.length} properties found`}
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title="Properties"
+        description={isLandlord ? 'Manage your rental portfolio.' : 'Browse verified listings across Ghana.'}
+        meta={isLandlord ? undefined : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} found`}
+        icon={<Building2 size={22} />}
+      >
         <div className="flex gap-2">
           <Link to="/properties/map">
             <Button variant="outline" className="shrink-0">
@@ -198,7 +197,7 @@ export function PropertiesPage() {
             </Link>
           </>}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Search bar + filter controls */}
       <div className="flex flex-col gap-3">

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -13,7 +14,6 @@ import {
   Lock, Check, X as XIcon, Clock, User, Eye, Ban, RotateCcw,
   MessageSquare, Building2, ChevronDown,
 } from 'lucide-react'
-import { DoodleCircle } from '@/components/ui/Doodles'
 
 interface AccessRequest {
   id: string
@@ -72,18 +72,14 @@ export function ProfileAccessPage() {
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="relative">
-        <DoodleCircle className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-        <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight flex items-center gap-2">
-          <Lock size={22} className="text-primary dark:text-blue-400" />
-          Profile Access
-        </h1>
-        <p className="text-sm text-muted dark:text-gray-400 mt-1">
-          {isTenant
-            ? 'Manage who can view your tenant profile. Approve or deny incoming requests.'
-            : 'View the status of your profile access requests to tenants.'}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Privacy"
+        title="Profile Access"
+        icon={<Lock size={22} />}
+        description={isTenant
+          ? 'Manage who can view your tenant profile. Approve or deny incoming requests.'
+          : 'Request access to tenant profiles and track your pending requests.'}
+      />
 
       {/* Filter tabs */}
       <div ref={pillAttach} className="relative isolate flex flex-wrap gap-1.5">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/Card'
@@ -18,10 +19,8 @@ import { useSocket } from '@/hooks/useSocket'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import {
-  Send, ArrowLeft, Plus, Search, Building2, MessageCircle,
-} from 'lucide-react'
+  Send, ArrowLeft, Plus, Search, Building2, MessageCircle,  MessageSquare } from 'lucide-react'
 import type { Conversation, ChatMessage } from '@/types'
-import { DoodleSpiral } from '@/components/ui/Doodles'
 import { IconWatermark } from '@/components/ui/Watermark'
 
 function formatMessageTime(dateStr: string) {
@@ -360,16 +359,13 @@ export function ChatPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <div className="relative">
-          <DoodleSpiral className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-2xl font-extrabold text-primary-dark dark:text-white tracking-tight font-display">
-            Messages
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-0.5">
-            Chat with landlords, tenants, and property managers
-          </p>
-        </div>
+      <div className="mb-4 flex-shrink-0">
+        <PageHeader
+          eyebrow="Conversations"
+          title="Messages"
+          description="Chat with landlords, tenants, and property managers."
+          icon={<MessageSquare size={22} />}
+        />
         <Button onClick={() => setShowNewConversation(true)} className="gap-1.5">
           <Plus size={16} />
           <span className="hidden sm:inline">New Message</span>

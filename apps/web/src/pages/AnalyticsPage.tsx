@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuthStore } from '@/stores/authStore'
 import { useMyAnalytics, usePlatformAnalytics, useRegistryStats } from '@/hooks/useApi'
@@ -163,10 +164,12 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-primary-dark">Portfolio Analytics</h1>
-        <p className="text-sm text-muted mt-1">Your property performance overview</p>
-      </div>
+      <PageHeader
+        eyebrow="Insights"
+        title="Portfolio Analytics"
+        description="Your property performance overview."
+        icon={<BarChart3 size={22} />}
+      />
 
       {/* KPI row */}
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

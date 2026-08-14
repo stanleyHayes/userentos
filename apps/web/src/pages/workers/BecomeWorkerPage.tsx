@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -82,13 +83,12 @@ export function BecomeWorkerPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
-          <Briefcase className="text-primary" size={24} />
-          Become a Worker
-        </h1>
-        <p className="text-muted text-sm mt-1">Create your tradesperson profile and start getting booked.</p>
-      </div>
+      <PageHeader
+        eyebrow="Services"
+        title="Become a Worker"
+        description="Create your tradesperson profile and start getting booked."
+        icon={<Briefcase size={22} />}
+      />
 
       <Card className="p-5 space-y-5">
         <div className="grid grid-cols-2 gap-3">

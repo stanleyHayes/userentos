@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -146,28 +147,17 @@ export function InsuranceClaimsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border border-border/80 bg-white/90 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04] sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-amber-500/12 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300">
-              <ShieldAlert size={26} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-display text-2xl font-extrabold tracking-tight text-primary-dark dark:text-white">
-                Insurance Claims Review
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">
-                Review policy claims, set payout amounts, and keep decision notes close to the claim record.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="warning" className="px-3 py-1">{pendingCount} pending</Badge>
-            <Badge variant="success" className="px-3 py-1">{approvedCount} approved</Badge>
-            <Badge variant="muted" className="px-3 py-1">{paidCount} paid</Badge>
-          </div>
-        </div>
-      </section>
+      <PageHeader
+        eyebrow="Platform admin"
+        title="Insurance Claims Review"
+        description="Review policy claims, set payout amounts, and keep decision notes close to the claim record."
+        icon={<ShieldAlert size={22} />}
+        accent="#f59e0b"
+      >
+        <Badge variant="warning" className="px-3 py-1">{pendingCount} pending</Badge>
+        <Badge variant="success" className="px-3 py-1">{approvedCount} approved</Badge>
+        <Badge variant="muted" className="px-3 py-1">{paidCount} paid</Badge>
+      </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={<Clock3 size={18} />} label="Pending Review" value={String(pendingCount)} sub={`${visibleItems.length} claims in current view`} />

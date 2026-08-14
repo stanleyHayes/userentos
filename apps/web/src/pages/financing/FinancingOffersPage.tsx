@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -62,10 +63,12 @@ export function FinancingOffersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Financing Marketplace</h1>
-        <p className="text-sm text-muted dark:text-gray-500">Get rent advance, deposit loans, and rent-to-own — repay monthly</p>
-      </div>
+      <PageHeader
+        eyebrow="Financing"
+        title="Financing Marketplace"
+        description="Get rent advance, deposit loans, and rent-to-own — repay monthly."
+        icon={<Banknote size={22} />}
+      />
 
       {isLoading ? (
         <GridSkeleton cols={3} count={3} />

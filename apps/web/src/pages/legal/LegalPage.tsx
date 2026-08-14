@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -12,7 +13,6 @@ import InputAdornment from '@mui/material/InputAdornment'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { LegalArticle } from '@/types'
-import { DoodleUnderline } from '@/components/ui/Doodles'
 
 const categories = [
   { name: 'Rent Control Act', icon: <Scale size={20} /> },
@@ -41,17 +41,17 @@ export function LegalPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative">
-          <DoodleUnderline className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Rental Laws</h1>
-          <p className="text-sm text-muted mt-1">Ghana's complete rental law repository</p>
-        </div>
+      <PageHeader
+        eyebrow="Know your rights"
+        title="Rental Laws"
+        description="Ghana's complete rental law repository."
+        icon={<Scale size={22} />}
+      >
         <Button variant="secondary" onClick={() => setShowAssistant(true)} className="w-full sm:w-auto">
           <MessageSquare size={16} />
           AI Legal Assistant
         </Button>
-      </div>
+      </PageHeader>
 
       <TextField
         type="text"

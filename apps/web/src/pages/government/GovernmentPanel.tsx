@@ -1,10 +1,10 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { usePlatformAnalytics } from '@/hooks/useApi'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import { Link } from 'react-router-dom'
 import { Shield, Building2, Users, Scale, HardDrive, Activity, BarChart3, Eye, DollarSign } from 'lucide-react'
-import { DoodleStars } from '@/components/ui/Doodles'
 import { OverviewTab } from './components/OverviewTab'
 import { PropertiesTab } from './components/PropertiesTab'
 import { FinancialTab } from './components/FinancialTab'
@@ -56,19 +56,13 @@ export function GovernmentPanel() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white">
-            <Shield size={20} />
-          </div>
-          <div className="relative">
-            <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-            <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-              Platform Analytics
-            </h1>
-            <p className="text-xs text-muted dark:text-gray-400">Complete database snapshot across all {Object.keys(a).length} collections</p>
-          </div>
-        </div>
+      <PageHeader
+        eyebrow="Government"
+        title="Platform Analytics"
+        description="A complete database snapshot across the platform."
+        meta={`${Object.keys(a).length} collections`}
+        icon={<Shield size={22} />}
+      >
         <div className="flex gap-2">
           <Link to="/government/reviews">
             <Button size="sm" variant="outline"><Eye size={14} /> <span className="hidden sm:inline">Reviews</span></Button>
@@ -77,7 +71,7 @@ export function GovernmentPanel() {
             <Button size="sm" variant="outline"><Scale size={14} /> <span className="hidden sm:inline">Simulate</span></Button>
           </Link>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Tab navigation */}
       <div ref={pillAttach} className="relative isolate flex gap-1 overflow-x-auto rounded-full border border-border/70 bg-surface/60 p-1 scrollbar-hide dark:border-white/10 dark:bg-white/[0.04]">
