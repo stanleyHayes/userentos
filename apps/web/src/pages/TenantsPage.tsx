@@ -115,7 +115,7 @@ export function TenantsPage() {
       ) : filtered.length === 0 && !search ? (
         <EmptyState preset="properties" title="No tenants yet" description="Once tenants sign rental agreements for your properties, they will appear here." />
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted text-center py-10">No tenants matching "{search}"</p>
+        <EmptyState compact preset="search" title="No tenants found" description={`Nothing matches "${search}". Try a different name or email.`} />
       ) : (
         <div className="space-y-3">
           {(() => {

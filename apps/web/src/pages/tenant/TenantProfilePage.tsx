@@ -317,7 +317,7 @@ function ProfessionalSection({ form, u }: { form: Profile; u: (f: string, v: unk
               <p className="text-xs text-muted dark:text-gray-500 mb-3">Add side jobs, freelancing, or other income sources</p>
 
               {incomeSources.length === 0 && (
-                <p className="text-sm text-muted dark:text-gray-500 text-center py-4">No additional income sources added</p>
+                <SharedEmptyState compact preset="general" title="No extra income" description="Add other income sources to strengthen your profile." />
               )}
 
               {incomeSources.map((src, i) => (

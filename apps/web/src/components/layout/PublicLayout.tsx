@@ -122,7 +122,7 @@ export function PublicLayout() {
 
           {/* Right controls */}
           <div className="flex items-center gap-1">
-            <ThemeToggle className="rounded-full hover:bg-surface dark:hover:bg-white/10" />
+            <ThemeToggle className="hover:bg-surface dark:hover:bg-white/10" />
 
             {/* Desktop CTA */}
             <Link
@@ -136,7 +136,7 @@ export function PublicLayout() {
             <button
               onClick={() => setOpen(!open)}
               aria-label="Toggle menu"
-              className="focus-ring relative rounded-full p-2 text-muted transition-colors hover:bg-surface hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white md:hidden"
+              className="focus-ring relative rounded-xl p-2 text-muted transition-colors hover:bg-surface hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white md:hidden"
             >
               <span
                 className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ${

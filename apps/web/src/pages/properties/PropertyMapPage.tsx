@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { MapPin, List, Loader2, AlertCircle } from 'lucide-react'
 import TextField from '@mui/material/TextField'
@@ -24,19 +25,17 @@ export function PropertyMapPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-            Property map
-          </h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">
-            {isLoading ? 'Loading listings…' : `${pins.length} listing${pins.length === 1 ? '' : 's'} plotted`}
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title="Property Map"
+        description="Every approved listing with a pinned location, clustered by area."
+        meta={isLoading ? 'Loading listings…' : `${pins.length} listing${pins.length === 1 ? '' : 's'} plotted`}
+        icon={<MapPin size={22} />}
+      >
         <Link to="/properties">
           <Button variant="outline" size="sm"><List size={16} /> List view</Button>
         </Link>
-      </div>
+      </PageHeader>
 
       <div className="flex flex-wrap gap-3">
         <TextField

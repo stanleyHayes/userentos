@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
@@ -151,13 +152,12 @@ export function MyBookingsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
-          <Wrench className="text-primary" size={24} />
-          My Bookings
-        </h1>
-        <p className="text-muted text-sm mt-1">Track your service requests and manage jobs.</p>
-      </div>
+      <PageHeader
+        eyebrow="Services"
+        title="My Bookings"
+        description="Track your service requests and manage jobs."
+        icon={<Wrench size={22} />}
+      />
 
       {/* View Toggle */}
       <div ref={viewPillAttach} className="relative isolate flex gap-1 mb-4 bg-surface dark:bg-[#0c0e1a] p-1 rounded-lg w-fit">

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -15,7 +16,6 @@ import InputAdornment from '@mui/material/InputAdornment'
 import { CreditCard, ArrowUpDown, Search, X, TrendingUp, Clock, CheckCircle } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
-import { DoodleStars } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { PaymentStatus, Payment } from '@/types'
 
@@ -105,21 +105,19 @@ export function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative">
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Payments</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">
-            {isTenant ? 'Track your rent payments' : 'Track received payments'}
-          </p>
-          <DoodleStars className="absolute -top-2 -right-8 text-secondary/15 dark:text-amber-400/15 w-12 h-12 pointer-events-none" />
-        </div>
+      <PageHeader
+        eyebrow="Money"
+        title="Payments"
+        description={isTenant ? 'Track your rent payments.' : 'Track received payments.'}
+        icon={<CreditCard size={22} />}
+      >
         {isTenant && (
           <Button data-testid="make-payment-button" onClick={() => setShowPay(true)}>
             <CreditCard size={16} />
             Make Payment
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
         {[

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +14,6 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { FileText, Plus, CheckCircle, AlertTriangle, PenTool, Shield, Calendar, Building2, CreditCard, ChevronRight, Search, ChevronLeft } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
-import { DoodleUnderline } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DatePicker } from '@/components/ui/DatePicker'
 import type { AgreementStatus } from '@/types'
@@ -66,19 +66,19 @@ export function AgreementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Rental Agreements</h1>
-          <DoodleUnderline className="text-primary/10 dark:text-blue-400/10 w-32 pointer-events-none" />
-          <p className="text-sm text-muted mt-1">Manage your digital rental contracts</p>
-        </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title="Rental Agreements"
+        description="Manage your digital rental contracts."
+        icon={<FileText size={22} />}
+      >
         {isLandlord && (
           <Button onClick={() => setShowCreate(true)}>
             <Plus size={16} />
             New Agreement
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {!isLoading && agreements.length > 0 && (() => {
         const active = agreements.filter((a) => a.status === 'active')
@@ -140,7 +140,7 @@ export function AgreementsPage() {
           {...(isLandlord ? { action: { label: 'Create agreement', onClick: () => setShowCreate(true) } } : {})}
         />
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted dark:text-gray-500 text-center py-10">No agreements matching your filters</p>
+        <EmptyState compact preset="agreements" title="No agreements found" description="Nothing matches the current filters." />
       ) : (
         <div className="space-y-3">
           {paginated.map((agreement) => {

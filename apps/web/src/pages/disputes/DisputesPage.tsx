@@ -1,4 +1,5 @@
 import { useState, useMemo, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -18,7 +19,6 @@ import {
 } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
-import { DoodleZigzag } from '@/components/ui/Doodles'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { DisputeStatus } from '@/types'
 
@@ -115,23 +115,13 @@ export function DisputesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white">
-              <Gavel size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-                Disputes
-              </h1>
-              <p className="text-xs text-muted dark:text-gray-400">
-                {isGov ? 'Review and resolve rental disputes' : 'File and track rental disputes'}
-              </p>
-              <DoodleZigzag className="text-primary/10 dark:text-blue-400/10 w-28 pointer-events-none mt-1" />
-            </div>
-          </div>
-        </div>
+      <PageHeader
+        eyebrow="Resolution"
+        title="Disputes"
+        description={isGov ? 'Review and resolve rental disputes.' : 'File and track rental disputes.'}
+        icon={<Gavel size={22} />}
+        accent="#f59e0b"
+      >
         {!isGov && (
           activeAgreement ? (
             <Button data-testid="new-dispute-button" onClick={() => setShowCreate(true)}>
@@ -148,7 +138,7 @@ export function DisputesPage() {
             </div>
           )
         )}
-      </div>
+      </PageHeader>
 
       {/* Stats Strip */}
       {disputes.length > 0 && (

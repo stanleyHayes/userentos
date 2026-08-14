@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { cn } from '@/lib/utils'
 import { Sun, Moon } from 'lucide-react'
 import { useThemeStore } from '@/stores/themeStore'
 
@@ -61,7 +62,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
     <button
       ref={btnRef}
       onClick={toggle}
-      className={`relative p-2 rounded-lg transition-all ${className}`}
+      className={cn('relative p-2 rounded-xl transition-all', className)}
       title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
     >
       <div className="relative w-[18px] h-[18px]">

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -11,8 +12,6 @@ import {
   Plus, FileText, Trash2, Clock, HardDrive,
   FolderOpen, Search,
 } from 'lucide-react'
-import { DoodleStars } from '@/components/ui/Doodles'
-import { IconWatermark } from '@/components/ui/Watermark'
 import type { Document, DocumentsResponse } from './documents/types'
 import { formatFileSize } from './documents/documentConfig'
 import { StatCard } from './documents/components/StatCard'
@@ -88,25 +87,17 @@ export function DocumentsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white">
-            <FolderOpen size={20} />
-          </div>
-          <div className="relative overflow-hidden">
-            <DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-            <IconWatermark icon={FileText} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
-            <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-              Documents
-            </h1>
-            <p className="text-xs text-muted dark:text-gray-400">Manage your rental documents and files</p>
-          </div>
-        </div>
+      <PageHeader
+        eyebrow="Rentals"
+        title="Documents"
+        description="Manage your rental documents and files."
+        icon={<FolderOpen size={22} />}
+      >
         <Button onClick={() => setShowUpload(true)}>
           <Plus size={16} />
           Upload
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Stats Strip */}
       {allDocuments.length > 0 && (

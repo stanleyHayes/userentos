@@ -454,7 +454,7 @@ export function PricingEnginePage() {
                       </div>
                     ))}
                     {analysisResult.comparableProperties.length === 0 && (
-                      <p className="text-sm text-muted text-center py-4">No comparable properties found.</p>
+                      <EmptyState compact preset="search" title="No comparables" description="No similar listings nearby to price against." />
                     )}
                   </div>
                 </Card>

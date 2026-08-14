@@ -152,7 +152,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Mobile: open sidebar drawer */}
           <button
-            className="focus-ring lg:hidden rounded-xl p-2 text-muted transition-colors hover:bg-surface hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
+            className="focus-ring neumorphic-icon lg:hidden rounded-xl p-2 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white"
             onClick={onMenuToggle}
           >
             <Menu size={22} />
@@ -264,7 +264,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           <div className="relative">
             <button
               onClick={() => setShowNotifs(!showNotifs)}
-              className="focus-ring neumorphic-icon relative rounded-xl p-2.5 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white"
+              className="focus-ring neumorphic-icon relative rounded-xl p-2 text-muted transition-colors hover:text-primary-dark dark:text-gray-400 dark:hover:text-white"
             >
               <Bell size={19} />
               {unreadCount > 0 && (

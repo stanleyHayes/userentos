@@ -221,7 +221,7 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
                   <HBar key={type} label={type.replace(/_/g, ' ')} value={count} max={maxType} color="bg-secondary/80" />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No property data</p>}
+            ) : <EmptyState compact preset="properties" title="No property data" description="Property analytics appear once listings are live." />}
           </CardContent>
         </Card>
 
@@ -493,7 +493,7 @@ function PlatformAnalytics() {
                   <HBar key={month} label={month} value={amount} max={maxVol} suffix={formatCurrency(amount)} />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No payment data</p>}
+            ) : <EmptyState compact preset="payments" title="No payment data" description="Payment volume appears once rent starts flowing." />}
           </CardContent>
         </Card>
 
@@ -552,7 +552,7 @@ function PlatformAnalytics() {
                   <HBar key={region} label={region} value={count} max={maxRegion} color="bg-emerald-500/80 dark:bg-emerald-400/80" />
                 ))}
               </div>
-            ) : <p className="text-sm text-muted text-center py-6">No regional data</p>}
+            ) : <EmptyState compact preset="properties" title="No regional data" description="Regional breakdowns need listings with a location." />}
           </CardContent>
         </Card>
 
@@ -723,7 +723,7 @@ function PublicRegistryAnalytics() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-muted text-center py-6">No views in the last 30 days</p>
+            <EmptyState compact preset="search" title="No views yet" description="Listing views from the last 30 days appear here." />
           )}
         </div>
 

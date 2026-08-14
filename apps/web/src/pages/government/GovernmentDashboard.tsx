@@ -127,7 +127,7 @@ export function GovernmentDashboard() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-muted text-sm">No disputes</div>
+              <EmptyState compact preset="disputes" title="No disputes" description="Disputes by category appear here once cases are filed." />
             )}
             <div className="mt-2 space-y-1.5">
               {pieData.map((d, i) => (

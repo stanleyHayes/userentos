@@ -260,7 +260,7 @@ export function PayrollReportsPage() {
                   </div>
 
                   {report.employees.length === 0 ? (
-                    <p className="text-xs text-muted dark:text-gray-500 text-center py-4">No deduction lines in this run</p>
+                    <EmptyState compact preset="payments" title="No deductions" description="This payroll run has no deduction lines." />
                   ) : (
                     <div className="space-y-2">
                       {report.employees.map((e) => (
