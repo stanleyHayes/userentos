@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMyWorker } from '@/hooks/useProvider'
 import {
   Wrench, Star, MapPin, Phone, ShieldCheck, CheckCircle,
-  Clock, User, ArrowLeft, Loader2, AlertCircle, Quote,
+  Clock, User, ArrowLeft, AlertCircle, Quote,
 } from 'lucide-react'
 import { BookingModal } from './BookingModal'
 
@@ -77,15 +78,13 @@ export function WorkerDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-10 flex justify-center">
-        <Loader2 size={32} className="animate-spin text-primary" />
-      </div>
+      <DetailSkeleton />
     )
   }
 
   if (!worker) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-10 text-center">
+      <div className="py-10 text-center">
         <Wrench className="text-muted mx-auto mb-3" size={40} />
         <p className="text-muted">Worker not found.</p>
       </div>
@@ -93,7 +92,7 @@ export function WorkerDetailPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate('/workers')} className="mb-4">
         <ArrowLeft size={16} className="mr-1" /> Back
       </Button>

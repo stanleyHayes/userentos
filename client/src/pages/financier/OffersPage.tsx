@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useMyFinancingOffers, useToggleFinancingOffer } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Power } from 'lucide-react'
+import { Plus, Power, Banknote } from 'lucide-react'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -15,13 +16,14 @@ export function FinancierOffersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Financing Offers</h1>
-          <p className="text-sm text-muted dark:text-gray-500">Configure the products you offer to applicants</p>
-        </div>
+      <PageHeader
+        eyebrow="Lending"
+        title="Financing Offers"
+        description="Configure the products you offer to applicants."
+        icon={<Banknote size={22} />}
+      >
         <Link to="/financing/offers/new"><Button size="sm"><Plus size={14} /> New Offer</Button></Link>
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <GridSkeleton cols={2} count={4} />

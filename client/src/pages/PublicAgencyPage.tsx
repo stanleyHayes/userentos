@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
+import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Card } from '@/components/ui/Card'
@@ -13,7 +14,7 @@ interface AgencyData {
 export function PublicAgencyPage() {
   const { slug = '' } = useParams()
   const { data, isLoading } = useQuery({ queryKey: ['public-agency', slug], queryFn: () => api.get<AgencyData>(`/agency/${slug}`) })
-  if (isLoading) return <div className="p-10 text-center">Loading agency…</div>
+  if (isLoading) return <DetailSkeleton />
   if (!data) return <EmptyState preset="general" title="Agency not found" description="This agency profile is unavailable." />
   return <div className="mx-auto max-w-6xl space-y-8 px-4 py-10">
     <header className="rounded-3xl bg-primary p-8 text-white">

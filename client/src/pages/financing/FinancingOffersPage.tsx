@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { GridSkeleton } from '@/components/ui/Skeleton'
 import { useFinancingOffers, useApplyForFinancing, useAgreements } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency } from '@/lib/utils'
@@ -66,9 +68,13 @@ export function FinancingOffersPage() {
       </div>
 
       {isLoading ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted">Loading offers…</CardContent></Card>
+        <GridSkeleton cols={3} count={3} />
       ) : offers.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-sm text-muted dark:text-gray-500">No active offers right now</CardContent></Card>
+        <EmptyState
+          icon={<Banknote size={40} />}
+          title="No financing offers yet"
+          description="Lenders have not published any offers for your situation. Check back soon — new rent advance and deposit loan products appear here as financiers list them."
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {offers.map((o) => (

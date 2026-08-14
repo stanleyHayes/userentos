@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { usePayrollRuns, useCreatePayrollRun } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, ArrowRight } from 'lucide-react'
+import { Plus, ArrowRight, Receipt } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -42,13 +43,14 @@ export function EmployerPayrollPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Payroll Runs</h1>
-          <p className="text-sm text-muted dark:text-gray-500">Build, approve, and process your monthly payroll</p>
-        </div>
+      <PageHeader
+        eyebrow="Workforce"
+        title="Payroll Runs"
+        description="Build, approve, and process your monthly payroll."
+        icon={<Receipt size={22} />}
+      >
         <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> New Run</Button>
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <ListSkeleton rows={4} />

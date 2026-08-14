@@ -268,7 +268,7 @@ export function LocalServicesPage() {
   const items = data?.items ?? []
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="space-y-5">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
           <Store className="text-primary" size={24} />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -77,13 +78,14 @@ export function MyMandatesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Salary Deduction Mandates</h1>
-          <p className="text-sm text-muted dark:text-gray-500">Authorize your employer to deduct rent, savings, or loan repayments from your salary</p>
-        </div>
+      <PageHeader
+        eyebrow="Payroll"
+        title="Salary Deduction Mandates"
+        description="Authorize your employer to deduct rent, savings, or loan repayments from your salary."
+        icon={<ShieldCheck size={22} />}
+      >
         <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> New Mandate</Button>
-      </div>
+      </PageHeader>
 
       <Card>
         <CardContent className="p-4 flex items-start gap-3">

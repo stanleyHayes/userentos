@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { DashboardSkeleton, ListSkeleton } from '@/components/ui/Skeleton'
 import TextField from '@mui/material/TextField'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -57,9 +58,7 @@ export function BusinessDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 size={32} className="animate-spin text-primary" />
-      </div>
+      <DashboardSkeleton />
     )
   }
 
@@ -322,7 +321,7 @@ function InquiryPipeline() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-primary" /></div>
+          <ListSkeleton rows={3} />
         ) : inquiries.length === 0 ? (
           <EmptyState preset="general" icon={<Inbox size={36} />} title="No inquiries here" description={filter ? `No ${filter} inquiries right now.` : 'New quote and interest requests from renters will appear here.'} compact />
         ) : (

@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { FileSignature } from 'lucide-react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useFinancingContracts } from '@/hooks/useApi'
@@ -26,10 +28,12 @@ export function FinancingContractsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">{isFinancier ? 'Active Portfolio' : 'My Financing Contracts'}</h1>
-        <p className="text-sm text-muted dark:text-gray-500">{isFinancier ? 'All contracts you have funded' : 'Your active and past financing contracts'}</p>
-      </div>
+      <PageHeader
+        eyebrow={isFinancier ? 'Lending' : 'Financing'}
+        title={isFinancier ? 'Active Portfolio' : 'My Financing Contracts'}
+        description={isFinancier ? 'All contracts you have funded.' : 'Your active and past financing contracts.'}
+        icon={<FileSignature size={22} />}
+      />
 
       {isLoading ? (
         <ListSkeleton rows={4} />

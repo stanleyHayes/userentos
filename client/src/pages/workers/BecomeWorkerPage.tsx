@@ -66,7 +66,7 @@ export function BecomeWorkerPage() {
 
   if (submitted) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-10">
+      <div className="max-w-xl mx-auto py-10">
         <Card className="p-10 text-center">
           <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-primary-dark dark:text-white mb-2">Profile Submitted!</h2>
@@ -81,7 +81,7 @@ export function BecomeWorkerPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
           <Briefcase className="text-primary" size={24} />

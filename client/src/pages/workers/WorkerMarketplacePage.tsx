@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { GridSkeleton } from '@/components/ui/Skeleton'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
@@ -9,7 +10,7 @@ import { Select } from '@/components/ui/Select'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Wrench, Star, MapPin, Phone, Search, Loader2, ShieldCheck,
+  Wrench, Star, MapPin, Phone, Search, ShieldCheck,
   AlertCircle, CheckCircle, Clock, User, Eye, Briefcase,
 } from 'lucide-react'
 import { BookingModal } from './BookingModal'
@@ -109,8 +110,8 @@ export function WorkerMarketplacePage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      <div className="mb-6 flex items-start justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
             <Wrench className="text-primary" size={24} />
@@ -123,42 +124,60 @@ export function WorkerMarketplacePage() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <Card className="p-4 mb-6">
-        <div className="grid md:grid-cols-5 gap-3">
-          <Select id="filter-trade" label="Trade" value={filters.trade} onChange={e => { setFilters(p => ({ ...p, trade: e.target.value })); setPage(1) }} options={TRADE_OPTIONS} />
-          <Input id="filter-location" label="Location" value={filters.location} onChange={e => { setFilters(p => ({ ...p, location: e.target.value })); setPage(1) }} placeholder="e.g. Accra" />
-          <Select id="filter-rating" label="Min Rating" value={filters.minRating} onChange={e => { setFilters(p => ({ ...p, minRating: e.target.value })); setPage(1) }} options={[
-            { value: '', label: 'Any' },
-            { value: '3', label: '3+ stars' },
-            { value: '4', label: '4+ stars' },
-            { value: '4.5', label: '4.5+ stars' },
-          ]} />
-          <div className="flex items-end gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filters.emergency} onChange={e => { setFilters(p => ({ ...p, emergency: e.target.checked })); setPage(1) }} className="rounded border-border" />
-              <span className="text-sm text-muted">Emergency</span>
-              <AlertCircle size={14} className="text-red-500" />
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filters.verified} onChange={e => { setFilters(p => ({ ...p, verified: e.target.checked })); setPage(1) }} className="rounded border-border" />
-              <span className="text-sm text-muted">Verified</span>
-              <ShieldCheck size={14} className="text-green-500" />
-            </label>
+      {/* Filters — the three inputs share a row, then the toggles and the
+          search action get their own, so the checkboxes are not squeezed into a
+          fifth of the width with the button pressed up against them. */}
+      <Card className="p-4">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Select id="filter-trade" label="Trade" value={filters.trade} onChange={e => { setFilters(p => ({ ...p, trade: e.target.value })); setPage(1) }} options={TRADE_OPTIONS} />
+            <Input id="filter-location" label="Location" value={filters.location} onChange={e => { setFilters(p => ({ ...p, location: e.target.value })); setPage(1) }} placeholder="e.g. Accra" />
+            <Select id="filter-rating" label="Min Rating" value={filters.minRating} onChange={e => { setFilters(p => ({ ...p, minRating: e.target.value })); setPage(1) }} options={[
+              { value: '', label: 'Any' },
+              { value: '3', label: '3+ stars' },
+              { value: '4', label: '4+ stars' },
+              { value: '4.5', label: '4.5+ stars' },
+            ]} />
           </div>
-          <div className="flex items-end">
-            <Button onClick={() => setPage(1)} className="w-full"><Search size={16} className="mr-1" /> Search</Button>
+
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-border/60 pt-4 dark:border-[#252a3a]/70">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={filters.emergency}
+                  onChange={e => { setFilters(p => ({ ...p, emergency: e.target.checked })); setPage(1) }}
+                  className="rounded border-border accent-primary dark:border-[#252a3a]"
+                />
+                <AlertCircle size={14} className="text-red-500" />
+                <span className="text-sm text-muted dark:text-gray-400">Emergency</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={filters.verified}
+                  onChange={e => { setFilters(p => ({ ...p, verified: e.target.checked })); setPage(1) }}
+                  className="rounded border-border accent-primary dark:border-[#252a3a]"
+                />
+                <ShieldCheck size={14} className="text-green-500" />
+                <span className="text-sm text-muted dark:text-gray-400">Verified</span>
+              </label>
+            </div>
+
+            <Button onClick={() => setPage(1)} className="w-full sm:w-auto sm:min-w-[150px]">
+              <Search size={16} /> Search
+            </Button>
           </div>
         </div>
       </Card>
 
       {/* Workers grid */}
       {isLoading ? (
-        <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-primary" /></div>
+        <GridSkeleton cols={3} count={6} />
       ) : workers.length === 0 ? (
         <EmptyState preset="search" title="No workers found" description="No workers match your criteria yet — try adjusting your filters." />
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {workers.map(worker => (
             <Card key={worker._id} className="p-4">
               <div className="flex gap-4">

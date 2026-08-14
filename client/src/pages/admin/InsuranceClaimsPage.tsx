@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { ListSkeleton } from '@/components/ui/Skeleton'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -223,13 +224,9 @@ export function InsuranceClaimsPage() {
       </Card>
 
       {activeClaimsQuery.isLoading ? (
-        <Card className="flex min-h-[260px] items-center justify-center p-10 text-center text-sm text-muted">
-          Loading claims...
-        </Card>
+        <ListSkeleton rows={4} />
       ) : visibleItems.length === 0 ? (
-        <Card className="flex min-h-[260px] items-center justify-center p-10 text-center">
-          <EmptyState preset="search" title="No claims found" description="Insurance claims matching your filters will appear here." />
-        </Card>
+        <EmptyState preset="search" title="No claims found" description="Insurance claims matching your filters will appear here." />
       ) : (
         <div className="space-y-4">
           {visibleItems.map((claim) => {

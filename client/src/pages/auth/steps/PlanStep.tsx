@@ -1,6 +1,7 @@
 import type { SubscriptionPackage } from '@/types'
+import { GridSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency } from '@/lib/utils'
-import { Check, Crown, Package, Building2, Loader2 } from 'lucide-react'
+import { Check, Crown, Package, Building2 } from 'lucide-react'
 
 interface Props {
   packages: SubscriptionPackage[]
@@ -12,8 +13,8 @@ interface Props {
 export function PlanStep({ packages, selectedId, onSelect, isLoading }: Props) {
   if (isLoading) {
     return (
-      <div className="flex justify-center py-10 animate-fade-up">
-        <Loader2 size={28} className="animate-spin text-primary" />
+      <div className="animate-fade-up">
+        <GridSkeleton cols={3} count={3} />
       </div>
     )
   }

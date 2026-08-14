@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -114,9 +115,7 @@ export function ServiceProviderDashboard() {
 
   if (workerLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 size={32} className="animate-spin text-primary" />
-      </div>
+      <DashboardSkeleton />
     )
   }
 

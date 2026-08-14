@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useFinancingApplications, useDecideFinancingApplication } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { CheckCircle2, X } from 'lucide-react'
+import { CheckCircle2, X, FileCheck } from 'lucide-react'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useState } from 'react'
@@ -26,10 +27,12 @@ export function FinancingApplicationsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">{isFinancier ? 'Applications Inbox' : 'My Financing Applications'}</h1>
-        <p className="text-sm text-muted dark:text-gray-500">{isFinancier ? 'Review, approve, or reject incoming applications' : 'Track your financing requests'}</p>
-      </div>
+      <PageHeader
+        eyebrow={isFinancier ? 'Lending' : 'Financing'}
+        title={isFinancier ? 'Applications Inbox' : 'My Financing Applications'}
+        description={isFinancier ? 'Review, approve, or reject incoming applications.' : 'Track your financing requests.'}
+        icon={<FileCheck size={22} />}
+      />
 
       {isLoading ? (
         <ListSkeleton rows={4} />

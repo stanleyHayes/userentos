@@ -10,7 +10,7 @@ import {
   Eye, Globe2,
 } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
-import { DashboardSkeleton } from '@/components/ui/Skeleton'
+import { DashboardSkeleton, ListSkeleton } from '@/components/ui/Skeleton'
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
@@ -641,7 +641,7 @@ function PublicRegistryAnalytics() {
       <Card>
         <CardHeader><CardTitle>Public Registry — Last 30 Days</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-muted text-center py-6">Loading registry analytics…</p>
+          <ListSkeleton rows={3} />
         </CardContent>
       </Card>
     )

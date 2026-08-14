@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ListSkeleton } from '@/components/ui/Skeleton'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -7,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Wrench, Star, Loader2, CheckCircle, Clock,
+  Wrench, Star, CheckCircle, Clock,
   X, Phone, ChevronDown, ChevronUp, Briefcase, User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -149,8 +150,8 @@ export function MyBookingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="mb-6">
+    <div className="space-y-5">
+      <div>
         <h1 className="text-2xl font-bold text-primary-dark dark:text-white flex items-center gap-2">
           <Wrench className="text-primary" size={24} />
           My Bookings
@@ -201,7 +202,7 @@ export function MyBookingsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-primary" /></div>
+        <ListSkeleton rows={4} />
       ) : filtered.length === 0 ? (
         <EmptyState preset="agreements" title="No bookings found" description="Your worker bookings will appear here." />
       ) : (
