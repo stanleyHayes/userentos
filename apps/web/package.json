@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "cp ../shared/types/index.ts src/types/shared.ts 2>/dev/null || true",
+    "prebuild": "cp ../../packages/shared/types/index.ts src/types/shared.ts 2>/dev/null || true",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",

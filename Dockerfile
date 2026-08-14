@@ -7,13 +7,14 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy dependency manifests first (better layer caching)
-COPY server/package.json server/package-lock.json ./
+COPY apps/api/package.json apps/api/package-lock.json ./
 # Full install (incl. devDeps) — tsc/tsx are required to build
 RUN npm ci --ignore-scripts
 
 # Copy source and build
-COPY shared/ ../shared/
-COPY server/ ./
+COPY packages/shared/ ../packages/shared/
+COPY packages/ml-models/ ../packages/ml-models/
+COPY apps/api/ ./
 RUN npm run build
 
 # Drop devDependencies so the runtime stage copies a lean node_modules
@@ -31,6 +32,9 @@ RUN addgroup -g 1001 -S rentos && adduser -S rentos -u 1001
 COPY --from=builder --chown=rentos:rentos /app/dist ./dist
 COPY --from=builder --chown=rentos:rentos /app/node_modules ./node_modules
 COPY --from=builder --chown=rentos:rentos /app/package.json ./package.json
+
+# Pricing model artifact — the API resolves it relative to its own dist/
+COPY --from=builder --chown=rentos:rentos /packages/ml-models ./packages/ml-models
 
 # Uploads directory (persistent volume recommended)
 RUN mkdir -p /app/uploads && chown -R rentos:rentos /app/uploads

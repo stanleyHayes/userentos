@@ -13,7 +13,26 @@ import {
 } from './features.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DEFAULT_MODEL_PATH = path.resolve(__dirname, '../../../../ml-models/pricing-model.json')
+
+/**
+ * The trained model lives outside this package, and the depth to it differs by
+ * how the API is running: from src/ under tsx, from dist/ after a build, and
+ * from /app/dist inside the container where only the artifact is copied in.
+ * A single relative path cannot satisfy all three, so try each and take the
+ * first that exists. ML_MODEL_PATH overrides everything.
+ */
+const MODEL_CANDIDATES = [
+  process.env.ML_MODEL_PATH,
+  // apps/api/{src,dist}/services/ml → repo root → packages/ml-models
+  path.resolve(__dirname, '../../../../../packages/ml-models/pricing-model.json'),
+  // Container layout: /app/dist/services/ml with the artifact at /app/packages
+  path.resolve(__dirname, '../../../packages/ml-models/pricing-model.json'),
+  // Pre-restructure layout, kept so an old checkout still finds its model
+  path.resolve(__dirname, '../../../../ml-models/pricing-model.json'),
+].filter((candidate): candidate is string => Boolean(candidate))
+
+const DEFAULT_MODEL_PATH = MODEL_CANDIDATES.find((candidate) => fs.existsSync(candidate))
+  ?? MODEL_CANDIDATES[MODEL_CANDIDATES.length - 1]
 
 export interface ModelState {
   weights: number[]

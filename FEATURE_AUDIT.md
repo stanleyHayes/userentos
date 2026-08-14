@@ -6,7 +6,7 @@
 - **Backend**: `services/ai.ts` has `generateText(prompt, context, language)` using Claude. Endpoint `POST /api/ai/generate` already live. Supports English, Twi, Ga, Ewe.
 - **Backend**: Rule-based abuse-check at `POST /api/ai/abuse-check` (public).
 - **Backend**: Legal assistant chat with RAG at `POST /api/ai/chat`.
-- **UI**: Legal Assistant chat page exists (`client/src/pages/legal/LegalAssistant.tsx`).
+- **UI**: Legal Assistant chat page exists (`apps/web/src/pages/legal/LegalAssistant.tsx`).
 
 ### What's Missing
 - **No AI integration in property creation flow**. `AddPropertyPage.tsx` has a manual title/description form with zero AI help.

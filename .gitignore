@@ -14,9 +14,9 @@ logs/
 .claude/worktrees/
 
 # Synced shared types (generated from shared/types/index.ts — do not edit directly)
-client/src/types/shared.ts
-server/src/types/shared.ts
-mobile/types/shared.ts
+apps/web/src/types/shared.ts
+apps/api/src/types/shared.ts
+apps/mobile/types/shared.ts
 
 # Build outputs
 *.apk
@@ -31,3 +31,6 @@ venv/
 __pycache__/
 *.pyc
 .raven/
+
+# Tooling caches
+.impeccable/

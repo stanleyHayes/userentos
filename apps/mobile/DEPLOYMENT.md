@@ -13,7 +13,7 @@
 # From project root
 npm run dev:mobile
 
-# Or from mobile/
+# Or from apps/mobile/
 npx expo start
 ```
 

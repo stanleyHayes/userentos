@@ -13,7 +13,7 @@
 # From project root
 npm run dev:server
 
-# Or from server/
+# Or from apps/api/
 npm run dev
 ```
 
@@ -94,7 +94,7 @@ Use the included `Dockerfile` at the project root for containerized deployment.
 
 ### Blueprint Free Deployment
 
-The root `render.yaml` deploys one Render **Free** Docker web service and does not create a Render database. During Blueprint setup, paste your MongoDB Atlas Free cluster connection string into the prompted `MONGO_URI` secret and provide the other prompted values from `server/.env`. Do not commit the Atlas URL or any other secret to Git.
+The root `render.yaml` deploys one Render **Free** Docker web service and does not create a Render database. During Blueprint setup, paste your MongoDB Atlas Free cluster connection string into the prompted `MONGO_URI` secret and provide the other prompted values from `apps/api/.env`. Do not commit the Atlas URL or any other secret to Git.
 
 1. Create a new **Web Service** on Render
 2. Select **Docker** as the runtime
@@ -109,7 +109,7 @@ Run the full stack locally with Docker Compose:
 
 ```bash
 # Set required secrets
-cp server/.env.example .env
+cp apps/api/.env.example .env
 # Edit .env and set JWT_SECRET, ANTHROPIC_API_KEY, RESEND_API_KEY, etc.
 
 # Start services

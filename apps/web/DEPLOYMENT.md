@@ -13,7 +13,7 @@
 # From project root
 npm run dev:client
 
-# Or from client/
+# Or from apps/web/
 npm run dev
 ```
 

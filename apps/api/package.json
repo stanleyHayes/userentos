@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "prebuild": "cp ../shared/types/index.ts src/types/shared.ts 2>/dev/null || true",
+    "prebuild": "cp ../../packages/shared/types/index.ts src/types/shared.ts 2>/dev/null || true",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",

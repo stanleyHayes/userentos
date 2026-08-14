@@ -23,9 +23,9 @@ Find properties, sign legally compliant agreements, pay rent via mobile money, b
 
 ```
 RentOS/
-├── client/          # React web app
-├── mobile/          # React Native (Expo) app
-├── server/          # Express API server
+├── apps/web/          # React web app
+├── apps/mobile/          # React Native (Expo) app
+├── apps/api/          # Express API server
 └── shared/          # Shared TypeScript types
 ```
 
@@ -43,14 +43,14 @@ RentOS/
 
 ```bash
 # Install all dependencies
-cd client && npm install
+cd apps/web && npm install
 cd ../server && npm install
 cd ../mobile && npm install
 ```
 
 ### Environment Variables
 
-**Server** (`server/.env`):
+**Server** (`apps/api/.env`):
 ```
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/rentos
@@ -58,12 +58,12 @@ JWT_SECRET=your_jwt_secret
 JWT_REFRESH_SECRET=your_refresh_secret
 ```
 
-**Client** (`client/.env`):
+**Client** (`apps/web/.env`):
 ```
 VITE_API_URL=http://localhost:5000/api
 ```
 
-**Mobile** (`mobile/.env`):
+**Mobile** (`apps/mobile/.env`):
 ```
 EXPO_PUBLIC_API_URL=http://localhost:5000/api
 ```
@@ -72,13 +72,13 @@ EXPO_PUBLIC_API_URL=http://localhost:5000/api
 
 ```bash
 # Server
-cd server && npm run dev
+cd apps/api && npm run dev
 
 # Client
-cd client && npm run dev
+cd apps/web && npm run dev
 
 # Mobile
-cd mobile && npx expo start
+cd apps/mobile && npx expo start
 ```
 
 ---

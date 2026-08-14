@@ -21,27 +21,27 @@
 
 | Issue | File | Fix |
 |---|---|---|
-| Hardcoded JWT secret fallback | `server/src/config/index.ts` | Throws on missing `JWT_SECRET`; allows test fallback only in `NODE_ENV=test` |
-| Password reset token leaked in API | `server/src/services/authService.ts` | Removed `resetToken` from response; only sent via email |
-| CORS permissive in production | `server/src/index.ts` | Blocks all origins if `CORS_ALLOWED_ORIGINS` unset in production |
-| Socket.IO CORS wildcard | `server/src/services/socket.ts` | Mirrors HTTP CORS policy from env |
-| Regex injection (ReDoS/NoSQL) | `server/src/routes/blog.ts`, `propertyService.ts`, `chat.ts`, `propertyController.ts` | All user input escaped with `escapeRegex()` before `$regex` |
-| Raw `req.body` in blog update | `server/src/routes/blog.ts` | Added Zod validation for PATCH fields |
-| Unvalidated `JSON.parse` | `server/src/routes/documents.ts` | Wrapped in `try/catch` with 400 response |
-| Placeholder API keys | `server/src/services/ai.ts`, `email.ts`, `sms.ts` | Lazy validation on first use; throws with clear message |
-| Hardcoded email URLs | `server/src/services/email.ts` | Uses `PUBLIC_BASE_URL` env variable |
-| Weak seeded passwords | `server/src/bootstrapNewRoles.ts` | Generates random secure passwords per run |
+| Hardcoded JWT secret fallback | `apps/api/src/config/index.ts` | Throws on missing `JWT_SECRET`; allows test fallback only in `NODE_ENV=test` |
+| Password reset token leaked in API | `apps/api/src/services/authService.ts` | Removed `resetToken` from response; only sent via email |
+| CORS permissive in production | `apps/api/src/index.ts` | Blocks all origins if `CORS_ALLOWED_ORIGINS` unset in production |
+| Socket.IO CORS wildcard | `apps/api/src/services/socket.ts` | Mirrors HTTP CORS policy from env |
+| Regex injection (ReDoS/NoSQL) | `apps/api/src/routes/blog.ts`, `propertyService.ts`, `chat.ts`, `propertyController.ts` | All user input escaped with `escapeRegex()` before `$regex` |
+| Raw `req.body` in blog update | `apps/api/src/routes/blog.ts` | Added Zod validation for PATCH fields |
+| Unvalidated `JSON.parse` | `apps/api/src/routes/documents.ts` | Wrapped in `try/catch` with 400 response |
+| Placeholder API keys | `apps/api/src/services/ai.ts`, `email.ts`, `sms.ts` | Lazy validation on first use; throws with clear message |
+| Hardcoded email URLs | `apps/api/src/services/email.ts` | Uses `PUBLIC_BASE_URL` env variable |
+| Weak seeded passwords | `apps/api/src/bootstrapNewRoles.ts` | Generates random secure passwords per run |
 
 ### Logic & Stability Fixes
 
 | Issue | File | Fix |
 |---|---|---|
-| Unawaited notifications | `server/src/services/payments/finalize.ts`, `routes/agreements.ts` | Added `await` to `notifyPaymentConfirmed`, `notifyPaymentReceived`, `notify()` |
-| Wrong transaction type | `server/src/services/scheduler.ts` | Changed `'rent_payment'` → `'savings_contribution'` for auto-debits |
-| Socket disconnect on unmount | `client/src/hooks/useSocket.ts` | Added reference counting; only disconnects when last consumer unmounts |
-| Upload 401 hard redirect | `client/src/lib/api.ts` | Removed `window.location.href` assignment; throws error instead |
-| Missing `param()` sanitization | `server/src/routes/agreements.ts`, `invitations.ts` | Added `param()` wrapper for all `req.params.id` lookups |
-| Scheduler OOM risk | `server/src/services/scheduler.ts` | Added batching (200 docs at a time) to agreement queries |
+| Unawaited notifications | `apps/api/src/services/payments/finalize.ts`, `routes/agreements.ts` | Added `await` to `notifyPaymentConfirmed`, `notifyPaymentReceived`, `notify()` |
+| Wrong transaction type | `apps/api/src/services/scheduler.ts` | Changed `'rent_payment'` → `'savings_contribution'` for auto-debits |
+| Socket disconnect on unmount | `apps/web/src/hooks/useSocket.ts` | Added reference counting; only disconnects when last consumer unmounts |
+| Upload 401 hard redirect | `apps/web/src/lib/api.ts` | Removed `window.location.href` assignment; throws error instead |
+| Missing `param()` sanitization | `apps/api/src/routes/agreements.ts`, `invitations.ts` | Added `param()` wrapper for all `req.params.id` lookups |
+| Scheduler OOM risk | `apps/api/src/services/scheduler.ts` | Added batching (200 docs at a time) to agreement queries |
 
 ### Production Infrastructure
 
@@ -68,8 +68,8 @@
 | `.github/workflows/ci.yml` | Updated with new jobs and env vars |
 
 ### Documentation Updates
-- `server/DEPLOYMENT.md` — Added Docker Compose and Render Docker instructions
-- `server/.env.example` — Updated to use `RESEND_API_KEY`, added `PUBLIC_BASE_URL`
+- `apps/api/DEPLOYMENT.md` — Added Docker Compose and Render Docker instructions
+- `apps/api/.env.example` — Updated to use `RESEND_API_KEY`, added `PUBLIC_BASE_URL`
 
 ---
 
@@ -87,12 +87,12 @@ E2E Tests:          5 spec files (auth active, others ready to run)
 ## 3. Deployment Checklist
 
 ### Pre-flight (Local)
-- [ ] `cp server/.env.example server/.env` and fill in all required values
+- [ ] `cp apps/api/.env.example apps/api/.env` and fill in all required values
 - [ ] `npm run install:all`
 - [ ] `npm run sync-types`
 - [ ] `npm run build`
 - [ ] `npm run dev` (verify client + server start)
-- [ ] `cd server && npm test` (26 tests should pass)
+- [ ] `cd apps/api && npm test` (26 tests should pass)
 
 ### Docker (Local)
 - [ ] `docker compose up --build`
@@ -167,7 +167,7 @@ E2E Tests:          5 spec files (auth active, others ready to run)
 ## 6. Support
 
 For deployment issues:
-1. Check `server/DEPLOYMENT.md` for platform-specific instructions
+1. Check `apps/api/DEPLOYMENT.md` for platform-specific instructions
 2. Verify environment variables are set in the hosting dashboard
 3. Check server logs for startup errors (especially `Missing required environment variable`)
 4. Ensure MongoDB is accessible from the server IP

@@ -115,7 +115,7 @@ Core capabilities:
 
 ```
 rentos/
-├── server/                  # Express API
+├── apps/api/                  # Express API
 │   ├── src/
 │   │   ├── index.ts         # Application bootstrap
 │   │   ├── config/          # Environment configuration
@@ -130,7 +130,7 @@ rentos/
 │   ├── dist/                # tsc output
 │   ├── uploads/             # Local file storage (dev)
 │   └── package.json
-├── client/                  # React SPA
+├── apps/web/                  # React SPA
 │   ├── src/
 │   │   ├── pages/           # Route components (lazy loaded)
 │   │   ├── components/      # Reusable UI
@@ -140,7 +140,7 @@ rentos/
 │   │   └── types/           # Local + synced shared types
 │   ├── dist/                # Vite build output
 │   └── package.json
-├── mobile/                  # Expo React Native app
+├── apps/mobile/                  # Expo React Native app
 │   ├── app/                 # File-based routes
 │   ├── components/          # Mobile UI
 │   ├── hooks/               # Mobile hooks
@@ -355,7 +355,7 @@ VITE_SENTRY_DSN=...
 
 ## 14. Notable Architectural Patterns
 
-1. **Manual Type Syncing** — `shared/types/index.ts` is copied to `client/src/types/shared.ts`, `server/src/types/shared.ts`, and `mobile/types/shared.ts` via `npm run sync-types`.
+1. **Manual Type Syncing** — `packages/shared/types/index.ts` is copied to `apps/web/src/types/shared.ts`, `apps/api/src/types/shared.ts`, and `apps/mobile/types/shared.ts` via `npm run sync-types`.
 2. **Lazy-Loaded Routes** — Every page in the web client uses `React.lazy()` to minimize initial bundle.
 3. **Subdomain-Aware Auth** — `authStore` auto-switches `activeRole` based on the current portal subdomain.
 4. **Bootstrap Guards** — `BootstrapState` model prevents re-running seeders, insurance bootstraps, and feature-flag bootstraps.

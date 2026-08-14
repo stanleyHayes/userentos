@@ -45,8 +45,8 @@ jobs:
       - name: Install workspace dependencies
         run: |
           npm ci
-          npm ci --prefix server
-          npm ci --prefix client
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
           npm ci --prefix e2e
 
       - name: Sync shared types

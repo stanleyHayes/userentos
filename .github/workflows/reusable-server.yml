@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: server
+        working-directory: apps/api
     env:
       JWT_SECRET: test-jwt-secret-for-ci-only
       NODE_ENV: test
@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: apps/api/package-lock.json
 
       - name: Sync shared types
         run: npm run sync-types
