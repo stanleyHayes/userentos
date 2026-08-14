@@ -78,6 +78,17 @@ services:
       - key: BANK_PSP_WEBHOOK_SECRET
         sync: false
 
+      # ─── Payouts (money out) ───
+      # Which PSP sends payouts. Point the Paystack webhook at
+      # https://<api-host>/api/webhooks/payouts/paystack — signatures are
+      # verified with the secret key, so there is no separate webhook secret.
+      - key: PAYOUT_PROVIDER
+        value: paystack
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_BASE_URL
+        sync: false
+
       # ─── Email / SMS ───
       - key: RESEND_API_KEY
         sync: false

@@ -79,11 +79,15 @@ import { bootstrapEntityApprovals } from './bootstrapEntityApprovals.js'
 import adminViewsRoutes from './routes/adminViews.js'
 import biometricAuthRoutes from './routes/biometricAuth.js'
 import paymentWebhookRoutes from './routes/paymentWebhooks.js'
+import payoutWebhookRoutes from './routes/payoutWebhooks.js'
+import payoutRoutes from './routes/payouts.js'
 import moveOutRoutes from './routes/moveOut.js'
 import legalDocumentRoutes from './routes/legalDocuments.js'
 import webhookRoutes from './routes/webhooks.js'
 import { onSimulatedComplete } from './services/payments/index.js'
 import { finalizePayment } from './services/payments/finalize.js'
+import { onSimulatedPayout } from './services/payouts/index.js'
+import { finalizePayout } from './services/payouts/finalize.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -130,6 +134,7 @@ app.use(
 // Each route inside `paymentWebhookRoutes` mounts its own `express.raw()`
 // so signature verification can hash the exact bytes the provider sent.
 app.use('/api/webhooks/payments', paymentWebhookRoutes)
+app.use('/api/webhooks/payouts', payoutWebhookRoutes)
 
 app.use(express.json({ limit: '100kb' }))
 
@@ -143,6 +148,14 @@ app.use(sanitizeRequest)
 onSimulatedComplete((event) => {
   finalizePayment(event, { source: 'simulator' }).catch((err) => {
     console.error('[Simulator] finalize threw:', (err as Error).message)
+  })
+})
+
+// Same bridge for payouts: the simulated transfer completes in-process and is
+// settled through the identical finalizer the Paystack webhook uses.
+onSimulatedPayout((event) => {
+  finalizePayout(event, { source: 'simulator' }).catch((err) => {
+    console.error('[PayoutSimulator] finalize threw:', (err as Error).message)
   })
 })
 
@@ -266,6 +279,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agreements', agreementRoutes)
 app.use('/api/payments', paymentRoutes)
+app.use('/api/payouts', payoutRoutes)
 app.use('/api/savings', savingsRoutes)
 app.use('/api/disputes', disputeRoutes)
 app.use('/api/legal', legalRoutes)

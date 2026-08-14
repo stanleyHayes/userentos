@@ -99,10 +99,11 @@ export const savingsController = {
     const parsed = amountMethodSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    // No payout rail exists yet (no provider disbursement, Payment record, or
-    // admin queue) — debiting here would permanently burn the user's balance.
-    // Refuse cleanly until a real disbursement path ships.
-    error(res, 'Withdrawals are not yet available', 503)
+    // Withdrawals moved to the payout rail (POST /api/payouts), which debits
+    // the wallet, sends the money through the PSP, and refunds if the transfer
+    // fails. Debiting here would burn the balance with nothing behind it, so
+    // this endpoint points callers at the real one instead.
+    error(res, 'Use POST /api/payouts to withdraw to your mobile money or bank account', 410)
   },
 
   listPlans: async (req: Request, res: Response) => {
