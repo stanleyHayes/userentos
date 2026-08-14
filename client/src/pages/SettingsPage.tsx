@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { User, Shield, Bell, Palette, Settings, ShieldCheck, Check } from 'lucide-react'
+import { User, Shield, Bell, Palette, Settings, ShieldCheck, Check, Wallet } from 'lucide-react'
 import { DoodleStars } from '@/components/ui/Doodles'
 import { IconWatermark } from '@/components/ui/Watermark'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ProfileTab } from './settings/ProfileTab'
 import { SecurityTab } from './settings/SecurityTab'
+import { PayoutTab } from './settings/PayoutTab'
 import { AppearanceTab } from './settings/AppearanceTab'
 import { NotificationsTab } from './settings/NotificationsTab'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
@@ -27,6 +28,7 @@ type MeUser = UserType & { verificationStatus?: VerificationStatus; taxReporting
 const tabs = [
   { id: 'profile', label: 'Profile', icon: <User size={16} /> },
   { id: 'security', label: 'Security', icon: <Shield size={16} /> },
+  { id: 'payouts', label: 'Payouts', icon: <Wallet size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
 ] as const
@@ -84,6 +86,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'security' && <SecurityTab />}
+        {activeTab === 'payouts' && <PayoutTab />}
         {activeTab === 'appearance' && <AppearanceTab />}
         {activeTab === 'notifications' && <NotificationsTab />}
       </div>

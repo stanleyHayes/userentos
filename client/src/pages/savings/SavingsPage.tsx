@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
-import { useWallet, useDeposit, useWithdraw, useSavingsPlans, useCreateSavingsPlan, useContributeToSavings } from '@/hooks/useApi'
+import { WithdrawModal } from './WithdrawModal'
+import { useWallet, useDeposit, useSavingsPlans, useCreateSavingsPlan, useContributeToSavings } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PiggyBank, Plus, ArrowUpRight, ArrowDownRight, FileText } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
@@ -38,6 +39,7 @@ export function SavingsPage() {
   const { data: plansData, isLoading: plansLoading } = useSavingsPlans()
   const plans = plansData?.items ?? []
   const [showDeposit, setShowDeposit] = useState(false)
+  const [showWithdraw, setShowWithdraw] = useState(false)
   const [showNewPlan, setShowNewPlan] = useState(false)
   const [showContribute, setShowContribute] = useState<string | null>(null)
 
@@ -99,14 +101,13 @@ export function SavingsPage() {
                     <ArrowDownRight size={14} /> Deposit
                   </button>
                   <button
-                    disabled
-                    title="Withdrawals are temporarily unavailable"
-                    className="inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium h-8 px-4 border border-white/30 text-white/70 opacity-60 cursor-not-allowed"
+                    onClick={() => setShowWithdraw(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium h-8 px-4 border border-white/30 text-white hover:bg-white/20 backdrop-blur transition-all hover:-translate-y-[1px] cursor-pointer"
                   >
                     <ArrowUpRight size={14} /> Withdraw
                   </button>
                 </div>
-                <p className="text-[11px] text-white/70 mt-2">Withdrawals are temporarily unavailable.</p>
+                <p className="text-[11px] text-white/70 mt-2">Withdrawals go to your saved mobile money or bank account.</p>
               </CardContent>
             </Card>
             <DashboardMetricCard label="Active Plans" value={String(activePlans.length)} icon={<FileText size={18} />} accent="#7c3aed" />
@@ -178,18 +179,19 @@ export function SavingsPage() {
         </>
       )}
 
-      <WalletActionModal open={showDeposit} onClose={() => setShowDeposit(false)} action="deposit" />
+      <WalletActionModal open={showDeposit} onClose={() => setShowDeposit(false)} />
+      <WithdrawModal open={showWithdraw} onClose={() => setShowWithdraw(false)} />
       <CreatePlanModal open={showNewPlan} onClose={() => setShowNewPlan(false)} />
       <ContributeModal planId={showContribute} onClose={() => setShowContribute(null)} />
     </div>
   )
 }
 
-function WalletActionModal({ open, onClose, action }: { open: boolean; onClose: () => void; action: 'deposit' | 'withdraw' }) {
+/** Deposits only — withdrawals go through the payout rail in WithdrawModal. */
+function WalletActionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const deposit = useDeposit()
-  const withdraw = useWithdraw()
   const qc = useQueryClient()
-  const mutation = action === 'deposit' ? deposit : withdraw
+  const mutation = deposit
   const [form, setForm] = useState({ amount: '', method: 'mtn_momo', phone: '' })
   const [instructions, setInstructions] = useState<string | null>(null)
 
@@ -203,20 +205,15 @@ function WalletActionModal({ open, onClose, action }: { open: boolean; onClose: 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     try {
-      if (action === 'deposit') {
-        // Deposit initiates a REAL payment collection — the wallet is credited
-        // only after the provider confirms, so show the payer instructions and
-        // poll for the balance change.
-        const res = await deposit.mutateAsync({ amount: Number(form.amount), method: form.method, phone: form.phone })
-        if (res?.instructions) {
-          setInstructions(res.instructions)
-          setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 3000)
-          setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 7000)
-        } else {
-          handleClose()
-        }
+      // A deposit initiates a REAL payment collection — the wallet is credited
+      // only after the provider confirms, so show the payer instructions and
+      // poll for the balance change.
+      const res = await deposit.mutateAsync({ amount: Number(form.amount), method: form.method, phone: form.phone })
+      if (res?.instructions) {
+        setInstructions(res.instructions)
+        setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 3000)
+        setTimeout(() => qc.invalidateQueries({ queryKey: ['wallet'] }), 7000)
       } else {
-        await withdraw.mutateAsync({ amount: Number(form.amount), method: form.method })
         handleClose()
       }
     } catch {
@@ -237,18 +234,18 @@ function WalletActionModal({ open, onClose, action }: { open: boolean; onClose: 
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title={action === 'deposit' ? 'Deposit to Wallet' : 'Withdraw from Wallet'}>
+    <Modal open={open} onClose={handleClose} title="Deposit to Wallet">
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <Input id="amount" label="Amount (GHS)" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required min="1" />
         <Select id="method" label="Method" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} options={methodOptions} />
-        {action === 'deposit' && form.method !== 'bank_transfer' && (
+        {form.method !== 'bank_transfer' && (
           <Input id="phone" label="Mobile money number" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="0241234567" required />
         )}
         {mutation.isError && <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">{(mutation.error as Error).message}</div>}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending || (action === 'deposit' && form.method !== 'bank_transfer' && form.phone.trim().length < 9)} variant={action === 'deposit' ? 'accent' : 'primary'}>
-            {mutation.isPending ? 'Processing...' : action === 'deposit' ? 'Deposit' : 'Withdraw'}
+          <Button type="submit" disabled={mutation.isPending || (form.method !== 'bank_transfer' && form.phone.trim().length < 9)} variant="accent">
+            {mutation.isPending ? 'Processing...' : 'Deposit'}
           </Button>
         </div>
       </form>

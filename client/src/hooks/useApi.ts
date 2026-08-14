@@ -294,6 +294,122 @@ export function useDeposit() {
   })
 }
 
+// ─── Payouts (money out) ───
+
+export interface PayoutDestination { name: string; code: string; type: 'mobile_money' | 'ghipss' }
+
+export interface PayoutAccount {
+  type: 'mobile_money' | 'ghipss'
+  accountNumber: string
+  bankCode: string
+  bankName: string
+  accountName: string
+  verified: boolean
+}
+
+export interface Payout {
+  id: string
+  userId: string
+  amount: number
+  status: 'requested' | 'processing' | 'paid' | 'failed'
+  reference: string
+  destination: { bankName: string; accountNumber: string; accountName: string }
+  failureReason?: string
+  createdAt?: string
+  paidAt?: string
+  user?: { firstName: string; lastName: string; email: string }
+}
+
+export function usePayoutDestinations() {
+  return useQuery({
+    queryKey: ['payout-destinations'],
+    queryFn: () => api.get<{ items: PayoutDestination[] }>('/payouts/destinations'),
+    // Telco and bank lists barely change; no need to re-fetch per visit.
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+export function usePayoutAccount() {
+  return useQuery({
+    queryKey: ['payout-account'],
+    queryFn: () => api.get<PayoutAccount | null>('/payouts/account'),
+  })
+}
+
+export function useSavePayoutAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { type: string; accountNumber: string; bankCode: string; accountName: string }) =>
+      api.put<PayoutAccount>('/payouts/account', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payout-account'] })
+      qc.invalidateQueries({ queryKey: ['payout-availability'] })
+    },
+  })
+}
+
+export function useRemovePayoutAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete<null>('/payouts/account'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payout-account'] })
+      qc.invalidateQueries({ queryKey: ['payout-availability'] })
+    },
+  })
+}
+
+/** What the user can withdraw right now, and whether anything blocks it. */
+export function usePayoutAvailability() {
+  return useQuery({
+    queryKey: ['payout-availability'],
+    queryFn: () => api.get<{ balance: number; minimum: number; hasVerifiedAccount: boolean; payoutInProgress: boolean }>('/payouts/available'),
+  })
+}
+
+export function useMyPayouts() {
+  return useQuery({
+    queryKey: ['payouts'],
+    queryFn: () => api.get<{ items: Payout[]; total: number }>('/payouts'),
+  })
+}
+
+export function useRequestPayout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { amount: number }) => api.post<Payout>('/payouts', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payouts'] })
+      qc.invalidateQueries({ queryKey: ['payout-availability'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}
+
+export function usePayoutQueue(status = 'requested') {
+  return useQuery({
+    queryKey: ['payout-queue', status],
+    queryFn: () => api.get<{ items: Payout[]; total: number }>(`/payouts/admin/queue?status=${status}`),
+  })
+}
+
+export function useApprovePayout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<Payout>(`/payouts/${id}/approve`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payout-queue'] }),
+  })
+}
+
+export function useDeclinePayout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post<Payout>(`/payouts/${id}/decline`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payout-queue'] }),
+  })
+}
+
 export function useWithdraw() {
   const qc = useQueryClient()
   return useMutation({
