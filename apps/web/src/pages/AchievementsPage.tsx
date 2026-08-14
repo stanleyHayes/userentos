@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { BadgeCard } from '@/components/badges/BadgeCard'
@@ -43,12 +44,12 @@ export function AchievementsPage() {
     <div className="space-y-6">
       <div className="relative flex items-center justify-between flex-wrap gap-3 overflow-hidden">
         <WatermarkConstellation icons={[Trophy, Medal, Star, Award, Flame]} />
-        <div className="relative z-10">
-          <h1 className="text-2xl font-bold text-primary-dark dark:text-white">Achievements</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">
-            Track your streaks, unlock badges, and stay on top of the leaderboard.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Financial"
+        title="Achievements"
+        description="Track your streaks, unlock badges, and stay on top of the leaderboard."
+        icon={<Trophy size={22} />}
+      />
         <Badge variant="success" className="relative z-10 text-xs">
           {earnedCount} of {totalCount} unlocked
         </Badge>

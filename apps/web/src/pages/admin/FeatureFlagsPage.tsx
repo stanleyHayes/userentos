@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -7,7 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAllFeatureFlags, useCreateFeatureFlag, useUpdateFeatureFlag, type FeatureFlagAdmin } from '@/hooks/useApi'
-import { Flag, Plus } from 'lucide-react'
+import { Flag, Plus, FlaskConical } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import toast from 'react-hot-toast'
 import type { UserRole } from '@/types'
@@ -38,12 +39,12 @@ export function FeatureFlagsPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white">
             <Flag size={20} />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-              Feature Flags
-            </h1>
-            <p className="text-xs text-muted dark:text-gray-400">Gate features by user, role, or rollout percentage</p>
-          </div>
+      <PageHeader
+        eyebrow="Platform admin"
+        title="Feature Flags"
+        description="Gate features by user, role, or rollout percentage."
+        icon={<FlaskConical size={22} />}
+      />
         </div>
         <Button onClick={() => setShowCreate(true)}><Plus size={16} /> New Flag</Button>
       </div>

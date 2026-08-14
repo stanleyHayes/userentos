@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -9,8 +10,7 @@ import { api } from '@/lib/api'
 import {
   TrendingUp, Shield, PiggyBank, FileText, Clock, Search,
   AlertTriangle, CheckCircle2, Info, ArrowUpRight, ArrowDownRight,
-  CreditCard, Lightbulb, ChevronRight, Gavel, Gauge,
-} from 'lucide-react'
+  CreditCard, Lightbulb, ChevronRight, Gavel, Gauge,  Star } from 'lucide-react'
 import { FormSkeleton } from '@/components/ui/Skeleton'
 import { IconWatermark } from '@/components/ui/Watermark'
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -78,12 +78,12 @@ export function CreditScorePage() {
         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${scoreInfo.gradient} flex items-center justify-center text-white`}>
           <Shield size={20} />
         </div>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-            Rent Credit Score
-          </h1>
-          <p className="text-xs text-muted dark:text-gray-400">Your rental reliability score based on real activity</p>
-        </div>
+      <PageHeader
+        eyebrow="Financial"
+        title="Rent Credit Score"
+        description="Your rental reliability score based on real activity."
+        icon={<Star size={22} />}
+      />
       </div>
 
       {/* Score Hero Card */}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -38,12 +39,12 @@ export function PackagesPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white">
             <Package size={20} />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">
-              Subscription Packages
-            </h1>
-            <p className="text-xs text-muted dark:text-gray-400">Manage subscription tiers for landlords and property managers</p>
-          </div>
+      <PageHeader
+        eyebrow="Platform admin"
+        title="Subscription Packages"
+        description="Manage subscription tiers for landlords and property managers."
+        icon={<Package size={22} />}
+      />
         </div>
         <Link to="/admin/packages/new">
           <Button className="flex-shrink-0"><Plus size={16} /> New Package</Button>

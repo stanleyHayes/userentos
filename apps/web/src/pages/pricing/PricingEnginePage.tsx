@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -306,14 +307,12 @@ export function PricingEnginePage() {
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary dark:bg-sky-400/10 dark:text-sky-300">
               <Activity size={24} />
             </div>
-            <div className="min-w-0">
-              <h1 className="font-display text-2xl font-extrabold tracking-tight text-primary-dark dark:text-white">
-                Rent Pricing Engine
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">
-                Analyze comparable properties, track rent trends, and check fair pricing.
-              </p>
-            </div>
+      <PageHeader
+        eyebrow="Insights"
+        title="Rent Pricing Engine"
+        description="Analyze comparable properties, track rent trends, and check fair pricing."
+        icon={<TrendingUp size={22} />}
+      />
           </div>
           {modelStatus && (
             <div className="flex flex-wrap items-center gap-2">

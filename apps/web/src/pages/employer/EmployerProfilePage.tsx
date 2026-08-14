@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Building2 } from 'lucide-react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -65,10 +67,12 @@ export function EmployerProfilePage() {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div>
-        <h1 className="text-xl font-extrabold font-display text-primary-dark dark:text-white">Employer Profile</h1>
-        <p className="text-sm text-muted dark:text-gray-500">Company details used for payroll deductions and employee enrollment</p>
-      </div>
+      <PageHeader
+        eyebrow="Workforce"
+        title="Employer Profile"
+        description="Company details used for payroll deductions and employee enrollment."
+        icon={<Building2 size={22} />}
+      />
 
       <Card>
         <CardHeader><CardTitle>Company</CardTitle></CardHeader>
