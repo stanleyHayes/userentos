@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Download, Layers3, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -97,7 +97,7 @@ export function RoleCapabilitiesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Layers3} title="Role Capabilities" description="Advanced workflows, reports, and exports for your active role." />
+      <PageHeader icon={<Layers3 size={22} />} title="Role Capabilities" description="Advanced workflows, reports, and exports for your active role." />
       {(agentPerformance || targeting || tax || fraud || market) && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {agentPerformance && Object.entries(agentPerformance).slice(0, 4).map(([key, value]) => <Card key={key}><CardContent><p className="text-xs text-muted">{key}</p><p className="text-xl font-bold">{value}</p></CardContent></Card>)}

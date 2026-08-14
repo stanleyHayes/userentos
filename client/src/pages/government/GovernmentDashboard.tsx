@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { usePlatformAnalytics } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
@@ -57,15 +57,15 @@ export function GovernmentDashboard() {
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        icon={Shield}
+        eyebrow="Government"
+        icon={<Shield size={22} />}
         title="Government Dashboard"
-        description="National rental market overview · Platform analytics"
-        actions={
-          <Link to="/government">
-            <Button size="sm"><Shield size={14} /> <span className="hidden sm:inline">Control Panel</span><span className="sm:hidden">Panel</span></Button>
-          </Link>
-        }
-      />
+        description="National rental market overview · Platform analytics."
+      >
+        <Link to="/government">
+          <Button size="sm"><Shield size={14} /> <span className="hidden sm:inline">Control Panel</span><span className="sm:hidden">Panel</span></Button>
+        </Link>
+      </PageHeader>
 
       {/* KPI Cards */}
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">

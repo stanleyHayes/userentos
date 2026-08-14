@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Building2, Link2, Trash2, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -77,7 +77,7 @@ export function AgencyPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Building2} title="Agency & Delegation" description="Publish your agency identity and manage scoped owner relationships." />
+      <PageHeader icon={<Building2 size={22} />} title="Agency & Delegation" description="Publish your agency identity and manage scoped owner relationships." />
       <Card>
         <CardHeader><CardTitle>Branded agency profile</CardTitle></CardHeader>
         <CardContent className="space-y-4">

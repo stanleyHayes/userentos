@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import { useHousingDemand } from '@/hooks/useHousing'
@@ -28,9 +28,10 @@ export function HousingDemandPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Home}
+        eyebrow="Government"
+        icon={<Home size={22} />}
         title="Housing Demand"
-        description="Rental prices and vacancy across regions"
+        description="Rental prices and vacancy across regions."
       />
 
       {/* Summary stat cards */}
