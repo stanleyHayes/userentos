@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -6,6 +7,7 @@ import { GridSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency } from '@/lib/utils'
 import { Building2, MapPin, Phone, Mail, BedDouble, Bath, Store } from 'lucide-react'
 import { useStorefront, useStorefrontProperties } from '@/hooks/useApi'
+import { applySeo } from '@/lib/seo'
 
 /**
  * A seller's public storefront (spec §4).
@@ -15,10 +17,38 @@ import { useStorefront, useStorefrontProperties } from '@/hooks/useApi'
  * it wanted to. Reachable at /s/:slug and, once wildcard DNS is in place, at
  * {slug}.userentos.com.
  */
-export function PublicStorefrontPage() {
-  const { slug } = useParams<{ slug: string }>()
+export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string } = {}) {
+  // On {slug}.userentos.com or a custom domain the slug comes from the host,
+  // not the path — there is no /s/:slug segment to read.
+  const { slug: slugFromPath } = useParams<{ slug: string }>()
+  const slug = slugOverride ?? slugFromPath
   const { data: storefront, isLoading, isError } = useStorefront(slug)
   const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
+
+  // Per-host SEO (spec §4.1). index.html carries the platform's own tags, so
+  // without this a storefront was served "RentOS Ghana — National Digital
+  // Rental Housing Platform" as its title on the seller's own domain, and
+  // every address the storefront answers on looked like a distinct page.
+  const canonicalUrl = storefront?.canonicalUrl
+  useEffect(() => {
+    if (!storefront) return
+    // The storefront answers on /s/{slug}, its subdomain and any custom
+    // domain. Only the canonical one should be indexed; the others point at
+    // it, and a *storefront host* that is not the canonical one is dropped
+    // outright — the server 301s a fresh crawl, but an in-app navigation
+    // never reaches the server.
+    const onCanonicalHost = !canonicalUrl
+      || (typeof window !== 'undefined' && canonicalUrl.startsWith(window.location.origin))
+
+    applySeo({
+      title: storefront.tagline ? `${storefront.name} — ${storefront.tagline}` : storefront.name,
+      description: storefront.about ?? storefront.tagline ?? `Verified rental listings from ${storefront.name}.`,
+      canonical: canonicalUrl,
+      image: storefront.branding?.coverUrl ?? storefront.branding?.logoUrl,
+      siteName: storefront.name,
+      noIndex: Boolean(slugOverride) && !onCanonicalHost,
+    })
+  }, [storefront, canonicalUrl, slugOverride])
 
   if (isLoading) {
     return <div className="mx-auto max-w-6xl px-4 py-10"><GridSkeleton cols={3} count={6} /></div>

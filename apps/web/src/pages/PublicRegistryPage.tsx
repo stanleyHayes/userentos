@@ -13,6 +13,7 @@ import { IconWatermark } from '@/components/ui/Watermark'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/utils'
+import { setMeta, setOgMeta } from '@/lib/seo'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
 interface RegistryListing {
@@ -66,26 +67,6 @@ const PRICE_RANGES = [
 ]
 
 const PAGE_SIZE = 12
-
-function setMeta(name: string, content: string) {
-  let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
-  if (!el) {
-    el = document.createElement('meta')
-    el.setAttribute('name', name)
-    document.head.appendChild(el)
-  }
-  el.setAttribute('content', content)
-}
-
-function setOgMeta(property: string, content: string) {
-  let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null
-  if (!el) {
-    el = document.createElement('meta')
-    el.setAttribute('property', property)
-    document.head.appendChild(el)
-  }
-  el.setAttribute('content', content)
-}
 
 function PropertyTypeIcon({ type }: { type: string }) {
   if (type === 'commercial' || type === 'warehouse') return <Warehouse size={14} />

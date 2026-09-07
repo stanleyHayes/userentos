@@ -1,4 +1,5 @@
 import { useState, useCallback, lazy, Suspense } from 'react'
+import { useStorefrontHost } from '@/hooks/useStorefrontHost'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
@@ -130,6 +131,25 @@ const queryClient = new QueryClient({
 // as the lazy chunk resolves, so the timer never fires user-visibly.
 const noop = () => {}
 
+/**
+ * What "/" renders, which depends on the hostname (spec §4.1).
+ *
+ * This has to be its own component: useStorefrontHost() calls useQuery, so it
+ * must run *inside* the QueryClientProvider below. Calling it in App() itself
+ * threw "No QueryClient set" on every page load — the build was clean and the
+ * error only appeared in a browser.
+ */
+function HomeRoute({ isPortal }: { isPortal: boolean }) {
+  const { slug: storefrontSlug, isResolving } = useStorefrontHost()
+
+  // A custom domain needs a server round-trip to name its storefront. Showing
+  // the marketing page in the meantime would flash the wrong brand at a
+  // seller's own visitors, so hold the splash until the answer arrives.
+  if (isResolving) return <SplashScreen onFinished={noop} />
+  if (storefrontSlug) return <PublicStorefrontPage slugOverride={storefrontSlug} />
+  return isPortal ? <Navigate to="/dashboard" replace /> : <LandingPage />
+}
+
 export default function App() {
   const { resolvedTheme } = useThemeStore()
   const muiTheme = resolvedTheme() === 'dark' ? darkTheme : lightTheme
@@ -154,8 +174,11 @@ export default function App() {
         <ScrollToTop />
         <Suspense fallback={<SplashScreen onFinished={noop} />}>
         <Routes>
-          {/* Public pages — on portal subdomains, "/" redirects to dashboard */}
-          <Route path="/" element={isPortal ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+          {/* Public pages. Order matters: a storefront host owns "/" before the
+              portal redirect or the marketing page get a chance, otherwise
+              {slug}.userentos.com renders the landing page — which is what it
+              did while the settings screen advertised that URL as live. */}
+          <Route path="/" element={<HomeRoute isPortal={isPortal} />} />
           <Route element={<PublicLayout />}>
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />

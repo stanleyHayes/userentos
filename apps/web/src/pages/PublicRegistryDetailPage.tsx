@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { setMeta, setOgMeta } from '@/lib/seo'
 
 interface RegistryListing {
   id: string
@@ -37,26 +38,6 @@ const TYPE_LABELS: Record<string, string> = {
   hostel: 'Hostel',
   commercial: 'Commercial',
   warehouse: 'Warehouse',
-}
-
-function setMeta(name: string, content: string) {
-  let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
-  if (!el) {
-    el = document.createElement('meta')
-    el.setAttribute('name', name)
-    document.head.appendChild(el)
-  }
-  el.setAttribute('content', content)
-}
-
-function setOgMeta(property: string, content: string) {
-  let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null
-  if (!el) {
-    el = document.createElement('meta')
-    el.setAttribute('property', property)
-    document.head.appendChild(el)
-  }
-  el.setAttribute('content', content)
 }
 
 function PropertyTypeIcon({ type, size = 14 }: { type: string; size?: number }) {
