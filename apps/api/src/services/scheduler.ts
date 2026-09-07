@@ -27,6 +27,7 @@ import { CreditScore } from '../models/CreditScore.js'
 import { Review } from '../models/Review.js'
 import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
+import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
 // Ghana timezone (UTC+0, no DST). cron defaults to server time, but we set tz explicitly
@@ -614,6 +615,19 @@ export function startScheduler() {
   }, { timezone: GHANA_TZ })
 
   // ─── Data retention: purge audit logs older than 2 years ───
+  // Sponsorship expiry — a campaign whose window closed must stop serving, but
+  // its spend and billing history stay (spec §9). Serving already filters on
+  // endAt, so this is bookkeeping rather than the enforcement itself.
+  cron.schedule('30 2 * * *', async () => {
+    if (!(await acquireCronLock('sponsorship-expiry', LOCK_TTL_DAILY))) return
+    try {
+      const expired = await expireFinishedCampaigns()
+      if (expired > 0) logger.info(`[Cron] Expired ${expired} finished sponsorship campaign(s).`)
+    } catch (err) {
+      logger.error(`[Cron] Sponsorship expiry failed: ${(err as Error).message}`)
+    }
+  }, { timezone: GHANA_TZ })
+
   cron.schedule('0 3 * * *', async () => {
     if (!(await acquireCronLock('audit-purge', LOCK_TTL_DAILY))) return
     try {

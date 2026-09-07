@@ -18,7 +18,7 @@ import {
   Plus, Search, MapPin, SlidersHorizontal,
   Bed, Bath, Car, Sofa, ArrowUpDown, Eye, Building2,
   Grid3X3, List, Send, Accessibility,
-  Upload,
+  Upload, Megaphone,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
@@ -413,6 +413,9 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
               <Building2 size={40} className="text-primary/20" />
             )}
             <div className="absolute top-3 left-3 flex gap-1.5">
+              {(p as { sponsored?: boolean }).sponsored && (
+                <Badge variant="warning" className="backdrop-blur"><Megaphone size={10} /> Sponsored</Badge>
+              )}
               <Badge variant={statusVariant[p.status as PropertyStatus]} className="backdrop-blur">{p.status?.replace('_', ' ')}</Badge>
               {p.listingStatus && p.listingStatus !== 'approved' && (
                 <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'} className="backdrop-blur">{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>

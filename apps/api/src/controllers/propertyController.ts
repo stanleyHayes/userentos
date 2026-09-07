@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getSponsoredPlacements, applySponsoredPlacements, recordImpressions } from '../services/marketplace/sponsorshipServing.js'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { propertyService } from '../container.js'
@@ -189,7 +190,29 @@ export const propertyController = {
       }
     }
 
-    success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+    // Sponsored listings ride on top of the organic results (spec §9). Only
+    // applied to the public browse — a landlord looking at their own portfolio
+    // has no use for advertising, and an admin view must show true ordering.
+    let served: typeof items = items
+    if (!ownOnly && !isAdmin) {
+      const placements = await getSponsoredPlacements('search_top', {
+        city: typeof q.city === 'string' ? q.city : undefined,
+      })
+      if (placements.length > 0) {
+        const withIds = items.map((p) => ({
+          ...p,
+          id: (p as { id?: string; _id?: Types.ObjectId }).id ?? String((p as { _id?: Types.ObjectId })._id),
+        }))
+        served = applySponsoredPlacements(withIds, placements) as typeof items
+        recordImpressions(
+          (served as unknown as { sponsorshipId?: string }[])
+            .map((p) => p.sponsorshipId)
+            .filter((id): id is string => Boolean(id)),
+        )
+      }
+    }
+
+    success(res, { items: served, total: served.length, page: 1, pageSize: 50, totalPages: 1 })
   },
 
   getById: async (req: Request, res: Response) => {
