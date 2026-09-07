@@ -72,6 +72,7 @@ const AdminPayoutsPage = lazy(() => import('@/pages/admin/PayoutsPage').then((m)
 const PlanEntitlementsPage = lazy(() => import('@/pages/admin/PlanEntitlementsPage').then((m) => ({ default: m.PlanEntitlementsPage })))
 const StorefrontSettingsPage = lazy(() => import('@/pages/storefront/StorefrontSettingsPage').then((m) => ({ default: m.StorefrontSettingsPage })))
 const SellerPaymentsPage = lazy(() => import('@/pages/storefront/SellerPaymentsPage').then((m) => ({ default: m.SellerPaymentsPage })))
+const PublicStorefrontPage = lazy(() => import('@/pages/storefront/PublicStorefrontPage').then((m) => ({ default: m.PublicStorefrontPage })))
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })))
 const FinancierOffersPage = lazy(() => import('@/pages/financier/OffersPage').then((m) => ({ default: m.FinancierOffersPage })))
 const OfferEditorPage = lazy(() => import('@/pages/financier/OfferEditorPage').then((m) => ({ default: m.OfferEditorPage })))
@@ -176,6 +177,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/s/:slug" element={<PublicStorefrontPage />} />
           </Route>
 
           {/* Protected dashboard routes */}

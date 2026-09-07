@@ -275,6 +275,29 @@ router.delete('/me/domains/:id', authenticate, asyncHandler(async (req, res) => 
 
 // ─── Public storefront (tenant-scoped reads) ───
 
+/**
+ * Which storefront does this request's host belong to?
+ *
+ * Returns null for the platform's own hostnames, so the web app can call this
+ * unconditionally on boot and render either the storefront or the normal app.
+ */
+router.get('/resolve/host', asyncHandler(async (req, res) => {
+  const slug = req.storefrontSlug
+  if (!slug) { success(res, null); return }
+
+  const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
+  if (!storefront) { success(res, null); return }
+
+  success(res, {
+    slug: storefront.slug,
+    name: storefront.name,
+    canonicalUrl: storefront.canonicalDomain
+      ? `https://${storefront.canonicalDomain}`
+      : `https://${storefront.slug}.userentos.com`,
+  })
+}))
+
+
 router.get('/:slug', optionalAuth, asyncHandler(async (req, res) => {
   const slug = param(req.params.slug).toLowerCase()
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()

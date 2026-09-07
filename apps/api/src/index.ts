@@ -31,6 +31,7 @@ import propertyRoutes from './routes/properties.js'
 import propertyModerationRoutes from './routes/propertyModeration.js'
 import entitlementRoutes from './routes/entitlements.js'
 import storefrontRoutes from './routes/storefronts.js'
+import { storefrontHost } from './middleware/storefrontHost.js'
 import marketplacePaymentRoutes from './routes/marketplacePayments.js'
 import marketplaceCommerceRoutes from './routes/marketplaceCommerce.js'
 import reviewerOrgRoutes from './routes/reviewerOrganizations.js'
@@ -286,7 +287,7 @@ app.use(
 app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/entitlements', entitlementRoutes)
-app.use('/api/storefronts', storefrontRoutes)
+app.use('/api/storefronts', storefrontHost, storefrontRoutes)
 app.use('/api/marketplace/payments', marketplacePaymentRoutes)
 app.use('/api/marketplace', marketplaceCommerceRoutes)
 app.use('/api/reviewer-organizations', reviewerOrgRoutes)

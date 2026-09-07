@@ -32,7 +32,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
   })
 
   it('recovers a payment whose webhook processing had failed', async () => {
-    const event = { eventId: 'evt-1', reference: 'MKT-1', attempts: 1, save: vi.fn() }
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-1', reference: 'MKT-1', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 1000, fees: 15, reference: 'MKT-1', currency: 'GHS', raw: {} })
     vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
@@ -46,7 +46,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
   })
 
   it('claims the event id so a retry cannot apply the same payment twice', async () => {
-    const event = { eventId: 'evt-dup', reference: 'MKT-2', attempts: 1, save: vi.fn() }
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-dup', reference: 'MKT-2', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 500, reference: 'MKT-2', currency: 'GHS', raw: {} })
     vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't2', status: 'pending', grossAmount: 500, discountAmount: 0 } as never)
@@ -60,7 +60,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
   })
 
   it('does not mark paid when the provider still says the payment failed', async () => {
-    const event = { eventId: 'evt-3', reference: 'MKT-3', attempts: 1, save: vi.fn() }
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-3', reference: 'MKT-3', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'failed', amount: 0, reference: 'MKT-3', currency: 'GHS', raw: {} })
 
@@ -71,7 +71,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
   })
 
   it('records the error and gives up after the attempt ceiling', async () => {
-    const event = { eventId: 'evt-4', reference: 'MKT-4', attempts: MAX_WEBHOOK_ATTEMPTS - 1, save: vi.fn() }
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-4', reference: 'MKT-4', attempts: MAX_WEBHOOK_ATTEMPTS - 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockRejectedValue(new Error('provider timeout'))
 
@@ -84,7 +84,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
   })
 
   it('refuses to reconcile when the provider amount disagrees', async () => {
-    const event = { eventId: 'evt-5', reference: 'MKT-5', attempts: 1, save: vi.fn() }
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-5', reference: 'MKT-5', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 10, reference: 'MKT-5', currency: 'GHS', raw: {} })
     vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't5', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
