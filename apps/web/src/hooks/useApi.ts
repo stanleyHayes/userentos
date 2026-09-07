@@ -296,6 +296,165 @@ export function useDeposit() {
 
 
 
+
+// ─── Storefronts (spec §4) ───
+
+export interface StorefrontDomainRow {
+  id: string
+  domain: string
+  status: 'pending' | 'verified' | 'active' | 'failed' | 'removed'
+  tlsStatus: string
+  verificationToken: string
+  failureReason?: string
+}
+
+export interface StorefrontRecord {
+  id: string
+  slug: string
+  name: string
+  tagline?: string
+  about?: string
+  status: string
+  canonicalDomain?: string
+  branding: {
+    logoUrl?: string; coverUrl?: string; primaryColor?: string
+    accentColor?: string; theme?: string; hideRentosBranding?: boolean
+  }
+  contact: { phone?: string; email?: string; whatsapp?: string; city?: string }
+  domains?: StorefrontDomainRow[]
+}
+
+export function useMyStorefront() {
+  return useQuery({
+    queryKey: ['storefront-me'],
+    queryFn: () => api.get<StorefrontRecord | null>('/storefronts/me'),
+  })
+}
+
+export function useCreateStorefront() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { slug: string; name: string; tagline?: string }) =>
+      api.post<StorefrontRecord>('/storefronts', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export function useUpdateStorefront() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<Pick<StorefrontRecord, 'name' | 'tagline' | 'about' | 'branding' | 'contact'>>) =>
+      api.patch<StorefrontRecord>('/storefronts/me', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export function useAddStorefrontDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (domain: string) =>
+      api.post<StorefrontDomainRow & { instructions: { txt: { host: string; type: string; value: string }; cname: { host: string; type: string; value: string } } }>('/storefronts/me/domains', { domain }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export function useVerifyStorefrontDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<StorefrontDomainRow>(`/storefronts/me/domains/${id}/verify`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export function useMakeDomainCanonical() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ canonicalDomain: string }>(`/storefronts/me/domains/${id}/canonical`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export function useRemoveStorefrontDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete<null>(`/storefronts/me/domains/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+/** Public storefront, by slug. */
+export function useStorefront(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['storefront', slug],
+    queryFn: () => api.get<StorefrontRecord & { canonicalUrl: string }>(`/storefronts/${slug}`),
+    enabled: Boolean(slug),
+  })
+}
+
+export function useStorefrontProperties(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['storefront-properties', slug],
+    queryFn: () => api.get<{ items: Property[]; total: number }>(`/storefronts/${slug}/properties`),
+    enabled: Boolean(slug),
+  })
+}
+
+// ─── Marketplace payments (spec §8) ───
+
+export interface SellerPaymentAccount {
+  id: string
+  businessName: string
+  bankName: string
+  accountNumberMasked: string
+  accountNameResolved?: string
+  status: string
+  readyToReceivePayments: boolean
+  failureReason?: string
+}
+
+export function useSellerPaymentAccount() {
+  return useQuery({
+    queryKey: ['marketplace-account'],
+    queryFn: () => api.get<SellerPaymentAccount | null>('/marketplace/payments/account'),
+  })
+}
+
+export function useMarketplaceBanks() {
+  return useQuery({
+    queryKey: ['marketplace-banks'],
+    queryFn: () => api.get<{ items: { name: string; code: string }[] }>('/marketplace/payments/banks'),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  })
+}
+
+export function useOnboardSellerPayments() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { businessName: string; bankCode: string; bankName: string; accountNumber: string }) =>
+      api.post<SellerPaymentAccount>('/marketplace/payments/account', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['marketplace-account'] }),
+  })
+}
+
+export interface MarketplaceTxn {
+  id: string
+  reference: string
+  grossAmount: number
+  platformFeePercent: number
+  platformFeeAmount: number
+  sellerExpectedAmount: number
+  status: string
+  createdAt: string
+}
+
+export function useMarketplaceTransactions() {
+  return useQuery({
+    queryKey: ['marketplace-transactions'],
+    queryFn: () => api.get<{ items: MarketplaceTxn[]; total: number }>('/marketplace/payments/transactions'),
+  })
+}
+
 // ─── Plan entitlements (spec §7) ───
 
 export interface FeatureDefinition {
