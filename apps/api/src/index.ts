@@ -31,6 +31,8 @@ import propertyRoutes from './routes/properties.js'
 import propertyModerationRoutes from './routes/propertyModeration.js'
 import entitlementRoutes from './routes/entitlements.js'
 import storefrontRoutes from './routes/storefronts.js'
+import marketplacePaymentRoutes from './routes/marketplacePayments.js'
+import marketplaceWebhookRoutes from './routes/marketplaceWebhooks.js'
 import agreementRoutes from './routes/agreements.js'
 import paymentRoutes from './routes/payments.js'
 import savingsRoutes from './routes/savings.js'
@@ -137,6 +139,7 @@ app.use(
 // Each route inside `paymentWebhookRoutes` mounts its own `express.raw()`
 // so signature verification can hash the exact bytes the provider sent.
 app.use('/api/webhooks/payments', paymentWebhookRoutes)
+app.use('/api/webhooks/marketplace', marketplaceWebhookRoutes)
 app.use('/api/webhooks/payouts', payoutWebhookRoutes)
 
 app.use(express.json({ limit: '100kb' }))
@@ -281,6 +284,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/entitlements', entitlementRoutes)
 app.use('/api/storefronts', storefrontRoutes)
+app.use('/api/marketplace/payments', marketplacePaymentRoutes)
 app.use('/api/properties', propertyModerationRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agreements', agreementRoutes)
