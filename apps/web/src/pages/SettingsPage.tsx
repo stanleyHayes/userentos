@@ -52,7 +52,7 @@ export function SettingsPage() {
       </div>
 
       {/* Tab navigation */}
-      <div ref={pillAttach} className="relative isolate flex gap-1.5 p-1 rounded-full bg-surface dark:bg-[#0c0e1a] border border-border/40 dark:border-[#252a3a]/40 w-fit">
+      <div ref={pillAttach} className="surface-track relative isolate flex w-fit gap-1.5 rounded-full border border-border/40 p-1 dark:border-[#252a3a]/40">
         <span
           aria-hidden
           className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-[#161927]"

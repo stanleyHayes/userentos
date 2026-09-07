@@ -269,34 +269,87 @@ html[data-skin="clay"],
   --radius-3xl: 2rem;
 }
 
-/* Tailwind's elevation scale, restated in clay.
-   85 shadow-sm/md/lg/xl call sites across 54 files draw from these variables,
-   so overriding the scale reaches all of them without touching one of them —
-   the same move as the radius scale above. Drop shadows only: an inset on a
-   dropdown panel or a modal reads as a dent, not as clay. The dedicated
-   surface classes keep the inner highlight.
-   Deliberately NOT redefined for neumorphism, so the default skin renders
-   byte-identically to before this feature existed. */
-html[data-skin="clay"],
-[data-skin-preview="clay"] {
-  --shadow-2xs: 0 2px 4px rgba(148, 163, 184, 0.22);
-  --shadow-xs: 0 3px 7px rgba(148, 163, 184, 0.26);
-  --shadow-sm: 0 4px 10px rgba(148, 163, 184, 0.3), 0 1px 3px rgba(148, 163, 184, 0.2);
-  --shadow-md: 0 8px 18px rgba(148, 163, 184, 0.34), 0 3px 7px rgba(148, 163, 184, 0.22);
-  --shadow-lg: 0 14px 30px rgba(148, 163, 184, 0.38), 0 5px 12px rgba(148, 163, 184, 0.24);
-  --shadow-xl: 0 22px 46px rgba(148, 163, 184, 0.42), 0 8px 18px rgba(148, 163, 184, 0.26);
-  --shadow-2xl: 0 32px 64px rgba(148, 163, 184, 0.48);
+/*
+ * Tailwind's elevation utilities, restated in clay.
+ *
+ * The first version of this overrode the --shadow-* theme variables. That does
+ * NOT work: Tailwind v4 inlines the literal shadow into --tw-shadow at build
+ * time rather than emitting var(--shadow-lg), so the variables changed and
+ * nothing rendered differently. Verified in a browser — --shadow-lg differed
+ * between skins while --tw-shadow was byte-identical. The radius scale is not
+ * affected; rounded-* really does read var(--radius-*).
+ *
+ * So the utilities are restated directly. These rules are unlayered, and
+ * unlayered styles beat anything in @layer utilities, so they win; the :hover
+ * rules carry one more class of specificity so hover still beats rest.
+ * Only the sizes actually used in the app are listed.
+ */
+html[data-skin="clay"] .shadow-sm { box-shadow: 0 4px 10px rgba(148, 163, 184, 0.3), 0 1px 3px rgba(148, 163, 184, 0.2); }
+html[data-skin="clay"] .shadow-md { box-shadow: 0 8px 18px rgba(148, 163, 184, 0.34), 0 3px 7px rgba(148, 163, 184, 0.22); }
+html[data-skin="clay"] .shadow-lg { box-shadow: 0 14px 30px rgba(148, 163, 184, 0.38), 0 5px 12px rgba(148, 163, 184, 0.24); }
+html[data-skin="clay"] .shadow-xl { box-shadow: 0 22px 46px rgba(148, 163, 184, 0.42), 0 8px 18px rgba(148, 163, 184, 0.26); }
+html[data-skin="clay"] .shadow-2xl { box-shadow: 0 32px 64px rgba(148, 163, 184, 0.48); }
+
+html[data-skin="clay"] .hover\:shadow-md:hover { box-shadow: 0 12px 24px rgba(148, 163, 184, 0.38), 0 4px 9px rgba(148, 163, 184, 0.26); }
+html[data-skin="clay"] .hover\:shadow-lg:hover { box-shadow: 0 18px 38px rgba(148, 163, 184, 0.44), 0 6px 15px rgba(148, 163, 184, 0.28); }
+html[data-skin="clay"] .hover\:shadow-xl:hover { box-shadow: 0 26px 54px rgba(148, 163, 184, 0.48), 0 10px 22px rgba(148, 163, 184, 0.3); }
+
+html[data-skin="clay"].dark .shadow-sm { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4); }
+html[data-skin="clay"].dark .shadow-md { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.58), 0 3px 7px rgba(0, 0, 0, 0.42); }
+html[data-skin="clay"].dark .shadow-lg { box-shadow: 0 14px 30px rgba(0, 0, 0, 0.62), 0 5px 12px rgba(0, 0, 0, 0.45); }
+html[data-skin="clay"].dark .shadow-xl { box-shadow: 0 22px 46px rgba(0, 0, 0, 0.66), 0 8px 18px rgba(0, 0, 0, 0.48); }
+html[data-skin="clay"].dark .shadow-2xl { box-shadow: 0 32px 64px rgba(0, 0, 0, 0.72); }
+
+html[data-skin="clay"].dark .hover\:shadow-md:hover { box-shadow: 0 12px 24px rgba(0, 0, 0, 0.62), 0 4px 9px rgba(0, 0, 0, 0.46); }
+html[data-skin="clay"].dark .hover\:shadow-lg:hover { box-shadow: 0 18px 38px rgba(0, 0, 0, 0.66), 0 6px 15px rgba(0, 0, 0, 0.5); }
+html[data-skin="clay"].dark .hover\:shadow-xl:hover { box-shadow: 0 26px 54px rgba(0, 0, 0, 0.7), 0 10px 22px rgba(0, 0, 0, 0.52); }
+
+/*
+ * Segmented controls, nav pills and status badges.
+ *
+ * These were the surfaces the skin never reached: a tab strip, the active
+ * sidebar item and a status badge stayed flat in BOTH skins while the cards
+ * around them changed. They are surfaces — a track is recessed and the thing
+ * riding in it is raised — so they get a treatment in neumorphism too, not
+ * just in clay.
+ *
+ * In @layer components so a page can still override with a utility.
+ */
+@layer components {
+  /* The groove a segmented control's options sit in. */
+  .surface-track {
+    background: var(--rentos-card-muted);
+    box-shadow: var(--rentos-shadow-inset);
+  }
+
+  /* The selected option riding in that groove, and the active nav item. */
+  .surface-pill {
+    background: var(--rentos-card);
+    box-shadow: var(--rentos-shadow-icon);
+  }
+
+  /* Status pills. Kept deliberately light: a badge that competes with a card
+     has stopped being a badge. */
+  .surface-badge {
+    box-shadow: var(--rentos-shadow-icon);
+  }
 }
 
-html[data-skin="clay"].dark,
-.dark [data-skin-preview="clay"] {
-  --shadow-2xs: 0 2px 4px rgba(0, 0, 0, 0.5);
-  --shadow-xs: 0 3px 7px rgba(0, 0, 0, 0.52);
-  --shadow-sm: 0 4px 10px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.58), 0 3px 7px rgba(0, 0, 0, 0.42);
-  --shadow-lg: 0 14px 30px rgba(0, 0, 0, 0.62), 0 5px 12px rgba(0, 0, 0, 0.45);
-  --shadow-xl: 0 22px 46px rgba(0, 0, 0, 0.66), 0 8px 18px rgba(0, 0, 0, 0.48);
-  --shadow-2xl: 0 32px 64px rgba(0, 0, 0, 0.72);
+html[data-skin="clay"] .surface-badge,
+[data-skin-preview="clay"] .surface-badge {
+  /* The full clay icon shadow is far too heavy at badge size. */
+  box-shadow:
+    3px 3px 8px rgba(148, 163, 184, 0.32),
+    -2px -2px 6px rgba(255, 255, 255, 0.9),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.7);
+}
+
+html[data-skin="clay"].dark .surface-badge,
+.dark [data-skin-preview="clay"] .surface-badge {
+  box-shadow:
+    3px 3px 8px rgba(0, 0, 0, 0.5),
+    -2px -2px 6px rgba(56, 74, 99, 0.28),
+    inset 1px 1px 2px rgba(86, 110, 143, 0.18);
 }
 
 /* Clay is a heavier finish; the card backdrop blur turns it muddy, and the
@@ -330,9 +383,28 @@ html[data-skin="clay"] .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline,
   border-color: transparent;
 }
 
+html[data-skin="clay"] .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline,
+[data-skin-preview="clay"] .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: color-mix(in oklab, var(--color-primary) 35%, transparent);
+}
+
 html[data-skin="clay"] .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline,
 [data-skin-preview="clay"] .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
   border-color: color-mix(in oklab, var(--color-primary) 60%, transparent);
+  border-width: 2px;
+}
+
+/* Focus keeps the pressed look AND regains the halo. The first version set the
+   inset unconditionally, which overwrote the focus ring entirely — a field
+   whose focus you cannot see is a worse field than an unskinned one. */
+html[data-skin="clay"] .MuiOutlinedInput-root.Mui-focused,
+[data-skin-preview="clay"] .MuiOutlinedInput-root.Mui-focused {
+  box-shadow: var(--rentos-shadow-inset), var(--rentos-ring);
+}
+
+html[data-skin="clay"] .MuiOutlinedInput-root.Mui-error .MuiOutlinedInput-notchedOutline,
+[data-skin-preview="clay"] .MuiOutlinedInput-root.Mui-error .MuiOutlinedInput-notchedOutline {
+  border-color: var(--color-danger);
 }
 
 /* Native controls that never went through MUI. */
@@ -377,15 +449,24 @@ html[data-skin="clay"] .MuiChip-root {
 
 /* Switching skins should read as the surfaces changing, not the page redrawing.
    Someone who set "reduce motion" still gets the skin — only the tween goes. */
-@media (prefers-reduced-motion: no-preference) {
-  .surface-card,
-  .neumorphic-icon,
-  .neumorphic-inset,
-  .neumorphic-button,
-  .MuiOutlinedInput-root,
-  .MuiButton-root,
-  .MuiChip-root {
-    transition: box-shadow 260ms ease, border-radius 260ms ease, background-color 260ms ease;
+@layer components {
+  /* Switching skins should read as the surfaces changing, not the page
+     redrawing. This MUST stay inside @layer components: unlayered it beat
+     Tailwind's own transition-* utilities and silently replaced the Button
+     component's `transition-all duration-200` with a box-shadow-only
+     transition — a motion regression in the DEFAULT skin, which is exactly
+     what this feature is not allowed to do.
+     Someone who set "reduce motion" still gets the skin; only the tween goes. */
+  @media (prefers-reduced-motion: no-preference) {
+    .surface-card,
+    .neumorphic-icon,
+    .neumorphic-inset,
+    .neumorphic-button,
+    .MuiOutlinedInput-root,
+    .MuiButton-root,
+    .MuiChip-root {
+      transition: box-shadow 260ms ease, border-radius 260ms ease, background-color 260ms ease;
+    }
   }
 }
 

@@ -74,7 +74,7 @@ export function GovernmentPanel() {
       </PageHeader>
 
       {/* Tab navigation */}
-      <div ref={pillAttach} className="relative isolate flex gap-1 overflow-x-auto rounded-full border border-border/70 bg-surface/60 p-1 scrollbar-hide dark:border-white/10 dark:bg-white/[0.04]">
+      <div ref={pillAttach} className="surface-track relative isolate flex gap-1 overflow-x-auto rounded-full border border-border/70 p-1 scrollbar-hide dark:border-white/10">
         <span
           aria-hidden
           className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary shadow-md transition-[transform,width,height] duration-300 ease-out"

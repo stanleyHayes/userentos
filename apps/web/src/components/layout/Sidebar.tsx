@@ -409,7 +409,7 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
                 <NavLink to={item.path} end onClick={onItemClick}
                   className={({ isActive }) => cn(
                     'focus-ring group/thread relative flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors',
-                    isActive ? 'bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-400' : 'text-gray-500 hover:bg-white hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/[0.05] dark:hover:text-white'
+                    isActive ? 'surface-pill bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-400' : 'text-gray-500 hover:bg-white hover:text-primary-dark dark:text-gray-400 dark:hover:bg-white/[0.05] dark:hover:text-white'
                   )}
                 >
                   {({ isActive }) => (
