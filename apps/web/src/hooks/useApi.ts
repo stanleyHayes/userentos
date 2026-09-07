@@ -295,6 +295,63 @@ export function useDeposit() {
 }
 
 
+
+// ─── Plan entitlements (spec §7) ───
+
+export interface FeatureDefinition {
+  key: string
+  type: 'boolean' | 'number' | 'string'
+  default: boolean | number | string
+  label: string
+  hint?: string
+}
+
+export interface PlanEntitlementRow { featureKey: string; value: boolean | number | string }
+
+export function useFeatureCatalogue() {
+  return useQuery({
+    queryKey: ['entitlement-features'],
+    queryFn: () => api.get<{ items: FeatureDefinition[] }>('/entitlements/features'),
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+export function usePlanEntitlements(planId: string | undefined) {
+  return useQuery({
+    queryKey: ['plan-entitlements', planId],
+    queryFn: () => api.get<{ planId: string; planName: string; planVersion: number; items: PlanEntitlementRow[] }>(`/entitlements/plans/${planId}`),
+    enabled: Boolean(planId),
+  })
+}
+
+export function useSetPlanEntitlement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ planId, ...body }: { planId: string; featureKey: string; value: boolean | number | string }) =>
+      api.put<PlanEntitlementRow>(`/entitlements/plans/${planId}`, body),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['plan-entitlements', v.planId] }),
+  })
+}
+
+export function usePublishPlanVersion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (planId: string) => api.post<{ planVersion: number }>(`/entitlements/plans/${planId}/versions`, {}),
+    onSuccess: (_d, planId) => {
+      qc.invalidateQueries({ queryKey: ['plan-entitlements', planId] })
+      qc.invalidateQueries({ queryKey: ['packages'] })
+    },
+  })
+}
+
+/** What the signed-in user's own plan allows — for upgrade prompts. */
+export function useMyEntitlements() {
+  return useQuery({
+    queryKey: ['my-entitlements'],
+    queryFn: () => api.get<{ planId: string | null; planName: string; planVersion: number; features: Record<string, boolean | number | string> }>('/entitlements/me'),
+  })
+}
+
 // ─── Property moderation (spec §5) ───
 
 export type ReviewListingStatus =

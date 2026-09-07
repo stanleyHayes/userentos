@@ -69,6 +69,7 @@ const PackageEditorPage = lazy(() => import('@/pages/admin/PackageEditorPage').t
 const InsuranceClaimsPage = lazy(() => import('@/pages/admin/InsuranceClaimsPage').then((m) => ({ default: m.InsuranceClaimsPage })))
 const ApprovalsPage = lazy(() => import('@/pages/admin/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
 const AdminPayoutsPage = lazy(() => import('@/pages/admin/PayoutsPage').then((m) => ({ default: m.PayoutsPage })))
+const PlanEntitlementsPage = lazy(() => import('@/pages/admin/PlanEntitlementsPage').then((m) => ({ default: m.PlanEntitlementsPage })))
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })))
 const FinancierOffersPage = lazy(() => import('@/pages/financier/OffersPage').then((m) => ({ default: m.FinancierOffersPage })))
 const OfferEditorPage = lazy(() => import('@/pages/financier/OfferEditorPage').then((m) => ({ default: m.OfferEditorPage })))
@@ -219,6 +220,7 @@ export default function App() {
             <Route path="/admin/insurance/claims" element={<RequireRole roles={['admin']}><InsuranceClaimsPage /></RequireRole>} />
             <Route path="/admin/approvals" element={<RequireRole roles={['admin']}><ApprovalsPage /></RequireRole>} />
             <Route path="/admin/payouts" element={<RequireRole roles={['admin']}><AdminPayoutsPage /></RequireRole>} />
+            <Route path="/admin/plans/entitlements" element={<RequireRole roles={['admin']}><PlanEntitlementsPage /></RequireRole>} />
             {/* Financing — financier + applicants */}
             <Route path="/financing" element={<FinancingOffersPage />} />
             <Route path="/financing/offers" element={<RequireRole roles={['financier']}><FinancierOffersPage /></RequireRole>} />
