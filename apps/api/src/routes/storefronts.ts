@@ -22,7 +22,7 @@ import { recordAudit } from '../utils/audit.js'
 import { requireEntitlement, EntitlementError } from '../services/entitlements.js'
 import {
   validateSlug, validateDomain, newVerificationToken, checkDomainOwnership,
-  publicStorefrontScope, storefrontScope,
+  publicStorefrontScope,
 } from '../services/storefront.js'
 
 const router = Router()

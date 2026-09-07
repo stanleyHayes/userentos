@@ -140,7 +140,7 @@ describe('marketplace webhook (spec §8.4)', () => {
 
     // The guarded update ran twice, but only the first claim applied a change.
     expect(MarketplaceTransaction.findOneAndUpdate).toHaveBeenCalledTimes(2)
-    const guard = vi.mocked(MarketplaceTransaction.findOneAndUpdate).mock.calls[0][0] as Record<string, unknown>
+    const guard = vi.mocked(MarketplaceTransaction.findOneAndUpdate).mock.calls[0][0] as unknown as Record<string, unknown>
     expect(guard).toMatchObject({ processedEventIds: { $ne: 'evt-dup' } })
     expect(doc.save).toHaveBeenCalledTimes(1)
   })

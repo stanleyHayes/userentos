@@ -4,7 +4,6 @@ import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { User } from '../models/User.js'
-import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { hasDelegatedScope } from './delegation.js'
 
 interface CreatePropertyData {
