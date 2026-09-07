@@ -23,6 +23,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'crypto'
+import { envOr } from '../../utils/env.js'
 import type {
   PayoutProvider,
   RecipientInput,
@@ -33,7 +34,7 @@ import type {
   PayoutDestination,
 } from './types.js'
 
-const BASE_URL = process.env.PAYSTACK_BASE_URL ?? 'https://api.paystack.co'
+const BASE_URL = envOr('PAYSTACK_BASE_URL', 'https://api.paystack.co')
 const REQUEST_TIMEOUT_MS = 20_000
 
 function secretKey(): string {

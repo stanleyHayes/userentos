@@ -10,6 +10,7 @@
  */
 
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
+import { envOr } from '../../utils/env.js'
 import type {
   PaymentProvider,
   CollectionInput,
@@ -18,7 +19,7 @@ import type {
   ProviderStatus,
 } from './types.js'
 
-const BASE_URL = process.env.TELECEL_BASE_URL ?? 'https://api.telecel.com.gh'
+const BASE_URL = envOr('TELECEL_BASE_URL', 'https://api.telecel.com.gh')
 const CLIENT_ID = process.env.TELECEL_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.TELECEL_CLIENT_SECRET ?? ''
 const WEBHOOK_SECRET = process.env.TELECEL_WEBHOOK_SECRET ?? ''

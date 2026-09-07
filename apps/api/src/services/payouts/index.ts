@@ -7,6 +7,7 @@
  */
 
 import { paystackPayoutProvider } from './paystack.js'
+import { envOr } from '../../utils/env.js'
 import { simulatedPayoutProvider } from './simulator.js'
 import type { PayoutProvider } from './types.js'
 
@@ -17,7 +18,7 @@ const liveProviders: Record<string, PayoutProvider> = {
 export function getPayoutProvider(): PayoutProvider {
   if (process.env.PAYMENTS_PROVIDER_MODE !== 'live') return simulatedPayoutProvider
 
-  const name = process.env.PAYOUT_PROVIDER ?? 'paystack'
+  const name = envOr('PAYOUT_PROVIDER', 'paystack')
   const provider = liveProviders[name]
   if (!provider) {
     throw new Error(`Unknown PAYOUT_PROVIDER '${name}' — supported: ${Object.keys(liveProviders).join(', ')}`)

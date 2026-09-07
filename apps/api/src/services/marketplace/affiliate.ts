@@ -5,10 +5,11 @@
  * rewrites what an affiliate already earned.
  */
 import { AffiliateProfile, AffiliateAttribution, AffiliateCommission } from '../../models/Affiliate.js'
+import { envNumber } from '../../utils/env.js'
 import { round2 } from '../../utils/money.js'
 
 /** Attribution window in days; admin-configurable via env. */
-export const ATTRIBUTION_WINDOW_DAYS = Number(process.env.AFFILIATE_ATTRIBUTION_DAYS ?? 30)
+export const ATTRIBUTION_WINDOW_DAYS = envNumber('AFFILIATE_ATTRIBUTION_DAYS', 30)
 
 export interface AttributionInput {
   code: string

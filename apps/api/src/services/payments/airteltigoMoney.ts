@@ -11,6 +11,7 @@
  */
 
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
+import { envOr } from '../../utils/env.js'
 import type {
   PaymentProvider,
   CollectionInput,
@@ -19,7 +20,7 @@ import type {
   ProviderStatus,
 } from './types.js'
 
-const BASE_URL = process.env.AIRTELTIGO_BASE_URL ?? 'https://openapi.airtel.africa'
+const BASE_URL = envOr('AIRTELTIGO_BASE_URL', 'https://openapi.airtel.africa')
 const CLIENT_ID = process.env.AIRTELTIGO_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.AIRTELTIGO_CLIENT_SECRET ?? ''
 const WEBHOOK_SECRET = process.env.AIRTELTIGO_WEBHOOK_SECRET ?? ''

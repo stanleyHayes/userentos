@@ -16,9 +16,10 @@
  * with the secret key.
  */
 import { createHmac, timingSafeEqual } from 'crypto'
+import { envOr } from '../../utils/env.js'
 import { toMinorUnits } from './split.js'
 
-const BASE_URL = process.env.PAYSTACK_BASE_URL ?? 'https://api.paystack.co'
+const BASE_URL = envOr('PAYSTACK_BASE_URL', 'https://api.paystack.co')
 const REQUEST_TIMEOUT_MS = 20_000
 
 function secretKey(): string {

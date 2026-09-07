@@ -18,6 +18,7 @@
  */
 
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto'
+import { envOr } from '../../utils/env.js'
 import type {
   PaymentProvider,
   CollectionInput,
@@ -26,12 +27,12 @@ import type {
   ProviderStatus,
 } from './types.js'
 
-const BASE_URL = process.env.MTN_MOMO_BASE_URL ?? 'https://sandbox.momodeveloper.mtn.com'
+const BASE_URL = envOr('MTN_MOMO_BASE_URL', 'https://sandbox.momodeveloper.mtn.com')
 const SUBSCRIPTION_KEY = process.env.MTN_MOMO_SUBSCRIPTION_KEY ?? ''
 const API_USER = process.env.MTN_MOMO_API_USER ?? ''
 const API_KEY = process.env.MTN_MOMO_API_KEY ?? ''
 const CALLBACK_URL = process.env.MTN_MOMO_CALLBACK_URL ?? ''
-const TARGET_ENV = process.env.MTN_MOMO_TARGET_ENV ?? 'sandbox'
+const TARGET_ENV = envOr('MTN_MOMO_TARGET_ENV', 'sandbox')
 
 interface CachedToken { value: string; expiresAt: number }
 let tokenCache: CachedToken | null = null
