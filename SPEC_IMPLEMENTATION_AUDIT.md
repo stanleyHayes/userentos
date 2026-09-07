@@ -63,18 +63,52 @@ All 25 checks pass against a running API and a real database
 
 ## Known gaps
 
-1. **Live Paystack test-mode run** — see above. Everything up to the network
-   boundary is covered; the boundary itself is not.
-2. **Storefront subdomain routing at the edge.** `resolveStorefrontByHost`
-   resolves a hostname to a storefront, but the deployment still needs a
-   wildcard DNS record for `*.userentos.com` and a matching Vercel domain
-   config before subdomains resolve in a browser.
-3. **TLS provisioning is marked `provisioning` and never advances.** It needs a
-   hosting-provider adapter call (the spec's §4.3 implementation note) once the
-   hosting layer is chosen.
-4. **Admin dashboards (§14) are partial.** Plans/entitlements and property
-   review have UIs; storefront moderation, sponsorship, promotions, affiliate
-   and the audit-log viewer are API-only so far.
-5. **Sponsored placement is not yet wired into search ranking.** Campaigns are
-   modelled, purchasable and moderated, but no surface reads them to boost or
-   label a listing.
+Re-checked 7 September 2026, after the admin-dashboard and abuse-reporting work.
+
+### Closed since the first audit
+
+- **Live Paystack test-mode run.** Verified against the live sandbox: 34 banks
+  listed, subaccount `ACCT_k8o0o4ay2tg2e1w` created, a GHS 1000 charge split
+  50/950, and idempotency confirmed on a repeated reference.
+- **Storefront hosts in the browser.** `detectStorefrontSlug` reads the slug off
+  a platform subdomain and `useStorefrontHost` asks the server only for a
+  possible custom domain. The middleware also 301s GET/HEAD to the canonical
+  host, and the page sets `rel=canonical` plus `noindex` on a non-canonical
+  storefront host.
+- **Admin dashboards (§14).** All nine now exist and are wired: storefronts,
+  transactions, sponsorships, promotions, affiliates, reviewer organisations,
+  the audit log, the author dashboard and storefront analytics.
+- **Abuse reporting and takedown (§6, §15).** `models/ContentReport.ts`,
+  `services/contentReports.ts`, `routes/contentReports.ts`, 9 tests.
+- **Sponsored placement in search ranking.** This entry was wrong when it was
+  written: `controllers/propertyController.ts` already calls
+  `getSponsoredPlacements`, `applySponsoredPlacements` and `recordImpressions`
+  on the list path, skipping admin views and a seller's own listings, and
+  labels each promoted item. Corrected rather than carried forward.
+- **Scheduled posts.** `scheduledFor` and the `scheduled` status existed but
+  nothing ever published them; a cron job now does, every 10 minutes.
+- **Blog publishing quota.** Was counted over drafts at create time, which both
+  blocked saving work and let pre-downgrade drafts publish past the new limit.
+  Counted over published + scheduled and enforced on publish.
+
+### Still open
+
+1. **TLS provisioning stays `provisioning` and never advances.** Needs a
+   hosting-provider adapter call (spec §4.3) once the hosting layer is chosen.
+   This is a deployment decision, not missing code.
+2. **Wildcard DNS.** `*.userentos.com` needs a DNS record and a matching Vercel
+   domain entry before storefront subdomains resolve for a real visitor. The
+   application side is done and verified locally against `*.localhost`.
+3. **Paystack Settlements API.** Reconciliation verifies transaction by
+   transaction rather than reading the settlements endpoint, so a settlement
+   that never lands is not detected as such.
+4. **Reporting a user.** `ContentReport` deliberately omits the `user` target
+   because there is no account-suspension mechanism to action it with. Adding
+   one means touching the auth path, which is its own piece of work.
+5. **Audit log vocabulary is inconsistent.** Writers use bare verbs
+   (`upload`, `update`) in `routes/documents.ts` and dotted names
+   (`storefront.domain_verified`) everywhere else, and `entityType` is
+   lowercase in some places and a PascalCase model name in others. The viewer
+   reads its filter vocabulary back out of the data rather than assuming a
+   fixed enum, so this is cosmetic — but it makes the log harder to read than
+   it should be.

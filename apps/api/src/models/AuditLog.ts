@@ -18,4 +18,12 @@ const auditLogSchema = new Schema<IAuditLog>({
   ipAddress: String,
 }, { timestamps: true })
 
+// The admin viewer sorts newest-first and filters on entityType/action, none of
+// which the userId index helps with. Without these, every page of the audit log
+// is a collection scan — fine now, and the reason the log stops being opened
+// once it is large.
+auditLogSchema.index({ createdAt: -1 })
+auditLogSchema.index({ entityType: 1, createdAt: -1 })
+auditLogSchema.index({ action: 1, createdAt: -1 })
+
 export const AuditLog = mongoose.model<IAuditLog>('AuditLog', auditLogSchema)
