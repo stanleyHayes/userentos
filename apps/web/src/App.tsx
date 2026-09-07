@@ -196,6 +196,7 @@ export default function App() {
             <Route path="/government" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><GovernmentPanel /></RequireRole>} />
             <Route path="/government/simulation" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PolicySimulationPage /></RequireRole>} />
             <Route path="/government/reviews" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PropertyReviewPage /></RequireRole>} />
+            <Route path="/admin/property-reviews" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><PropertyReviewPage /></RequireRole>} />
             <Route path="/government/housing-demand" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><HousingDemandPage /></RequireRole>} />
             <Route path="/credit-score" element={<CreditScorePage />} />
             <Route path="/my-profile" element={<TenantProfilePage />} />

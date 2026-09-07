@@ -189,6 +189,21 @@ export function notifyPropertyApproved(landlordId: string, propertyTitle: string
   })
 }
 
+/**
+ * Owner-facing notification for a "request changes" decision. The issue list is
+ * included in the message because the owner needs to know WHAT to fix without
+ * opening the app.
+ */
+export function notifyPropertyChangesRequested(landlordId: string, propertyTitle: string, issues: string[]) {
+  const list = issues.length ? ` Please fix: ${issues.join('; ')}.` : ''
+  return notify({
+    userId: landlordId,
+    title: 'Changes requested on your listing',
+    message: `"${propertyTitle}" needs updates before it can be approved.${list}`,
+    actionUrl: '/properties',
+  })
+}
+
 export function notifyPropertyRejected(landlordId: string, propertyTitle: string, reason?: string) {
   return notify({
     userId: landlordId,

@@ -7,7 +7,12 @@ export interface IProperty extends Document {
   type: string
   stayType: 'short_stay' | 'long_stay'
   status: string
-  listingStatus: 'draft' | 'pending_review' | 'approved' | 'rejected'
+  listingStatus: 'draft' | 'pending_review' | 'in_review' | 'changes_requested' | 'approved' | 'rejected' | 'published' | 'suspended' | 'archived' | 'withdrawn'
+  /** Bumped on each resubmission so review cycles stay distinguishable. */
+  reviewVersion?: number
+  submittedAt?: Date
+  /** Actionable issues from the latest request-changes decision. */
+  reviewIssues?: string[]
   rejectionReason?: string
   reviewedBy?: string
   reviewedAt?: Date
@@ -78,7 +83,14 @@ const propertySchema = new Schema<IProperty>({
   type: { type: String, required: true, enum: ['apartment', 'house', 'room', 'commercial', 'warehouse', 'studio', 'townhouse', 'hostel', 'shared_room'] },
   stayType: { type: String, enum: ['short_stay', 'long_stay'], default: 'long_stay' },
   status: { type: String, required: true, enum: ['available', 'occupied', 'under_dispute', 'maintenance_required'], default: 'available' },
-  listingStatus: { type: String, enum: ['draft', 'pending_review', 'approved', 'rejected'], default: 'draft' },
+  listingStatus: {
+    type: String,
+    enum: ['draft', 'pending_review', 'in_review', 'changes_requested', 'approved', 'rejected', 'published', 'suspended', 'archived', 'withdrawn'],
+    default: 'draft',
+  },
+  reviewVersion: { type: Number, default: 1 },
+  submittedAt: Date,
+  reviewIssues: { type: [String], default: [] },
   rejectionReason: String,
   reviewedBy: String,
   reviewedAt: Date,

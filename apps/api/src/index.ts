@@ -28,6 +28,7 @@ import { sanitizeRequest } from './middleware/sanitize.js'
 import authRoutes from './routes/auth.js'
 import userRoutes from './routes/users.js'
 import propertyRoutes from './routes/properties.js'
+import propertyModerationRoutes from './routes/propertyModeration.js'
 import agreementRoutes from './routes/agreements.js'
 import paymentRoutes from './routes/payments.js'
 import savingsRoutes from './routes/savings.js'
@@ -276,6 +277,7 @@ app.use(
 // Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
+app.use('/api/properties', propertyModerationRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agreements', agreementRoutes)
 app.use('/api/payments', paymentRoutes)

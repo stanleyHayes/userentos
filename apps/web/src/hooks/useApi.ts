@@ -294,6 +294,90 @@ export function useDeposit() {
   })
 }
 
+
+// ─── Property moderation (spec §5) ───
+
+export type ReviewListingStatus =
+  | 'draft' | 'pending_review' | 'in_review' | 'changes_requested'
+  | 'approved' | 'rejected' | 'published' | 'suspended' | 'archived' | 'withdrawn'
+
+export interface ReviewQueueItem {
+  id: string
+  title: string
+  landlordId: string
+  rentAmount: number
+  type: string
+  listingStatus: ReviewListingStatus
+  reviewVersion?: number
+  reviewIssues?: string[]
+  images?: string[]
+  address?: { city?: string; region?: string; street?: string }
+  createdAt?: string
+  submittedAt?: string
+}
+
+export interface PropertyReviewRecord {
+  id: string
+  action: string
+  reviewerId: string
+  reviewerName: string
+  reviewerOrg: string
+  reviewVersion: number
+  reasonCode?: string
+  note?: string
+  issues: string[]
+  fromStatus: string
+  toStatus: string
+  createdAt: string
+}
+
+export function useReviewQueue(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ''
+  return useQuery({
+    queryKey: ['review-queue', status ?? 'open'],
+    queryFn: () => api.get<{ items: ReviewQueueItem[]; total: number }>(`/properties/review-queue${query}`),
+  })
+}
+
+export function usePropertyReviewHistory(propertyId: string | undefined) {
+  return useQuery({
+    queryKey: ['property-reviews', propertyId],
+    queryFn: () => api.get<{ items: PropertyReviewRecord[]; total: number }>(`/properties/${propertyId}/reviews`),
+    enabled: Boolean(propertyId),
+  })
+}
+
+/** Approve, reject, request changes, suspend or unsuspend a listing. */
+export function useReviewProperty() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: {
+      id: string
+      action: 'approve' | 'reject' | 'request_changes' | 'suspend' | 'unsuspend'
+      reasonCode?: string
+      note?: string
+      issues?: string[]
+    }) => api.post<{ id: string; listingStatus: ReviewListingStatus }>(`/properties/${id}/review`, body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['review-queue'] })
+      qc.invalidateQueries({ queryKey: ['property-reviews', vars.id] })
+      qc.invalidateQueries({ queryKey: ['properties'] })
+    },
+  })
+}
+
+/** Owner submits or resubmits a listing for review. */
+export function useSubmitPropertyForReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ id: string; listingStatus: string }>(`/properties/${id}/submit`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['properties'] })
+      qc.invalidateQueries({ queryKey: ['review-queue'] })
+    },
+  })
+}
+
 // ─── Payouts (money out) ───
 
 export interface PayoutDestination { name: string; code: string; type: 'mobile_money' | 'ghipss' }
