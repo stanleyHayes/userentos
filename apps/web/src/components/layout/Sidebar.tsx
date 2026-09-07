@@ -7,7 +7,8 @@ import {
   MessageSquare, Lock, FileCheck, ClipboardCheck, Crown, Package,
   Banknote, FileSignature, Calendar, ShieldCheck, Award, Wrench, ShieldPlus,
   Trophy, ShieldAlert, Sparkles, PenTool, TrendingUp, Store,
-  Receipt, Inbox, CalendarCheck, Coins, Landmark, ContactRound, Layers3, Map, SlidersHorizontal } from 'lucide-react'
+  Receipt, Inbox, CalendarCheck, Coins, Landmark, ContactRound, Layers3, Map, SlidersHorizontal, LayoutGrid, Briefcase, LifeBuoy,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -19,17 +20,17 @@ import type { UserRole } from '@/types'
 import Tooltip from '@mui/material/Tooltip'
 
 interface NavItem { label: string; labelKey?: string; path: string; icon: React.ReactNode; roles: UserRole[]; badge?: ReactNode }
-interface NavGroup { label: string; labelKey?: string; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean }
+interface NavGroup { label: string; labelKey?: string; icon: React.ReactNode; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean }
 
 const navGroups: NavGroup[] = [
-  { label: 'Overview', labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'], defaultOpen: true,
+  { label: 'Overview', icon: <LayoutGrid size={15} />, labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'], defaultOpen: true,
     items: [
       { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
       { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
       { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin', 'financier'] },
     ],
   },
-  { label: 'Rentals', labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,
+  { label: 'Rentals', icon: <Building2 size={15} />, labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,
     items: [
       { label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
       { label: 'Property Map', path: '/properties/map', icon: <Map size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'government'] },
@@ -52,7 +53,7 @@ const navGroups: NavGroup[] = [
       { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
     ],
   },
-  { label: 'Portfolio', labelKey: 'nav.portfolio', roles: ['landlord', 'property_manager'], defaultOpen: true,
+  { label: 'Portfolio', icon: <Briefcase size={15} />, labelKey: 'nav.portfolio', roles: ['landlord', 'property_manager'], defaultOpen: true,
     items: [
       { label: 'Leads', labelKey: 'nav.leads', path: '/agent/leads', icon: <Inbox size={20} />, roles: ['landlord', 'property_manager'] },
       { label: 'Viewings', labelKey: 'nav.viewings', path: '/agent/viewings', icon: <CalendarCheck size={20} />, roles: ['landlord', 'property_manager'] },
@@ -62,7 +63,7 @@ const navGroups: NavGroup[] = [
       { label: 'Vacancy', labelKey: 'nav.vacancy', path: '/landlord/vacancy', icon: <Building2 size={20} />, roles: ['landlord', 'property_manager'] },
     ],
   },
-  { label: 'Financial', labelKey: 'nav.financial', roles: ['tenant'], defaultOpen: true,
+  { label: 'Financial', icon: <PiggyBank size={15} />, labelKey: 'nav.financial', roles: ['tenant'], defaultOpen: true,
     items: [
       { label: 'RentGuard', labelKey: 'nav.rentguard', path: '/savings', icon: <PiggyBank size={20} />, roles: ['tenant'] },
       { label: 'Financing', labelKey: 'nav.financing', path: '/financing', icon: <Banknote size={20} />, roles: ['tenant'] },
@@ -73,7 +74,7 @@ const navGroups: NavGroup[] = [
       { label: 'My Profile', labelKey: 'nav.myProfile', path: '/my-profile', icon: <UserCircle size={20} />, roles: ['tenant'] },
     ],
   },
-  { label: 'Lending', labelKey: 'nav.lending', roles: ['financier'], defaultOpen: true,
+  { label: 'Lending', icon: <Banknote size={15} />, labelKey: 'nav.lending', roles: ['financier'], defaultOpen: true,
     items: [
       { label: 'My Offers', labelKey: 'nav.myOffers', path: '/financing/offers', icon: <Banknote size={20} />, roles: ['financier'] },
       { label: 'Applications', labelKey: 'nav.applications', path: '/financing/applications', icon: <FileCheck size={20} />, roles: ['financier'] },
@@ -81,7 +82,7 @@ const navGroups: NavGroup[] = [
       { label: 'Collections', labelKey: 'nav.collections', path: '/financing/collections', icon: <AlertTriangle size={20} />, roles: ['financier'] },
     ],
   },
-  { label: 'Workforce', labelKey: 'nav.workforce', roles: ['employer'], defaultOpen: true,
+  { label: 'Workforce', icon: <Users size={15} />, labelKey: 'nav.workforce', roles: ['employer'], defaultOpen: true,
     items: [
       { label: 'Profile', labelKey: 'nav.profile', path: '/employer/profile', icon: <Building2 size={20} />, roles: ['employer'] },
       { label: 'Employees', labelKey: 'nav.employees', path: '/employer/employees', icon: <Users size={20} />, roles: ['employer'] },
@@ -89,7 +90,7 @@ const navGroups: NavGroup[] = [
       { label: 'Payroll Reports', labelKey: 'nav.payrollReports', path: '/employer/reports', icon: <BarChart3 size={20} />, roles: ['employer'] },
     ],
   },
-  { label: 'Support', labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,
+  { label: 'Support', icon: <LifeBuoy size={15} />, labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,
     items: [
       { label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'] },
       { label: 'Disputes', labelKey: 'nav.disputes', path: '/disputes', icon: <AlertTriangle size={20} />, roles: ['tenant', 'landlord', 'government', 'legal_officer', 'admin'] },
@@ -98,7 +99,7 @@ const navGroups: NavGroup[] = [
       { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier'] },
     ],
   },
-  { label: 'Administration', labelKey: 'nav.administration', roles: ['government', 'admin', 'super_admin'], defaultOpen: false,
+  { label: 'Administration', icon: <Shield size={15} />, labelKey: 'nav.administration', roles: ['government', 'admin', 'super_admin'], defaultOpen: false,
     items: [
       { label: 'Users', labelKey: 'nav.users', path: '/users', icon: <Users size={20} />, roles: ['government', 'admin', 'super_admin'] },
       { label: 'Government Panel', labelKey: 'nav.governmentPanel', path: '/government', icon: <Shield size={20} />, roles: ['government', 'admin', 'super_admin'] },
@@ -113,7 +114,7 @@ const navGroups: NavGroup[] = [
       { label: 'Feature Flags', labelKey: 'nav.featureFlags', path: '/admin/feature-flags', icon: <FlaskConical size={20} />, roles: ['super_admin'] },
     ],
   },
-  { label: 'Platform Admin', labelKey: 'nav.platformAdmin', roles: ['admin', 'super_admin'], defaultOpen: false,
+  { label: 'Platform Admin', icon: <Crown size={15} />, labelKey: 'nav.platformAdmin', roles: ['admin', 'super_admin'], defaultOpen: false,
     items: [
       { label: 'Financing Operations', labelKey: 'nav.allFinancing', path: '/admin/financing', icon: <Banknote size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Employer Network', labelKey: 'nav.allEmployers', path: '/admin/employers', icon: <Building2 size={20} />, roles: ['admin', 'super_admin'] },
@@ -276,7 +277,22 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
 
   // Collapsible group
   return (
-    <div className="mb-2">
+    <div className="relative mb-2">
+      {/* The connector. One line, drawn on the group container rather than
+          inside the list, so it runs unbroken from the group's own icon down
+          through every item icon — the items' badges sit above it (z-10 with a
+          solid background), which is what gives the threaded look. Its left
+          offset matches the icon centre: px-4 (16px) + half of a 28px badge. */}
+      {isOpen && group.items.length > 0 && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute left-[30px] top-[38px] bottom-[28px] w-px transition-colors',
+            groupHasActiveItem ? 'bg-primary/25 dark:bg-sky-300/25' : 'bg-border dark:bg-white/10',
+          )}
+        />
+      )}
+
       <button
         onClick={() => {
           if (isOpen) {
@@ -288,20 +304,25 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
           }
         }}
         className={cn(
-          'focus-ring flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors hover:bg-surface/70 hover:text-primary-dark dark:hover:bg-white/5 dark:hover:text-gray-300',
+          'focus-ring flex w-full items-center gap-2.5 rounded-xl px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors hover:bg-surface/70 hover:text-primary-dark dark:hover:bg-white/5 dark:hover:text-gray-300',
           groupHasActiveItem ? 'text-primary dark:text-sky-300' : 'text-muted dark:text-gray-500',
         )}
       >
-        <span className="flex items-center gap-2">
-          <span className={cn('h-1.5 w-1.5 rounded-full', groupHasActiveItem ? 'bg-primary dark:bg-sky-300' : 'bg-muted/50 dark:bg-gray-600')} />
-          {group.labelKey ? t(group.labelKey) : group.label}
+        <span className={cn(
+          'relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border bg-white transition-colors dark:bg-[#111422]',
+          groupHasActiveItem
+            ? 'border-primary/40 text-primary dark:border-sky-300/40 dark:text-sky-300'
+            : 'border-border text-muted dark:border-white/10 dark:text-gray-500',
+        )}>
+          {group.icon}
         </span>
-        <ChevronDown size={14} className={cn('transition-transform duration-200', isOpen ? '' : '-rotate-90')} />
+        <span className="flex-1 text-left">{group.labelKey ? t(group.labelKey) : group.label}</span>
+        <ChevronDown size={14} className={cn('shrink-0 transition-transform duration-200', isOpen ? '' : '-rotate-90')} />
       </button>
 
       <div className={cn('grid transition-[grid-template-rows,opacity] duration-200 ease-in-out', isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
         <div className="min-h-0 overflow-hidden">
-          <ul className="relative mt-1 space-y-1 rounded-2xl bg-surface/35 px-1.5 py-2 before:absolute before:left-[23px] before:top-5 before:bottom-5 before:w-px before:bg-border dark:bg-white/[0.025] dark:before:bg-white/10">
+          <ul className="relative mt-1 space-y-0.5 px-1.5 py-1">
             {group.items.map((item) => (
               <li key={item.path}>
                 <NavLink to={item.path} end onClick={onItemClick}
