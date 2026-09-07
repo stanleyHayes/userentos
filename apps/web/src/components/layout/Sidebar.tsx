@@ -278,11 +278,11 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
   // Collapsible group
   return (
     <div className="relative mb-2">
-      {/* The connector. One line, drawn on the group container rather than
-          inside the list, so it runs unbroken from the group's own icon down
-          through every item icon — the items' badges sit above it (z-10 with a
-          solid background), which is what gives the threaded look. Its left
-          offset matches the icon centre: px-4 (16px) + half of a 28px badge. */}
+      {/* The spine. It hangs from the group's own icon (centre x = px-4 + half
+          of a 28px badge = 30px) and stops at the centre of the last row —
+          bottom-[28px] is the list's 4px bottom padding plus half a 48px row —
+          so the line ends *in* the last elbow instead of dangling past it.
+          Each item then curves off it; see the elbow below. */}
       {isOpen && group.items.length > 0 && (
         <span
           aria-hidden
@@ -322,9 +322,31 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
 
       <div className={cn('grid transition-[grid-template-rows,opacity] duration-200 ease-in-out', isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
         <div className="min-h-0 overflow-hidden">
-          <ul className="relative mt-1 space-y-0.5 px-1.5 py-1">
-            {group.items.map((item) => (
-              <li key={item.path}>
+          {/* pl-[34px] pushes every row clear of the group title: with the
+              link's own px-2.5 the item icon starts at 44px, a full badge
+              width right of the group's. The children read as children. */}
+          <ul className="relative mt-1 space-y-0.5 py-1 pl-[34px] pr-1.5">
+            {group.items.map((item) => {
+              const isItemActive = activeItem?.path === item.path
+              return (
+              <li key={item.path} className="relative">
+                {/* The elbow: a box with only its left and bottom edges drawn
+                    and the corner between them rounded, so the spine appears to
+                    turn into the row. left-[-4px] puts that left edge back on
+                    the spine (30px absolute), h-6 lands the bottom edge on the
+                    row's centre line, and the 14px width runs it to exactly the
+                    item icon's left edge. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute left-[-4px] top-0 h-6 w-[14px] rounded-bl-[10px] border-b border-l transition-colors',
+                    isItemActive
+                      ? 'border-primary/60 dark:border-sky-300/60'
+                      : groupHasActiveItem
+                        ? 'border-primary/25 dark:border-sky-300/25'
+                        : 'border-border dark:border-white/10',
+                  )}
+                />
                 <NavLink to={item.path} end onClick={onItemClick}
                   className={({ isActive }) => cn(
                     'focus-ring group/thread relative flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors',
@@ -347,7 +369,8 @@ function GroupSection({ group, collapsed, onItemClick }: { group: NavGroup & { i
                   )}
                 </NavLink>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       </div>
