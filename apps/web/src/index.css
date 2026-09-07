@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Instrument+Sans:ital,wght@0,400..800;1,400..800&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Instrument+Sans:ital,wght@0,400..800;1,400..800&family=Outfit:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 /* TT Squares — local self-hosted font */
@@ -697,7 +697,11 @@ section[id] { scroll-margin-top: 5rem; }
 /* Font for display headings */
 .font-display { font-family: var(--font-display); }
 
-/* Headings use Fraunces; everything else keeps the default fonts */
+/* Headings use Fraunces; everything else keeps the default fonts.
+   This is deliberate, not an oversight: Outfit carries the UI (body, buttons,
+   labels, tables) and Fraunces carries the headlines. It does mean Outfit is
+   rarely the font you *notice*, which reads as "Outfit isn't loading" — it is;
+   verified in a browser via document.fonts.check and a render-width probe. */
 h1, h2,
 h1.font-display, h2.font-display {
   font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
