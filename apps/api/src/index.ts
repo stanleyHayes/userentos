@@ -37,6 +37,8 @@ import marketplaceCommerceRoutes from './routes/marketplaceCommerce.js'
 import reviewerOrgRoutes from './routes/reviewerOrganizations.js'
 import authoringRoutes from './routes/authoring.js'
 import contentReportRoutes from './routes/contentReports.js'
+import adminAuditLogsRoutes from './routes/adminAuditLogs.js'
+import adminAffiliatesRoutes from './routes/adminAffiliates.js'
 import marketplaceWebhookRoutes from './routes/marketplaceWebhooks.js'
 import agreementRoutes from './routes/agreements.js'
 import paymentRoutes from './routes/payments.js'
@@ -344,6 +346,8 @@ app.use('/api/achievements', achievementRoutes)
 app.use('/api/feature-flags', featureFlagRoutes)
 // Mounted BEFORE /api/admin so the approvals router wins over admin views.
 app.use('/api/admin/approvals', adminApprovalsRoutes)
+app.use('/api/admin/audit-logs', adminAuditLogsRoutes)
+app.use('/api/admin/affiliates', adminAffiliatesRoutes)
 app.use('/api/admin', adminViewsRoutes)
 app.use('/api/auth/biometric', biometricAuthRoutes)
 app.use('/api/move-outs', moveOutRoutes)

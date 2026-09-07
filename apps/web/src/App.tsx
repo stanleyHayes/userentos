@@ -109,6 +109,15 @@ const InsuranceMarketplacePage = lazy(() => import('@/pages/insurance/InsuranceM
 const ProviderProductsPage = lazy(() => import('@/pages/insurance/ProviderProductsPage').then((m) => ({ default: m.ProviderProductsPage })))
 const LocalServicesPage = lazy(() => import('@/pages/business/LocalServicesPage').then((m) => ({ default: m.LocalServicesPage })))
 const AchievementsPage = lazy(() => import('@/pages/AchievementsPage').then((m) => ({ default: m.AchievementsPage })))
+const AdminStorefrontsPage = lazy(() => import('@/pages/admin/AdminStorefrontsPage').then((m) => ({ default: m.AdminStorefrontsPage })))
+const AdminSponsorshipsPage = lazy(() => import('@/pages/admin/AdminSponsorshipsPage').then((m) => ({ default: m.AdminSponsorshipsPage })))
+const AdminPromotionsPage = lazy(() => import('@/pages/admin/AdminPromotionsPage').then((m) => ({ default: m.AdminPromotionsPage })))
+const AdminAuditLogPage = lazy(() => import('@/pages/admin/AdminAuditLogPage').then((m) => ({ default: m.AdminAuditLogPage })))
+const AdminReviewerOrgsPage = lazy(() => import('@/pages/admin/AdminReviewerOrgsPage').then((m) => ({ default: m.AdminReviewerOrgsPage })))
+const AdminTransactionsPage = lazy(() => import('@/pages/admin/AdminTransactionsPage').then((m) => ({ default: m.AdminTransactionsPage })))
+const AdminAffiliatesPage = lazy(() => import('@/pages/admin/AdminAffiliatesPage').then((m) => ({ default: m.AdminAffiliatesPage })))
+const AuthorPostsPage = lazy(() => import('@/pages/authoring/AuthorPostsPage').then((m) => ({ default: m.AuthorPostsPage })))
+const StorefrontAnalyticsPage = lazy(() => import('@/pages/storefront/StorefrontAnalyticsPage').then((m) => ({ default: m.StorefrontAnalyticsPage })))
 const AdminFinancingPage = lazy(() => import('@/pages/admin/AdminFinancingPage').then((m) => ({ default: m.AdminFinancingPage })))
 const AdminEmployersPage = lazy(() => import('@/pages/admin/AdminEmployersPage').then((m) => ({ default: m.AdminEmployersPage })))
 const AdminMaintenancePage = lazy(() => import('@/pages/admin/AdminMaintenancePage').then((m) => ({ default: m.AdminMaintenancePage })))
@@ -287,6 +296,15 @@ export default function App() {
             <Route path="/achievements" element={<AchievementsPage />} />
             <Route path="/role-capabilities" element={<RoleCapabilitiesPage />} />
             {/* Platform Admin — read-only views across all tenants */}
+            <Route path="/admin/storefronts" element={<RequireRole roles={['admin']}><AdminStorefrontsPage /></RequireRole>} />
+            <Route path="/admin/sponsorships" element={<RequireRole roles={['admin']}><AdminSponsorshipsPage /></RequireRole>} />
+            <Route path="/admin/promotions" element={<RequireRole roles={['admin']}><AdminPromotionsPage /></RequireRole>} />
+            <Route path="/admin/audit-logs" element={<RequireRole roles={['admin']}><AdminAuditLogPage /></RequireRole>} />
+            <Route path="/admin/reviewer-organizations" element={<RequireRole roles={['admin']}><AdminReviewerOrgsPage /></RequireRole>} />
+            <Route path="/admin/transactions" element={<RequireRole roles={['admin']}><AdminTransactionsPage /></RequireRole>} />
+            <Route path="/admin/affiliates" element={<RequireRole roles={['admin']}><AdminAffiliatesPage /></RequireRole>} />
+            <Route path="/storefront/posts" element={<RequireRole roles={['landlord', 'property_manager', 'business', 'developer', 'admin']}><AuthorPostsPage /></RequireRole>} />
+            <Route path="/storefront/analytics" element={<RequireRole roles={['landlord', 'property_manager', 'business', 'developer']}><StorefrontAnalyticsPage /></RequireRole>} />
             <Route path="/admin/financing" element={<RequireRole roles={['admin']}><AdminFinancingPage /></RequireRole>} />
             <Route path="/admin/employers" element={<RequireRole roles={['admin']}><AdminEmployersPage /></RequireRole>} />
             <Route path="/admin/maintenance" element={<RequireRole roles={['admin']}><AdminMaintenancePage /></RequireRole>} />
