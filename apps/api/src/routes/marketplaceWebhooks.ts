@@ -18,6 +18,14 @@ import { logger } from '../utils/logger.js'
 const router = Router()
 const rawBody = express.raw({ type: '*/*', limit: '256kb' })
 
+/** Mark an event applied so the dead-letter sweep skips it. */
+async function markEventProcessed(eventId: string): Promise<void> {
+  await WebhookEvent.updateOne(
+    { provider: 'paystack', eventId },
+    { $set: { processedAt: new Date(), processingError: undefined } },
+  ).catch(() => undefined)
+}
+
 interface PaystackChargeEvent {
   event: string
   id?: string | number
@@ -62,13 +70,16 @@ router.post('/paystack', rawBody, async (req: Request, res: Response) => {
   const reference = event.data?.reference
 
   try {
-    // Raw payload retained for dispute investigation (spec §8.4).
+    // Raw payload retained for dispute investigation (spec §8.4). Stored
+    // BEFORE processing so a crash mid-handler still leaves the event on disk
+    // for the dead-letter sweep to retry.
     await WebhookEvent.create({
       provider: 'paystack',
       eventId,
       eventType: event.event,
       reference,
       payload: raw.slice(0, 20_000),
+      attempts: 1,
     }).catch(() => undefined)
 
     if (!reference) return
@@ -111,17 +122,24 @@ router.post('/paystack', rawBody, async (req: Request, res: Response) => {
       claimed.processorFeeAmount = verified.fees
       claimed.settlementStatus = 'pending'
       await claimed.save()
+      await markEventProcessed(eventId)
       logger.info(`[MarketplaceWebhook] ${reference} paid — platform fee ${claimed.platformFeeAmount}`)
     } else if (event.event === 'charge.failed') {
       claimed.status = 'failed'
       await claimed.save()
+      await markEventProcessed(eventId)
     } else if (event.event === 'refund.processed') {
       claimed.status = 'refunded'
       await claimed.save()
+      await markEventProcessed(eventId)
     }
   } catch (err) {
-    // The event is stored; a dead-letter sweep can retry from WebhookEvent.
-    logger.error(`[MarketplaceWebhook] processing failed for ${reference}: ${(err as Error).message}`)
+    // Left unprocessed on purpose: retryUnprocessedWebhooks picks it up on the
+    // next sweep and asks the provider again rather than trusting this attempt.
+    const message = (err as Error).message
+    await WebhookEvent.updateOne({ provider: 'paystack', eventId }, { $set: { processingError: message } })
+      .catch(() => undefined)
+    logger.error(`[MarketplaceWebhook] processing failed for ${reference}: ${message} — queued for retry`)
   }
 })
 

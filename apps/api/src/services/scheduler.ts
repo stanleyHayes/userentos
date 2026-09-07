@@ -28,6 +28,7 @@ import { Review } from '../models/Review.js'
 import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
+import { retryUnprocessedWebhooks, reconcilePendingTransactions } from './marketplace/reconcile.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
 // Ghana timezone (UTC+0, no DST). cron defaults to server time, but we set tz explicitly
@@ -615,6 +616,27 @@ export function startScheduler() {
   }, { timezone: GHANA_TZ })
 
   // ─── Data retention: purge audit logs older than 2 years ───
+  // Marketplace webhook dead-letter retry and settlement reconciliation
+  // (spec §8.4). Runs every 15 minutes: a webhook that failed mid-processing,
+  // or never arrived at all, otherwise leaves a real payment stuck at pending
+  // with the seller unpaid and no route to the truth.
+  cron.schedule('*/15 * * * *', async () => {
+    if (!process.env.PAYSTACK_SECRET_KEY) return
+    if (!(await acquireCronLock('marketplace-reconcile', LOCK_TTL_RECONCILE))) return
+    try {
+      const retried = await retryUnprocessedWebhooks()
+      if (retried.recovered > 0 || retried.exhausted > 0) {
+        logger.info(`[Cron] Webhook retry: ${retried.recovered} recovered, ${retried.exhausted} exhausted of ${retried.examined}.`)
+      }
+      const reconciled = await reconcilePendingTransactions()
+      if (reconciled.corrected > 0) {
+        logger.info(`[Cron] Reconciled ${reconciled.corrected} of ${reconciled.examined} pending marketplace transaction(s).`)
+      }
+    } catch (err) {
+      logger.error(`[Cron] Marketplace reconciliation failed: ${(err as Error).message}`)
+    }
+  }, { timezone: GHANA_TZ })
+
   // Sponsorship expiry — a campaign whose window closed must stop serving, but
   // its spend and billing history stay (spec §9). Serving already filters on
   // endAt, so this is bookkeeping rather than the enforcement itself.
