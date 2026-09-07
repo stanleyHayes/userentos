@@ -15,6 +15,9 @@ export interface IReview extends Document {
   valueForMoney: number // 1-5
   neighborhood: number // 1-5
   verified: boolean // was this tenant actually in an agreement for this property
+  /** Set by an admin acting on an abuse report; hidden from every listing. */
+  removed?: boolean
+  removedReason?: string
 }
 
 const reviewSchema = new Schema<IReview>({
@@ -32,6 +35,8 @@ const reviewSchema = new Schema<IReview>({
   valueForMoney: { type: Number, min: 1, max: 5, default: 3 },
   neighborhood: { type: Number, min: 1, max: 5, default: 3 },
   verified: { type: Boolean, default: false },
+  removed: { type: Boolean, default: false, index: true },
+  removedReason: String,
 }, { timestamps: true })
 
 // One review per user per property

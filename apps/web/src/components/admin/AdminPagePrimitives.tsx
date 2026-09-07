@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 
 /**
@@ -83,12 +83,22 @@ interface AdminStateCardProps {
   icon?: ReactNode
 }
 
-export function AdminLoadingState({ title, description }: AdminStateCardProps) {
+/**
+ * A loading admin table.
+ *
+ * This used to be a centred spinner with the title and description as text.
+ * A skeleton reserves the shape of the rows that are coming, so the page does
+ * not jump when they land — the same treatment every other loading surface in
+ * the app uses. `title`/`description` are kept in the signature (many call
+ * sites pass them) but are announced to screen readers rather than drawn.
+ */
+export function AdminLoadingState({ title, description, rows = 6, cols = 5 }: AdminStateCardProps & { rows?: number; cols?: number }) {
   return (
-    <section className="surface-card rounded-2xl border p-10 text-center">
-      <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-primary dark:text-blue-400" />
-      <p className="text-sm font-bold text-primary-dark dark:text-white">{title}</p>
-      <p className="mt-1 text-xs text-muted dark:text-gray-500">{description}</p>
+    <section className="surface-card overflow-hidden rounded-2xl border" aria-busy="true">
+      <span className="sr-only">{title}. {description}</span>
+      <div className="p-4 sm:p-5">
+        <TableSkeleton rows={rows} cols={cols} />
+      </div>
     </section>
   )
 }

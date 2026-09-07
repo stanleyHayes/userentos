@@ -12,9 +12,20 @@ function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Public: list published posts
+/**
+ * A post belongs to a seller's storefront rather than to RentOS editorial.
+ *
+ * The platform blog and a storefront's blog are different publications that
+ * happen to share a collection. Without this, every post a seller wrote for
+ * their own storefront was listed on RentOS's editorial blog (spec §6).
+ */
+// `$eq: null` matches both an explicit null and a missing field, which is how
+// a post with no storefront is actually stored.
+const PLATFORM_ONLY: Record<string, unknown> = { storefrontId: { $eq: null } }
+
+// Public: list published posts on the platform's own blog
 router.get('/', async (req, res) => {
-  const filter: Record<string, unknown> = { published: true }
+  const filter: Record<string, unknown> = { published: true, ...PLATFORM_ONLY }
   if (req.query.tag) filter.tags = req.query.tag
   if (req.query.search) {
     const escaped = escapeRegex(String(req.query.search))
@@ -31,7 +42,8 @@ router.get('/', async (req, res) => {
 
 // Public: get single post by slug
 router.get('/slug/:slug', async (req, res) => {
-  const post = await BlogPost.findOne({ slug: param(req.params.slug), published: true }).lean()
+  const slugFilter: Record<string, unknown> = { slug: param(req.params.slug), published: true, ...PLATFORM_ONLY }
+  const post = await BlogPost.findOne(slugFilter).lean()
   if (!post) { error(res, 'Post not found', 404); return }
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })
@@ -43,7 +55,10 @@ router.get('/:id', authenticate, async (req, res) => {
   if (!post) { error(res, 'Post not found', 404); return }
   const roles = req.user!.roles
   const isStaff = roles.includes('admin') || roles.includes('government') || roles.includes('legal_officer') || roles.includes('super_admin')
-  if (!post.published && post.author !== req.user!.userId && !isStaff) {
+  // `author` is a display name, not an id — comparing it to userId never
+  // matched, so an author could not open their own unpublished draft here.
+  // `authorId` is the ownership field.
+  if (!post.published && post.authorId !== req.user!.userId && !isStaff) {
     error(res, 'Post not found', 404)
     return
   }

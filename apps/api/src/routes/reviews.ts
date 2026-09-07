@@ -19,9 +19,11 @@ router.get('/property/:propertyId', async (req, res) => {
   const skip = (page - 1) * pageSize
 
   const [reviews, summaryAgg] = await Promise.all([
-    Review.find({ propertyId }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    // `removed` is set when an admin actions an abuse report; a removed review
+    // must not appear anywhere a reader or the rating average can see it.
+    Review.find({ propertyId, removed: { $ne: true } }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
     Review.aggregate([
-      { $match: { propertyId } },
+      { $match: { propertyId, removed: { $ne: true } } },
       { $group: {
         _id: null,
         count: { $sum: 1 },
@@ -120,7 +122,7 @@ router.get('/neighborhood/:city', async (req, res) => {
 
   const [agg, recent] = await Promise.all([
     Review.aggregate([
-      { $match: { propertyId: { $in: propertyIds } } },
+      { $match: { propertyId: { $in: propertyIds }, removed: { $ne: true } } },
       { $group: {
         _id: null,
         count: { $sum: 1 },
@@ -129,7 +131,7 @@ router.get('/neighborhood/:city', async (req, res) => {
         recommend: { $sum: { $cond: ['$wouldRecommend', 1, 0] } },
       } },
     ]),
-    Review.find({ propertyId: { $in: propertyIds } }).sort({ createdAt: -1 }).limit(10).lean(),
+    Review.find({ propertyId: { $in: propertyIds }, removed: { $ne: true } }).sort({ createdAt: -1 }).limit(10).lean(),
   ])
 
   const s = agg[0] ?? { count: 0 }

@@ -28,6 +28,7 @@ import { Review } from '../models/Review.js'
 import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
+import { BlogPost } from '../models/BlogPost.js'
 import { retryUnprocessedWebhooks, reconcilePendingTransactions } from './marketplace/reconcile.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
@@ -647,6 +648,31 @@ export function startScheduler() {
       if (expired > 0) logger.info(`[Cron] Expired ${expired} finished sponsorship campaign(s).`)
     } catch (err) {
       logger.error(`[Cron] Sponsorship expiry failed: ${(err as Error).message}`)
+    }
+  }, { timezone: GHANA_TZ })
+
+  // Scheduled posts (spec §6). The model has had a 'scheduled' status and a
+  // scheduledFor date all along, but nothing ever moved a post out of that
+  // state — an author who scheduled a post watched it sit there forever.
+  // Every 10 minutes is close enough: publishing is not time-critical to the
+  // minute, and a tighter schedule buys nothing an author would notice.
+  cron.schedule('*/10 * * * *', async () => {
+    if (!(await acquireCronLock('publish-scheduled-posts', LOCK_TTL_RECONCILE))) return
+    try {
+      const now = new Date()
+      const due = await BlogPost.find({ status: 'scheduled', scheduledFor: { $lte: now } })
+        .select('_id slug').lean()
+      if (due.length === 0) return
+
+      const result = await BlogPost.updateMany(
+        { _id: { $in: due.map((p) => p._id) }, status: 'scheduled' },
+        { $set: { status: 'published', published: true, publishedAt: now } },
+      )
+      if ((result.modifiedCount ?? 0) > 0) {
+        logger.info(`[Cron] Published ${result.modifiedCount} scheduled post(s).`)
+      }
+    } catch (err) {
+      logger.error(`[Cron] Scheduled post publishing failed: ${(err as Error).message}`)
     }
   }, { timezone: GHANA_TZ })
 

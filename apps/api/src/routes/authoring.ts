@@ -11,6 +11,7 @@ import { authenticate, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { Storefront } from '../models/Storefront.js'
+import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -47,14 +48,10 @@ router.post('/posts', authenticate, asyncHandler(async (req, res) => {
   const parsed = postSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  // Plan-gated publishing quota (§7.1 blog_limit).
-  try {
-    const existing = await BlogPost.countDocuments({ authorId: req.user!.userId, status: { $ne: 'removed' } })
-    await requireQuota(req.user!.userId, 'blog.limit', existing, 'Blog posts')
-  } catch (err) {
-    if (err instanceof EntitlementError) { error(res, err.message, 402); return }
-    throw err
-  }
+  // No quota here. blog.limit is a *publishing* quota (§7.1): counting drafts
+  // against it blocked an author from even saving work, and let anyone who
+  // drafted before a downgrade publish past their new limit. The check now
+  // lives on the publish route, where it belongs.
 
   const storefront = parsed.data.attachToStorefront
     ? await Storefront.findOne({ ownerId: req.user!.userId }).lean()
@@ -63,10 +60,15 @@ router.post('/posts', authenticate, asyncHandler(async (req, res) => {
   let slug = slugify(parsed.data.title)
   if (await BlogPost.findOne({ slug }).lean()) slug = `${slug}-${Date.now().toString(36)}`
 
+  // The byline is public. This used to be req.user.email, which published the
+  // author's email address on every post they wrote.
+  const author = await User.findById(req.user!.userId).select('firstName lastName').lean()
+  const byline = author ? `${author.firstName ?? ''} ${author.lastName ?? ''}`.trim() : ''
+
   const post = await BlogPost.create({
     ...parsed.data,
     slug,
-    author: req.user!.email ?? 'RentOS author',
+    author: byline || 'RentOS author',
     authorId: req.user!.userId,
     storefrontId: storefront ? String(storefront._id) : undefined,
     status: 'draft',
@@ -93,9 +95,41 @@ router.post('/posts/:id/publish', authenticate, asyncHandler(async (req, res) =>
   const post = await BlogPost.findById(param(req.params.id))
   if (!post) { error(res, 'Post not found', 404); return }
   if (post.authorId !== req.user!.userId) { error(res, 'You can only publish your own posts', 403); return }
+  if (post.status === 'published') { error(res, 'This post is already published', 409); return }
+
+  // Plan-gated publishing quota (§7.1 blog.limit), counted over posts that are
+  // actually live or queued to go live. Re-publishing an archived post counts
+  // again, which is correct: it is occupying a slot once more.
+  try {
+    const live = await BlogPost.countDocuments({
+      authorId: req.user!.userId,
+      status: { $in: ['published', 'scheduled'] },
+    })
+    await requireQuota(req.user!.userId, 'blog.limit', live, 'Published posts')
+  } catch (err) {
+    if (err instanceof EntitlementError) { error(res, err.message, 402); return }
+    throw err
+  }
+
+  // A future scheduledFor means "queue it", not "publish it now". Without this
+  // the field was accepted, stored and then silently ignored.
+  const scheduledFor = post.scheduledFor
+  if (scheduledFor && scheduledFor.getTime() > Date.now()) {
+    post.status = 'scheduled'
+    post.published = false
+    await post.save()
+
+    await recordAudit(req, 'blog.scheduled', 'BlogPost', String(post._id), {
+      slug: post.slug,
+      scheduledFor: scheduledFor.toISOString(),
+    })
+    success(res, { id: String(post._id), status: post.status, scheduledFor }, 'Scheduled')
+    return
+  }
 
   post.status = 'published'
   post.published = true
+  post.publishedAt = post.publishedAt ?? new Date()
   await post.save()
 
   await recordAudit(req, 'blog.published', 'BlogPost', String(post._id), { slug: post.slug })

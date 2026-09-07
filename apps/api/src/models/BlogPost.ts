@@ -15,6 +15,12 @@ export interface IBlogPost extends Document {
   storefrontId?: string
   status?: 'draft' | 'in_review' | 'scheduled' | 'published' | 'archived' | 'removed'
   scheduledFor?: Date
+  /**
+   * When the post actually went live. Distinct from createdAt: a post drafted
+   * in March and scheduled for June was created once and published once, and a
+   * reader's "posted on" date means the second of those.
+   */
+  publishedAt?: Date
   seoTitle?: string
   seoDescription?: string
   canonicalUrl?: string
@@ -35,6 +41,7 @@ const blogPostSchema = new Schema<IBlogPost>({
   storefrontId: { type: String, index: true },
   status: { type: String, enum: ['draft', 'in_review', 'scheduled', 'published', 'archived', 'removed'], default: 'draft', index: true },
   scheduledFor: Date,
+  publishedAt: Date,
   seoTitle: String,
   seoDescription: String,
   canonicalUrl: String,
