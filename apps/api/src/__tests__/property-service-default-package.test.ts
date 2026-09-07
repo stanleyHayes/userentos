@@ -9,6 +9,12 @@ vi.mock('../models/User.js', () => ({
 vi.mock('../models/SubscriptionPackage.js', () => ({
   SubscriptionPackage: { findById: vi.fn(), findOne: vi.fn() },
 }))
+// The limit now resolves through the entitlement engine, which overlays
+// explicit feature grants on top of the plan's columns. No grants here, so the
+// plan's own maxProperties still decides — which is what these tests assert.
+vi.mock('../models/PlanEntitlement.js', () => ({
+  PlanEntitlement: { find: vi.fn(() => ({ lean: vi.fn().mockResolvedValue([]) })) },
+}))
 
 function makeRepo(count: number) {
   return {

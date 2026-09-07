@@ -11,6 +11,10 @@ export interface ISubscriptionPackage extends Document {
   isActive: boolean
   isDefault: boolean // auto-assigned to new landlords/managers
   sortOrder: number
+  /** Bumped when commercial terms change; subscribers keep their version. */
+  version: number
+  /** Percentage RentOS retains from eligible marketplace payments. */
+  platformFeePercent: number
 }
 
 const subscriptionPackageSchema = new Schema<ISubscriptionPackage>({
@@ -24,6 +28,8 @@ const subscriptionPackageSchema = new Schema<ISubscriptionPackage>({
   isActive: { type: Boolean, default: true },
   isDefault: { type: Boolean, default: false },
   sortOrder: { type: Number, default: 0 },
+  version: { type: Number, default: 1 },
+  platformFeePercent: { type: Number, default: 5, min: 0, max: 100 },
 }, { timestamps: true })
 
 subscriptionPackageSchema.methods.toSafe = function () {

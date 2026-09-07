@@ -1,4 +1,5 @@
 import { Types } from 'mongoose'
+import { requireQuota, EntitlementError } from './entitlements.js'
 import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
@@ -136,32 +137,26 @@ export class PropertyService {
   }
 
   async create(data: CreatePropertyData, userId: string) {
-    // Enforce subscription listing limits. A user WITH a package is capped by it;
-    // an EXPIRED subscription blocks new listings until renewed (previously
-    // subscriptionEndDate was written but never enforced anywhere).
+    // Enforce the active-property limit through the entitlement engine rather
+    // than reading plan columns directly (spec §7.3). The engine resolves the
+    // subscriber's plan version, applies its `property.limit` grant and falls
+    // back to the free-tier default, so no code here branches on a plan name.
     const user = await User.findById(userId).lean()
     if (user?.subscriptionPackageId) {
       const isExpired = !!user.subscriptionEndDate && new Date(user.subscriptionEndDate) < new Date()
       if (isExpired) {
         return { error: 'Your subscription has expired. Renew it to add more properties.', status: 403 }
       }
-      const pkg = await SubscriptionPackage.findById(user.subscriptionPackageId).lean()
-      if (pkg && pkg.maxProperties !== -1) {
-        const count = await this.propertyRepo.count({ landlordId: userId })
-        if (count >= pkg.maxProperties) {
-          return { error: `Your ${pkg.name} package allows up to ${pkg.maxProperties} propert${pkg.maxProperties === 1 ? 'y' : 'ies'}. Upgrade to add more.`, status: 403 }
-        }
+    }
+
+    try {
+      const activeCount = await this.propertyRepo.count({ landlordId: userId })
+      await requireQuota(userId, 'property.limit', activeCount, 'Active property limit')
+    } catch (err) {
+      if (err instanceof EntitlementError) {
+        return { error: err.message, status: 403 }
       }
-    } else {
-      // No package assigned — fall back to the default (free) package limits
-      // instead of skipping enforcement entirely (previously a bypass).
-      const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
-      if (defaultPkg && defaultPkg.maxProperties !== -1) {
-        const count = await this.propertyRepo.count({ landlordId: userId })
-        if (count >= defaultPkg.maxProperties) {
-          return { error: `Your free ${defaultPkg.name} package allows up to ${defaultPkg.maxProperties} propert${defaultPkg.maxProperties === 1 ? 'y' : 'ies'}. Subscribe to a paid plan to add more.`, status: 403 }
-        }
-      }
+      throw err
     }
 
     const property = await this.propertyRepo.create({
