@@ -13,7 +13,7 @@ export function generateOpenAPIDoc() {
       version: '1.0.0',
       title: 'RentOS API',
       description: 'National digital rental housing platform for Ghana.',
-      contact: { name: 'RentOS Support', email: 'support@rentos.gh' },
+      contact: { name: 'RentOS Support', email: 'support@userentos.com' },
     },
     servers: [{ url: '/api' }],
   })

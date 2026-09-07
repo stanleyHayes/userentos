@@ -6,12 +6,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.rentos.com.gh"
+        "EXPO_PUBLIC_API_URL": "https://api.userentos.com"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.rentos.com.gh"
+        "EXPO_PUBLIC_API_URL": "https://api.userentos.com"
       }
     }
   }

@@ -10,7 +10,7 @@ import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead 
 import { useSocket } from '@/hooks/useSocket'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { AppearanceMenu } from '@/components/ui/AppearanceMenu'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -227,8 +227,10 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
           <HeaderLanguageToggle />
 
-          {/* Theme toggle */}
-          <ThemeToggle className="neumorphic-icon rounded-xl" />
+          {/* Light/dark and the surface finish live together — they are one
+              "how this looks" decision to a user, even though they are
+              independent settings underneath. */}
+          <AppearanceMenu />
 
           {/* Role switcher — on portal subdomains, only show portal-relevant roles */}
           {user && (() => {

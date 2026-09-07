@@ -88,7 +88,7 @@ router.delete('/me', authenticate, async (req, res) => {
 
   // Scramble PII
   const scramble = crypto.randomBytes(8).toString('hex')
-  user.email = `deleted-${scramble}@rentos.gh`
+  user.email = `deleted-${scramble}@userentos.com`
   user.phone = `000000${scramble.slice(0, 6)}`
   user.firstName = 'Deleted'
   user.lastName = 'User'

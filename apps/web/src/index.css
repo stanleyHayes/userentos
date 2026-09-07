@@ -103,13 +103,54 @@
 }
 
 :root {
-  --rentos-card: rgba(240, 244, 248, 0.94);
-  --rentos-card-muted: rgba(248, 250, 252, 0.82);
-  --rentos-card-border: rgba(148, 163, 184, 0.24);
-  --rentos-shadow-soft: 10px 10px 24px rgba(163, 177, 194, 0.34), -10px -10px 24px rgba(255, 255, 255, 0.9);
-  --rentos-shadow-lift: 14px 14px 32px rgba(163, 177, 194, 0.4), -12px -12px 30px rgba(255, 255, 255, 0.96);
-  --rentos-shadow-inset: inset 3px 3px 7px rgba(163, 177, 194, 0.28), inset -3px -3px 7px rgba(255, 255, 255, 0.88);
+  /* Skin-independent. */
   --rentos-ring: 0 0 0 4px rgba(30, 58, 95, 0.14);
+
+  /* Neumorphism: dual emboss, lit from the top left. */
+  --neu-card: rgba(240, 244, 248, 0.94);
+  --neu-card-muted: rgba(248, 250, 252, 0.82);
+  --neu-card-border: rgba(148, 163, 184, 0.24);
+  --neu-soft: 10px 10px 24px rgba(163, 177, 194, 0.34), -10px -10px 24px rgba(255, 255, 255, 0.9);
+  --neu-lift: 14px 14px 32px rgba(163, 177, 194, 0.4), -12px -12px 30px rgba(255, 255, 255, 0.96);
+  --neu-inset: inset 3px 3px 7px rgba(163, 177, 194, 0.28), inset -3px -3px 7px rgba(255, 255, 255, 0.88);
+  --neu-icon: 5px 5px 12px rgba(163, 177, 194, 0.26), -5px -5px 12px rgba(255, 255, 255, 0.82);
+  --neu-button: 5px 5px 12px rgba(15, 31, 51, 0.2), -4px -4px 10px rgba(255, 255, 255, 0.22);
+  --neu-button-hover: 7px 7px 16px rgba(15, 31, 51, 0.24), -5px -5px 12px rgba(255, 255, 255, 0.26);
+
+  /* Claymorphism: one soft drop shadow plus an inner highlight and an inner
+     shadow — that pairing is what reads as a thick pressed edge rather than a
+     panel lit from one side. */
+  --clay-card: rgba(237, 242, 249, 0.97);
+  --clay-card-muted: rgba(245, 249, 253, 0.9);
+  --clay-card-border: rgba(148, 163, 184, 0.16);
+  --clay-soft:
+    16px 18px 38px rgba(148, 163, 184, 0.46),
+    -8px -10px 26px rgba(255, 255, 255, 0.95),
+    inset 2px 3px 6px rgba(255, 255, 255, 0.95),
+    inset -3px -4px 9px rgba(148, 163, 184, 0.38);
+  --clay-lift:
+    20px 24px 48px rgba(148, 163, 184, 0.52),
+    -10px -12px 32px rgba(255, 255, 255, 1),
+    inset 2px 3px 6px rgba(255, 255, 255, 0.95),
+    inset -3px -4px 9px rgba(148, 163, 184, 0.4);
+  --clay-inset:
+    inset 7px 8px 16px rgba(148, 163, 184, 0.42),
+    inset -5px -6px 14px rgba(255, 255, 255, 0.95);
+  --clay-icon:
+    7px 8px 18px rgba(148, 163, 184, 0.4),
+    -4px -5px 12px rgba(255, 255, 255, 0.95),
+    inset 1px 2px 4px rgba(255, 255, 255, 0.95),
+    inset -2px -2px 5px rgba(148, 163, 184, 0.32);
+  --clay-button:
+    8px 9px 20px rgba(30, 58, 95, 0.22),
+    -4px -5px 12px rgba(255, 255, 255, 0.3),
+    inset 1px 2px 4px rgba(255, 255, 255, 0.35),
+    inset -2px -3px 6px rgba(15, 31, 51, 0.22);
+  --clay-button-hover:
+    11px 13px 26px rgba(30, 58, 95, 0.26),
+    -5px -6px 14px rgba(255, 255, 255, 0.34),
+    inset 1px 2px 4px rgba(255, 255, 255, 0.38),
+    inset -2px -3px 6px rgba(15, 31, 51, 0.24);
 }
 
 /* Dark mode — theme variable overrides (only active when .dark class is on <html>) */
@@ -122,14 +163,230 @@
   --color-surface: #0a0d12;
   --color-border: #30283d;
   --color-muted: #9c96ad;
-  --rentos-card: rgba(17, 22, 30, 0.94);
-  --rentos-card-muted: rgba(12, 16, 23, 0.88);
-  --rentos-card-border: rgba(125, 211, 252, 0.12);
-  --rentos-shadow-soft: 10px 10px 24px rgba(0, 0, 0, 0.5), -8px -8px 22px rgba(39, 50, 65, 0.42);
-  --rentos-shadow-lift: 14px 14px 34px rgba(0, 0, 0, 0.58), -10px -10px 28px rgba(42, 54, 70, 0.46);
-  --rentos-shadow-inset: inset 3px 3px 8px rgba(0, 0, 0, 0.54), inset -3px -3px 8px rgba(45, 58, 74, 0.38);
   --rentos-ring: 0 0 0 4px rgba(45, 212, 191, 0.2);
+
+  --neu-card: rgba(17, 22, 30, 0.94);
+  --neu-card-muted: rgba(12, 16, 23, 0.88);
+  --neu-card-border: rgba(125, 211, 252, 0.12);
+  --neu-soft: 10px 10px 24px rgba(0, 0, 0, 0.5), -8px -8px 22px rgba(39, 50, 65, 0.42);
+  --neu-lift: 14px 14px 34px rgba(0, 0, 0, 0.58), -10px -10px 28px rgba(42, 54, 70, 0.46);
+  --neu-inset: inset 3px 3px 8px rgba(0, 0, 0, 0.54), inset -3px -3px 8px rgba(45, 58, 74, 0.38);
+  --neu-icon: 5px 5px 12px rgba(0, 0, 0, 0.48), -4px -4px 10px rgba(45, 58, 74, 0.36);
+  --neu-button: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34);
+  --neu-button-hover: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4);
+
+  --clay-card: rgba(23, 29, 41, 0.97);
+  --clay-card-muted: rgba(16, 21, 31, 0.92);
+  --clay-card-border: rgba(125, 211, 252, 0.09);
+  --clay-soft:
+    16px 18px 38px rgba(0, 0, 0, 0.62),
+    -8px -10px 26px rgba(56, 74, 99, 0.32),
+    inset 2px 3px 6px rgba(86, 110, 143, 0.22),
+    inset -3px -4px 9px rgba(0, 0, 0, 0.5);
+  --clay-lift:
+    20px 24px 48px rgba(0, 0, 0, 0.68),
+    -10px -12px 32px rgba(56, 74, 99, 0.36),
+    inset 2px 3px 6px rgba(86, 110, 143, 0.24),
+    inset -3px -4px 9px rgba(0, 0, 0, 0.52);
+  --clay-inset:
+    inset 7px 8px 16px rgba(0, 0, 0, 0.6),
+    inset -5px -6px 14px rgba(56, 74, 99, 0.3);
+  --clay-icon:
+    7px 8px 18px rgba(0, 0, 0, 0.55),
+    -4px -5px 12px rgba(56, 74, 99, 0.3),
+    inset 1px 2px 4px rgba(86, 110, 143, 0.2),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.45);
+  --clay-button:
+    8px 9px 20px rgba(0, 0, 0, 0.55),
+    -4px -5px 12px rgba(56, 74, 99, 0.28),
+    inset 1px 2px 4px rgba(86, 110, 143, 0.22),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.45);
+  --clay-button-hover:
+    11px 13px 26px rgba(0, 0, 0, 0.62),
+    -5px -6px 14px rgba(56, 74, 99, 0.32),
+    inset 1px 2px 4px rgba(86, 110, 143, 0.24),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.48);
   color-scheme: dark;
+}
+
+/*
+ * ─── Surface skins ───────────────────────────────────────────────────────────
+ *
+ * Every surface in the app (.surface-card, .neumorphic-icon, .neumorphic-inset,
+ * .neumorphic-button, and anything reading --rentos-shadow-*) draws from the
+ * --rentos-* variables, so a skin is a remapping and nothing else — no
+ * component knows which skin is active.
+ *
+ * Two selectors per skin:
+ *   html[data-skin=...]      the whole page, set by the theme store
+ *   [data-skin-preview=...]  one subtree, so the picker can show a card
+ *                            rendered in a skin the page is NOT using
+ *
+ * A rule that matches the preview element sets the variables directly on it,
+ * and a direct declaration always beats an inherited one — so the preview wins
+ * over the page skin regardless of which selector is more specific.
+ *
+ * Light and dark come free: --neu-* and --clay-* are themselves redefined
+ * under .dark, and these rules only choose between them.
+ */
+
+:root,
+[data-skin-preview="neu"] {
+  --rentos-card: var(--neu-card);
+  --rentos-card-muted: var(--neu-card-muted);
+  --rentos-card-border: var(--neu-card-border);
+  --rentos-shadow-soft: var(--neu-soft);
+  --rentos-shadow-lift: var(--neu-lift);
+  --rentos-shadow-inset: var(--neu-inset);
+  --rentos-shadow-icon: var(--neu-icon);
+  --rentos-shadow-button: var(--neu-button);
+  --rentos-shadow-button-hover: var(--neu-button-hover);
+}
+
+html[data-skin="clay"],
+[data-skin-preview="clay"] {
+  --rentos-card: var(--clay-card);
+  --rentos-card-muted: var(--clay-card-muted);
+  --rentos-card-border: var(--clay-card-border);
+  --rentos-shadow-soft: var(--clay-soft);
+  --rentos-shadow-lift: var(--clay-lift);
+  --rentos-shadow-inset: var(--clay-inset);
+  --rentos-shadow-icon: var(--clay-icon);
+  --rentos-shadow-button: var(--clay-button);
+  --rentos-shadow-button-hover: var(--clay-button-hover);
+}
+
+/* Clay needs generous corners — without them the thick edge just reads as
+   blur. Overriding Tailwind's radius scale reshapes every rounded-* utility
+   at once, which is the only practical way to reach ~390 existing call sites. */
+html[data-skin="clay"],
+[data-skin-preview="clay"] {
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2rem;
+}
+
+/* Tailwind's elevation scale, restated in clay.
+   85 shadow-sm/md/lg/xl call sites across 54 files draw from these variables,
+   so overriding the scale reaches all of them without touching one of them —
+   the same move as the radius scale above. Drop shadows only: an inset on a
+   dropdown panel or a modal reads as a dent, not as clay. The dedicated
+   surface classes keep the inner highlight.
+   Deliberately NOT redefined for neumorphism, so the default skin renders
+   byte-identically to before this feature existed. */
+html[data-skin="clay"],
+[data-skin-preview="clay"] {
+  --shadow-2xs: 0 2px 4px rgba(148, 163, 184, 0.22);
+  --shadow-xs: 0 3px 7px rgba(148, 163, 184, 0.26);
+  --shadow-sm: 0 4px 10px rgba(148, 163, 184, 0.3), 0 1px 3px rgba(148, 163, 184, 0.2);
+  --shadow-md: 0 8px 18px rgba(148, 163, 184, 0.34), 0 3px 7px rgba(148, 163, 184, 0.22);
+  --shadow-lg: 0 14px 30px rgba(148, 163, 184, 0.38), 0 5px 12px rgba(148, 163, 184, 0.24);
+  --shadow-xl: 0 22px 46px rgba(148, 163, 184, 0.42), 0 8px 18px rgba(148, 163, 184, 0.26);
+  --shadow-2xl: 0 32px 64px rgba(148, 163, 184, 0.48);
+}
+
+html[data-skin="clay"].dark,
+.dark [data-skin-preview="clay"] {
+  --shadow-2xs: 0 2px 4px rgba(0, 0, 0, 0.5);
+  --shadow-xs: 0 3px 7px rgba(0, 0, 0, 0.52);
+  --shadow-sm: 0 4px 10px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.58), 0 3px 7px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 14px 30px rgba(0, 0, 0, 0.62), 0 5px 12px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 22px 46px rgba(0, 0, 0, 0.66), 0 8px 18px rgba(0, 0, 0, 0.48);
+  --shadow-2xl: 0 32px 64px rgba(0, 0, 0, 0.72);
+}
+
+/* Clay is a heavier finish; the card backdrop blur turns it muddy, and the
+   inner highlight already does the separating. */
+html[data-skin="clay"] .surface-card,
+[data-skin-preview="clay"] .surface-card {
+  backdrop-filter: none;
+}
+
+/*
+ * Clay for the primitives that never had a neumorphic treatment to inherit.
+ *
+ * Form controls are MUI, so they are unreachable from a React prop — the skin
+ * has to meet them in CSS. Doing it here rather than in 50 call sites is also
+ * the only way to honour "touch them all": anything rendered later picks the
+ * treatment up for free.
+ */
+
+/* Text fields, selects and textareas read as pressed into the surface, which
+   is the counterpart to cards standing out of it. */
+html[data-skin="clay"] .MuiOutlinedInput-root,
+[data-skin-preview="clay"] .MuiOutlinedInput-root {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--rentos-shadow-inset);
+}
+
+html[data-skin="clay"] .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline,
+[data-skin-preview="clay"] .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline {
+  /* The inset shadow already describes the edge; keeping the outline as well
+     draws two competing borders around one field. */
+  border-color: transparent;
+}
+
+html[data-skin="clay"] .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline,
+[data-skin-preview="clay"] .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+
+/* Native controls that never went through MUI. */
+html[data-skin="clay"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-skin="clay"] textarea,
+html[data-skin="clay"] select {
+  border-radius: var(--radius-lg);
+}
+
+/* Floating surfaces: menus, dialogs, popovers, tooltips. */
+html[data-skin="clay"] .MuiPaper-root,
+[data-skin-preview="clay"] .MuiPaper-root {
+  border-radius: var(--radius-xl);
+}
+
+html[data-skin="clay"] .MuiMenu-paper,
+html[data-skin="clay"] .MuiPopover-paper,
+html[data-skin="clay"] .MuiDialog-paper {
+  box-shadow: var(--rentos-shadow-soft);
+}
+
+/* MUI buttons carry their own elevation; hand them the skin's. */
+html[data-skin="clay"] .MuiButton-root {
+  border-radius: var(--radius-lg);
+}
+
+html[data-skin="clay"] .MuiButton-contained {
+  box-shadow: var(--rentos-shadow-button);
+}
+
+html[data-skin="clay"] .MuiButton-contained:hover {
+  box-shadow: var(--rentos-shadow-button-hover);
+}
+
+/* Chips and badges: clay lifts them off the surface instead of tinting a flat
+   pill. Kept subtle — a badge that competes with a card is a badge that has
+   stopped being a badge. */
+html[data-skin="clay"] .MuiChip-root {
+  border-radius: var(--radius-md);
+  box-shadow: var(--rentos-shadow-icon);
+}
+
+/* Switching skins should read as the surfaces changing, not the page redrawing.
+   Someone who set "reduce motion" still gets the skin — only the tween goes. */
+@media (prefers-reduced-motion: no-preference) {
+  .surface-card,
+  .neumorphic-icon,
+  .neumorphic-inset,
+  .neumorphic-button,
+  .MuiOutlinedInput-root,
+  .MuiButton-root,
+  .MuiChip-root {
+    transition: box-shadow 260ms ease, border-radius 260ms ease, background-color 260ms ease;
+  }
 }
 
 /* Fallback dark overrides */
@@ -296,11 +553,7 @@ html {
   .neumorphic-icon {
     background: color-mix(in oklab, var(--rentos-card) 94%, transparent);
     border: 1px solid var(--rentos-card-border);
-    box-shadow: 5px 5px 12px rgba(163, 177, 194, 0.26), -5px -5px 12px rgba(255, 255, 255, 0.82);
-  }
-
-  .dark .neumorphic-icon {
-    box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.48), -4px -4px 10px rgba(45, 58, 74, 0.36);
+    box-shadow: var(--rentos-shadow-icon);
   }
 
   .neumorphic-inset {
@@ -326,13 +579,11 @@ html {
 
 .neumorphic-button {
   border: 1px solid color-mix(in oklab, currentColor 10%, transparent);
-  box-shadow: 5px 5px 12px rgba(15, 31, 51, 0.2), -4px -4px 10px rgba(255, 255, 255, 0.22);
+  box-shadow: var(--rentos-shadow-button);
 }
 
-.neumorphic-button:hover { box-shadow: 7px 7px 16px rgba(15, 31, 51, 0.24), -5px -5px 12px rgba(255, 255, 255, 0.26); }
+.neumorphic-button:hover { box-shadow: var(--rentos-shadow-button-hover); }
 .neumorphic-button:active { box-shadow: var(--rentos-shadow-inset); }
-.dark .neumorphic-button { box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.5), -4px -4px 11px rgba(49, 63, 80, 0.34); }
-.dark .neumorphic-button:hover { box-shadow: 8px 8px 18px rgba(0, 0, 0, 0.58), -5px -5px 13px rgba(49, 63, 80, 0.4); }
 
 /* Signup wizard: the rail visually anchors the controls while preserving a
    deliberately uneven hierarchy — compact secondary Back, dominant Continue. */

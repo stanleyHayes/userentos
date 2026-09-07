@@ -23,8 +23,8 @@ Runs on `http://localhost:5173`. API requests to `/api` are proxied to `http://l
 
 | Variable | Description | Dev | Production |
 |---|---|---|---|
-| `VITE_API_URL` | Backend API URL | `/api` (uses Vite proxy) | `https://api.rentos.gh/api` |
-| `VITE_SOCKET_URL` | WebSocket URL | `http://localhost:5002` | `https://api.rentos.gh` |
+| `VITE_API_URL` | Backend API URL | `/api` (uses Vite proxy) | `https://api.userentos.com/api` |
+| `VITE_SOCKET_URL` | WebSocket URL | `http://localhost:5002` | `https://api.userentos.com` |
 
 **Files:**
 - `.env` — local development overrides

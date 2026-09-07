@@ -1,4 +1,5 @@
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
+import { CONTACT_EMAIL } from '@/lib/contact'
 import { DoodleCircle } from '@/components/ui/Doodles'
 
 export function DataProtectionPage() {
@@ -96,7 +97,7 @@ export function DataProtectionPage() {
           content: (
             <div className="rounded-xl bg-surface dark:bg-[#161927] border border-border dark:border-[#252a3a] p-4">
               <p className="font-medium text-primary-dark dark:text-white">Data Protection Officer</p>
-              <p className="mt-2">Email: dpo@rentos.gh</p>
+              <p className="mt-2">Email: {CONTACT_EMAIL.info}</p>
               <p>Phone: +233 30 XXX XXXX</p>
               <p>Address: Data Protection Office, RentOS Ghana, Accra</p>
             </div>

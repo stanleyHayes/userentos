@@ -83,9 +83,9 @@ export default function AboutScreen() {
         <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Legal</Text>
           {[
-            { label: 'Terms of Service', url: 'https://rentos.gh/terms' },
-            { label: 'Privacy Policy', url: 'https://rentos.gh/privacy' },
-            { label: 'Data Protection', url: 'https://rentos.gh/data-protection' },
+            { label: 'Terms of Service', url: 'https://userentos.com/terms' },
+            { label: 'Privacy Policy', url: 'https://userentos.com/privacy' },
+            { label: 'Data Protection', url: 'https://userentos.com/data-protection' },
           ].map((link, i, arr) => (
             <TouchableOpacity
               key={link.label}

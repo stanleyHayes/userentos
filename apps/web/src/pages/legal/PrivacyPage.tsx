@@ -1,4 +1,5 @@
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
+import { CONTACT_EMAIL } from '@/lib/contact'
 import { DoodleStars } from '@/components/ui/Doodles'
 
 export function PrivacyPage() {
@@ -13,7 +14,7 @@ export function PrivacyPage() {
         {
           id: 'introduction',
           title: 'Introduction',
-          content: <p>RentOS Ghana ("we", "our", "us") is committed to protecting and respecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform, including the website at rentos.gh and the RentOS mobile application.</p>,
+          content: <p>RentOS Ghana ("we", "our", "us") is committed to protecting and respecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform, including the website at userentos.com and the RentOS mobile application.</p>,
         },
         {
           id: 'information-collected',
@@ -103,7 +104,7 @@ export function PrivacyPage() {
           content: (
             <div className="rounded-xl bg-surface dark:bg-[#161927] border border-border dark:border-[#252a3a] p-4">
               <p className="font-medium text-primary-dark dark:text-white">Data Protection Officer</p>
-              <p className="mt-2">Email: privacy@rentos.gh</p>
+              <p className="mt-2">Email: {CONTACT_EMAIL.info}</p>
               <p>Phone: +233 30 XXX XXXX</p>
               <p>Address: Accra, Ghana</p>
             </div>

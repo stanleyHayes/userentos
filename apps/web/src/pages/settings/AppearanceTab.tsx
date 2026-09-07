@@ -3,8 +3,8 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore } from '@/stores/authStore'
 import { useUpdateSettings } from '@/hooks/useApi'
-import { useThemeStore } from '@/stores/themeStore'
-import { Sun, Moon, Monitor, Palette, Globe, Check, Sparkles } from 'lucide-react'
+import { useThemeStore, SKINS, type Skin } from '@/stores/themeStore'
+import { Sun, Moon, Monitor, Palette, Globe, Check, Sparkles, Layers, Blocks } from 'lucide-react'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 
 const languages = [
@@ -16,7 +16,7 @@ const languages = [
 
 export function AppearanceTab() {
   const { i18n } = useTranslation()
-  const { theme, setTheme } = useThemeStore()
+  const { theme, setTheme, skin, setSkin } = useThemeStore()
   const updateSettings = useUpdateSettings()
   const { user } = useAuthStore()
   const resetTour = useOnboardingStore((s) => s.resetTour)
@@ -26,6 +26,12 @@ export function AppearanceTab() {
     if (!user?.activeRole) return
     resetTour(user.activeRole)
     startTour(user.activeRole)
+  }
+
+  /** One icon per finish, matching the header's Appearance menu. */
+  const skinIcon: Record<Skin, React.ReactNode> = {
+    neu: <Layers size={20} />,
+    clay: <Blocks size={20} />,
   }
 
   const themeOptions = [
@@ -67,6 +73,58 @@ export function AppearanceTab() {
                 <div className="text-center">
                   <p className="text-sm font-semibold text-primary-dark dark:text-white">{opt.label}</p>
                   <p className="text-[10px] text-muted dark:text-gray-500 mt-0.5">{opt.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Surface style */}
+      <Card>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-1">
+            <Layers size={16} className="text-primary dark:text-blue-400" />
+            <h3 className="text-sm font-bold text-primary-dark dark:text-white">Surface style</h3>
+          </div>
+          <p className="mb-5 text-xs text-muted dark:text-gray-500">
+            How cards, buttons and icons are shaped. Independent of light and dark.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {SKINS.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setSkin(opt.id)}
+                aria-pressed={skin === opt.id}
+                className={`relative flex flex-col gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                  skin === opt.id
+                    ? 'border-primary dark:border-blue-500 bg-primary/5 dark:bg-blue-500/10 shadow-sm'
+                    : 'border-border/60 dark:border-[#252a3a]/60 hover:border-primary/40 dark:hover:border-blue-500/40'
+                }`}
+              >
+                {skin === opt.id && (
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary dark:bg-blue-500 flex items-center justify-center">
+                    <Check size={12} className="text-white" />
+                  </div>
+                )}
+                {/* Rendered in the finish it is offering, so the swatch is the
+                    real shadow stack rather than a picture of one. */}
+                <div
+                  data-skin-preview={opt.id}
+                  className="flex h-14 items-center gap-2.5 rounded-xl px-3"
+                  style={{ background: 'var(--rentos-card)', boxShadow: 'var(--rentos-shadow-soft)' }}
+                >
+                  <span className="neumorphic-icon grid h-8 w-8 shrink-0 place-items-center rounded-xl text-primary dark:text-blue-400">
+                    {skinIcon[opt.id]}
+                  </span>
+                  <span className="flex-1 space-y-1.5">
+                    <span className="block h-1.5 w-4/5 rounded-full bg-primary-dark/30 dark:bg-white/30" />
+                    <span className="block h-1.5 w-3/5 rounded-full bg-muted/30 dark:bg-white/15" />
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-primary-dark dark:text-white">{opt.label}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted dark:text-gray-500">{opt.blurb}</p>
                 </div>
               </button>
             ))}

@@ -23,7 +23,7 @@ Press `a` for Android emulator, `i` for iOS simulator, or scan QR with Expo Go.
 
 | Variable | Description | Dev | Production |
 |---|---|---|---|
-| `EXPO_PUBLIC_API_URL` | Backend API URL | `http://localhost:3002/api` | `https://api.rentos.com.gh` |
+| `EXPO_PUBLIC_API_URL` | Backend API URL | `http://localhost:3002/api` | `https://api.userentos.com` |
 
 Set in `eas.json` per build profile, or in a `.env` file for local dev.
 

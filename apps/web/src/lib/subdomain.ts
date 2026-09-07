@@ -60,10 +60,10 @@ const PORTAL_SUBDOMAINS = new Set<string>(['tenant', 'landlord', 'government', '
  * Detect the active portal from the current hostname.
  *
  * Examples:
- *   tenant.rentos.com.gh  → 'tenant'
- *   landlord.rentos.com.gh → 'landlord'
- *   www.rentos.com.gh     → 'www'
- *   rentos.com.gh         → 'www'
+ *   tenant.userentos.com  → 'tenant'
+ *   landlord.userentos.com → 'landlord'
+ *   www.userentos.com     → 'www'
+ *   userentos.com         → 'www'
  *   localhost              → 'www'
  *   tenant.localhost       → 'tenant'  (for dev)
  */

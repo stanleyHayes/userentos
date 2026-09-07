@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { CONTACT_EMAIL } from '@/lib/contact'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowRight,
@@ -150,9 +151,9 @@ export function Footer() {
             <h3 className="font-display text-lg font-extrabold">Support desk</h3>
             <p className="mt-2 text-sm leading-relaxed text-white/45">For account help, product questions, and platform operations.</p>
             <div className="mt-5 space-y-4 text-sm">
-              <a href="mailto:support@rentos.gh" className="flex items-center gap-3 text-white/58 transition-colors hover:text-white">
+              <a href={`mailto:${CONTACT_EMAIL.support}`} className="flex items-center gap-3 text-white/58 transition-colors hover:text-white">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-400/10 text-sky-200"><Mail size={15} /></span>
-                support@rentos.gh
+                {CONTACT_EMAIL.support}
               </a>
               <a href="tel:+233300000000" className="flex items-center gap-3 text-white/58 transition-colors hover:text-white">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-200"><Phone size={15} /></span>

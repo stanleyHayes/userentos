@@ -14,7 +14,7 @@ const faqs = [
 ]
 
 const contactOptions = [
-  { icon: 'mail-outline' as const, label: 'Email Support', value: 'support@rentos.com.gh', action: () => Linking.openURL('mailto:support@rentos.com.gh') },
+  { icon: 'mail-outline' as const, label: 'Email Support', value: 'support@userentos.com', action: () => Linking.openURL('mailto:support@userentos.com') },
   { icon: 'call-outline' as const, label: 'Phone', value: '+233 30 XXX XXXX', action: () => Linking.openURL('tel:+23330XXXXXXX') },
   { icon: 'location-outline' as const, label: 'Office', value: 'Accra, Ghana', action: undefined },
 ]
