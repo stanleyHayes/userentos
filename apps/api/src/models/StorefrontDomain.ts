@@ -18,6 +18,12 @@ export interface IStorefrontDomain extends Document {
   verifiedAt?: Date
   lastCheckedAt?: Date
   failureReason?: string
+  /** Which hosting provider was asked to issue the certificate. */
+  tlsProvider?: string
+  /** When issuance was requested, so a stuck certificate can time out. */
+  tlsRequestedAt?: Date
+  /** DNS the host still wants, surfaced to the seller verbatim. */
+  tlsChallenges?: Array<{ type: string; domain: string; value: string; reason?: string }>
   createdAt: Date
   updatedAt: Date
 }
@@ -31,6 +37,15 @@ const storefrontDomainSchema = new Schema<IStorefrontDomain>({
   verifiedAt: Date,
   lastCheckedAt: Date,
   failureReason: String,
+  tlsProvider: String,
+  tlsRequestedAt: Date,
+  tlsChallenges: [{
+    _id: false,
+    type: { type: String },
+    domain: String,
+    value: String,
+    reason: String,
+  }],
 }, { timestamps: true })
 
 export const StorefrontDomain = mongoose.model<IStorefrontDomain>('StorefrontDomain', storefrontDomainSchema)

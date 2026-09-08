@@ -161,5 +161,18 @@ services:
         sync: false
       - key: SEED_ADMIN_PHONE
         sync: false
+      # Storefront custom-domain TLS (spec §4.3). Without these the API cannot
+      # ask the host to issue a certificate, and a verified domain reports
+      # "TLS is not managed by this deployment" rather than waiting forever.
+      - key: HOSTING_PROVIDER
+        value: vercel
+      - key: VERCEL_API_TOKEN
+        sync: false
+      - key: VERCEL_PROJECT_ID
+        sync: false
+      - key: VERCEL_TEAM_ID
+        sync: false
+      - key: TLS_PROVISION_TIMEOUT_HOURS
+        value: "24"
     healthCheckPath: /api/health
     autoDeploy: true

@@ -23,6 +23,7 @@ import { BlogPost } from '../models/BlogPost.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
+import { hostingProvider } from '../services/hosting/index.js'
 import { requireEntitlement, getFeature, EntitlementError } from '../services/entitlements.js'
 import {
   validateSlug, validateDomain, newVerificationToken, checkDomainOwnership,
@@ -222,13 +223,32 @@ router.post('/me/domains/:id/verify', authenticate, asyncHandler(async (req, res
   record.status = 'verified'
   record.verifiedAt = new Date()
   record.failureReason = undefined
-  // TLS is provisioned by the hosting layer; surface the wait rather than
-  // claiming the domain is live before a certificate exists.
-  record.tlsStatus = 'provisioning'
+
+  // Hand the domain to the hosting layer and record what it actually said.
+  // This used to set 'provisioning' unconditionally with nothing behind it, so
+  // every custom domain sat provisioning forever — a worse answer than none.
+  const host = hostingProvider()
+  const provision = await host.attachDomain(record.domain)
+
+  record.tlsStatus = provision.tls
+  record.tlsProvider = host.name
+  record.tlsRequestedAt = new Date()
+  record.tlsChallenges = provision.challenges ?? []
+  record.failureReason = provision.tls === 'active' ? undefined : provision.reason
   await record.save()
 
-  await recordAudit(req, 'storefront.domain_verified', 'StorefrontDomain', String(record._id), { domain: record.domain })
-  success(res, { ...record.toObject(), id: String(record._id) }, 'Domain verified — TLS is being provisioned')
+  await recordAudit(req, 'storefront.domain_verified', 'StorefrontDomain', String(record._id), {
+    domain: record.domain,
+    tls: record.tlsStatus,
+    provider: host.name,
+  })
+
+  const message = record.tlsStatus === 'active'
+    ? 'Domain verified and live'
+    : host.configured
+      ? 'Domain verified — the certificate is being issued'
+      : 'Domain verified. TLS is not managed by this deployment.'
+  success(res, { ...record.toObject(), id: String(record._id) }, message)
 }))
 
 /**
@@ -266,7 +286,15 @@ router.delete('/me/domains/:id', authenticate, asyncHandler(async (req, res) => 
   const record = await StorefrontDomain.findOne({ _id: param(req.params.id), storefrontId: String(storefront._id) })
   if (!record) { error(res, 'Domain not found', 404); return }
 
+  // Release it at the host too. A domain left attached to the project keeps
+  // serving this storefront and, worse, blocks another seller from ever
+  // claiming it — Vercel refuses a domain already in use elsewhere.
+  const detached = await hostingProvider().detachDomain(record.domain)
+
   record.status = 'removed'
+  record.tlsStatus = 'none'
+  record.tlsChallenges = []
+  record.failureReason = detached.ok ? undefined : detached.reason
   await record.save()
   if (storefront.canonicalDomain === record.domain) {
     storefront.canonicalDomain = undefined

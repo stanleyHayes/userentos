@@ -100,7 +100,17 @@ export function AppearanceMenu({ className = '' }: { className?: string }) {
             id={id}
             role="dialog"
             aria-labelledby={`${id}-title`}
-            className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-border/60 bg-white p-4 shadow-xl dark:border-[#252a3a]/60 dark:bg-[#161927] dark:shadow-black/40"
+            /*
+             * Pinned to the viewport on mobile, to the trigger from sm up.
+             *
+             * `absolute right-0` anchors to the TRIGGER's right edge, and the
+             * trigger sits mid-header on a phone with several buttons to its
+             * right — so a panel this wide ran off the left of the screen.
+             * Below sm it is fixed between two gutters instead, clearing the
+             * h-16 header — the same treatment the notification and user menus
+             * in Header.tsx already use, so all three behave alike.
+             */
+            className="fixed left-2 right-2 top-16 z-50 rounded-2xl border border-border/60 bg-white p-4 shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[22rem] dark:border-[#252a3a]/60 dark:bg-[#161927] dark:shadow-black/40"
           >
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>

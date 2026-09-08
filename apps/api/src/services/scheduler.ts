@@ -29,6 +29,7 @@ import { Conversation, Message } from '../models/Conversation.js'
 import { acquireCronLock } from './cronLock.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
+import { pollPendingCertificates } from './hosting/poll.js'
 import { retryUnprocessedWebhooks, reconcilePendingTransactions } from './marketplace/reconcile.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 
@@ -673,6 +674,18 @@ export function startScheduler() {
       }
     } catch (err) {
       logger.error(`[Cron] Scheduled post publishing failed: ${(err as Error).message}`)
+    }
+  }, { timezone: GHANA_TZ })
+
+  // Custom-domain certificates (spec §4.3). Attaching a domain starts issuance;
+  // this is what finishes it. Every 5 minutes because a seller who has just
+  // pointed their DNS is watching the screen.
+  cron.schedule('*/5 * * * *', async () => {
+    if (!(await acquireCronLock('tls-provisioning', LOCK_TTL_RECONCILE))) return
+    try {
+      await pollPendingCertificates()
+    } catch (err) {
+      logger.error(`[Cron] TLS provisioning poll failed: ${(err as Error).message}`)
     }
   }, { timezone: GHANA_TZ })
 
