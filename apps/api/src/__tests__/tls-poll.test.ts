@@ -13,8 +13,21 @@ const { pollPendingCertificates, TLS_TIMEOUT_HOURS } = await import('../services
 const NOW = new Date('2026-09-08T12:00:00Z')
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000)
 
+/** The fields the poller reads or writes on a domain row. */
+interface FakeRow {
+  domain: string
+  tlsStatus: string
+  tlsRequestedAt?: Date
+  verifiedAt?: Date
+  createdAt: Date
+  lastCheckedAt?: Date
+  failureReason?: string
+  tlsChallenges?: unknown[]
+  save: ReturnType<typeof vi.fn>
+}
+
 /** A pending domain row with a save() we can assert against. */
-function row(overrides: Record<string, unknown> = {}) {
+function row(overrides: Partial<FakeRow> = {}): FakeRow {
   return {
     domain: 'shop.com',
     tlsStatus: 'provisioning',
@@ -25,7 +38,7 @@ function row(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function pending(rows: ReturnType<typeof row>[]) {
+function pending(rows: FakeRow[]) {
   findMock.mockReturnValue({ limit: () => Promise.resolve(rows) })
 }
 

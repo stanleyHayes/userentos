@@ -2394,7 +2394,10 @@ export async function seedDatabase() {
 
   // Keep a copy at the repo root for easy access during development.
   try {
-    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+    // src/models -> src -> api -> apps -> repo root. This was one level short
+    // after the move to apps/*, so every reseed dropped a stray
+    // apps/credentials.txt instead of updating the one at the root.
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
     fs.writeFileSync(path.join(repoRoot, 'credentials.txt'), `${credentialsLines.join('\n')}\n`)
   } catch {
     // Non-fatal — the console output above is the source of truth.
