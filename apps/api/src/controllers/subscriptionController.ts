@@ -210,6 +210,7 @@ export const subscriptionController = {
         phone: phone ?? '',
         reference,
         narration: `RentOS subscription: ${pkg.name}`,
+        payerEmail: req.user!.email,
       })
 
       payment.providerRef = result.providerRef

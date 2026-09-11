@@ -24,6 +24,15 @@ export interface CollectionInput {
   reference: string
   /** Short narration shown on the payer's prompt / statement. */
   narration: string
+  /**
+   * The payer's email, where the rail wants one.
+   *
+   * Paystack keys its customer records on email and sends the receipt there.
+   * Without it every tenant collapses into a single customer record and nobody
+   * gets a receipt, so pass the real payer whenever the caller knows it.
+   * Optional because the telco rails have no use for it.
+   */
+  payerEmail?: string
 }
 
 export interface InitiateResult {

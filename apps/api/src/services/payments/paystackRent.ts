@@ -155,9 +155,11 @@ function makePaystackProvider(id: Exclude<ProviderId, 'bank_transfer'>): Payment
       const data = await call<ChargeResponse>('/charge', {
         method: 'POST',
         body: {
-          // Paystack requires an email; it is the payer's receipt address and
-          // is not otherwise used by this flow.
-          email: envOr('PAYSTACK_COLLECTION_EMAIL', 'payments@userentos.com'),
+          // The payer's own address when we know it: Paystack keys customers
+          // on email and sends the receipt there, so a shared fallback would
+          // file every tenant's rent under one customer and send nobody a
+          // receipt. The platform address is only a last resort.
+          email: input.payerEmail?.trim() || envOr('PAYSTACK_COLLECTION_EMAIL', 'payments@userentos.com'),
           amount: String(toMinorUnits(input.amount)),
           currency: 'GHS',
           reference: input.reference,

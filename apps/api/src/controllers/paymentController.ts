@@ -89,6 +89,7 @@ export const paymentController = {
         phone: phone ?? '',
         reference,
         narration: `Rent payment for ${agreement.propertyId}`,
+        payerEmail: req.user!.email,
       })
 
       payment.providerRef = result.providerRef

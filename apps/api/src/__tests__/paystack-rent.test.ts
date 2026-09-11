@@ -101,6 +101,27 @@ describe('initiating a collection', () => {
     expect(r.instructions).toMatch(/one-time code/i)
   })
 
+  it('bills the real payer so the receipt reaches them', async () => {
+    const fetchMock = okFetch({ reference: 'PAY-E', status: 'pay_offline' })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await paystackMtnProvider.initiateCollection({
+      amount: 10, phone: '0551234987', reference: 'PAY-E', narration: 'Rent',
+      payerEmail: 'kwame@rentos.gh',
+    })
+
+    // A shared address would file every tenant under one Paystack customer and
+    // send nobody a receipt.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).email).toBe('kwame@rentos.gh')
+  })
+
+  it('falls back to the platform address when the payer has no email', async () => {
+    const fetchMock = okFetch({ reference: 'PAY-F', status: 'pay_offline' })
+    vi.stubGlobal('fetch', fetchMock)
+    await paystackMtnProvider.initiateCollection({ amount: 10, phone: '0551234987', reference: 'PAY-F', narration: 'Rent', payerEmail: '  ' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).email).toBe('payments@userentos.com')
+  })
+
   it('surfaces the provider display text to the payer when there is one', async () => {
     vi.stubGlobal('fetch', okFetch({ reference: 'PAY-4', status: 'pay_offline', display_text: 'Dial *170# to approve' }))
     const r = await paystackMtnProvider.initiateCollection({ amount: 10, phone: '0551234987', reference: 'PAY-4', narration: 'Rent' })

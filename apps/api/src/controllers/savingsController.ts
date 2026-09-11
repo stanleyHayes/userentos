@@ -78,6 +78,7 @@ export const savingsController = {
       phone: phone ?? '',
       reference,
       narration: 'RentOS wallet deposit',
+      payerEmail: req.user!.email,
     })
 
     payment.providerRef = result.providerRef
