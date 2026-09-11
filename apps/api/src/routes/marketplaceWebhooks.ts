@@ -14,6 +14,8 @@ import { MarketplaceTransaction } from '../models/MarketplaceTransaction.js'
 import { WebhookEvent } from '../models/WebhookEvent.js'
 import { verifyWebhookSignature, verifyTransaction } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
+import { finalizePayment } from '../services/payments/finalize.js'
+import { paystackMtnProvider } from '../services/payments/paystackRent.js'
 
 const router = Router()
 const rawBody = express.raw({ type: '*/*', limit: '256kb' })
@@ -87,7 +89,14 @@ router.post('/paystack', rawBody, async (req: Request, res: Response) => {
 
     const transaction = await MarketplaceTransaction.findOne({ reference })
     if (!transaction) {
-      logger.warn(`[MarketplaceWebhook] no transaction for reference ${reference}`)
+      // Paystack posts EVERY event for the account to a single webhook URL, so
+      // a rent/savings/subscription charge arrives here too. Before this it was
+      // logged and dropped, which would have left every Paystack-rail rent
+      // payment stuck at pending until the reconcile sweep caught it.
+      const handled = await finalizePayment(paystackMtnProvider.parseWebhook(raw), { source: 'webhook' })
+      if (!handled) {
+        logger.warn(`[MarketplaceWebhook] reference ${reference} matched no marketplace transaction and no payment`)
+      }
       return
     }
 

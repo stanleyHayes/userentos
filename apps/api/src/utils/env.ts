@@ -33,3 +33,20 @@ export function envNumber(name: string, fallback: number): number {
   const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : fallback
 }
+
+/**
+ * The platform's public origin, with any trailing slash removed.
+ *
+ * Callback URLs handed to a payment provider MUST be absolute — a provider
+ * that receives "/api/webhooks/..." has nowhere to send the confirmation, and
+ * the payment silently never completes. Building one by interpolating a
+ * possibly-empty env var is how that happens, so callers go through here.
+ */
+export function publicBaseUrl(): string {
+  return envOr('PUBLIC_BASE_URL', 'https://userentos.com').replace(/\/+$/, '')
+}
+
+/** An absolute URL under the public origin, for a provider to call back to. */
+export function publicUrl(path: string): string {
+  return `${publicBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`
+}

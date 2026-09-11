@@ -21,10 +21,13 @@ import type {
   WebhookEvent,
   ProviderStatus,
 } from './types.js'
+import { envOr } from '../../utils/env.js'
 
 const WEBHOOK_SECRET = process.env.BANK_PSP_WEBHOOK_SECRET ?? ''
-const DEPOSIT_ACCOUNT = process.env.BANK_DEPOSIT_ACCOUNT ?? '0000000000'
-const DEPOSIT_BANK = process.env.BANK_DEPOSIT_BANK_NAME ?? 'Stanbic Bank Ghana'
+// envOr, not ??: a variable present but blank is an empty STRING, which would
+// show the payer an empty account number to transfer money into.
+const DEPOSIT_ACCOUNT = envOr('BANK_DEPOSIT_ACCOUNT', '0000000000')
+const DEPOSIT_BANK = envOr('BANK_DEPOSIT_BANK_NAME', 'Stanbic Bank Ghana')
 
 function mapStatus(s: string | undefined | null): ProviderStatus {
   switch ((s ?? '').toLowerCase()) {

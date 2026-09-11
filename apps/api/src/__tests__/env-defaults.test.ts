@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { envOr, envOptional, envNumber } from '../utils/env.js'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { envOr, envOptional, envNumber, publicUrl } from '../utils/env.js'
 
 /**
  * An empty environment variable must behave as ABSENT.
@@ -77,5 +77,33 @@ describe('env reads with a meaningful default do not use ?? (regression guard)',
         .map((m) => m[1])
       expect(offenders, `${file} must not default a non-empty value with ??`).toEqual([])
     }
+  })
+})
+
+describe('publicUrl (payment provider callbacks)', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  it('builds an absolute url from the configured origin', () => {
+    vi.stubEnv('PUBLIC_BASE_URL', 'https://api.userentos.com')
+    expect(publicUrl('/api/webhooks/payments/telecel')).toBe('https://api.userentos.com/api/webhooks/payments/telecel')
+  })
+
+  it('never yields a relative url when the variable is blank', () => {
+    // The bug: `${process.env.PUBLIC_BASE_URL ?? ''}/api/...` handed a payment
+    // provider a path with no host, so the confirmation had nowhere to go.
+    vi.stubEnv('PUBLIC_BASE_URL', '   ')
+    const url = publicUrl('/api/webhooks/payments/telecel')
+    expect(url.startsWith('http')).toBe(true)
+    expect(() => new URL(url)).not.toThrow()
+  })
+
+  it('does not double the slash when the origin has a trailing one', () => {
+    vi.stubEnv('PUBLIC_BASE_URL', 'https://api.userentos.com/')
+    expect(publicUrl('/api/x')).toBe('https://api.userentos.com/api/x')
+  })
+
+  it('accepts a path without a leading slash', () => {
+    vi.stubEnv('PUBLIC_BASE_URL', 'https://api.userentos.com')
+    expect(publicUrl('api/x')).toBe('https://api.userentos.com/api/x')
   })
 })

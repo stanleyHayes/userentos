@@ -18,7 +18,7 @@
  */
 
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto'
-import { envOr } from '../../utils/env.js'
+import { envOr, publicUrl } from '../../utils/env.js'
 import type {
   PaymentProvider,
   CollectionInput,
@@ -31,7 +31,10 @@ const BASE_URL = envOr('MTN_MOMO_BASE_URL', 'https://sandbox.momodeveloper.mtn.c
 const SUBSCRIPTION_KEY = process.env.MTN_MOMO_SUBSCRIPTION_KEY ?? ''
 const API_USER = process.env.MTN_MOMO_API_USER ?? ''
 const API_KEY = process.env.MTN_MOMO_API_KEY ?? ''
-const CALLBACK_URL = process.env.MTN_MOMO_CALLBACK_URL ?? ''
+// Defaults to this platform's own MTN webhook rather than to nothing. `?? ''`
+// meant an unset variable sent `X-Callback-Url: ''` — an empty header is not
+// the same as no header, and MTN then has nowhere to report the result.
+const CALLBACK_URL = envOr('MTN_MOMO_CALLBACK_URL', publicUrl('/api/webhooks/payments/mtn-momo'))
 const TARGET_ENV = envOr('MTN_MOMO_TARGET_ENV', 'sandbox')
 
 interface CachedToken { value: string; expiresAt: number }
@@ -96,7 +99,10 @@ class MtnMomoProvider implements PaymentProvider {
         Authorization: `Bearer ${token}`,
         'X-Reference-Id': xReferenceId,
         'X-Target-Environment': TARGET_ENV,
-        'X-Callback-Url': CALLBACK_URL,
+        // Omitted entirely when there is no callback to give: MTN documents
+        // polling as the fallback, and a blank header is malformed rather than
+        // absent.
+        ...(CALLBACK_URL ? { 'X-Callback-Url': CALLBACK_URL } : {}),
         'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY,
         'Content-Type': 'application/json',
       },

@@ -1,13 +1,22 @@
 /**
  * Payment provider factory.
  *
- * Reads `PAYMENTS_PROVIDER_MODE` (`'live' | 'simulated'`, default `simulated`).
- * Returns the live adapter for the requested method when in live mode, or the
- * simulator adapter (which preserves legacy auto-complete behavior) otherwise.
+ * Two independent switches:
  *
- * Centralizing the toggle here means the controller and webhook routes never
- * branch on the mode — they just call `getProvider(method).initiateCollection(...)`
- * and the right thing happens for the current environment.
+ *  - `PAYMENTS_PROVIDER_MODE` (`'live' | 'simulated'`) decides whether real
+ *    money moves at all.
+ *  - `PAYMENTS_RAIL` (`'paystack' | 'direct'`) decides WHO carries a live
+ *    mobile-money collection: Paystack, which already fronts MTN, Telecel and
+ *    AirtelTigo for the marketplace side, or the three direct telco
+ *    integrations, each of which needs its own commercial contract.
+ *
+ * Paystack is the default rail because it is the one relationship the platform
+ * actually has. `direct` is kept so the telco adapters remain reachable for
+ * anyone who does sign those contracts.
+ *
+ * Centralizing both here means the controller and webhook routes never branch —
+ * they call `getProvider(method).initiateCollection(...)` and the right thing
+ * happens for the current environment.
  */
 
 import type { PaymentProvider, ProviderId } from './types.js'
@@ -16,6 +25,8 @@ import { telecelCashProvider } from './telecelCash.js'
 import { airtelTigoMoneyProvider } from './airteltigoMoney.js'
 import { bankTransferProvider } from './bankTransfer.js'
 import { makeSimulator } from './simulator.js'
+import { paystackRentProviders } from './paystackRent.js'
+import { envOr } from '../../utils/env.js'
 
 export type PaymentMode = 'live' | 'simulated'
 
@@ -37,16 +48,31 @@ export function getMode(): PaymentMode {
   return 'simulated'
 }
 
-const liveProviders: Record<ProviderId, PaymentProvider> = {
+/** The direct telco/bank integrations, one contract per network. */
+const directProviders: Record<ProviderId, PaymentProvider> = {
   mtn_momo: mtnMomoProvider,
   telecel_cash: telecelCashProvider,
   airteltigo_money: airtelTigoMoneyProvider,
   bank_transfer: bankTransferProvider,
 }
 
+export type PaymentRail = 'paystack' | 'direct'
+
+export function getRail(): PaymentRail {
+  return envOr('PAYMENTS_RAIL', 'paystack') === 'direct' ? 'direct' : 'paystack'
+}
+
+/**
+ * Bank transfer has no Paystack equivalent in this flow, so it always uses its
+ * own adapter regardless of rail — a caller asking for a bank collection gets
+ * one rather than a confusing failure.
+ */
 export function getProvider(method: ProviderId): PaymentProvider {
-  if (getMode() === 'live') return liveProviders[method]
-  return makeSimulator(method)
+  if (getMode() !== 'live') return makeSimulator(method)
+  if (getRail() === 'paystack' && method !== 'bank_transfer') {
+    return paystackRentProviders[method]
+  }
+  return directProviders[method]
 }
 
 export type { PaymentProvider, ProviderId } from './types.js'

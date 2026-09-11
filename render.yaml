@@ -33,6 +33,11 @@ services:
       # Must be set in the Render dashboard ('live' for real collections).
       # Never hardcode 'simulated' here — in production the simulator fakes
       # every payment without moving money.
+      # paystack (default) or direct — see apps/api/.env.example.
+      - key: PAYMENTS_RAIL
+        value: paystack
+      - key: PAYSTACK_COLLECTION_EMAIL
+        sync: false
       - key: PAYMENTS_PROVIDER_MODE
         sync: false
       # MTN MoMo Collections. BASE_URL defaults to the sandbox host, so it must

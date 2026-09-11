@@ -10,7 +10,7 @@
  */
 
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
-import { envOr } from '../../utils/env.js'
+import { envOr, publicUrl } from '../../utils/env.js'
 import type {
   PaymentProvider,
   CollectionInput,
@@ -76,7 +76,10 @@ class TelecelCashProvider implements PaymentProvider {
       currency: 'GHS',
       msisdn: input.phone,
       description: input.narration,
-      callbackUrl: `${process.env.PUBLIC_BASE_URL ?? ''}/api/webhooks/payments/telecel`,
+      // Absolute, always: `${PUBLIC_BASE_URL ?? ''}` produced a RELATIVE url
+      // whenever the variable was unset or blank, which Telecel cannot call
+      // back — the charge would succeed and never be confirmed.
+      callbackUrl: publicUrl('/api/webhooks/payments/telecel'),
     }
     const res = await fetch(`${BASE_URL}/v1/collections/charge`, {
       method: 'POST',

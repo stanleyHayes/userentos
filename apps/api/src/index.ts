@@ -88,6 +88,7 @@ import achievementRoutes from './routes/achievements.js'
 import featureFlagRoutes from './routes/featureFlags.js'
 import { bootstrapFeatureFlags } from './bootstrapFeatureFlags.js'
 import { bootstrapEntityApprovals } from './bootstrapEntityApprovals.js'
+import { bootstrapPlanEntitlements } from './bootstrapPlanEntitlements.js'
 import adminViewsRoutes from './routes/adminViews.js'
 import biometricAuthRoutes from './routes/biometricAuth.js'
 import paymentWebhookRoutes from './routes/paymentWebhooks.js'
@@ -449,6 +450,13 @@ async function start() {
     } else {
       logger.info('Bootstrap: bootstrapEntityApprovals already ran on this database — skipping.')
     }
+
+    // Deliberately NOT behind runBootstrap's once-per-database marker. The
+    // plans it grants against are created by a seed that may not have run yet
+    // on first boot; a marker would record "done" against zero plans and never
+    // look again, leaving every paid tier granting nothing forever. It is
+    // idempotent and skips any plan an admin has already authored grants for.
+    await bootstrapPlanEntitlements()
     startScheduler()
 
     // Load or train ML pricing model
