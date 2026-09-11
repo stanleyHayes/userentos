@@ -46,7 +46,21 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        /*
+         * Use the Chrome already installed on the machine rather than
+         * Playwright's bundled build.
+         *
+         * The bundled chrome-headless-shell this version asks for (build 1217)
+         * is no longer downloadable, so `playwright install` fetches a
+         * different build and every spec fails with "Executable doesn't
+         * exist" — 27 of 27, before a single assertion runs. Pinning to the
+         * stable channel makes the suite depend on a browser that is actually
+         * present. Override with PLAYWRIGHT_CHANNEL if you need the bundled one.
+         */
+        channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome',
+      },
     },
   ],
 
