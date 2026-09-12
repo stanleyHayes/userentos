@@ -24,6 +24,12 @@ test.describe('rent payment', () => {
     await page.getByTestId('payment-method-select').click()
     await page.getByRole('option', { name: /mtn/i }).click()
 
+    // Wait for the MUI Select's option list to close before submitting.
+    // Without this the submit click lands on the still-closing backdrop and is
+    // swallowed: the form stays filled, no request is made, and the failure
+    // looks like a missing instructions modal rather than a lost click.
+    await expect(page.getByRole('listbox')).toBeHidden()
+
     await page.getByTestId('payment-submit').click()
 
     // Simulator shows instructions modal; dismiss it so the list is visible.
