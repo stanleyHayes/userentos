@@ -368,3 +368,47 @@ describe('valuation explainability (roadmap §5)', () => {
     expect(sparse.dataQuality.suppliedFields).toBeLessThan(sparse.dataQuality.totalFields)
   })
 })
+
+
+describe('training is reproducible', () => {
+  /**
+   * Training used Math.random() for weight initialisation, so the same
+   * properties produced a different model every run. A logged modelVersion
+   * then identified a moment in time rather than a model, and a past
+   * valuation could not be re-derived — which is the whole point of recording
+   * one. It also made the explainability test flaky: an above-average
+   * property occasionally priced below the baseline.
+   */
+  function corpus(): IProperty[] {
+    return Array.from({ length: 40 }, (_, i) => makeProperty({
+      rentAmount: 1500 + (i % 7) * 200,
+      bedrooms: 1 + (i % 4),
+      bathrooms: 1 + (i % 3),
+      floorArea: 55 + i * 2,
+      yearBuilt: 2008 + (i % 12),
+    }) as IProperty)
+  }
+
+  it('produces identical weights from identical data', () => {
+    const a = new RentPriceModel()
+    const b = new RentPriceModel()
+    a.train(corpus(), { maxEpochs: 300 })
+    b.train(corpus(), { maxEpochs: 300 })
+
+    expect(a.weights).toEqual(b.weights)
+    expect(a.bias).toBe(b.bias)
+  })
+
+  it('produces identical predictions from identical data', () => {
+    const a = new RentPriceModel()
+    const b = new RentPriceModel()
+    a.train(corpus(), { maxEpochs: 300 })
+    b.train(corpus(), { maxEpochs: 300 })
+
+    const input = {
+      city: 'Accra', type: 'apartment', bedrooms: 3, bathrooms: 2,
+      floorArea: 110, region: 'Greater Accra', yearBuilt: 2016,
+    }
+    expect(a.predict(input).predictedRent).toBe(b.predict(input).predictedRent)
+  })
+})

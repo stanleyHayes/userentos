@@ -19,6 +19,7 @@ import { validateCoupon } from '../services/marketplace/coupons.js'
 import {
   listBanks, resolveAccount, createSubaccount, updateSubaccount,
   initializeSplitTransaction, verifyTransaction,
+  initializePlatformTransaction,
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
 import { applySuccessfulCharge } from '../services/marketplace/settle.js'
@@ -155,6 +156,9 @@ const initSchema = z.object({
   purpose: z.string().min(1).max(60),
   /** The order being paid for, for purposes that have one. */
   bookingId: z.string().optional(),
+  /** The campaign a sponsorship payment is for. Its PRICE still comes from
+   *  the server's own record, never from the request. */
+  sponsorshipId: z.string().max(64).optional(),
   /** Receipt address. Not used to identify anyone. */
   email: z.string().email(),
   // No discountAmount either — the discount is derived from couponCode below.
@@ -202,8 +206,75 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     purpose: input.purpose,
     buyerId: req.user!.userId,
     bookingId: input.bookingId,
+    sponsorshipId: input.sponsorshipId,
   })
   if (!quote.ok) { error(res, quote.reason, quote.status); return }
+
+  /*
+   * A platform charge has no seller, no subaccount and no split: the buyer is
+   * paying Rentos for something Rentos provides. Sponsorship is the case that
+   * exists today — campaigns were created 'pending_payment' and settlement
+   * already knew how to activate them, but nothing could charge for one, so
+   * they sat unpaid forever.
+   *
+   * Coupons are deliberately not applied here. validateCoupon resolves a
+   * funding source of 'platform' or 'seller', and on a charge with no seller
+   * half of that has no meaning; a discount on platform revenue is a pricing
+   * decision, not a checkout one.
+   */
+  if (quote.payee === 'platform') {
+    const reference = input.idempotencyKey
+      ?? `SPN-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
+
+    const transaction = await MarketplaceTransaction.create({
+      reference,
+      buyerId: req.user!.userId,
+      buyerEmail: input.email,
+      sponsorshipId: quote.sponsorshipId,
+      purpose: input.purpose,
+      currency: 'GHS',
+      grossAmount: quote.amount,
+      // The whole charge is platform revenue; there is nobody to split with.
+      platformFeePercent: 100,
+      platformFeeAmount: quote.amount,
+      sellerExpectedAmount: 0,
+      feeBearer: 'platform',
+      discountAmount: 0,
+      status: 'initialized',
+    })
+
+    try {
+      const init = await initializePlatformTransaction({
+        email: input.email,
+        amount: quote.amount,
+        reference,
+        metadata: {
+          purpose: input.purpose,
+          sponsorshipId: quote.sponsorshipId,
+          description: quote.description,
+        },
+      })
+
+      transaction.providerAccessCode = init.accessCode
+      transaction.providerReference = init.reference
+      transaction.status = 'pending'
+      await transaction.save()
+
+      success(res, {
+        reference,
+        authorizationUrl: init.authorizationUrl,
+        accessCode: init.accessCode,
+        payableAmount: quote.amount,
+        platformFeeAmount: quote.amount,
+        sellerExpectedAmount: 0,
+      }, 'Payment initialized', 201)
+    } catch (err) {
+      transaction.status = 'failed'
+      await transaction.save()
+      error(res, `Could not start the payment: ${(err as Error).message}`, 502)
+    }
+    return
+  }
 
   const account = await PaymentAccount.findOne({ ownerId: quote.sellerId }).lean()
   if (!account?.subaccountCode || !account.readyToReceivePayments) {

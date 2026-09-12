@@ -83,11 +83,27 @@ describe('marketplace checkout cannot be told its own discount', () => {
   })
 
   it('feeds the split the derived discount, never the input', () => {
+    // Sliced by matching the call's own parentheses rather than by hunting
+    // for the next `const reference`: the platform-charge branch added an
+    // earlier one, which silently emptied the slice and made this assertion
+    // vacuous instead of failing loudly.
     const init = src.slice(src.indexOf("router.post('/initialize'"))
-    const call = init.slice(init.indexOf('calculateSplit('), init.indexOf('const reference'))
+    const start = init.indexOf('calculateSplit(')
+    expect(start).toBeGreaterThan(-1)
+    const call = init.slice(start, init.indexOf('})', start) + 2)
+
     expect(call).toContain('discountAmount,')
     expect(call).toContain('grossAmount: quote.amount')
     expect(call).not.toContain('input.amount')
+  })
+
+  it('does not let a platform charge take its amount from the caller either', () => {
+    // Sponsorship is billed by the platform, so there is no seller and no
+    // split — but the price must still come from the campaign record.
+    const init = src.slice(src.indexOf("router.post('/initialize'"))
+    const branch = init.slice(init.indexOf("quote.payee === 'platform'"))
+    expect(branch).toContain('grossAmount: quote.amount')
+    expect(branch).not.toContain('input.amount')
   })
 })
 

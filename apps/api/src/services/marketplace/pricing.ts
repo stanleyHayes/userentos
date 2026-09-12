@@ -19,20 +19,31 @@
  */
 import { isValidObjectId } from 'mongoose'
 import { ServiceBooking } from '../../models/ServiceBooking.js'
+import { Sponsorship } from '../../models/Sponsorship.js'
 
 export interface QuoteRequest {
   purpose: string
   /** The authenticated buyer. A quote is always resolved for someone. */
   buyerId: string
   bookingId?: string
+  sponsorshipId?: string
 }
 
+/**
+ * Who the money is for.
+ *
+ * 'seller' is a sale between two users, split at settlement. 'platform' is
+ * Rentos charging for something it provides itself, with no split and no
+ * subaccount — the distinction decides which Paystack call is made, so it is
+ * part of the quote rather than inferred downstream.
+ */
 export type Quote =
-  | { ok: true; amount: number; sellerId: string; description: string; bookingId?: string }
+  | { ok: true; payee: 'seller'; amount: number; sellerId: string; description: string; bookingId?: string }
+  | { ok: true; payee: 'platform'; amount: number; description: string; sponsorshipId?: string }
   | { ok: false; reason: string; status: number }
 
 /** The purposes the server can price. Anything else cannot be paid for here. */
-export const PRICEABLE_PURPOSES = ['service_booking'] as const
+export const PRICEABLE_PURPOSES = ['service_booking', 'sponsorship'] as const
 
 /**
  * A completed service booking, priced at the quote the worker gave and the
@@ -78,10 +89,59 @@ async function quoteServiceBooking(req: QuoteRequest): Promise<Quote> {
 
   return {
     ok: true,
+    payee: 'seller',
     amount,
     sellerId: booking.workerUserId,
     description: `${booking.type} booking`,
     bookingId: String(booking._id),
+  }
+}
+
+/**
+ * A sponsorship campaign, priced at the figure recorded when it was created.
+ *
+ * Sponsorship is platform revenue: the buyer pays Rentos for placement rather
+ * than paying another user. Until now there was no way to pay for one at all —
+ * a campaign was created 'pending_payment', settlement already knew how to
+ * activate it, and the only checkout route refused the purpose because it pays
+ * a seller's subaccount and there is no seller. Campaigns sat unpaid forever.
+ */
+async function quoteSponsorship(req: QuoteRequest): Promise<Quote> {
+  if (!req.sponsorshipId) {
+    return { ok: false, reason: 'A sponsorship payment needs the campaign it is paying for.', status: 400 }
+  }
+  if (!isValidObjectId(req.sponsorshipId)) {
+    return { ok: false, reason: 'That campaign does not exist.', status: 404 }
+  }
+
+  const sponsorship = await Sponsorship.findById(req.sponsorshipId).lean()
+  // Same 404 for "missing" and "not yours", so a caller cannot probe which
+  // campaign ids exist.
+  if (!sponsorship || sponsorship.ownerId !== req.buyerId) {
+    return { ok: false, reason: 'That campaign does not exist.', status: 404 }
+  }
+
+  if (sponsorship.status !== 'pending_payment') {
+    return {
+      ok: false,
+      reason: `This campaign is ${sponsorship.status} and is not awaiting payment.`,
+      status: 409,
+    }
+  }
+
+  // `spend` is what the campaign recorded at creation, copied from the
+  // admin-configured product price. It is the server's own figure — the buyer
+  // never supplies it — which is the whole point of resolving here.
+  if (!sponsorship.spend || sponsorship.spend <= 0) {
+    return { ok: false, reason: 'This campaign has no price to charge.', status: 409 }
+  }
+
+  return {
+    ok: true,
+    payee: 'platform',
+    amount: sponsorship.spend,
+    description: `Sponsorship campaign ${sponsorship.placement ?? ''}`.trim(),
+    sponsorshipId: String(sponsorship._id),
   }
 }
 
@@ -91,15 +151,7 @@ export async function resolveQuote(req: QuoteRequest): Promise<Quote> {
       return quoteServiceBooking(req)
 
     case 'sponsorship':
-      // Sponsorship is platform revenue, not a sale between two users. This
-      // route pays a SELLER's Paystack subaccount and takes a platform cut;
-      // there is no seller, and the buyer must not be paid their own money.
-      // It needs a plain charge to the platform, which does not exist yet.
-      return {
-        ok: false,
-        reason: 'Sponsorship is billed by the platform and cannot be paid through seller checkout.',
-        status: 400,
-      }
+      return quoteSponsorship(req)
 
     default:
       return { ok: false, reason: `"${req.purpose}" is not something that can be paid for here.`, status: 400 }

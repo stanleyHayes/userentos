@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const findById = vi.fn()
 vi.mock('../models/ServiceBooking.js', () => ({ ServiceBooking: { findById } }))
 
+const sponsorshipFindById = vi.fn()
+vi.mock('../models/Sponsorship.js', () => ({ Sponsorship: { findById: sponsorshipFindById } }))
+
 const { resolveQuote, PRICEABLE_PURPOSES } = await import('../services/marketplace/pricing.js')
 
 const BK = '6aa4699041cd5dd00132cfa1'
@@ -29,7 +32,8 @@ describe('the server prices the purchase (spec §8)', () => {
   it('takes the amount from the accepted quote, not from the caller', async () => {
     findById.mockReturnValue(lean(booking()))
     await expect(ask()).resolves.toEqual({
-      ok: true, amount: 400, sellerId: 'worker1', description: 'repair booking', bookingId: BK,
+      ok: true, payee: 'seller', amount: 400, sellerId: 'worker1',
+      description: 'repair booking', bookingId: BK,
     })
   })
 
@@ -87,21 +91,96 @@ describe('unpriceable purposes are refused, not trusted', () => {
       .resolves.toMatchObject({ ok: false, status: 400 })
   })
 
-  it('refuses sponsorship — it is platform revenue, not a sale between users', async () => {
-    // This route pays a SELLER's subaccount and takes a platform cut. There is
-    // no seller, and the buyer must not be paid their own money.
+  it('still needs to know WHICH campaign a sponsorship pays for', async () => {
+    // Sponsorship is now priceable, but the price comes from the campaign
+    // record. Without an id there is nothing to read it from, and the amount
+    // must never fall back to the caller's.
     const q = await resolveQuote({ purpose: 'sponsorship', buyerId: 'buyer1' })
     expect(q).toMatchObject({ ok: false, status: 400 })
-    expect((q as { reason: string }).reason).toContain('platform')
   })
 
   it('only advertises purposes it can actually price', () => {
-    expect([...PRICEABLE_PURPOSES]).toEqual(['service_booking'])
+    expect([...PRICEABLE_PURPOSES]).toEqual(['service_booking', 'sponsorship'])
   })
 
   it('reads a malformed id as not found rather than leaking a CastError', async () => {
     await expect(resolveQuote({ purpose: 'service_booking', buyerId: 'b', bookingId: 'not-an-id' }))
       .resolves.toEqual({ ok: false, reason: 'That booking does not exist.', status: 404 })
     expect(findById).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('sponsorship is platform revenue, priced from the campaign (spec §9)', () => {
+  const SP = '6aa4699041cd5dd00132cfb2'
+
+  const campaign = (o: Record<string, unknown> = {}) => ({
+    _id: SP,
+    ownerId: 'buyer1',
+    placement: 'search_top',
+    spend: 250,
+    status: 'pending_payment',
+    ...o,
+  })
+
+  const buy = (o: Record<string, unknown> = {}) =>
+    resolveQuote({ purpose: 'sponsorship', buyerId: 'buyer1', sponsorshipId: SP, ...o })
+
+  beforeEach(() => {
+    sponsorshipFindById.mockReset()
+  })
+
+  it('can now be paid for at all', async () => {
+    // Campaigns were created pending_payment and settlement already knew how
+    // to activate them, but no route could charge for one — so every campaign
+    // sat unpaid forever.
+    sponsorshipFindById.mockReturnValue(lean(campaign()))
+    await expect(buy()).resolves.toEqual({
+      ok: true,
+      payee: 'platform',
+      amount: 250,
+      description: 'Sponsorship campaign search_top',
+      sponsorshipId: SP,
+    })
+  })
+
+  it('names no seller — there is nobody to split with', async () => {
+    sponsorshipFindById.mockReturnValue(lean(campaign()))
+    const quote = await buy()
+    expect(quote).not.toHaveProperty('sellerId')
+  })
+
+  it('takes the price from the campaign, never from the caller', async () => {
+    sponsorshipFindById.mockReturnValue(lean(campaign({ spend: 1200 })))
+    await expect(buy({ amount: 1 })).resolves.toMatchObject({ amount: 1200 })
+  })
+
+  it('refuses a campaign belonging to someone else, as a 404', async () => {
+    // Same answer as "missing", so a caller cannot probe which ids exist.
+    sponsorshipFindById.mockReturnValue(lean(campaign({ ownerId: 'someone-else' })))
+    await expect(buy()).resolves.toEqual({
+      ok: false, reason: 'That campaign does not exist.', status: 404,
+    })
+  })
+
+  it('refuses a campaign that is not awaiting payment', async () => {
+    // Without this, paying twice for an active campaign is possible.
+    for (const status of ['active', 'cancelled', 'expired', 'paused']) {
+      sponsorshipFindById.mockReturnValue(lean(campaign({ status })))
+      const quote = await buy()
+      expect(quote).toMatchObject({ ok: false, status: 409 })
+      expect((quote as { reason: string }).reason).toContain(status)
+    }
+  })
+
+  it('refuses a campaign with no price', async () => {
+    sponsorshipFindById.mockReturnValue(lean(campaign({ spend: 0 })))
+    await expect(buy()).resolves.toMatchObject({ ok: false, status: 409 })
+  })
+
+  it('reads a malformed id as not found rather than leaking a CastError', async () => {
+    await expect(resolveQuote({ purpose: 'sponsorship', buyerId: 'b', sponsorshipId: 'nope' }))
+      .resolves.toEqual({ ok: false, reason: 'That campaign does not exist.', status: 404 })
+    expect(sponsorshipFindById).not.toHaveBeenCalled()
   })
 })

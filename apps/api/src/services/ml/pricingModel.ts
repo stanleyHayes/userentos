@@ -66,6 +66,26 @@ export interface PredictionResult {
   sampleCount: number
 }
 
+/** Matches WEIGHT_INIT_SEED in ml-service/app/ml/model.py. */
+const WEIGHT_INIT_SEED = 42
+
+/**
+ * mulberry32 — a small, fast, well-distributed PRNG.
+ *
+ * Any deterministic generator would do; what matters is that it is seeded and
+ * stable across processes, so two training runs on the same data produce the
+ * same model.
+ */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 export class RentPriceModel {
   weights: number[] = []
   bias = 0
@@ -176,7 +196,15 @@ export class RentPriceModel {
     const yNorm = y.map(v => (v - targetMean) / targetStd)
 
     // Initialize weights (Xavier-like)
-    this.weights = Array(m).fill(0).map(() => (Math.random() - 0.5) * Math.sqrt(2 / m))
+    // Seeded, not Math.random(). Training was non-deterministic: the same
+    // properties produced a different model every run, so a logged
+    // modelVersion identified a moment in time rather than a reproducible
+    // model, and a valuation could never be re-derived. It also made the
+    // explainability test flaky — an above-average property occasionally
+    // priced below the baseline depending on where the weights started.
+    // pricingModel.py has always seeded this; the port did not.
+    const random = seededRandom(WEIGHT_INIT_SEED)
+    this.weights = Array(m).fill(0).map(() => (random() - 0.5) * Math.sqrt(2 / m))
     this.bias = 0
 
     let bestLoss = Infinity

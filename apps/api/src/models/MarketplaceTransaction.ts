@@ -14,7 +14,8 @@ export interface IMarketplaceTransaction extends Document {
   reference: string
   buyerId?: string
   buyerEmail: string
-  sellerId: string
+  /** Absent on a platform charge (sponsorship), where there is no seller. */
+  sellerId?: string
   storefrontId?: string
   propertyId?: string
   /** Set when this payment buys a sponsorship, so settling it can activate the campaign. */
@@ -52,7 +53,9 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   reference: { type: String, required: true, unique: true, index: true },
   buyerId: String,
   buyerEmail: { type: String, required: true },
-  sellerId: { type: String, required: true, index: true },
+  // Not required: a platform charge has no seller to pay. Only queries
+  // filter on this field; nothing dereferences it.
+  sellerId: { type: String, index: true },
   storefrontId: String,
   propertyId: String,
   sponsorshipId: { type: String, index: true },

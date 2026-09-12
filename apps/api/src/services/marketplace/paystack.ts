@@ -146,6 +146,48 @@ export async function initializeSplitTransaction(input: InitializeSplitInput): P
   return { authorizationUrl: data.authorization_url, accessCode: data.access_code, reference: data.reference }
 }
 
+export interface InitializePlatformInput {
+  email: string
+  /** Amount the buyer pays, in GHS major units. */
+  amount: number
+  reference: string
+  callbackUrl?: string
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * A charge that goes entirely to the platform, with no split.
+ *
+ * Sponsorship is platform revenue: the buyer is paying Rentos for placement,
+ * not paying another user for goods. Routing it through
+ * initializeSplitTransaction would need a subaccount that does not exist, and
+ * naming the buyer's own subaccount would pay them their own money back less
+ * a fee.
+ *
+ * Deliberately no `subaccount`, `bearer` or `transaction_charge`: every one of
+ * those only means something when there is a seller to split with.
+ */
+export async function initializePlatformTransaction(input: InitializePlatformInput): Promise<{
+  authorizationUrl: string
+  accessCode: string
+  reference: string
+}> {
+  const body: Record<string, unknown> = {
+    email: input.email,
+    amount: toMinorUnits(input.amount),
+    reference: input.reference,
+    currency: 'GHS',
+    metadata: input.metadata,
+  }
+  if (input.callbackUrl) body.callback_url = input.callbackUrl
+
+  const data = await call<{ authorization_url: string; access_code: string; reference: string }>(
+    '/transaction/initialize',
+    { method: 'POST', body },
+  )
+  return { authorizationUrl: data.authorization_url, accessCode: data.access_code, reference: data.reference }
+}
+
 export interface VerifiedTransaction {
   status: string
   reference: string
