@@ -416,41 +416,6 @@ export const propertyController = {
     success(res, { ...property.toObject(), id: property._id.toString() }, 'Property submitted for review')
   },
 
-  review: async (req: Request, res: Response) => {
-    const { status, rejectionReason } = req.body
-    if (!['approved', 'rejected'].includes(status)) {
-      error(res, 'Status must be approved or rejected')
-      return
-    }
-
-    const property = await Property.findById(param(req.params.id))
-    if (!property) { error(res, 'Property not found', 404); return }
-    if (property.listingStatus !== 'pending_review') {
-      error(res, 'Property is not pending review')
-      return
-    }
-
-    property.listingStatus = status
-    property.reviewedBy = req.user!.userId
-    property.reviewedAt = new Date()
-    if (status === 'approved') {
-      property.publishedAt = new Date()
-    } else {
-      property.rejectionReason = rejectionReason || ''
-    }
-    await property.save()
-
-    if (status === 'approved') {
-      notifyPropertyApproved(property.landlordId, property.title)
-      checkAndAward(property.landlordId, 'first_property_listed', { propertyId: property._id.toString() })
-        .catch((err) => console.warn('[Property] checkAndAward failed:', err.message))
-    } else {
-      notifyPropertyRejected(property.landlordId, property.title, property.rejectionReason)
-    }
-
-    success(res, { ...property.toObject(), id: property._id.toString() }, `Property ${status}`)
-  },
-
   uploadImages: async (req: Request, res: Response) => {
     const files = req.files as Express.Multer.File[]
     if (!files || files.length === 0) { error(res, 'No images uploaded'); return }

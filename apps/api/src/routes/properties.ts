@@ -32,7 +32,11 @@ router.post('/bulk', authenticate, requireRole('landlord', 'property_manager'), 
 router.post('/', authenticate, asyncHandler(propertyController.create))
 router.post('/:id/publish', authenticate, asyncHandler(propertyController.publish))
 // Approving/rejecting a listing is an admin moderation action.
-router.post('/:id/review', authenticate, requireRole('admin', 'super_admin'), asyncHandler(propertyController.review))
+// NOTE: POST /:id/review is served by propertyModeration.ts, which is mounted
+// on /api/properties BEFORE this router. The handler that used to be declared
+// here could never run — Express matched the moderation route first — and it
+// took a different body ({ status } rather than { action }), so anything
+// written against it failed validation against a route it never reached.
 router.patch('/:id', authenticate, asyncHandler(propertyController.update))
 router.delete('/:id', authenticate, asyncHandler(propertyController.delete))
 router.post('/:id/images', authenticate, upload.array('images', 10), asyncHandler(propertyController.uploadImages))

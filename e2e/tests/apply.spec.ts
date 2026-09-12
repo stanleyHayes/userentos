@@ -65,9 +65,12 @@ test.describe('property application', () => {
     const adminLoginData = await adminLoginRes.json()
     expect(adminLoginRes.ok(), `Admin login failed: ${JSON.stringify(adminLoginData)}`).toBeTruthy()
 
+    // The moderation router serves this path and takes an ACTION, not a status.
+    // The old { status: 'approved' } body targeted a handler that Express never
+    // reached, so this step had been failing validation rather than approving.
     const reviewRes = await request.post(`${API_BASE}/api/properties/${propertyId}/review`, {
       headers: { Authorization: `Bearer ${adminLoginData.data.token}` },
-      data: { status: 'approved' },
+      data: { action: 'approve' },
     })
     expect(reviewRes.ok(), `Listing approval failed: ${JSON.stringify(await reviewRes.json())}`).toBeTruthy()
 
