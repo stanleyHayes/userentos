@@ -68,6 +68,16 @@ function buildPropertyEmbeddingText(data: { title: string; description: string; 
   return parts.join('. ')
 }
 
+/*
+ * Everything the add-property wizard actually collects.
+ *
+ * zod strips unknown keys, so the fields missing from here were accepted by the
+ * API and silently discarded: bedrooms, bathrooms, furnished, parking, floor
+ * area, year built, floor, availability, the neighbourhood, and the ENTIRE
+ * tenant-preferences step. A landlord filled in two screens and none of it was
+ * saved — and the search filters for minBedrooms, furnished and parking then
+ * matched nothing on every property created through the product.
+ */
 const createPropertySchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
@@ -77,6 +87,7 @@ const createPropertySchema = z.object({
     city: z.string().min(1),
     region: z.string().min(1),
     digitalAddress: z.string().optional(),
+    neighborhood: z.string().optional(),
   }),
   rentAmount: z.number().positive(),
   rentDurationMonths: z.number().int().positive(),
@@ -84,6 +95,44 @@ const createPropertySchema = z.object({
   rules: z.array(z.string()).default([]),
   amenities: z.array(z.string()).default([]),
   coordinates: z.object({ lat: z.number(), lng: z.number() }).optional(),
+
+  // Step 2 — the property itself.
+  bedrooms: z.number().int().min(0).max(50).optional(),
+  bathrooms: z.number().int().min(0).max(50).optional(),
+  furnished: z.boolean().optional(),
+  parkingSpaces: z.number().int().min(0).max(50).optional(),
+  floorArea: z.number().positive().max(100_000).optional(),
+  yearBuilt: z.number().int().min(1800).max(2200).optional(),
+  floor: z.number().int().min(-5).max(200).optional(),
+  availableFrom: z.string().optional(),
+
+  // Step 3 — who the landlord will accept. Partial: the wizard does not ask
+  // for every field, and the model supplies defaults for the rest.
+  preferences: z.object({
+    minCreditScore: z.number().min(0).max(1000).optional(),
+    minIncomeMultiple: z.number().min(0).max(20).optional(),
+    maxOccupants: z.number().int().min(0).max(50).optional(),
+    allowSmokers: z.boolean().optional(),
+    allowPets: z.boolean().optional(),
+    allowChildren: z.boolean().optional(),
+    preferredEmployment: z.array(z.string()).optional(),
+    preferredGender: z.enum(['any', 'male', 'female']).optional(),
+    minAge: z.number().int().min(0).max(120).optional(),
+    maxAge: z.number().int().min(0).max(120).optional(),
+    requireReferences: z.boolean().optional(),
+    requireEmploymentProof: z.boolean().optional(),
+    requireProfileComplete: z.boolean().optional(),
+  }).optional(),
+
+  accessibility: z.object({
+    wheelchairAccessible: z.boolean().optional(),
+    stepFreeEntry: z.boolean().optional(),
+    elevator: z.boolean().optional(),
+    accessibleBathroom: z.boolean().optional(),
+    hearingLoop: z.boolean().optional(),
+    brailleSignage: z.boolean().optional(),
+    groundFloorOnly: z.boolean().optional(),
+  }).optional(),
 })
 
 export const propertyController = {
@@ -248,6 +297,15 @@ export const propertyController = {
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
     const result = await propertyService.create(parsed.data, req.user!.userId)
+    // The service refuses over-quota and expired-subscription creates. Without
+    // this check the refusal was returned as HTTP 403 carrying
+    // {"success": true, "message": "Property created"} — the landlord was told
+    // their listing existed when nothing had been written. update, delete and
+    // bulkCreate all check; create was the one that did not.
+    if (result.error || !result.data) {
+      error(res, result.error ?? 'Could not create property', result.status ?? 400)
+      return
+    }
 
     // Generate embedding for semantic search (fire-and-forget)
     try {
