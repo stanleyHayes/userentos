@@ -217,6 +217,16 @@ export default function LoginScreen() {
             <Text style={[s.footerText, { color: c.muted }]}>Don't have an account? </Text>
             <Link href="/auth/register" style={[s.link, { color: c.primary }]}>Create one</Link>
           </View>
+
+          {/*
+            Reachable WITHOUT an account, on purpose. Someone being pushed out
+            of their home should not have to register before finding out
+            whether it is legal. The endpoint behind it is public too.
+          */}
+          <View style={s.footer}>
+            <Text style={[s.footerText, { color: c.muted }]}>Landlord trouble? </Text>
+            <Link href="/rights-check" style={[s.link, { color: c.primary }]}>Check if it&apos;s legal</Link>
+          </View>
         </View>
     </AuthShell>
   )

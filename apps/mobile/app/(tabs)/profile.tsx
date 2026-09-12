@@ -103,6 +103,7 @@ export default function ProfileScreen() {
       items: [
         { icon: 'analytics-outline', label: 'Credit Score', onPress: () => router.push('/credit-score') },
         { icon: 'bar-chart-outline', label: 'Analytics', onPress: () => router.push('/analytics') },
+        { icon: 'shield-checkmark-outline', label: 'Is this legal?', onPress: () => router.push('/rights-check') },
         { icon: 'scale-outline', label: 'Rental Laws', onPress: () => router.push('/legal') },
         { icon: 'sparkles-outline', label: 'AI Legal Assistant', onPress: () => router.push('/legal-assistant') },
         { icon: 'color-wand-outline', label: 'AI Writer', onPress: () => router.push('/ai-writer') },

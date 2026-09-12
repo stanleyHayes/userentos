@@ -120,6 +120,7 @@ export default function RootLayout() {
           <Stack.Screen name="blog-detail" options={{ title: 'Article' }} />
           <Stack.Screen name="analytics" options={{ title: 'Analytics' }} />
           <Stack.Screen name="legal" options={{ title: 'Rental Laws' }} />
+          <Stack.Screen name="rights-check" options={{ title: 'Is this legal?' }} />
           <Stack.Screen name="legal-assistant" options={{ title: 'AI Legal Assistant' }} />
           <Stack.Screen name="documents" options={{ title: 'Documents' }} />
           <Stack.Screen name="tenant-profile" options={{ title: 'My Profile' }} />
