@@ -13,6 +13,7 @@
  * same rules.
  */
 import { Sponsorship } from '../../models/Sponsorship.js'
+import { ServiceBooking } from '../../models/ServiceBooking.js'
 import { logger } from '../../utils/logger.js'
 import type { IMarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
 
@@ -69,6 +70,23 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (activated) logger.info(`[${source}] sponsorship ${transaction.sponsorshipId} activated by ${transaction.reference}`)
+  }
+
+  /*
+   * Mark the order paid too.
+   *
+   * Without this the money lands and the booking still reads
+   * paymentStatus: 'pending', so the worker chases a payment that already
+   * settled and the buyer could be charged twice. Guarded on the current
+   * status so a replayed event cannot overwrite a later correction.
+   */
+  if (transaction.bookingId) {
+    const settledBooking = await ServiceBooking.findOneAndUpdate(
+      { _id: transaction.bookingId, paymentStatus: { $ne: 'paid' } },
+      { $set: { paymentStatus: 'paid', paymentAmount: transaction.grossAmount - transaction.discountAmount } },
+      { returnDocument: 'after' },
+    )
+    if (settledBooking) logger.info(`[${source}] booking ${transaction.bookingId} marked paid by ${transaction.reference}`)
   }
 
   logger.info(`[${source}] ${transaction.reference} paid — platform fee ${transaction.platformFeeAmount}`)

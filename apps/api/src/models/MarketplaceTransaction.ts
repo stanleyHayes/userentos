@@ -19,6 +19,8 @@ export interface IMarketplaceTransaction extends Document {
   propertyId?: string
   /** Set when this payment buys a sponsorship, so settling it can activate the campaign. */
   sponsorshipId?: string
+  /** The service booking this payment settles, resolved server-side from the quote. */
+  bookingId?: string
   purpose: string
   currency: string
   grossAmount: number
@@ -54,6 +56,7 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   storefrontId: String,
   propertyId: String,
   sponsorshipId: { type: String, index: true },
+  bookingId: { type: String, index: true },
   purpose: { type: String, required: true, default: 'marketplace' },
   currency: { type: String, required: true, default: 'GHS' },
   grossAmount: { type: Number, required: true, min: 0 },

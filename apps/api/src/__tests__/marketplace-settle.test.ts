@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const findOneAndUpdate = vi.fn()
 vi.mock('../models/Sponsorship.js', () => ({ Sponsorship: { findOneAndUpdate } }))
 
+const bookingUpdate = vi.fn()
+vi.mock('../models/ServiceBooking.js', () => ({ ServiceBooking: { findOneAndUpdate: bookingUpdate } }))
+
 const { applySuccessfulCharge } = await import('../services/marketplace/settle.js')
 
 type Txn = {
@@ -32,7 +35,7 @@ const txn = (o: Partial<Txn> = {}): Txn => ({
 const settle = (t: Txn, v: unknown, s: 'webhook' | 'verify' = 'webhook') => applySuccessfulCharge(t as any, v as any, s)
 
 describe('applying a successful charge (one path for webhook and verify)', () => {
-  beforeEach(() => { vi.clearAllMocks(); findOneAndUpdate.mockResolvedValue(null) })
+  beforeEach(() => { vi.clearAllMocks(); findOneAndUpdate.mockResolvedValue(null); bookingUpdate.mockResolvedValue(null) })
 
   it('marks a correctly-paid transaction paid and pending settlement', async () => {
     const t = txn()
@@ -97,6 +100,28 @@ describe('applying a successful charge (one path for webhook and verify)', () =>
     const t = txn({ sponsorshipId: 'spon1' })
     await expect(settle(t, { status: 'success', amount: 1000 })).resolves.toEqual({ applied: true })
     expect(findOneAndUpdate.mock.calls[0][0]).toMatchObject({ status: 'pending_payment' })
+  })
+
+  it('marks the booking paid so the worker stops chasing a settled payment', async () => {
+    bookingUpdate.mockResolvedValue({ _id: 'bk1' })
+    const t = txn({ discountAmount: 100 } as Partial<Txn>)
+    ;(t as unknown as { bookingId: string }).bookingId = 'bk1'
+
+    await settle(t, { status: 'success', amount: 900 })
+
+    expect(bookingUpdate).toHaveBeenCalledWith(
+      { _id: 'bk1', paymentStatus: { $ne: 'paid' } },
+      { $set: { paymentStatus: 'paid', paymentAmount: 900 } },
+      { returnDocument: 'after' },
+    )
+  })
+
+  it('does not re-settle a booking already marked paid', async () => {
+    bookingUpdate.mockResolvedValue(null)
+    const t = txn()
+    ;(t as unknown as { bookingId: string }).bookingId = 'bk1'
+    await expect(settle(t, { status: 'success', amount: 1000 })).resolves.toEqual({ applied: true })
+    expect(bookingUpdate.mock.calls[0][0]).toMatchObject({ paymentStatus: { $ne: 'paid' } })
   })
 
   it('does not touch sponsorships when the charge is refused', async () => {

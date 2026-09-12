@@ -41,11 +41,27 @@ describe('invitation resend cannot escalate privilege', () => {
 describe('marketplace checkout cannot be told its own discount', () => {
   const src = read('routes/marketplacePayments.ts')
 
-  it('does not accept a discount from the request body', () => {
-    // The route is unauthenticated (guest checkout), so a client-supplied
-    // discountAmount let anyone buy a GHS 1000 item for one cedi.
-    const schema = src.slice(src.indexOf('const initSchema'), src.indexOf('})', src.indexOf('const initSchema')))
+  it('accepts neither a price nor a payee from the request body', () => {
+    // Both used to come from the client: the buyer could name their own price
+    // AND nominate who got paid. The server resolves both from the order.
+    const schema = src.slice(src.indexOf('const initSchema'), src.indexOf('\n})', src.indexOf('const initSchema')))
     expect(schema).not.toMatch(/^\s*discountAmount:/m)
+    expect(schema).not.toMatch(/^\s*amount:/m)
+    expect(schema).not.toMatch(/^\s*sellerId:/m)
+  })
+
+  it('lets the resolver decide what can be paid for', () => {
+    // A zod enum here would refuse an unpriceable purpose with "expected
+    // service_booking", which tells the caller nothing about why.
+    const init = src.slice(src.indexOf("router.post('/initialize'"))
+    expect(init).toContain('resolveQuote(')
+    expect(init).toMatch(/if \(!quote\.ok\) \{ error\(res, quote\.reason, quote\.status\)/)
+  })
+
+  it('resolves the quote before it touches the seller account or the split', () => {
+    const init = src.slice(src.indexOf("router.post('/initialize'"))
+    expect(init.indexOf('resolveQuote(')).toBeLessThan(init.indexOf('PaymentAccount.findOne'))
+    expect(init.indexOf('resolveQuote(')).toBeLessThan(init.indexOf('calculateSplit('))
   })
 
   it('derives the discount by validating the coupon server-side', () => {
@@ -70,7 +86,8 @@ describe('marketplace checkout cannot be told its own discount', () => {
     const init = src.slice(src.indexOf("router.post('/initialize'"))
     const call = init.slice(init.indexOf('calculateSplit('), init.indexOf('const reference'))
     expect(call).toContain('discountAmount,')
-    expect(call).not.toContain('input.discountAmount')
+    expect(call).toContain('grossAmount: quote.amount')
+    expect(call).not.toContain('input.amount')
   })
 })
 

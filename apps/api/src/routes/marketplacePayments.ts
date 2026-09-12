@@ -22,6 +22,7 @@ import {
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
 import { applySuccessfulCharge } from '../services/marketplace/settle.js'
+import { resolveQuote } from '../services/marketplace/pricing.js'
 
 const router = Router()
 
@@ -141,16 +142,22 @@ router.post('/account', authenticate, asyncHandler(async (req, res) => {
 }))
 
 const initSchema = z.object({
-  sellerId: z.string().min(1),
-  amount: z.number().positive().max(10_000_000),
+  /*
+   * What is being bought. The SERVER prices it — see services/marketplace/
+   * pricing.ts. There is deliberately no `amount` and no `sellerId` here:
+   * both used to come from the request body, which let an authenticated buyer
+   * name their own price and nominate who got paid.
+   */
+  // A free string, deliberately: resolveQuote is the one place that decides
+  // what can be paid for, and it gives a specific reason. A zod enum here
+  // would reject an unpriceable purpose with "expected service_booking",
+  // which tells the caller nothing about why.
+  purpose: z.string().min(1).max(60),
+  /** The order being paid for, for purposes that have one. */
+  bookingId: z.string().optional(),
+  /** Receipt address. Not used to identify anyone. */
   email: z.string().email(),
-  propertyId: z.string().optional(),
-  storefrontId: z.string().optional(),
-  /** When this payment buys a sponsorship, the campaign it activates once paid. */
-  sponsorshipId: z.string().optional(),
-  purpose: z.string().max(60).default('marketplace'),
-  // NOTE: there is deliberately no discountAmount here. The discount is
-  // derived server-side from couponCode; see below.
+  // No discountAmount either — the discount is derived from couponCode below.
   couponCode: z.string().max(40).optional(),
   /** Client-supplied idempotency key (spec §15). */
   idempotencyKey: z.string().min(8).max(80).optional(),
@@ -159,23 +166,17 @@ const initSchema = z.object({
 /**
  * Start a split payment.
  *
+ * Both the price and the payee come from the server: `resolveQuote` reads them
+ * off the order being paid for, so a buyer can neither choose what they pay
+ * nor who receives it. A purpose the server cannot price is refused outright
+ * rather than trusted.
+ *
  * The fee percentage is read from the seller's plan and SNAPSHOTTED onto the
  * transaction, so a later plan change never rewrites this payment's economics.
- */
-/*
- * Authenticated. This was reachable with no credentials at all — `optionalAuth`
- * is global, so `req.user` was simply undefined and the handler carried on.
- * A route that asks a PSP to collect money should know who is asking, and
- * per-user coupon limits are unenforceable against an anonymous caller.
- * Nothing in apps/web or apps/mobile calls this endpoint, so requiring a
- * session breaks no existing flow.
  *
- * KNOWN GAP, deliberately not papered over: `amount` is still supplied by the
- * caller and there is no order or quote to check it against, so an
- * authenticated buyer can name their own price. Closing that needs a
- * server-side order/quote record — a design decision, not a one-line guard —
- * and inventing a price rule here would be guessing at policy. See the review
- * notes; this is the top open item on this route.
+ * Authenticated: this was once reachable with no credentials at all, because
+ * `optionalAuth` is global and the handler simply carried on with req.user
+ * undefined.
  */
 router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   const parsed = initSchema.safeParse(req.body)
@@ -196,7 +197,15 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     }
   }
 
-  const account = await PaymentAccount.findOne({ ownerId: input.sellerId }).lean()
+  // Price and payee, both from the server's own records.
+  const quote = await resolveQuote({
+    purpose: input.purpose,
+    buyerId: req.user!.userId,
+    bookingId: input.bookingId,
+  })
+  if (!quote.ok) { error(res, quote.reason, quote.status); return }
+
+  const account = await PaymentAccount.findOne({ ownerId: quote.sellerId }).lean()
   if (!account?.subaccountCode || !account.readyToReceivePayments) {
     error(res, 'This seller cannot receive payments yet', 409)
     return
@@ -226,9 +235,8 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     const coupon = await validateCoupon({
       code: input.couponCode,
       userId: req.user!.userId,
-      amount: input.amount,
-      sellerId: input.sellerId,
-      propertyId: input.propertyId,
+      amount: quote.amount,
+      sellerId: quote.sellerId,
     })
     if (!coupon.valid) { error(res, coupon.reason ?? 'That coupon cannot be used.', 422); return }
     discountAmount = coupon.discountAmount
@@ -236,9 +244,9 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     discountSource = coupon.fundingSource
   }
 
-  const platformFeePercent = await getNumericFeature(input.sellerId, 'platform.fee_percent')
+  const platformFeePercent = await getNumericFeature(quote.sellerId, 'platform.fee_percent')
   const split = calculateSplit({
-    grossAmount: input.amount,
+    grossAmount: quote.amount,
     platformFeePercent,
     discountAmount,
   })
@@ -249,10 +257,8 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     reference,
     buyerId: req.user!.userId,
     buyerEmail: input.email,
-    sellerId: input.sellerId,
-    storefrontId: input.storefrontId,
-    propertyId: input.propertyId,
-    sponsorshipId: input.sponsorshipId,
+    sellerId: quote.sellerId,
+    bookingId: quote.bookingId,
     purpose: input.purpose,
     currency: 'GHS',
     grossAmount: split.grossAmount,
@@ -276,7 +282,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       reference,
       subaccountCode: account.subaccountCode,
       feeBearer: split.feeBearer,
-      metadata: { propertyId: input.propertyId, sellerId: input.sellerId, purpose: input.purpose },
+      metadata: { bookingId: quote.bookingId, sellerId: quote.sellerId, purpose: input.purpose, description: quote.description },
     })
 
     transaction.providerAccessCode = init.accessCode
