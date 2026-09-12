@@ -21,6 +21,7 @@ import {
   initializeSplitTransaction, verifyTransaction,
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
+import { applySuccessfulCharge } from '../services/marketplace/settle.js'
 
 const router = Router()
 
@@ -306,12 +307,10 @@ router.get('/verify/:reference', asyncHandler(async (req, res) => {
 
   try {
     const verified = await verifyTransaction(reference)
-    if (verified.status === 'success' && transaction.status !== 'paid') {
-      transaction.status = 'paid'
-      transaction.verifiedAt = new Date()
-      transaction.processorFeeAmount = verified.fees
-      await transaction.save()
-    }
+    // The same rules the webhook applies. This path used to set status='paid'
+    // with no amount check, so a charge the webhook would have REFUSED for a
+    // mismatch could be accepted just by polling here instead.
+    await applySuccessfulCharge(transaction, verified, 'verify')
     success(res, {
       reference,
       status: transaction.status,

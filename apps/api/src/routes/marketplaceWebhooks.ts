@@ -16,7 +16,7 @@ import { verifyWebhookSignature, verifyTransaction } from '../services/marketpla
 import { logger } from '../utils/logger.js'
 import { finalizePayment } from '../services/payments/finalize.js'
 import { paystackMtnProvider } from '../services/payments/paystackRent.js'
-import { Sponsorship } from '../models/Sponsorship.js'
+import { applySuccessfulCharge } from '../services/marketplace/settle.js'
 
 const router = Router()
 const rawBody = express.raw({ type: '*/*', limit: '256kb' })
@@ -114,48 +114,14 @@ router.post('/paystack', rawBody, async (req: Request, res: Response) => {
     }
 
     if (event.event === 'charge.success') {
-      // Never take the webhook's word for it — re-verify server-side.
+      // Never take the webhook's word for it — re-verify server-side, then
+      // apply the shared settlement rules (amount guard, settlement status,
+      // sponsorship activation) so this path and /verify cannot drift.
       const verified = await verifyTransaction(reference)
-      if (verified.status !== 'success') {
-        logger.error(`[MarketplaceWebhook] ${reference} claimed success but verification says ${verified.status}`)
-        return
-      }
-      if (Math.abs(verified.amount - (claimed.grossAmount - claimed.discountAmount)) > 0.01) {
-        logger.error(
-          `[MarketplaceWebhook] CRITICAL amount mismatch on ${reference}: expected ${claimed.grossAmount - claimed.discountAmount}, provider says ${verified.amount}`,
-        )
-        return
-      }
-
-      claimed.status = 'paid'
-      claimed.verifiedAt = new Date()
-      claimed.processorFeeAmount = verified.fees
-      claimed.settlementStatus = 'pending'
-      await claimed.save()
-      /*
-       * Activate the sponsorship this payment bought.
-       *
-       * A campaign is created 'pending_payment' whenever the product costs
-       * anything, and NOTHING anywhere moved it out of that state — while
-       * serving only ever selects status 'active'. So a sponsorship could be
-       * bought and could never run: billed, never served.
-       *
-       * Guarded on the current status so a replayed or out-of-order event
-       * cannot revive a campaign an admin has since paused or cancelled.
-       */
-      if (claimed.sponsorshipId) {
-        const activated = await Sponsorship.findOneAndUpdate(
-          { _id: claimed.sponsorshipId, status: 'pending_payment' },
-          { $set: { status: 'active' } },
-          { returnDocument: 'after' },
-        )
-        if (activated) {
-          logger.info(`[MarketplaceWebhook] sponsorship ${claimed.sponsorshipId} activated by ${reference}`)
-        }
-      }
+      const outcome = await applySuccessfulCharge(claimed, verified, 'webhook')
+      if (!outcome.applied && outcome.reason !== 'already_paid') return
 
       await markEventProcessed(eventId)
-      logger.info(`[MarketplaceWebhook] ${reference} paid — platform fee ${claimed.platformFeeAmount}`)
     } else if (event.event === 'charge.failed') {
       claimed.status = 'failed'
       await claimed.save()
