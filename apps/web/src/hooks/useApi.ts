@@ -2857,3 +2857,26 @@ export function useUpdateMyInsuranceProduct() {
     },
   })
 }
+
+/**
+ * The payment rails the server will actually accept right now.
+ *
+ * Both payment UIs hardcoded the full list, so "Bank Transfer" was offered
+ * whether or not a deposit account was configured — and unconfigured, that
+ * rail shows the payer a placeholder account number to send real rent to.
+ * One source of truth, on the server, so the options cannot drift from what
+ * the backend allows.
+ */
+export interface PaymentMethodOption {
+  id: string
+  label: string
+}
+
+export function usePaymentMethods() {
+  return useQuery({
+    queryKey: ['payment-methods'],
+    queryFn: () => api.get<{ methods: PaymentMethodOption[]; mode: string }>('/payments/methods'),
+    // Availability changes only with deployment configuration.
+    staleTime: 10 * 60 * 1000,
+  })
+}

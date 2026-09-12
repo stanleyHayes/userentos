@@ -6,21 +6,27 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { useSubscriptionPackages, useMySubscription, useSubscribe } from '@/hooks/useApi'
+import { useSubscriptionPackages, useMySubscription, useSubscribe, usePaymentMethods } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import { Check, Crown, Package, Building2, ArrowRight } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import toast from 'react-hot-toast'
 
-const PAYMENT_METHODS = [
-  { value: 'mtn_momo', label: 'MTN Mobile Money' },
-  { value: 'telecel_cash', label: 'Telecel Cash' },
-  { value: 'airteltigo_money', label: 'AirtelTigo Money' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
+// Fallback only: used while the server's list is in flight, and it
+// deliberately omits bank_transfer — offering a rail that may not be
+// configured is the bug this replaced.
+const FALLBACK_METHODS = [
+  { id: 'mtn_momo', label: 'MTN Mobile Money' },
+  { id: 'telecel_cash', label: 'Telecel Cash' },
+  { id: 'airteltigo_money', label: 'AirtelTigo Money' },
 ]
 
+
 export function SubscriptionPage() {
+  // Server-driven, so an unconfigured rail is never offered.
+  const { data: methodsData } = usePaymentMethods()
+  const payableMethods = methodsData?.methods ?? FALLBACK_METHODS
   const { data: packagesData, isLoading: pkgLoading } = useSubscriptionPackages()
   const { data: sub, isLoading: subLoading, refetch } = useMySubscription()
   const subscribe = useSubscribe()
@@ -192,7 +198,7 @@ export function SubscriptionPage() {
             label="Payment method"
             value={payMethod}
             onChange={(e) => setPayMethod(e.target.value)}
-            options={PAYMENT_METHODS}
+            options={payableMethods.map((m) => ({ value: m.id, label: m.label }))}
           />
           {payMethod !== 'bank_transfer' && (
             <Input

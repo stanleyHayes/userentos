@@ -5,7 +5,7 @@ import { Payment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
-import { getProvider } from '../services/payments/index.js'
+import { getProvider, isMethodAvailable } from '../services/payments/index.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { round2 } from '../utils/money.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
@@ -71,6 +71,14 @@ export const paymentController = {
     const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 
     try {
+      // Refuse a rail that is not configured, BEFORE writing a Payment row.
+      // Bank transfer falls back to a placeholder deposit account when unset, so
+      // an unguarded pick tells the tenant to send real rent to `0000000000`.
+      if (!isMethodAvailable(method as ProviderId)) {
+        error(res, 'That payment method is not available right now. Please choose another.', 422)
+        return
+      }
+
       const payment = await Payment.create({
         agreementId,
         tenantId: req.user!.userId,

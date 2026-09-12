@@ -26,9 +26,37 @@ import { airtelTigoMoneyProvider } from './airteltigoMoney.js'
 import { bankTransferProvider } from './bankTransfer.js'
 import { makeSimulator } from './simulator.js'
 import { paystackRentProviders } from './paystackRent.js'
-import { envOr } from '../../utils/env.js'
+import { envOptional, envOr } from '../../utils/env.js'
 
 export type PaymentMode = 'live' | 'simulated'
+
+/**
+ * Whether a rail is usable in LIVE mode.
+ *
+ * Bank transfer is "pay by reference": the payer is shown a deposit account
+ * number and sends money to it from their banking app. With
+ * BANK_DEPOSIT_ACCOUNT unset the adapter falls back to `0000000000` at
+ * "Stanbic Bank Ghana", so a tenant who picked Bank Transfer — it is offered
+ * in the UI today — was told to transfer real rent to a placeholder account,
+ * and the money would be gone with no webhook ever arriving.
+ *
+ * The fallback is right for a demo and wrong for production, so the rail is
+ * gated on being configured rather than on the default being plausible.
+ * Mobile money needs no gate: it rides Paystack, which is configured.
+ */
+export function isMethodAvailable(method: ProviderId): boolean {
+  if (getMode() !== 'live') return true
+  if (method === 'bank_transfer') {
+    return !!envOptional('BANK_DEPOSIT_ACCOUNT') && !!envOptional('BANK_PSP_WEBHOOK_SECRET')
+  }
+  return true
+}
+
+/** The rails a payer may actually choose right now. */
+export function availableMethods(): ProviderId[] {
+  return (['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer'] as ProviderId[])
+    .filter(isMethodAvailable)
+}
 
 export function getMode(): PaymentMode {
   const raw = process.env.PAYMENTS_PROVIDER_MODE

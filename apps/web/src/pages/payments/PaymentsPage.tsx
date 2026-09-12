@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { useAuthStore } from '@/stores/authStore'
-import { usePayments, useCreatePayment, useAgreements } from '@/hooks/useApi'
+import { usePayments, useCreatePayment, useAgreements, usePaymentMethods } from '@/hooks/useApi'
 import { useCelebrationStore } from '@/stores/celebrationStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import TextField from '@mui/material/TextField'
@@ -27,12 +27,30 @@ const statusVariant: Record<PaymentStatus, 'warning' | 'default' | 'success' | '
   refunded: 'muted',
 }
 
-const methodOptions = [
+/**
+ * Every method that can appear in payment HISTORY, for the filter dropdown.
+ * A past payment may well have used a rail that is no longer offered, and
+ * hiding it here would make those rows unfilterable.
+ */
+const historicalMethods = [
   { value: 'mtn_momo', label: 'MTN Mobile Money' },
   { value: 'telecel_cash', label: 'Telecel Cash' },
   { value: 'airteltigo_money', label: 'AirtelTigo Money' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
 ]
+
+/**
+ * Fallback for the PAY-NOW selector while the server's list is in flight.
+ * Deliberately omits bank_transfer: offering a rail that may not be
+ * configured is the bug this replaced — unconfigured, it shows the payer a
+ * placeholder deposit account to send real rent to.
+ */
+const FALLBACK_PAYABLE = [
+  { id: 'mtn_momo', label: 'MTN Mobile Money' },
+  { id: 'telecel_cash', label: 'Telecel Cash' },
+  { id: 'airteltigo_money', label: 'AirtelTigo Money' },
+]
+
 
 type SortField = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -40,6 +58,10 @@ type SortDir = 'asc' | 'desc'
 export function PaymentsPage() {
   const user = useAuthStore((s) => s.user)
   const isTenant = user?.activeRole === 'tenant'
+
+  // What the server will actually accept, rather than a hardcoded list that
+  // can offer a rail the backend refuses.
+
 
   // Filters — applied SERVER-side (the list endpoint is paginated)
   const [statusFilter, setStatusFilter] = useState('')
@@ -177,12 +199,12 @@ export function PaymentsPage() {
                 select
                 value={methodFilter}
                 onChange={(e) => { setMethodFilter(e.target.value); setPage(1) }}
-                slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true, renderValue: (v): React.ReactNode => (v as string) ? methodOptions.find(m => m.value === v)?.label ?? (v as string) : 'All Methods' } }}
+                slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true, renderValue: (v): React.ReactNode => (v as string) ? historicalMethods.find(m => m.value === v)?.label ?? (v as string) : 'All Methods' } }}
                 size="small"
                 fullWidth
               >
                 <MenuItem value="">All Methods</MenuItem>
-                {methodOptions.map((m) => (
+                {historicalMethods.map((m) => (
                   <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
                 ))}
               </TextField>
@@ -361,6 +383,11 @@ function MakePaymentModal({
   onInstructions: (text: string) => void
 }) {
   const createPayment = useCreatePayment()
+  // Only the rails the server will accept. The hardcoded list offered Bank
+  // Transfer whether or not a deposit account was configured, and
+  // unconfigured that rail shows a placeholder account to send real rent to.
+  const { data: methodsData } = usePaymentMethods()
+  const payableMethods = methodsData?.methods ?? FALLBACK_PAYABLE
   const celebrate = useCelebrationStore((s) => s.celebrate)
   const user = useAuthStore((s) => s.user)
   const { data: agreementData } = useAgreements()
@@ -452,8 +479,8 @@ function MakePaymentModal({
             inputLabel: { shrink: true },
           }}
         >
-          {methodOptions.map((m) => (
-            <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+          {payableMethods.map((m) => (
+            <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>
           ))}
         </TextField>
 
