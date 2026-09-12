@@ -22,6 +22,7 @@ from app.ml.features import (
     FEATURE_NAMES,
     EncodingMaps,
     compute_encodings,
+    contract_fingerprint,
     extract_features,
     extract_features_from_property,
 )
@@ -362,6 +363,7 @@ class RentPriceModel:
             "featureNames": list(FEATURE_NAMES),
             "targetTransform": self.target_transform,
             "residualVariance": self.residual_variance,
+            "featureFingerprint": contract_fingerprint(),
         }
         with open(file_path, "w") as f:
             json.dump(state, f, indent=2)
@@ -393,6 +395,17 @@ class RentPriceModel:
                 raise ValueError(
                     f"artifact has {weights.shape} weights, "
                     f"expected {len(FEATURE_NAMES)}"
+                )
+
+            # A count check cannot see a REORDER or a redefinition: the vector
+            # stays 18 long while position 7 stops meaning cityEncoded. The
+            # probe does. Absent on artifacts written before this existed, so
+            # only enforced when present.
+            stored_fingerprint = state.get("featureFingerprint")
+            if stored_fingerprint and stored_fingerprint != contract_fingerprint():
+                raise ValueError(
+                    "artifact was built against a different feature-extraction contract; "
+                    "retrain with scripts/train_seed.py"
                 )
             if not np.all(np.isfinite(weights)) or not np.isfinite(bias):
                 raise ValueError("artifact contains non-finite weights")

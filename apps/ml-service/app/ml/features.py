@@ -152,3 +152,39 @@ def extract_features_from_property(
         },
         encodings,
     )
+
+
+#: Fixed probe for fingerprinting the feature-extraction contract.
+#: Exercises every branch: numbers, booleans, the encodings, the amenity
+#: keyword flags and the missing-value path.
+FINGERPRINT_PROBE: dict[str, Any] = {
+    "bedrooms": 2, "bathrooms": 1, "floorArea": 95.5, "furnished": True,
+    "parkingSpaces": 1, "advanceMonths": 6, "amenities": ["Water", "Security"],
+    "city": "accra", "type": "apartment", "region": "greater accra",
+    "yearBuilt": 2018, "stayType": "long_stay",
+    # floor deliberately absent, to pin the MISSING path too.
+}
+
+FINGERPRINT_ENCODINGS: EncodingMaps = {
+    "city": {"accra": 3000.0},
+    "type": {"apartment": 2500.0},
+    "region": {"greater accra": 2800.0},
+}
+
+
+def contract_fingerprint() -> str:
+    """A stable hash of the feature vector produced for a fixed input.
+
+    The model artifact stores one weight per position in FEATURE_NAMES. Adding,
+    removing or REORDERING a feature, or changing what one of them means,
+    silently repoints every weight — and a length check cannot see a reorder
+    or a redefinition, only a count change.
+
+    Included in the artifact and rechecked on load.
+    """
+    import hashlib
+    vector = extract_features(FINGERPRINT_PROBE, FINGERPRINT_ENCODINGS)
+    payload = "|".join(FEATURE_NAMES) + "||" + ",".join(
+        "nan" if v != v else f"{v:.6f}" for v in vector
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

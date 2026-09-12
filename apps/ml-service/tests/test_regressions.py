@@ -334,3 +334,63 @@ class TestValuationExplainability:
         assert body["dataQuality"]["totalFields"] == 18
         assert all({"feature", "contribution", "impactPercent", "value"} <= c.keys()
                    for c in body["featureContributions"])
+
+
+class TestPricingFeatureContract:
+    """A reordered or redefined feature must invalidate the artifact.
+
+    The artifact stores one weight per position in FEATURE_NAMES. Reordering
+    the list, or changing what one entry means, repoints every weight while
+    the length stays 18 — so the existing count check sees nothing wrong and
+    the model goes on answering with weights that no longer match the
+    features they multiply.
+    """
+
+    def test_fingerprint_is_stable(self):
+        from app.ml.features import contract_fingerprint
+        assert contract_fingerprint() == contract_fingerprint()
+
+    def test_fingerprint_changes_when_the_feature_order_changes(self, monkeypatch):
+        from app.ml import features as features_module
+        baseline = features_module.contract_fingerprint()
+
+        reordered = list(features_module.FEATURE_NAMES)
+        reordered[0], reordered[1] = reordered[1], reordered[0]
+        monkeypatch.setattr(features_module, "FEATURE_NAMES", reordered)
+
+        assert features_module.contract_fingerprint() != baseline
+
+    def test_load_refuses_an_artifact_from_a_different_contract(self, tmp_path):
+        model = RentPriceModel()
+        model.train(generate_properties(60, seed=4), max_epochs=200)
+        path = str(tmp_path / "model.json")
+        model.save(path)
+
+        state = json.load(open(path))
+        state["featureFingerprint"] = "0000000000000000"
+        json.dump(state, open(path, "w"))
+
+        assert RentPriceModel().load(path) is False
+
+    def test_an_artifact_without_a_fingerprint_still_loads(self, tmp_path):
+        # Written before the guard existed. Refusing those would brick a
+        # running deployment on upgrade, so absence is tolerated; only a
+        # MISMATCH is refused.
+        model = RentPriceModel()
+        model.train(generate_properties(60, seed=4), max_epochs=200)
+        path = str(tmp_path / "model.json")
+        model.save(path)
+
+        state = json.load(open(path))
+        del state["featureFingerprint"]
+        json.dump(state, open(path, "w"))
+
+        assert RentPriceModel().load(path) is True
+
+    def test_the_shipped_artifact_matches_this_build(self):
+        import os
+        from app.config import get_settings
+        path = get_settings().model_path
+        if not os.path.exists(path):
+            pytest.skip("no artifact committed in this checkout")
+        assert RentPriceModel().load(path) is True
