@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Modal, Alert, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
@@ -35,38 +35,41 @@ export default function UsersAdminScreen() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  async function load() {
+  /*
+   * Search and role filtering are the SERVER's job.
+   *
+   * This fetched page one — 20 rows — and filtered it on the device, so on a
+   * 102-user database most users were invisible AND unsearchable: the search
+   * box only ever searched the 20 most recent accounts and reported nothing
+   * found for people who exist.
+   */
+  const load = useCallback(async (query: string, role: RoleFilter) => {
     try {
-      const data = await api.get<{ items: User[] }>('/users')
-      setUsers(data.items ?? (Array.isArray(data) ? data : []))
-    } catch { /* no-op */ } finally { setLoading(false) }
-  }
+      const params = new URLSearchParams({ pageSize: '50' })
+      if (query.trim()) params.set('search', query.trim())
+      const filterRole = roleFilterMap[role]
+      if (filterRole) params.set('role', filterRole)
 
-  useEffect(() => { load() }, [])
+      const data = await api.get<{ items: User[] }>(`/users?${params.toString()}`)
+      setUsers(data.items ?? [])
+    } catch { setUsers([]) } finally { setLoading(false) }
+  }, [])
+
+  // Debounced so typing a name is not one request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => { void load(search, roleFilter) }, 300)
+    return () => clearTimeout(t)
+  }, [search, roleFilter, load])
 
   async function onRefresh() {
     setRefreshing(true)
-    await load()
+    await load(search, roleFilter)
     setRefreshing(false)
   }
 
-  const filtered = useMemo(() => {
-    let result = users
-    const filterRole = roleFilterMap[roleFilter]
-    if (filterRole) {
-      result = result.filter((u) => u.roles?.includes(filterRole) || u.activeRole === filterRole)
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (u) =>
-          u.firstName?.toLowerCase().includes(q) ||
-          u.lastName?.toLowerCase().includes(q) ||
-          u.email?.toLowerCase().includes(q),
-      )
-    }
-    return result
-  }, [users, roleFilter, search])
+  // The server matched these; a second local pass would only narrow them with
+  // weaker rules and make the counts wrong.
+  const filtered = users
 
   const roleColors: Record<string, string> = {
     tenant: c.accent,
@@ -84,7 +87,8 @@ export default function UsersAdminScreen() {
         try {
           await api.delete(`/users/${userId}`)
           setSelectedUser(null)
-          load()
+          // Reload the same view the admin is looking at, not an unfiltered one.
+          void load(search, roleFilter)
         } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to delete')
