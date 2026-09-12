@@ -188,8 +188,10 @@ export default function PropertyDetailScreen() {
 
       // Fetch reviews
       try {
-        const reviewData = await api.get<{ items: Review[] }>(`/reviews/property/${id}`)
-        setReviews(reviewData.items ?? [])
+        // The endpoint answers { reviews, page, pageSize, totalPages, summary }.
+        // Reading `.items` yielded undefined, so no review ever displayed.
+        const reviewData = await api.get<{ reviews: Review[] }>(`/reviews/property/${id}`)
+        setReviews(reviewData.reviews ?? [])
       } catch { /* no-op */ }
 
       // Fetch agreements (for tenant history)
@@ -285,8 +287,10 @@ export default function PropertyDetailScreen() {
       Alert.alert('Error', 'Please select a star rating.')
       return
     }
-    if (!reviewComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment.')
+    // Match the server's zod rule (content min 10) so the user is told what is
+    // wrong here, instead of getting a raw validation error back from the API.
+    if (reviewComment.trim().length < 10) {
+      Alert.alert('Error', 'Please write at least 10 characters so your review is useful.')
       return
     }
     setSubmittingReview(true)
@@ -294,7 +298,10 @@ export default function PropertyDetailScreen() {
       await api.post('/reviews', {
         propertyId: id,
         rating: reviewRating,
-        comment: reviewComment.trim(),
+        // The API's zod schema requires `content` (min 10 chars). Sending
+        // `comment` failed validation every time, so a review could never be
+        // submitted from mobile.
+        content: reviewComment.trim(),
         pros: reviewPros.trim() ? reviewPros.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
         cons: reviewCons.trim() ? reviewCons.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
       })
@@ -305,8 +312,10 @@ export default function PropertyDetailScreen() {
       setReviewCons('')
       Alert.alert('Success', 'Your review has been submitted.')
       try {
-        const reviewData = await api.get<{ items: Review[] }>(`/reviews/property/${id}`)
-        setReviews(reviewData.items ?? [])
+        // The endpoint answers { reviews, page, pageSize, totalPages, summary }.
+        // Reading `.items` yielded undefined, so no review ever displayed.
+        const reviewData = await api.get<{ reviews: Review[] }>(`/reviews/property/${id}`)
+        setReviews(reviewData.reviews ?? [])
       } catch { /* no-op */ }
     } catch (e) {
       const _err = e as { message?: string }

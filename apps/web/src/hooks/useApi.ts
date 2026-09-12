@@ -154,7 +154,11 @@ export function useDeleteProperty() {
 export function usePropertyRecommendations() {
   return useQuery({
     queryKey: ['property-recommendations'],
-    queryFn: () => api.get<Property[]>('/properties/recommendations/for-me'),
+    // The endpoint answers { items, total }, not a bare array. Typed as an
+    // array, `recommendations?.length` was always undefined, so the tenant
+    // dashboard's "Recommended for you" section never rendered at all.
+    queryFn: () => api.get<{ items: Property[]; total: number }>('/properties/recommendations/for-me'),
+    select: (data) => data.items ?? [],
   })
 }
 

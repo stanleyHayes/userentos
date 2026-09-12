@@ -50,13 +50,15 @@ export default function HomeScreen() {
         api.get<Record<string, number>>('/analytics/me'),
         api.get<{ propertyIds: string[] }>('/properties/favorites/me').catch(() => ({ propertyIds: [] })),
         api.get<{ items: PropertyItem[] }>('/properties').catch(() => ({ items: [] })),
-        api.get<PropertyItem[]>('/properties/recommendations/for-me').catch(() => []),
+        // { items, total } — not a bare array. Read as an array this was always
+        // empty, so "Recommended for You" never showed anything.
+        api.get<{ items: PropertyItem[] }>('/properties/recommendations/for-me').catch(() => ({ items: [] })),
         api.get<{ items: AgreementItem[] }>('/agreements').catch(() => ({ items: [] })),
       ])
       setAnalytics(data)
       const favIds: string[] = favs.propertyIds ?? []
       setSavedProperties(props.items.filter((p) => favIds.includes(p.id ?? p._id ?? '')))
-      setRecommendations(Array.isArray(recs) ? recs.slice(0, 4) : [])
+      setRecommendations((recs.items ?? []).slice(0, 4))
       const active = (agreementsRes.items ?? []).find((a) => a.status === 'active')
       setActiveAgreement(active ?? null)
     } catch { /* no-op */ } finally { setLoading(false) }

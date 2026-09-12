@@ -103,13 +103,33 @@ export default function MessagesScreen() {
 
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
-  async function loadUsers() {
+  /**
+   * Search users server-side.
+   *
+   * GET /chat/users REQUIRES a search of at least two characters and errors
+   * otherwise. This screen called it bare and filtered the result on the
+   * client, so the request always failed, the catch swallowed it, and the new
+   * conversation picker was permanently empty.
+   */
+  const MIN_USER_SEARCH = 2
+
+  async function loadUsers(query: string) {
+    if (query.trim().length < MIN_USER_SEARCH) { setAllUsers([]); return }
     setLoadingUsers(true)
     try {
-      const data = await api.get<{ items: { id: string; firstName: string; lastName: string; email: string; activeRole: string }[] }>('/chat/users')
+      const data = await api.get<{ items: { id: string; firstName: string; lastName: string; email: string; activeRole: string }[] }>(
+        `/chat/users?search=${encodeURIComponent(query.trim())}`,
+      )
       setAllUsers((data.items ?? []).filter((u) => u.id !== user?.id))
-    } catch { /* no-op */ } finally { setLoadingUsers(false) }
+    } catch { setAllUsers([]) } finally { setLoadingUsers(false) }
   }
+
+  // Debounced so typing a name is not one request per keystroke.
+  useEffect(() => {
+    if (!showNewModal) return
+    const t = setTimeout(() => { void loadUsers(userSearch) }, 300)
+    return () => clearTimeout(t)
+  }, [userSearch, showNewModal])
 
   async function startConversation(participantId: string) {
     setCreating(true)
@@ -121,11 +141,9 @@ export default function MessagesScreen() {
     } catch { /* no-op */ } finally { setCreating(false) }
   }
 
-  const filteredUsers = allUsers.filter((u) => {
-    if (!userSearch.trim()) return true
-    const q = userSearch.toLowerCase()
-    return `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-  })
+  // The server matched these against the query; re-filtering here would only
+  // narrow them with weaker rules.
+  const filteredUsers = allUsers
 
   const filtered = conversations.filter((cv) => {
     if (!search.trim()) return true
@@ -186,7 +204,7 @@ export default function MessagesScreen() {
             <Text style={[s.emptySubtitle, { color: c.muted }]}>Start a new conversation by tapping the button below</Text>
           </View>
         )} />
-      <TouchableOpacity style={[s.fab, { backgroundColor: c.primary }]} onPress={() => { setShowNewModal(true); if (allUsers.length === 0) loadUsers() }} activeOpacity={0.8}>
+      <TouchableOpacity style={[s.fab, { backgroundColor: c.primary }]} onPress={() => { setShowNewModal(true); setUserSearch('') }} activeOpacity={0.8}>
         <Ionicons name="create-outline" size={24} color="#ffffff" />
       </TouchableOpacity>
       <Modal visible={showNewModal} animationType="slide" transparent>
