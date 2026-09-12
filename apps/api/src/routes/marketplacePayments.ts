@@ -15,6 +15,7 @@ import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { getNumericFeature } from '../services/entitlements.js'
 import { calculateSplit } from '../services/marketplace/split.js'
+import { validateCoupon } from '../services/marketplace/coupons.js'
 import {
   listBanks, resolveAccount, createSubaccount, updateSubaccount,
   initializeSplitTransaction, verifyTransaction,
@@ -145,7 +146,8 @@ const initSchema = z.object({
   propertyId: z.string().optional(),
   storefrontId: z.string().optional(),
   purpose: z.string().max(60).default('marketplace'),
-  discountAmount: z.number().min(0).optional(),
+  // NOTE: there is deliberately no discountAmount here. The discount is
+  // derived server-side from couponCode; see below.
   couponCode: z.string().max(40).optional(),
   /** Client-supplied idempotency key (spec §15). */
   idempotencyKey: z.string().min(8).max(80).optional(),
@@ -182,11 +184,45 @@ router.post('/initialize', asyncHandler(async (req, res) => {
     return
   }
 
+  /*
+   * Derive the discount; never accept one.
+   *
+   * This route took `discountAmount` straight from the request body and fed it
+   * to calculateSplit. It is also unauthenticated (guest checkout), so anyone
+   * could POST amount: 1000 with discountAmount: 999 and buy a GHS 1000 item
+   * for one cedi — the seller's payout is computed from the discounted figure.
+   * The coupon code was recorded on the transaction but never validated or
+   * redeemed, so usage limits and expiry did nothing here either.
+   *
+   * The discount now comes from validateCoupon, the same path /promotions/
+   * validate uses, which enforces existence, active status, the date window,
+   * minimum spend, per-seller scope and usage limits. An invalid coupon is
+   * refused outright rather than silently ignored, so a buyer is never charged
+   * full price by a code they believe applied.
+   */
+  let discountAmount = 0
+  let couponCode: string | undefined
+  let discountSource: 'platform' | 'seller' | undefined
+
+  if (input.couponCode) {
+    const coupon = await validateCoupon({
+      code: input.couponCode,
+      userId: req.user?.userId ?? input.email,
+      amount: input.amount,
+      sellerId: input.sellerId,
+      propertyId: input.propertyId,
+    })
+    if (!coupon.valid) { error(res, coupon.reason ?? 'That coupon cannot be used.', 422); return }
+    discountAmount = coupon.discountAmount
+    couponCode = input.couponCode.trim().toUpperCase()
+    discountSource = coupon.fundingSource
+  }
+
   const platformFeePercent = await getNumericFeature(input.sellerId, 'platform.fee_percent')
   const split = calculateSplit({
     grossAmount: input.amount,
     platformFeePercent,
-    discountAmount: input.discountAmount,
+    discountAmount,
   })
 
   const reference = input.idempotencyKey ?? `MKT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
@@ -206,7 +242,10 @@ router.post('/initialize', asyncHandler(async (req, res) => {
     sellerExpectedAmount: split.sellerExpectedAmount,
     feeBearer: split.feeBearer,
     discountAmount: split.discountAmount,
-    couponCode: input.couponCode,
+    // The normalised code and the funding source that validateCoupon resolved,
+    // so reconciliation knows whose margin paid for the discount.
+    couponCode,
+    discountSource,
     subaccountCode: account.subaccountCode,
     status: 'initialized',
   })

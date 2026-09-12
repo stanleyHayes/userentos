@@ -12,6 +12,7 @@ import { notify, notifyPropertyApproved, notifyPropertyRejected } from '../servi
 import { checkAndAward } from '../services/achievements.js'
 import { embed } from '../services/embeddings.js'
 import { cache } from '../services/cache.js'
+import { canTransition, type ReviewStatus } from '../services/propertyReview.js'
 
 interface LeanProperty {
   _id: Types.ObjectId
@@ -315,7 +316,29 @@ export const propertyController = {
     if (!property) { error(res, 'Property not found', 404); return }
     if (property.landlordId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
+    /*
+     * Obey the review state machine, the same as POST /:id/submit.
+     *
+     * This set listingStatus = 'pending_review' from ANY status. TRANSITIONS
+     * does not allow suspended -> pending_review (only published or archived),
+     * and for good reason: a listing suspended by a moderator acting on an
+     * abuse report could be pushed straight back into the queue by its owner
+     * and re-approved, which undoes the takedown. The guard lives three
+     * routes away in propertyModeration.ts; this legacy endpoint walked past
+     * it.
+     */
+    const from = (property.listingStatus ?? 'draft') as ReviewStatus
+    if (!canTransition(from, 'pending_review')) {
+      error(res, `A property in "${from}" cannot be submitted for review`, 409)
+      return
+    }
+
+    // A resubmission is a new round for the reviewer, so it gets its own
+    // version — matching /submit, which callers may use interchangeably.
+    const isResubmission = from === 'changes_requested' || from === 'rejected'
     property.listingStatus = 'pending_review'
+    property.reviewVersion = (property.reviewVersion ?? 1) + (isResubmission ? 1 : 0)
+    property.submittedAt = new Date()
     await property.save()
 
     // Notify admins (best-effort) — a literal 'admin' userId reaches no one.

@@ -729,7 +729,27 @@ export function startScheduler() {
           Review.updateMany({ userId: uid }, { $set: { userName: 'Deleted User' } }),
           Conversation.updateMany({ participants: uid }, { $pull: { participants: uid } }),
         ])
-        await User.findByIdAndDelete(uid)
+        /*
+         * deleteOne, not findByIdAndDelete.
+         *
+         * User has a pre(/^find/) hook that appends
+         * `deletedAt: { $exists: false }` to any query that does not already
+         * mention deletedAt. findByIdAndDelete goes through findOneAndDelete,
+         * so the hook fired and the delete became
+         * `{ _id, deletedAt: { $exists: false } }` — which can never match a
+         * user selected precisely BECAUSE deletedAt is set. Every related
+         * record was erased while the User document itself, holding the email,
+         * name, phone and password hash, survived indefinitely: the erasure
+         * looked successful and was not.
+         *
+         * deleteOne is not matched by the hook, and restating the deletedAt
+         * precondition re-checks atomically that this user is still eligible.
+         */
+        const purged = await User.deleteOne({ _id: uid, deletedAt: { $lt: cutoff } })
+        if (purged.deletedCount === 0) {
+          logger.warn(`[Scheduler] GDPR purge matched no user document for ${uid.slice(0, 8)}...`)
+          continue
+        }
         logger.info(`[Scheduler] Hard-deleted user ${uid.slice(0, 8)}... after 30-day grace period`)
       }
     } catch (err) {

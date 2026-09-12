@@ -251,6 +251,19 @@ router.post('/:id/resend', authenticate, requirePermission('users:invite'), asyn
     return
   }
 
+  // The SAME delegation guard the create route runs. Resend mints a fresh raw
+  // token and hands it back to the caller, and the create route's own comment
+  // says that is only safe because canDelegate has proven the invitation can
+  // grant nothing the caller does not already hold. Without it here, anyone
+  // with users:invite could resend a super_admin invitation created by someone
+  // else, take the returned link, and accept it themselves — a straight
+  // privilege escalation past a guard that exists three routes above.
+  const delegationError = canDelegate(req, invitation.roles, invitation.permissions ?? [])
+  if (delegationError) {
+    error(res, delegationError, 403)
+    return
+  }
+
   const rawToken = crypto.randomBytes(32).toString('hex')
   invitation.token = hashInviteToken(rawToken)
   invitation.expiresAt = new Date(Date.now() + INVITE_TTL_MS)
