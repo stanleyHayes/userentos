@@ -211,7 +211,14 @@ export function useCreateAgreement() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: Partial<RentalAgreement>) => api.post<RentalAgreement>('/agreements', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agreements'] }),
+    // Both keys. The list is ['agreements']; the detail page is
+    // ['agreement', id], and React Query matches by key PREFIX, so
+    // invalidating the list alone left an open detail page stale — after
+    // signing, the signed badge never appeared.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agreements'] })
+      qc.invalidateQueries({ queryKey: ['agreement'] })
+    },
   })
 }
 
@@ -221,7 +228,14 @@ export function useSignAgreement() {
     // The typed legal name is recorded as the e-signature.
     mutationFn: ({ id, signatureName }: { id: string; signatureName: string }) =>
       api.post<RentalAgreement>(`/agreements/${id}/sign`, { signatureName }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agreements'] }),
+    // Both keys. The list is ['agreements']; the detail page is
+    // ['agreement', id], and React Query matches by key PREFIX, so
+    // invalidating the list alone left an open detail page stale — after
+    // signing, the signed badge never appeared.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agreements'] })
+      qc.invalidateQueries({ queryKey: ['agreement'] })
+    },
   })
 }
 
@@ -230,7 +244,14 @@ export function useUpdateAgreement() {
   return useMutation({
     mutationFn: ({ id, ...body }: Partial<RentalAgreement> & { id: string }) =>
       api.patch<RentalAgreement>(`/agreements/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agreements'] }),
+    // Both keys. The list is ['agreements']; the detail page is
+    // ['agreement', id], and React Query matches by key PREFIX, so
+    // invalidating the list alone left an open detail page stale — after
+    // signing, the signed badge never appeared.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agreements'] })
+      qc.invalidateQueries({ queryKey: ['agreement'] })
+    },
   })
 }
 
@@ -1878,6 +1899,9 @@ export function useInitiateMoveOut() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['move-outs'] })
       qc.invalidateQueries({ queryKey: ['agreements'] })
+      // The detail page is keyed ['agreement', id] and is not prefix-matched
+      // by ['agreements'] — a move-out must refresh it too.
+      qc.invalidateQueries({ queryKey: ['agreement'] })
     },
   })
 }
