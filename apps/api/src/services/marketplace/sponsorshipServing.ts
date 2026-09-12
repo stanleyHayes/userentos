@@ -24,7 +24,8 @@ export interface SponsoredPlacement {
   placement: string
 }
 
-const SERVABLE_LISTING_STATUSES = ['approved', 'published']
+// Same definition the public registry uses — one place, not two.
+import { PUBLICLY_VISIBLE_STATUSES as SERVABLE_LISTING_STATUSES } from '../propertyReview.js'
 
 /**
  * Active sponsorships for a placement, filtered down to listings that are

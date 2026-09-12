@@ -7,6 +7,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
+import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 
 function hashIp(ip: string): string {
   return crypto.createHash('sha256').update(ip).digest('hex')
@@ -39,7 +40,7 @@ interface SanitizedListing {
   rentAmount: number
   bedrooms: number
   bathrooms: number
-  listingStatus: 'approved'
+  listingStatus: string
   publishedAt: Date | null
   image: string | null
 }
@@ -59,7 +60,9 @@ function sanitize(p: object): SanitizedListing {
     rentAmount: typeof raw.rentAmount === 'number' ? raw.rentAmount : 0,
     bedrooms: typeof raw.bedrooms === 'number' ? raw.bedrooms : 0,
     bathrooms: typeof raw.bathrooms === 'number' ? raw.bathrooms : 0,
-    listingStatus: 'approved',
+    // The real status, not a hard-coded 'approved' — 'published' is equally
+    // live and the response should say which one it is.
+    listingStatus: (raw.listingStatus as string) ?? 'approved',
     publishedAt: (raw.publishedAt as Date | null | undefined) ?? null,
     image: images.length > 0 ? String(images[0]) : null,
   }
@@ -83,7 +86,7 @@ router.get(
     const pageSize = Math.min(50, Math.max(1, Number(q.pageSize) || 20))
 
     const filter: Record<string, unknown> = {
-      listingStatus: 'approved',
+      listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
     }
 
     if (city) {
@@ -239,7 +242,7 @@ router.get(
       return
     }
 
-    const doc = await Property.findOne({ _id: id, listingStatus: 'approved' }).lean()
+    const doc = await Property.findOne({ _id: id, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
     if (!doc) {
       error(res, 'Property not found', 404)
       return

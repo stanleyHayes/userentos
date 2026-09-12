@@ -44,6 +44,18 @@ export function canTransition(from: ReviewStatus, to: ReviewStatus): boolean {
   return (TRANSITIONS[from] ?? []).includes(to)
 }
 
+/**
+ * Statuses at which a listing is live to the public.
+ *
+ * Both count: 'approved' is the state moderation leaves a listing in, and
+ * 'published' is where a landlord (or `unsuspend`) moves it afterwards —
+ * TRANSITIONS allows approved -> published, and sponsorship serving already
+ * treated the pair as live. The public registry accepted only 'approved', so
+ * anything reaching 'published' silently disappeared from the public site, and
+ * unsuspending a listing removed it rather than restoring it.
+ */
+export const PUBLICLY_VISIBLE_STATUSES: ReviewStatus[] = ['approved', 'published']
+
 /** Statuses a moderator should see in the review queue. */
 export const REVIEWABLE_STATUSES: ReviewStatus[] = ['pending_review', 'in_review']
 
