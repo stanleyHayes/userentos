@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { envOr, envOptional, envNumber, publicUrl } from '../utils/env.js'
+import { envOr, envOptional, envNumber, publicUrl, publicBaseUrl } from '../utils/env.js'
 
 /**
  * An empty environment variable must behave as ABSENT.
@@ -105,5 +105,25 @@ describe('publicUrl (payment provider callbacks)', () => {
   it('accepts a path without a leading slash', () => {
     vi.stubEnv('PUBLIC_BASE_URL', 'https://api.userentos.com')
     expect(publicUrl('api/x')).toBe('https://api.userentos.com/api/x')
+  })
+
+  it('uses the API origin, not the web app origin, when they differ', () => {
+    // One variable used to serve both. Pointed at the web app, MTN's
+    // confirmation hits the SPA, which answers 200 with HTML — the provider
+    // records a successful delivery and the payment never completes.
+    vi.stubEnv('PUBLIC_BASE_URL', 'https://userentos.com')
+    vi.stubEnv('PUBLIC_API_URL', 'https://api.userentos.com')
+
+    expect(publicUrl('/api/webhooks/payments/telecel'))
+      .toBe('https://api.userentos.com/api/webhooks/payments/telecel')
+    // Emailed links still go to the browser app.
+    expect(publicBaseUrl()).toBe('https://userentos.com')
+  })
+
+  it('falls back to the web origin on a single-host deployment', () => {
+    // API and app on one origin: setting one variable must keep working.
+    vi.stubEnv('PUBLIC_API_URL', '')
+    vi.stubEnv('PUBLIC_BASE_URL', 'https://userentos.com')
+    expect(publicUrl('/api/x')).toBe('https://userentos.com/api/x')
   })
 })

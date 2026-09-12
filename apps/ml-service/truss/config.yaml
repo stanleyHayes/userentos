@@ -1,0 +1,23 @@
+# Truss packaging for the RentOS rent-pricing model (ML roadmap §10).
+#
+# The model itself is NOT redefined here. `external_package_dirs` bundles the
+# ml-service `app` package, so Baseten serves exactly the same
+# RentPriceModel and feature extraction the FastAPI service and the test
+# suite run. A second copy of the feature vector is how train/serve skew
+# starts — two of the three bugs fixed in this model came from precisely that.
+model_name: rentos-rent-pricing
+python_version: "3.11"
+
+# Bundles apps/ml-service/app as an importable `app` package.
+external_package_dirs:
+  - ../app
+
+# The model is pure NumPy: no torch, no sklearn, no GPU.
+requirements:
+  - numpy>=2.5.0
+
+resources:
+  cpu: "1"
+  memory: 1Gi
+
+environment_variables: {}

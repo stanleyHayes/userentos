@@ -25,7 +25,7 @@ export interface IValuationLog extends Document {
   /** Model artifact identity — the model's trainedAt timestamp. */
   modelVersion: string
   /** Which implementation answered: the in-process model or the ML service. */
-  modelSource: 'local' | 'ml-service'
+  modelSource: 'local' | 'ml-service' | 'baseten'
   /** Where the valuation was requested from, for slicing evaluation. */
   context: 'pricing_engine' | 'pricing_analysis' | 'api'
 
@@ -62,7 +62,7 @@ export interface IValuationLog extends Document {
 
 const valuationLogSchema = new Schema<IValuationLog>({
   modelVersion: { type: String, required: true, index: true },
-  modelSource: { type: String, enum: ['local', 'ml-service'], required: true },
+  modelSource: { type: String, enum: ['local', 'ml-service', 'baseten'], required: true },
   context: {
     type: String,
     enum: ['pricing_engine', 'pricing_analysis', 'api'],

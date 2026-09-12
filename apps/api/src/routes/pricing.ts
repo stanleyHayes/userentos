@@ -5,6 +5,7 @@ import { success, error } from '../utils/response.js'
 import { analyzePropertyPricing, getRentTrends, checkFairPrice } from '../services/pricing.js'
 import { rentPriceModel } from '../services/ml/pricingModel.js'
 import { mlClient } from '../services/mlClient.js'
+import { basetenClient } from '../services/ml/baseten.js'
 import { listValuations, recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
 import { Property } from '../models/Property.js'
 
@@ -169,6 +170,23 @@ router.post('/predict-ml', authenticate, async (req, res) => {
   const { propertyId, ...input } = parsed.data
 
   try {
+    // Three interchangeable sources, tried in order: Baseten, a self-hosted
+    // ML service, then the in-process model. Each falls through on failure,
+    // so an unreachable host degrades the estimate instead of the page.
+    if (basetenClient.isEnabled()) {
+      try {
+        const result = await basetenClient.predict(input)
+        success(res, result)
+        void recordValuation({
+          input, result, modelSource: 'baseten', context: 'pricing_engine',
+          requestedBy: req.user?.userId, propertyId,
+        })
+        return
+      } catch (e) {
+        console.warn('[pricing] Baseten failed, falling through:', (e as Error).message)
+      }
+    }
+
     if (mlClient.isEnabled()) {
       // External ML service — fall back to the local model if it's down/slow.
       try {

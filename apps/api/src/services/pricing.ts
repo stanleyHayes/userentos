@@ -2,6 +2,7 @@ import { Property } from '../models/Property.js'
 import { rentPriceModel } from './ml/pricingModel.js'
 import type { PredictionResult } from './ml/pricingModel.js'
 import { mlClient } from './mlClient.js'
+import { basetenClient } from './ml/baseten.js'
 import { recordValuation } from './ml/valuationLog.js'
 
 // Escape user-supplied input before embedding it in a RegExp, to prevent
@@ -179,10 +180,18 @@ export async function analyzePropertyPricing(
 
   // Add ML prediction if model is trained (local or external)
   let mlPrediction: PredictionResult | undefined
-  let mlSource: 'local' | 'ml-service' = 'local'
+  let mlSource: 'local' | 'ml-service' | 'baseten' = 'local'
   const mlInput = { city, type, bedrooms, bathrooms, floorArea, furnished, amenities }
   try {
-    if (mlClient.isEnabled()) {
+    if (basetenClient.isEnabled()) {
+      try {
+        mlPrediction = await basetenClient.predict(mlInput)
+        mlSource = 'baseten'
+      } catch {
+        // Falls through to the ML service, then the local model.
+      }
+    }
+    if (!mlPrediction && mlClient.isEnabled()) {
       try {
         mlPrediction = await mlClient.predict(mlInput)
         mlSource = 'ml-service'
@@ -190,7 +199,7 @@ export async function analyzePropertyPricing(
         // External ML service down/slow — fall back to the local model if trained.
         if (rentPriceModel.isTrained) mlPrediction = rentPriceModel.predict(mlInput)
       }
-    } else if (rentPriceModel.isTrained) {
+    } else if (!mlPrediction && rentPriceModel.isTrained) {
       mlPrediction = rentPriceModel.predict(mlInput)
     }
   } catch {
