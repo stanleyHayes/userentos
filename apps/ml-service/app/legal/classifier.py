@@ -34,7 +34,7 @@ import numpy as np
 from app.core.logging import get_logger
 from app.legal.corpus import TRAINING_EXAMPLES
 from app.legal.taxonomy import LABEL_KEYS
-from app.legal.text import N_FEATURES, features
+from app.legal.text import N_FEATURES, contract_fingerprint, features
 
 logger = get_logger(__name__)
 
@@ -440,6 +440,7 @@ class ComplaintClassifier:
                     "sampleCount": self.sample_count,
                     "metrics": self.metrics,
                     "nFeatures": N_FEATURES,
+                    "featureFingerprint": contract_fingerprint(),
                 })]),
             )
 
@@ -454,6 +455,17 @@ class ComplaintClassifier:
                 # something else now. Refuse rather than serve noise.
                 raise ValueError(
                     f"artifact built for {meta.get('nFeatures')} features, this build uses {N_FEATURES}"
+                )
+
+            # The space can stay the same size while its CONTENTS move: a
+            # change to tokenisation, n-grams, stopwords or normalisation
+            # reassigns every index, and the file still loads with matching
+            # shapes and silently wrong weights. The probe catches that.
+            stored_fingerprint = meta.get("featureFingerprint")
+            if stored_fingerprint and stored_fingerprint != contract_fingerprint():
+                raise ValueError(
+                    "artifact was built against a different feature-extraction contract; "
+                    "retrain with scripts/train_legal.py"
                 )
 
             labels = tuple(str(x) for x in data["labels"])

@@ -19,11 +19,12 @@ from app.legal.text import MAX_CHARS, features, normalise
 def model():
     """Trained once for the module — training is ~2 minutes."""
     classifier = ComplaintClassifier()
-    # Smaller corpus and fewer epochs than production: these tests check
+    # Smaller corpus and far fewer epochs than production: these tests check
     # behaviour and invariants, not the published accuracy numbers, which
-    # scripts/train_legal.py owns.
-    classifier.train(generate(per_label=40, negatives=200),
-                     calibration_set=TRAINING_EXAMPLES, epochs=300)
+    # scripts/train_legal.py owns. Training is the whole cost of this suite,
+    # so it is kept to what the assertions actually need.
+    classifier.train(generate(per_label=25, negatives=120),
+                     calibration_set=TRAINING_EXAMPLES, epochs=120)
     return classifier
 
 
@@ -84,7 +85,7 @@ class TestThresholdGuards:
 
     def test_metrics_admit_when_calibration_was_not_human_text(self):
         classifier = ComplaintClassifier()
-        classifier.train(generate(per_label=20, negatives=80), epochs=100)
+        classifier.train(generate(per_label=15, negatives=60), epochs=60)
         assert classifier.metrics["calibratedOnHeldOutHumanText"] is False
         assert "template memorisation" in classifier.metrics["caveat"]
 
@@ -218,3 +219,49 @@ class TestApi:
     def test_batch_is_bounded(self, client):
         assert client.post("/legal/classify-batch",
                            json={"texts": ["my landlord cut the water"] * 51}).status_code == 422
+
+
+class TestFeatureContract:
+    """A changed feature pipeline must invalidate the artifact.
+
+    Weights are stored by feature INDEX. Change tokenisation, the n-gram
+    ranges, the stopwords, the hash or the normalisation and every index is
+    reassigned — the file still loads, the shapes still match, and every
+    weight now means something else. Checking N_FEATURES does not catch it:
+    the space stays the same size while its contents move.
+    """
+
+    def test_fingerprint_is_stable_across_calls(self):
+        from app.legal.text import contract_fingerprint
+        assert contract_fingerprint() == contract_fingerprint()
+
+    def test_fingerprint_changes_when_the_pipeline_changes(self, monkeypatch):
+        from app.legal import text as text_module
+        baseline = text_module.contract_fingerprint()
+
+        # Any change to what features() yields must move the fingerprint.
+        monkeypatch.setattr(text_module, "STOPWORDS", frozenset())
+        assert text_module.contract_fingerprint() != baseline
+
+    def test_load_refuses_an_artifact_from_a_different_contract(self, model, tmp_path):
+        import json
+        path = str(tmp_path / "legal.npz")
+        model.save(path)
+
+        data = dict(np.load(path, allow_pickle=False))
+        meta = json.loads(str(data["meta"][0]))
+        meta["featureFingerprint"] = "0000000000000000"  # as if the pipeline moved
+        data["meta"] = np.array([json.dumps(meta)])
+        np.savez_compressed(path, **data)
+
+        assert ComplaintClassifier().load(path) is False
+
+    def test_the_shipped_artifact_matches_this_build(self):
+        # Guards the committed data/legal-classifier.npz against a pipeline
+        # change landing without a retrain.
+        import os
+        from app.config import get_settings
+        path = get_settings().legal_model_path
+        if not os.path.exists(path):
+            pytest.skip("no artifact committed in this checkout")
+        assert ComplaintClassifier().load(path) is True

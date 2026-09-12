@@ -105,3 +105,25 @@ def features(text: str) -> dict[int, float]:
     if norm_factor == 0:
         return {}
     return {idx: v / norm_factor for idx, v in weighted.items()}
+
+
+#: A fixed probe used to fingerprint the feature-extraction contract.
+#: Deliberately exercises words, bigrams, digits, punctuation and case.
+FINGERPRINT_PROBE = "My landlord demanded 12 months advance and changed the locks!"
+
+
+def contract_fingerprint() -> str:
+    """A stable hash of what `features()` produces for a fixed input.
+
+    The model artifact stores weights by feature INDEX, so any change to
+    tokenisation, n-gram ranges, stopwords, the hash function or the
+    normalisation silently reassigns every index — the file still loads, the
+    shapes still match, and every weight now means something else.
+
+    Checking N_FEATURES alone does not catch that: the space stays the same
+    size while its contents move. Recomputing this probe at load does.
+    """
+    feats = features(FINGERPRINT_PROBE)
+    payload = ",".join(f"{idx}:{value:.6f}" for idx, value in sorted(feats.items()))
+    import hashlib
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

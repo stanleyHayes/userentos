@@ -14,6 +14,7 @@ import {
   type ToneOption,
 } from '../services/ai.js'
 import { success, error } from '../utils/response.js'
+import { logger } from '../utils/logger.js'
 import { aiLimiter, publicLimiter } from '../middleware/rateLimit.js'
 import { assessAdvance } from '../services/legal/rentLaw.js'
 import {
@@ -577,7 +578,8 @@ router.get('/complaints', authenticate, requireRole('admin', 'super_admin'), asy
     })
     success(res, result)
   } catch (err) {
-    error(res, (err as Error).message || 'Failed to list complaints', 500)
+    logger.error(`[complaints] list failed: ${(err as Error).message}`)
+    error(res, 'Failed to list complaints', 500)
   }
 })
 
@@ -598,7 +600,8 @@ router.post('/complaints/:id/review', authenticate, requireRole('admin', 'super_
     if (!updated) { error(res, 'Complaint not found', 404); return }
     success(res, updated)
   } catch (err) {
-    error(res, (err as Error).message || 'Failed to record review', 500)
+    logger.error(`[complaints] review failed: ${(err as Error).message}`)
+    error(res, 'Failed to record review', 500)
   }
 })
 
@@ -621,6 +624,7 @@ router.get('/complaints/scorecard', authenticate, requireRole('admin', 'super_ad
         : undefined,
     })
   } catch (err) {
-    error(res, (err as Error).message || 'Failed to build scorecard', 500)
+    logger.error(`[complaints] scorecard failed: ${(err as Error).message}`)
+    error(res, 'Failed to build scorecard', 500)
   }
 })
