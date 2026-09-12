@@ -5,6 +5,7 @@ import { authenticate, requireRole } from '../middleware/auth.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { User } from '../models/User.js'
 
 const router = Router()
 
@@ -80,7 +81,22 @@ router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const post = await BlogPost.create({ ...parsed.data, author: req.user!.userId })
+  /*
+   * `author` is the public byline; `authorId` is the ownership field.
+   *
+   * This wrote the raw ObjectId into `author` and never set `authorId` at all,
+   * so the public blog credited a post to "6aa469…" and the ownership check on
+   * GET /blog/:id could never match — an author could not open their own
+   * unpublished draft. Same mistake authoring.ts made with the email address.
+   */
+  const writer = await User.findById(req.user!.userId).select('firstName lastName').lean()
+  const byline = writer ? `${writer.firstName ?? ''} ${writer.lastName ?? ''}`.trim() : ''
+
+  const post = await BlogPost.create({
+    ...parsed.data,
+    author: byline || 'RentOS editorial',
+    authorId: req.user!.userId,
+  })
   success(res, { ...post.toObject(), id: post._id.toString() }, 'Post created', 201)
 })
 

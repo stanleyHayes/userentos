@@ -23,6 +23,7 @@ import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
 import { RefreshToken } from '../models/RefreshToken.js'
+import { escapeRegex } from '../utils/params.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -182,10 +183,31 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
   const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
   const skip = (page - 1) * pageSize
 
+  /*
+   * Search and role filtering happen HERE, not in the browser.
+   *
+   * The admin page fetched page one (20 rows) and filtered that in JavaScript,
+   * so on a 102-user database 82 users were invisible AND unsearchable — the
+   * search box silently only ever searched the 20 most recent accounts.
+   */
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : ''
+  const role = typeof req.query.role === 'string' ? req.query.role.trim() : ''
+
+  const filter: Record<string, unknown> = {}
+  if (search) {
+    const safe = escapeRegex(search)
+    filter.$or = [
+      { firstName: new RegExp(safe, 'i') },
+      { lastName: new RegExp(safe, 'i') },
+      { email: new RegExp(safe, 'i') },
+    ]
+  }
+  if (role) filter.roles = role
+
   const [total, users] = await Promise.all([
     // countDocuments doesn't fire the pre(/^find/) soft-delete hook — filter explicitly
-    User.countDocuments({ deletedAt: { $exists: false } }),
-    User.find({}).select('-passwordHash -__v').sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    User.countDocuments({ ...filter, deletedAt: { $exists: false } }),
+    User.find(filter).select('-passwordHash -__v').sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))
   success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })

@@ -32,13 +32,27 @@ export function formatCurrency(amount: number, currency = 'GHS'): string {
   }).format(amount)
 }
 
+/** A bare calendar date from the API, e.g. "2026-09-12". */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
 export function formatDate(date: string | Date | undefined | null): string {
   if (!date) return '—'
   const d = new Date(date)
   if (isNaN(d.getTime())) return '—'
+
+  /*
+   * A date-only string is parsed by JS as UTC midnight, so formatting it in a
+   * timezone behind UTC renders the PREVIOUS day — a lease starting on the 1st
+   * shows as the 31st. A bare calendar date has no timezone to convert, so it
+   * is formatted as-is; a real timestamp still renders in the viewer's zone,
+   * which is what they want for "when did this happen".
+   */
+  const isDateOnly = typeof date === 'string' && DATE_ONLY.test(date)
+
   return new Intl.DateTimeFormat('en-GH', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    ...(isDateOnly ? { timeZone: 'UTC' } : {}),
   }).format(d)
 }

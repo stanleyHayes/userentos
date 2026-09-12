@@ -951,10 +951,26 @@ export function useRegistryStats(enabled = true) {
 }
 
 // Users (admin)
-export function useUsers() {
+/**
+ * The admin user list.
+ *
+ * Search and role filtering are the SERVER's job: this used to fetch page one
+ * (20 rows) and filter it in the browser, so on a larger database most users
+ * were invisible and the search box only ever searched those 20.
+ */
+export function useUsers(params?: { search?: string; role?: string; page?: number; pageSize?: number }) {
+  const query = new URLSearchParams()
+  if (params?.search) query.set('search', params.search)
+  if (params?.role) query.set('role', params.role)
+  query.set('page', String(params?.page ?? 1))
+  query.set('pageSize', String(params?.pageSize ?? 20))
+
   return useQuery({
-    queryKey: ['users'],
-    queryFn: () => api.get<PaginatedResponse<User>>('/users'),
+    // The params are part of the key, or changing a filter would serve the
+    // previous filter's cached rows.
+    queryKey: ['users', params?.search ?? '', params?.role ?? '', params?.page ?? 1, params?.pageSize ?? 20],
+    queryFn: () => api.get<PaginatedResponse<User>>(`/users?${query.toString()}`),
+    placeholderData: keepPreviousData,
   })
 }
 

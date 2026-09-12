@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { AdminPagination } from '@/components/admin/AdminPagePrimitives'
 import {
   useUsers, useCreateUser, useUpdateUserPermissions, useDeleteUser,
   useInvitations, useSendInvitation, useRevokeInvitation, useResendInvitation,
@@ -13,7 +14,7 @@ import { formatDate } from '@/lib/utils'
 import { Search, Plus, Mail, Shield, Trash2, RotateCw, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
@@ -81,8 +82,20 @@ export function UsersPage() {
   const canManagePerms = isSuperAdmin || currentUser?.permissions?.includes('users:manage_permissions')
   const canDelete = isSuperAdmin || currentUser?.permissions?.includes('users:delete')
 
-  const { data, isLoading } = useUsers()
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<string>('')
+  const [page, setPage] = useState(1)
+  // Debounced so typing is not one request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data, isLoading } = useUsers({ search: debouncedSearch, role: roleFilter, page })
   const users = data?.items ?? []
+  const totalPages = data?.totalPages ?? 1
+  const totalUsers = data?.total ?? users.length
   const { data: invitations, isLoading: invLoading } = useInvitations()
 
   const createUser = useCreateUser()
@@ -94,8 +107,6 @@ export function UsersPage() {
 
   const [tab, setTab] = useState<Tab>('users')
   const { attach: tabUnderlineAttach, style: tabUnderlineStyle, visible: tabUnderlineVisible } = useSlidingIndicator<HTMLDivElement, 'underline'>(tab, 'underline')
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<string>('')
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -112,11 +123,9 @@ export function UsersPage() {
   const [editRoles, setEditRoles] = useState<UserRole[]>([])
   const [editPermissions, setEditPermissions] = useState<Permission[]>([])
 
-  const filtered = users.filter((u) => {
-    const matchesSearch = !search || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
-    const matchesRole = !roleFilter || u.roles.includes(roleFilter as UserRole)
-    return matchesSearch && matchesRole
-  })
+  // The server applied search and role; re-filtering here would only narrow
+  // its matches with weaker rules and break the counts.
+  const filtered = users
 
   function handleCreateUser() {
     if (!createForm.email || !createForm.firstName || !createForm.lastName || !createForm.password || !createForm.phone || !createForm.roles.length) {
@@ -251,14 +260,14 @@ export function UsersPage() {
               type="text"
               placeholder="Search by name or email..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search size={18} /></InputAdornment> }, inputLabel: { shrink: true } }}
               fullWidth
             />
             <TextField
               select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }}
               slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true, renderValue: (v) => (v as string) ? roleLabel[(v as string) as UserRole] ?? v : 'All Roles' } }}
               sx={{ minWidth: 180 }}
             >
@@ -271,7 +280,7 @@ export function UsersPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>All Users ({filtered.length})</CardTitle>
+              <CardTitle>All Users ({totalUsers})</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -351,6 +360,12 @@ export function UsersPage() {
                 </div>
               )}
             </CardContent>
+            <AdminPagination
+              page={page}
+              totalPages={totalPages}
+              onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+            />
           </Card>
         </>
       )}
