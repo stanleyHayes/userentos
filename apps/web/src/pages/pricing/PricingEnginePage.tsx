@@ -63,8 +63,22 @@ interface FairPriceResult {
 
 interface MLPredictionResult {
   predictedRent: number
+  /** What the average property in the training set is worth. */
+  baselineRent: number
   confidenceInterval: { low: number; high: number }
-  featureContributions: { feature: string; contribution: number }[]
+  featureContributions: {
+    feature: string
+    /** GHS above/below the baseline — signed, so it can be a negative driver. */
+    contribution: number
+    impactPercent: number
+    value: number
+  }[]
+  dataQuality: {
+    suppliedFields: number
+    totalFields: number
+    imputedFields: string[]
+    warning: string | null
+  }
   modelVersion: string
   r2Score: number
   sampleCount: number
@@ -692,20 +706,65 @@ export function PricingEnginePage() {
                   <p className="text-xs text-muted mt-1">
                     Confidence: {formatCurrency(mlResult.confidenceInterval.low)} to {formatCurrency(mlResult.confidenceInterval.high)}
                   </p>
+                  {mlResult.baselineRent > 0 && (
+                    <p className="mt-1 text-xs text-muted">
+                      Typical property in the model:{' '}
+                      <span className="font-semibold">{formatCurrency(mlResult.baselineRent)}</span>
+                      {' — this one is '}
+                      <span className={cn(
+                        'font-semibold',
+                        mlResult.predictedRent >= mlResult.baselineRent
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-amber-600 dark:text-amber-400',
+                      )}>
+                        {mlResult.predictedRent >= mlResult.baselineRent ? 'above' : 'below'} average
+                      </span>
+                    </p>
+                  )}
                 </div>
 
+                {/* An imputed feature is a stated average, not an observation:
+                    say so rather than presenting the estimate as equally
+                    grounded whether the caller gave us 18 facts or 4. */}
+                {mlResult.dataQuality?.warning && (
+                  <div className="rounded-xl border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-400/30 dark:bg-amber-400/10">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                      Based on {mlResult.dataQuality.suppliedFields} of {mlResult.dataQuality.totalFields} property details
+                    </p>
+                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-200/80">
+                      {mlResult.dataQuality.warning}
+                    </p>
+                  </div>
+                )}
+
                 <div>
-                  <h3 className="mb-3 text-sm font-bold text-primary-dark dark:text-white">Feature Contributions</h3>
+                  <h3 className="text-sm font-bold text-primary-dark dark:text-white">What drives this estimate</h3>
+                  <p className="mb-3 mt-0.5 text-xs text-muted">
+                    Each figure is this property&apos;s value above or below the typical one.
+                  </p>
                   <div className="space-y-3">
                     {mlResult.featureContributions.slice(0, 8).map((c, i) => (
                       <div key={i} className="rounded-xl border border-border/80 bg-surface/70 p-3 dark:border-white/10 dark:bg-white/[0.03]">
                         <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                          <span className="text-muted capitalize">{c.feature.replace(/([A-Z])/g, ' $1').trim()}</span>
+                          <span className="flex items-center gap-1.5 text-muted capitalize">
+                            {c.feature.replace(/([A-Z])/g, ' $1').trim()}
+                            {mlResult.dataQuality?.imputedFields?.includes(c.feature) && (
+                              <span
+                                title="Not supplied — estimated from the training average"
+                                className="rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 dark:bg-amber-400/15 dark:text-amber-300"
+                              >
+                                estimated
+                              </span>
+                            )}
+                          </span>
                           <span className={cn(
-                            'font-semibold',
+                            'font-semibold tabular-nums',
                             c.contribution >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           )}>
                             {c.contribution >= 0 ? '+' : ''}{formatCurrency(Math.round(c.contribution))}
+                            <span className="ml-1 font-normal text-muted">
+                              ({c.impactPercent >= 0 ? '+' : ''}{c.impactPercent}%)
+                            </span>
                           </span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-white dark:bg-black/20">

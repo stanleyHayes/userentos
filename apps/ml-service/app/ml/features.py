@@ -88,7 +88,14 @@ def extract_features(input_data: dict[str, Any], encodings: EncodingMaps) -> lis
     city = str(input_data.get("city", "")).lower().strip()
     prop_type = str(input_data.get("type", "")).lower().strip()
     region = str(input_data.get("region", "")).lower().strip()
+    # An explicit [] means "no amenities"; an absent list means we were not
+    # told. Conflating them priced every amenity-less request as a property
+    # with none of them, the single largest negative driver there is.
+    stated_amenities = input_data.get("amenities") is not None
     amenities = input_data.get("amenities") or []
+
+    def _flag(present: bool) -> float:
+        return (1.0 if present else 0.0) if stated_amenities else MISSING
 
     def _num(key: str) -> float:
         """A supplied 0 means zero; an absent field means unknown."""
@@ -99,10 +106,10 @@ def extract_features(input_data: dict[str, Any], encodings: EncodingMaps) -> lis
         _num("bedrooms"),
         _num("bathrooms"),
         _num("floorArea"),
-        1.0 if input_data.get("furnished") else 0.0,
+        MISSING if input_data.get("furnished") is None else (1.0 if input_data["furnished"] else 0.0),
         _num("parkingSpaces"),
         _num("advanceMonths"),
-        float(len(amenities)),  # an empty/absent list means no amenities, not unknown
+        float(len(amenities)) if stated_amenities else MISSING,
         # A city/type/region the model never saw in training is unknown, not
         # worthless. These are target-mean encodings in the thousands of GHS,
         # so defaulting to 0.0 knocked ~65% off the price of every listing in
@@ -110,14 +117,15 @@ def extract_features(input_data: dict[str, Any], encodings: EncodingMaps) -> lis
         encodings["city"].get(city, MISSING),
         encodings["type"].get(prop_type, MISSING),
         encodings["region"].get(region, MISSING),
-        1.0 if _has_keyword(amenities, ["water"]) else 0.0,
-        1.0 if _has_keyword(amenities, ["electric", "power"]) else 0.0,
-        1.0 if _has_keyword(amenities, ["security", "guard", "cctv"]) else 0.0,
-        1.0 if _has_keyword(amenities, ["wifi", "internet"]) else 0.0,
-        1.0 if _has_keyword(amenities, ["ac", "air condition", "aircond"]) else 0.0,
+        _flag(_has_keyword(amenities, ["water"])),
+        _flag(_has_keyword(amenities, ["electric", "power"])),
+        _flag(_has_keyword(amenities, ["security", "guard", "cctv"])),
+        _flag(_has_keyword(amenities, ["wifi", "internet"])),
+        _flag(_has_keyword(amenities, ["ac", "air condition", "aircond"])),
         _num("floor"),
         _num("yearBuilt"),
-        1.0 if input_data.get("stayType") == "short_stay" else 0.0,
+        MISSING if input_data.get("stayType") is None
+        else (1.0 if input_data["stayType"] == "short_stay" else 0.0),
     ]
 
 

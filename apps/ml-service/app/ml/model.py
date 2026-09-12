@@ -224,8 +224,9 @@ class RentPriceModel:
         # entered the model as 0 — "unknown year built" priced as year 0 —
         # and the caller got a confident, badly low number with no warning.
         # Legacy artifacts without usable means fall back to 0 as before.
+        missing = np.isnan(features)
         if self.feature_means is not None and self.feature_means.shape == features.shape:
-            features = np.where(np.isnan(features), self.feature_means, features)
+            features = np.where(missing, self.feature_means, features)
         features = np.nan_to_num(features, nan=0.0)
 
         raw = float(features @ self.weights + self.bias)
@@ -244,22 +245,100 @@ class RentPriceModel:
         uncertainty = 0.2 * (1.0 - max(0.0, self.r2_score)) + 0.05
         margin = predicted * uncertainty
 
-        contributions = [
-            {"feature": FEATURE_NAMES[i], "contribution": float(self.weights[i] * features[i])}
-            for i in range(len(FEATURE_NAMES))
-        ]
-        contributions.sort(key=lambda c: abs(c["contribution"]), reverse=True)
+        contributions = self._attribute(features, predicted)
+        baseline = self._baseline_rent()
 
         return {
             "predictedRent": round(predicted),
+            "baselineRent": round(baseline),
             "confidenceInterval": {
                 "low": round(max(0.0, predicted - margin)),
                 "high": round(predicted + margin),
             },
             "featureContributions": contributions,
+            "dataQuality": self._data_quality(missing),
             "modelVersion": self.trained_at,
             "r2Score": round(self.r2_score, 3),
             "sampleCount": self.sample_count,
+        }
+
+    def _baseline_rent(self) -> float:
+        """What the average property in the training set is worth.
+
+        Every attribution below is stated relative to this, so a feature's
+        number answers "how much does THIS property's value differ from
+        typical because of this?" rather than the meaningless product of a
+        weight and an absolute value.
+        """
+        if self.feature_means is None or self.weights is None:
+            return 0.0
+        raw = float(self.feature_means @ self.weights + self.bias)
+        if self.target_transform == "log":
+            return float(np.exp(min(raw + 0.5 * self.residual_variance, MAX_LOG_RENT)))
+        return max(0.0, raw)
+
+    def _attribute(self, features: np.ndarray, predicted: float) -> list[dict[str, Any]]:
+        """Signed, cedi-denominated attribution per feature.
+
+        The old version reported weight * value, which is neither signed nor
+        in cedis: for a log-space model it produced numbers like 1.26 that the
+        web UI then rendered through formatCurrency as "GHS 1", and because
+        an absolute value is almost always positive, the panel showed every
+        feature as value-INCREASING and never surfaced a negative driver.
+
+        Attribution is against the training mean. In log space each feature
+        multiplies the baseline by exp(w * (x - mean)), so the amount of the
+        final rent owed to it is predicted - predicted / that multiplier.
+        """
+        assert self.weights is not None
+        means = (
+            self.feature_means
+            if self.feature_means is not None and self.feature_means.shape == features.shape
+            else np.zeros_like(features)
+        )
+        deltas = self.weights * (features - means)
+
+        out: list[dict[str, Any]] = []
+        for i, name in enumerate(FEATURE_NAMES):
+            delta = float(deltas[i])
+            if self.target_transform == "log":
+                multiplier = float(np.exp(np.clip(delta, -50.0, 50.0)))
+                amount = predicted - predicted / multiplier if multiplier > 0 else 0.0
+                impact = (multiplier - 1.0) * 100.0
+            else:  # legacy linear-in-price artifact: the delta is already GHS
+                amount = delta
+                impact = (delta / predicted * 100.0) if predicted > 0 else 0.0
+            out.append({
+                "feature": name,
+                "contribution": round(amount, 2),
+                "impactPercent": round(impact, 1),
+                "value": round(float(features[i]), 4),
+            })
+        out.sort(key=lambda c: abs(c["contribution"]), reverse=True)
+        return out
+
+    def _data_quality(self, missing: np.ndarray) -> dict[str, Any]:
+        """Which inputs the caller did not supply, and how much that matters.
+
+        Section 5 of the roadmap requires a data-quality warning when the
+        property data is incomplete; an imputed feature is a stated average,
+        not an observation, and the caller is entitled to know which.
+        """
+        imputed = [FEATURE_NAMES[i] for i in range(len(FEATURE_NAMES)) if bool(missing[i])]
+        total = len(FEATURE_NAMES)
+        supplied = total - len(imputed)
+        warning = None
+        if imputed:
+            warning = (
+                f"{len(imputed)} of {total} inputs were not supplied and were "
+                "estimated from the training average; the result is less "
+                "specific to this property."
+            )
+        return {
+            "suppliedFields": supplied,
+            "totalFields": total,
+            "imputedFields": imputed,
+            "warning": warning,
         }
 
     # ── Persistence ─────────────────────────────────────────────────────

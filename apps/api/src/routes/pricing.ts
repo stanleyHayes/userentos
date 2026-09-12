@@ -137,12 +137,17 @@ const predictMlSchema = z.object({
   city: z.string().min(1).max(200),
   type: z.string().min(1).max(200),
   bedrooms: z.number().int().min(0).max(100),
-  bathrooms: z.number().int().min(0).max(100).default(1),
+  bathrooms: z.number().int().min(0).max(100).optional(),
   floorArea: z.number().positive().max(1_000_000).optional(),
-  furnished: z.boolean().default(false),
-  parkingSpaces: z.number().int().min(0).max(1000).default(0),
-  advanceMonths: z.number().int().min(0).max(120).default(1),
-  amenities: z.array(z.string()).max(100).default([]),
+  // No .default() on any of these. A default is a fabricated observation: it
+  // reaches the model as a real value, so "amenities not stated" became "this
+  // property has no amenities" (-59% on a live call) and "advance not stated"
+  // became one month. Left undefined, the model imputes the training average
+  // and reports the field as estimated.
+  furnished: z.boolean().optional(),
+  parkingSpaces: z.number().int().min(0).max(1000).optional(),
+  advanceMonths: z.number().int().min(0).max(120).optional(),
+  amenities: z.array(z.string()).max(100).optional(),
   region: z.string().max(200).optional(),
   floor: z.number().int().min(-20).max(300).optional(),
   yearBuilt: z.number().int().min(1800).max(2200).optional(),

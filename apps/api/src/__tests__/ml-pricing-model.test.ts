@@ -291,3 +291,80 @@ describe('missing vs zero feature values', () => {
     expect(explicitZero).not.toBe(omitted)
   })
 })
+
+describe('valuation explainability (roadmap §5)', () => {
+  function trainedModel(): RentPriceModel {
+    const cities: [string, string, number][] = [
+      ['Accra', 'Greater Accra', 3200],
+      ['Kumasi', 'Ashanti', 2100],
+      ['Tamale', 'Northern', 1300],
+    ]
+    const props: IProperty[] = []
+    for (let i = 0; i < 60; i++) {
+      const [city, region, base] = cities[i % 3]
+      props.push(makeProperty({
+        address: { street: 'Test St', city, region },
+        rentAmount: base + (i % 5) * 150,
+        bedrooms: 1 + (i % 4),
+        bathrooms: 1 + (i % 3),
+        floorArea: 60 + i,
+        yearBuilt: 2010 + (i % 10),
+        floor: i % 5,
+        parkingSpaces: i % 3,
+        advanceMonths: 1 + (i % 6),
+      }) as IProperty)
+    }
+    const model = new RentPriceModel()
+    model.train(props, { maxEpochs: 800 })
+    return model
+  }
+
+  const cheap = {
+    city: 'Tamale', type: 'apartment', bedrooms: 1, bathrooms: 1, floorArea: 62,
+    region: 'Northern', yearBuilt: 2010, floor: 0, parkingSpaces: 0,
+    advanceMonths: 1, furnished: false, amenities: [], stayType: 'long_stay' as const,
+  }
+  const dear = { ...cheap, city: 'Accra', region: 'Greater Accra', bedrooms: 4, bathrooms: 3, floorArea: 118 }
+
+  it('surfaces value-DECREASING drivers, not only positive ones', () => {
+    // weight * value is almost always positive, so the old attribution
+    // painted every feature green and never explained a low valuation.
+    const { featureContributions } = trainedModel().predict(cheap)
+    expect(featureContributions.some(c => c.contribution < 0)).toBe(true)
+  })
+
+  it('attributes against the average property, in cedis', () => {
+    const model = trainedModel()
+    const low = model.predict(cheap)
+    const high = model.predict(dear)
+
+    expect(high.predictedRent).toBeGreaterThan(low.predictedRent)
+    // Baseline is the same average property regardless of the input.
+    expect(low.baselineRent).toBe(high.baselineRent)
+    // A below-average property sits under the baseline, an above-average one over it.
+    expect(low.predictedRent).toBeLessThan(low.baselineRent)
+    expect(high.predictedRent).toBeGreaterThan(high.baselineRent)
+
+    // Attributions are in the same units as the rent, so the UI's
+    // formatCurrency is meaningful: they roughly reconstruct the gap.
+    const summed = high.featureContributions.reduce((s, c) => s + c.contribution, 0)
+    expect(Math.abs(summed - (high.predictedRent - high.baselineRent))).toBeLessThan(
+      Math.max(50, high.predictedRent * 0.05),
+    )
+  })
+
+  it('reports which inputs were estimated rather than supplied', () => {
+    const model = trainedModel()
+
+    const complete = model.predict(dear)
+    expect(complete.dataQuality.imputedFields).toEqual([])
+    expect(complete.dataQuality.warning).toBeNull()
+    expect(complete.dataQuality.suppliedFields).toBe(complete.dataQuality.totalFields)
+
+    const sparse = model.predict({ city: 'Accra', type: 'apartment', bedrooms: 2, bathrooms: 1 })
+    expect(sparse.dataQuality.imputedFields).toContain('yearBuilt')
+    expect(sparse.dataQuality.imputedFields).toContain('floorArea')
+    expect(sparse.dataQuality.warning).toMatch(/not supplied/)
+    expect(sparse.dataQuality.suppliedFields).toBeLessThan(sparse.dataQuality.totalFields)
+  })
+})

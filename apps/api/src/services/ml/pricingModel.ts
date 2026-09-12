@@ -51,7 +51,16 @@ export interface ModelState {
 export interface PredictionResult {
   predictedRent: number
   confidenceInterval: { low: number; high: number }
-  featureContributions: { feature: string; contribution: number }[]
+  featureContributions: { feature: string; contribution: number; impactPercent: number; value: number }[]
+  /** What the average property in the training set is worth. */
+  baselineRent: number
+  /** How much of the estimate rests on supplied facts rather than averages. */
+  dataQuality: {
+    suppliedFields: number
+    totalFields: number
+    imputedFields: string[]
+    warning: string | null
+  }
   modelVersion: string
   r2Score: number
   sampleCount: number
@@ -273,8 +282,12 @@ export class RentPriceModel {
     // Same imputation as training. Without it an omitted optional field
     // entered the model as 0 — "unknown year built" priced as year 0 — and
     // the caller got a confident, badly low number with no warning.
+    const imputedFields: string[] = []
     for (let j = 0; j < features.length; j++) {
-      if (!Number.isFinite(features[j])) features[j] = this.featureMeans[j] ?? 0
+      if (!Number.isFinite(features[j])) {
+        imputedFields.push(FEATURE_NAMES[j])
+        features[j] = this.featureMeans[j] ?? 0
+      }
     }
 
     const predictedRent = this.weights.reduce((s, w, j) => s + w * features[j], 0) + this.bias
@@ -285,11 +298,38 @@ export class RentPriceModel {
     const uncertainty = 0.2 * (1 - Math.max(0, this.r2Score)) + 0.05
     const margin = clampedRent * uncertainty
 
-    // Feature contributions (each weight * feature value)
-    const contributions = features.map((v, i) => ({
-      feature: FEATURE_NAMES[i],
-      contribution: this.weights[i] * v,
-    })).sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
+    // What the average training property is worth. Every attribution below is
+    // stated against it, so a feature's number answers "how much is THIS
+    // property worth more or less than typical because of this?".
+    //
+    // The old version reported weight * value, which is not signed: an
+    // absolute value is almost always positive, so the UI showed every
+    // feature as value-INCREASING and never surfaced a negative driver.
+    const baselineRent = Math.max(
+      0,
+      this.weights.reduce((s, w, j) => s + w * (this.featureMeans[j] ?? 0), 0) + this.bias,
+    )
+
+    const contributions = features.map((v, i) => {
+      const delta = this.weights[i] * (v - (this.featureMeans[i] ?? 0))
+      return {
+        feature: FEATURE_NAMES[i],
+        contribution: Math.round(delta * 100) / 100,
+        impactPercent: clampedRent > 0 ? Math.round((delta / clampedRent) * 1000) / 10 : 0,
+        value: Math.round(v * 10000) / 10000,
+      }
+    }).sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
+
+    const totalFields = FEATURE_NAMES.length
+    const dataQuality = {
+      suppliedFields: totalFields - imputedFields.length,
+      totalFields,
+      imputedFields,
+      warning: imputedFields.length > 0
+        ? `${imputedFields.length} of ${totalFields} inputs were not supplied and were `
+          + 'estimated from the training average; the result is less specific to this property.'
+        : null,
+    }
 
     return {
       predictedRent: Math.round(clampedRent),
@@ -298,6 +338,8 @@ export class RentPriceModel {
         high: Math.round(clampedRent + margin),
       },
       featureContributions: contributions,
+      baselineRent: Math.round(baselineRent),
+      dataQuality,
       modelVersion: this.trainedAt,
       r2Score: Math.round(this.r2Score * 1000) / 1000,
       sampleCount: this.sampleCount,

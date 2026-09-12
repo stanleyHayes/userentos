@@ -19,9 +19,12 @@ class PropertyInput(BaseModel):
     """
 
     bedrooms: int = Field(..., ge=0, le=100)
-    bathrooms: int = Field(..., ge=0, le=100)
+    # Optional, like every other descriptive field: an unstated bathroom count
+    # is imputed from the training average and reported as estimated, rather
+    # than silently assumed to be 1.
+    bathrooms: int | None = Field(None, ge=0, le=100)
     floorArea: float | None = Field(None, ge=0, le=1_000_000)
-    furnished: bool | None = False
+    furnished: bool | None = None
     parkingSpaces: int | None = Field(None, ge=0, le=1000)
     advanceMonths: int | None = Field(None, ge=0, le=120)
     amenities: list[str] | None = Field(None, max_length=100)
@@ -88,14 +91,29 @@ class ConfidenceInterval(BaseModel):
 
 
 class FeatureContribution(BaseModel):
+    """One feature's signed effect, measured against the average property."""
+
     feature: str
-    contribution: float
+    contribution: float  # GHS above/below the baseline rent
+    impactPercent: float  # the same effect as a percentage
+    value: float  # the value used, after imputation
+
+
+class DataQuality(BaseModel):
+    """How much of this estimate rests on supplied facts vs. averages."""
+
+    suppliedFields: int
+    totalFields: int
+    imputedFields: list[str]
+    warning: str | None = None
 
 
 class PredictResponse(BaseModel):
     predictedRent: int
+    baselineRent: int  # what the average property in training is worth
     confidenceInterval: ConfidenceInterval
     featureContributions: list[FeatureContribution]
+    dataQuality: DataQuality
     modelVersion: str
     r2Score: float
     sampleCount: int

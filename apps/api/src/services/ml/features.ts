@@ -106,7 +106,8 @@ export function computeEncodings(properties: IProperty[]): Encodings {
 
 export interface PropertyInput {
   bedrooms: number
-  bathrooms: number
+  /** Optional: an unstated bathroom count is imputed, not assumed to be 1. */
+  bathrooms?: number
   floorArea?: number
   furnished?: boolean
   parkingSpaces?: number
@@ -125,29 +126,36 @@ export function extractFeatures(input: PropertyInput, encodings: Encodings): Fea
   const typeKey = input.type.toLowerCase().trim()
   const regionKey = (input.region || '').toLowerCase().trim()
 
-  const amenities = input.amenities || []
+  // An explicit [] means "no amenities"; an absent list means we were not
+  // told. Conflating them priced every amenity-less request as a property
+  // with none of them, which is the single largest negative driver there is.
+  const stated = input.amenities !== undefined && input.amenities !== null
+  const amenities = input.amenities ?? []
+  const flag = (present: boolean) => (stated ? (present ? 1 : 0) : MISSING)
 
   return [
     num(input.bedrooms),
     num(input.bathrooms),
     num(input.floorArea),
-    input.furnished ? 1 : 0,
+    input.furnished === undefined || input.furnished === null ? MISSING : (input.furnished ? 1 : 0),
     num(input.parkingSpaces),
     num(input.advanceMonths),
-    amenities.length, // an empty/absent list means no amenities, not unknown
+    stated ? amenities.length : MISSING,
     // A city/type/region never seen in training is unknown, not worthless:
     // these are target-mean encodings in the thousands of GHS.
     encodings.city[cityKey] ?? MISSING,
     encodings.type[typeKey] ?? MISSING,
     encodings.region[regionKey] ?? MISSING,
-    hasKeyword(amenities, ['water']) ? 1 : 0,
-    hasKeyword(amenities, ['electric', 'power']) ? 1 : 0,
-    hasKeyword(amenities, ['security', 'guard', 'cctv']) ? 1 : 0,
-    hasKeyword(amenities, ['wifi', 'internet']) ? 1 : 0,
-    hasKeyword(amenities, ['ac', 'air condition', 'aircond']) ? 1 : 0,
+    flag(hasKeyword(amenities, ['water'])),
+    flag(hasKeyword(amenities, ['electric', 'power'])),
+    flag(hasKeyword(amenities, ['security', 'guard', 'cctv'])),
+    flag(hasKeyword(amenities, ['wifi', 'internet'])),
+    flag(hasKeyword(amenities, ['ac', 'air condition', 'aircond'])),
     num(input.floor),
     num(input.yearBuilt),
-    input.stayType === 'short_stay' ? 1 : 0,
+    input.stayType === undefined || input.stayType === null
+      ? MISSING
+      : (input.stayType === 'short_stay' ? 1 : 0),
   ]
 }
 

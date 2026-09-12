@@ -14,7 +14,13 @@ interface RentTrend { month: string; averageRent: number; listingCount: number }
 interface TrendsResponse { trends: RentTrend[] }
 interface FairPriceResult { isFair: boolean; verdict: string; suggestedRange?: { min: number; max: number } }
 interface ModelStatus { isTrained: boolean; r2Score?: number; sampleCount?: number }
-interface MlPrediction { predictedRent: number; confidenceInterval?: { low: number; high: number } }
+interface MlPrediction {
+  predictedRent: number
+  confidenceInterval?: { low: number; high: number }
+  /** What the average property in the training set is worth. */
+  baselineRent?: number
+  dataQuality?: { suppliedFields: number; totalFields: number; imputedFields: string[]; warning: string | null }
+}
 
 const TABS = [
   { key: 'analysis', label: 'Analysis', icon: 'trending-up-outline' as const },
@@ -254,6 +260,26 @@ export default function PricingScreen() {
                 <Text style={[s.mlStat, { color: c.textLight }]}>
                   Range: GHS {String(mlResult.confidenceInterval?.low)} - GHS {String(mlResult.confidenceInterval?.high)}
                 </Text>
+                {typeof mlResult.baselineRent === 'number' && mlResult.baselineRent > 0 && (
+                  <Text style={[s.mlStat, { color: c.textLight }]}>
+                    Typical property: GHS {String(mlResult.baselineRent)} — this one is{' '}
+                    {mlResult.predictedRent >= mlResult.baselineRent ? 'above' : 'below'} average
+                  </Text>
+                )}
+                {/* An estimated field is a stated average, not an observation.
+                    Say so rather than presenting a 4-fact estimate as being as
+                    grounded as an 18-fact one. */}
+                {mlResult.dataQuality?.warning ? (
+                  <View style={[s.mlWarning, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+                    <Text style={[s.mlWarningTitle, { color: c.warning }]}>
+                      Based on {String(mlResult.dataQuality.suppliedFields)} of{' '}
+                      {String(mlResult.dataQuality.totalFields)} property details
+                    </Text>
+                    <Text style={[s.mlWarningBody, { color: c.textLight }]}>
+                      {mlResult.dataQuality.warning}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             )}
           </View>
@@ -296,5 +322,8 @@ const s = StyleSheet.create({
   trendCount: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginLeft: 4 },
   verdict: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm },
   mlRent: { fontSize: 28, fontFamily: 'Outfit_800ExtraBold', marginVertical: spacing.sm },
+  mlWarning: { marginTop: spacing.md, padding: spacing.md, borderRadius: 12 },
+  mlWarningTitle: { fontSize: 12, fontFamily: 'Outfit_700Bold', marginBottom: 4 },
+  mlWarningBody: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },
   mlStat: { fontSize: 13, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 })

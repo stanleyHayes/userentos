@@ -30,7 +30,14 @@ interface PropertyInput {
 interface PredictionResult {
   predictedRent: number
   confidenceInterval: { low: number; high: number }
-  featureContributions: { feature: string; contribution: number }[]
+  featureContributions: { feature: string; contribution: number; impactPercent: number; value: number }[]
+  baselineRent: number
+  dataQuality: {
+    suppliedFields: number
+    totalFields: number
+    imputedFields: string[]
+    warning: string | null
+  }
   modelVersion: string
   r2Score: number
   sampleCount: number

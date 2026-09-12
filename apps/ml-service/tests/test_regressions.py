@@ -274,3 +274,63 @@ def test_training_imputes_missing_property_fields():
     year_mean = model.feature_means[FEATURE_NAMES.index("yearBuilt")]
     assert 1985 <= year_mean <= 2026, f"mean year built imputed as {year_mean}"
     assert model.r2_score > 0.5
+
+
+class TestValuationExplainability:
+    """Roadmap §5: a valuation must explain itself, not return one opaque number."""
+
+    CHEAP = {"bedrooms": 1, "bathrooms": 1, "floorArea": 30, "city": "Wa",
+             "type": "room", "region": "Upper West", "yearBuilt": 1995,
+             "floor": 0, "parkingSpaces": 0, "advanceMonths": 1,
+             "furnished": False, "amenities": [], "stayType": "long_stay"}
+    DEAR = {**CHEAP, "bedrooms": 4, "bathrooms": 4, "floorArea": 320, "city": "East Legon",
+            "type": "townhouse", "region": "Greater Accra", "yearBuilt": 2023,
+            "furnished": True, "parkingSpaces": 3, "advanceMonths": 12,
+            "amenities": ["Water", "Electricity", "Security", "WiFi", "Air Conditioning"]}
+
+    def test_surfaces_value_decreasing_drivers(self, trained_model):  # noqa: F811
+        """weight * value is almost always positive, so the old attribution
+        painted every feature as value-increasing and never explained a low
+        valuation."""
+        result = trained_model.predict(self.CHEAP)
+        assert any(c["contribution"] < 0 for c in result["featureContributions"])
+
+    def test_attributes_against_the_average_property(self, trained_model):  # noqa: F811
+        low = trained_model.predict(self.CHEAP)
+        high = trained_model.predict(self.DEAR)
+
+        assert high["predictedRent"] > low["predictedRent"]
+        assert low["baselineRent"] == high["baselineRent"]
+        assert low["predictedRent"] < low["baselineRent"]
+        assert high["predictedRent"] > high["baselineRent"]
+
+    def test_contributions_are_in_cedis_not_log_space(self, trained_model):  # noqa: F811
+        """The web UI renders these through formatCurrency. In log space the
+        numbers were ~1.26 and displayed as 'GHS 1'."""
+        result = trained_model.predict(self.DEAR)
+        biggest = max(abs(c["contribution"]) for c in result["featureContributions"])
+        # Comfortably beyond anything log space could produce.
+        assert biggest > 100
+        for c in result["featureContributions"]:
+            assert "impactPercent" in c and "value" in c
+
+    def test_reports_which_inputs_were_estimated(self, trained_model):  # noqa: F811
+        complete = trained_model.predict(self.DEAR)
+        assert complete["dataQuality"]["imputedFields"] == []
+        assert complete["dataQuality"]["warning"] is None
+
+        sparse = trained_model.predict({"bedrooms": 2, "bathrooms": 1,
+                                        "city": "Accra", "type": "apartment"})
+        imputed = sparse["dataQuality"]["imputedFields"]
+        assert "yearBuilt" in imputed and "floorArea" in imputed
+        assert "not supplied" in sparse["dataQuality"]["warning"]
+        assert sparse["dataQuality"]["suppliedFields"] < sparse["dataQuality"]["totalFields"]
+
+    def test_predict_endpoint_returns_the_new_fields(self, client):
+        res = client.post("/predict", json=SAMPLE_INPUT)
+        assert res.status_code == 200
+        body = res.json()
+        assert body["baselineRent"] > 0
+        assert body["dataQuality"]["totalFields"] == 18
+        assert all({"feature", "contribution", "impactPercent", "value"} <= c.keys()
+                   for c in body["featureContributions"])
