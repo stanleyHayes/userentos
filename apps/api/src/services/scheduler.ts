@@ -149,7 +149,19 @@ export function startScheduler() {
     logger.info('[Scheduler] Checking rent reminders...')
     try {
       const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      /*
+       * Look back two months, not to the start of this calendar month.
+       *
+       * The "already paid, skip the reminder" check used the current calendar
+       * month, but nextDue rolls into NEXT month as soon as this month's due
+       * date passes. A tenant whose rent falls on the 5th and who paid on the
+       * 3rd was therefore treated as paid for the 5th of the following month
+       * too — so the 14, 7 and 3 day reminders for the next cycle were all
+       * suppressed by the previous cycle's payment. The window must cover the
+       * cycle that nextDue actually closes, which is resolved per agreement
+       * below.
+       */
+      const lookbackStart = new Date(now.getFullYear(), now.getMonth() - 2, 1)
 
       // Use cursor + batching to avoid loading all agreements into memory
       const batchSize = 200
@@ -168,9 +180,17 @@ export function startScheduler() {
         const recentPayments = await Payment.find({
           agreementId: { $in: agreementIds },
           status: 'completed',
-          createdAt: { $gte: monthStart },
+          createdAt: { $gte: lookbackStart },
         }).lean()
-        const paidAgreementIds = new Set(recentPayments.map((p) => p.agreementId))
+        // Most recent completed payment per agreement, compared per cycle below.
+        const lastPaidAt = new Map<string, number>()
+        for (const p of recentPayments) {
+          // agreementId is optional on Payment (wallet top-ups have none).
+          const agreementId = p.agreementId
+          if (!agreementId) continue
+          const at = new Date((p as { createdAt?: Date }).createdAt ?? 0).getTime()
+          if (at > (lastPaidAt.get(agreementId) ?? 0)) lastPaidAt.set(agreementId, at)
+        }
 
         for (const agreement of activeAgreements) {
           // Rent falls due each month on the lease start day-of-month: this
@@ -193,7 +213,13 @@ export function startScheduler() {
           // Only remind at 14, 7, and 3 days before due
           if (daysUntilDue === 14 || daysUntilDue === 7 || daysUntilDue === 3) {
             const agId = (agreement._id as Types.ObjectId).toString()
-            if (paidAgreementIds.has(agId)) continue
+
+            // Has THIS cycle been paid? The cycle nextDue closes began at the
+            // previous month's occurrence of the same day, so only a payment
+            // on or after that date counts.
+            const cycleStart = new Date(nextDue)
+            cycleStart.setMonth(cycleStart.getMonth() - 1)
+            if ((lastPaidAt.get(agId) ?? 0) >= cycleStart.getTime()) continue
 
             const propertyTitle = propertyTitleMap.get(agreement.propertyId) ?? 'your property'
             notifyRentReminder(
@@ -447,7 +473,22 @@ export function startScheduler() {
       try {
         // Cursor-stream contracts (they embed full amortization schedules —
         // loading the whole collection at once doesn't scale).
-        const cursor = FinancingContract.find({ status: { $in: ['active', 'in_grace', 'in_arrears'] } }).cursor()
+        /*
+         * 'defaulted' is included deliberately.
+         *
+         * This job derives status purely from overdueCount, and it is the only
+         * thing that writes 'defaulted' (at >= 4 overdue installments). Leaving
+         * defaulted out of its own query meant the job wrote a status it then
+         * refused to look at: once a contract defaulted, no amount of catching
+         * up could move it, because nothing re-examined it. Every other status
+         * here is recomputed from reality each day; making this one sticky was
+         * an accident, not a policy.
+         *
+         * If the business wants a defaulted contract to require MANUAL
+         * reinstatement, that is a real policy and belongs in an explicit
+         * transition guard — not in an omission from a query.
+         */
+        const cursor = FinancingContract.find({ status: { $in: ['active', 'in_grace', 'in_arrears', 'defaulted'] } }).cursor()
         const now = new Date()
         const todayStart = new Date(now); todayStart.setUTCHours(0, 0, 0, 0)
         for await (const c of cursor) {

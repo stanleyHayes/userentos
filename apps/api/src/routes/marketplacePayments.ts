@@ -145,6 +145,8 @@ const initSchema = z.object({
   email: z.string().email(),
   propertyId: z.string().optional(),
   storefrontId: z.string().optional(),
+  /** When this payment buys a sponsorship, the campaign it activates once paid. */
+  sponsorshipId: z.string().optional(),
   purpose: z.string().max(60).default('marketplace'),
   // NOTE: there is deliberately no discountAmount here. The discount is
   // derived server-side from couponCode; see below.
@@ -249,6 +251,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     sellerId: input.sellerId,
     storefrontId: input.storefrontId,
     propertyId: input.propertyId,
+    sponsorshipId: input.sponsorshipId,
     purpose: input.purpose,
     currency: 'GHS',
     grossAmount: split.grossAmount,

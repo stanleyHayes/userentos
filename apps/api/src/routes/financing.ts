@@ -257,7 +257,11 @@ router.post('/contracts/:id/repay', authenticate, async (req, res) => {
 
   // The contract must be repayable BEFORE we touch the wallet — otherwise a debit
   // followed by a thrown applyRepayment would burn the borrower's money.
-  if (!['active', 'in_grace', 'in_arrears'].includes(contract.status)) {
+  // 'defaulted' accepts repayment. Refusing money from a borrower trying to
+  // cure their own default is indefensible on its own, and combined with the
+  // arrears cron — which was the only thing setting 'defaulted' — it left an
+  // automated job able to lock someone out of ever repaying their loan.
+  if (!['active', 'in_grace', 'in_arrears', 'defaulted'].includes(contract.status)) {
     error(res, `Contract is ${contract.status} — cannot accept repayment`); return
   }
 
