@@ -502,7 +502,11 @@ export function usePublishPlanVersion() {
     mutationFn: (planId: string) => api.post<{ planVersion: number }>(`/entitlements/plans/${planId}/versions`, {}),
     onSuccess: (_d, planId) => {
       qc.invalidateQueries({ queryKey: ['plan-entitlements', planId] })
-      qc.invalidateQueries({ queryKey: ['packages'] })
+      // The real keys. This invalidated ['packages'], which no query in the
+      // app uses, so publishing a new plan version left every packages list
+      // showing the previous version's terms until a manual refresh.
+      qc.invalidateQueries({ queryKey: ['subscription-packages'] })
+      qc.invalidateQueries({ queryKey: ['subscription-packages-all'] })
     },
   })
 }

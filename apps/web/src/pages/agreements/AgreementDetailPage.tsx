@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import toast from 'react-hot-toast'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { MoveInChecklist } from '@/components/agreements/MoveInChecklist'
@@ -142,6 +143,11 @@ export function AgreementDetailPage() {
     try {
       const { token: downloadToken } = await api.post<{ token: string }>(`/agreements/${agreement.id}/document-link`, {})
       window.open(`${apiBase}/agreements/${agreement.id}/document.pdf?token=${encodeURIComponent(downloadToken)}`, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      // Without this the promise rejected unhandled: the spinner stopped and
+      // absolutely nothing else happened, so a failed download looked like a
+      // dead button on a document people need for a tenancy.
+      toast.error(err instanceof Error ? err.message : 'Could not prepare the document for download')
     } finally {
       setDownloadingPdf(false)
     }

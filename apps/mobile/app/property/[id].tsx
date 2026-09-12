@@ -134,6 +134,9 @@ export default function PropertyDetailScreen() {
   const [activeTab, setActiveTab] = useState<'tenants' | 'reviews'>('reviews')
 
   const isTenant = user?.activeRole === 'tenant'
+  // Mirrors requireRole on GET /users/government.
+  const REVIEWER_ROLES = ['government', 'admin', 'super_admin', 'legal_officer']
+  const canMessageReviewer = (user?.roles ?? []).some((r) => REVIEWER_ROLES.includes(r))
   const isGovOrAdmin = user?.activeRole === 'government' || user?.activeRole === 'admin'
 
   const listingStatusColors: Record<string, string> = {
@@ -743,7 +746,17 @@ export default function PropertyDetailScreen() {
               </View>
             )}
 
-            {property.listingStatus === 'pending_review' && (
+            {/*
+              * Only shown to someone who can actually use it.
+              *
+              * GET /users/government requires a reviewer role, so for the
+              * landlord this button was rendered to it always 403'd and the
+              * only outcome was "Failed to start conversation". A control that
+              * cannot work is worse than no control; letting a landlord message
+              * their reviewer needs that endpoint opened up deliberately, which
+              * is a product decision, not a client-side workaround.
+              */}
+            {property.listingStatus === 'pending_review' && canMessageReviewer && (
               <TouchableOpacity
                 style={[s.primaryBtn, { backgroundColor: c.primary, opacity: messagingReviewer ? 0.6 : 1 }]}
                 onPress={handleMessageReviewer}
