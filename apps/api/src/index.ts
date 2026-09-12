@@ -18,6 +18,7 @@ import { errorTrackingHandler, readRecentErrors } from './middleware/errorTracki
 import { authenticate, optionalAuth, requireRole } from './middleware/auth.js'
 import { success } from './utils/response.js'
 import { runBootstrap } from './models/BootstrapState.js'
+import { basetenClient } from './services/ml/baseten.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
 import './openapi/endpoints.js'
@@ -497,6 +498,14 @@ async function start() {
     httpServer.listen(config.port, () => {
       logger.info(`RentOS API v0.2.0 running on http://localhost:${config.port}`)
       logger.info(`Socket.IO ready`)
+
+      /*
+       * Absorb the Baseten cold start here rather than on a user's first
+       * valuation. Baseten scales deployments to zero, so the first request
+       * after an idle period waits for a container. warm() never throws and
+       * never blocks the listen callback — it is deliberately not awaited.
+       */
+      void basetenClient.warm()
     })
   } catch (err) {
     logger.error(`Failed to start server: ${err}`)

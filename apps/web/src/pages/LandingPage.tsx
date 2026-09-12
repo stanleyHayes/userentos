@@ -53,6 +53,7 @@ import {
   Wand2,
   X,
   XCircle,
+  AlertTriangle,
 } from 'lucide-react'
 
 interface AbuseViolation {
@@ -66,6 +67,13 @@ interface AbuseCheckResult {
   isViolation: boolean
   severity: 'high' | 'medium' | 'low' | null
   violations: AbuseViolation[]
+  /**
+   * What the Rent Act says about any advance mentioned — including when it is
+   * LAWFUL. This is the most useful thing the checker can say: three months
+   * advance is within the law, and a worried tenant deserves to be told so
+   * plainly rather than left to infer it from an absence of warnings.
+   */
+  advance?: { verdict: 'violation' | 'lawful' | 'unclear'; months?: number; message: string }
   nextSteps: string[]
   contacts: {
     rentControl: { name: string; phone: string; location: string }
@@ -754,6 +762,40 @@ export function LandingPage() {
                     </div>
                   </div>
                 </div>
+
+                {abuseResult.advance && (
+                  <div className={`rounded-2xl border p-4 ${
+                    abuseResult.advance.verdict === 'violation'
+                      ? 'border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30'
+                      : abuseResult.advance.verdict === 'lawful'
+                        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
+                        : 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`mt-0.5 shrink-0 ${
+                        abuseResult.advance.verdict === 'violation'
+                          ? 'text-red-600 dark:text-red-300'
+                          : abuseResult.advance.verdict === 'lawful'
+                            ? 'text-emerald-600 dark:text-emerald-300'
+                            : 'text-amber-600 dark:text-amber-300'
+                      }`}>
+                        {abuseResult.advance.verdict === 'lawful'
+                          ? <CheckCircle2 size={18} />
+                          : abuseResult.advance.verdict === 'violation'
+                            ? <XCircle size={18} />
+                            : <AlertTriangle size={18} />}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-primary-dark dark:text-white">
+                          Rent advance
+                        </p>
+                        <p className="mt-0.5 text-sm leading-relaxed text-muted dark:text-gray-300">
+                          {abuseResult.advance.message}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {abuseResult.violations.length > 0 && (
                   <div className="grid gap-4 md:grid-cols-2">

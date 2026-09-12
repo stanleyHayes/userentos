@@ -22,6 +22,12 @@ import {
   describeAdvance,
   type Violation as LegalViolation,
 } from '../services/legal/abuseCheck.js'
+import {
+  listComplaints,
+  recordComplaint,
+  reviewComplaint,
+  scoreClassifier,
+} from '../services/legal/complaintLog.js'
 
 const router = Router()
 
@@ -357,13 +363,33 @@ router.post('/abuse-check', publicLimiter, async (req, res) => {
     }
   }
 
+  const source = classified ? 'model+statute' as const : 'keywords+statute' as const
   result.analysis = {
-    source: classified ? 'model+statute' : 'keywords+statute',
+    source,
     modelVersion: classified?.modelVersion,
     abstained: classified?.abstained,
   }
 
   success(res, result)
+
+  /*
+   * Stored after the response, redacted, for a reviewer to turn into training
+   * data. The classifier is trained on phrasings we imagined; this is how it
+   * gets phrasings people used. Fire-and-forget — a worried tenant's answer
+   * must never fail because the training row could not be written.
+   */
+  void recordComplaint({
+    text: query,
+    predictedLabels: classified?.labels ?? [],
+    scores: (classified?.scores ?? []).map(s => ({
+      label: s.label, probability: s.probability, threshold: s.threshold,
+    })),
+    abstained: classified?.abstained ?? false,
+    source,
+    modelVersion: classified?.modelVersion,
+    advanceVerdict: advance?.verdict as 'violation' | 'lawful' | 'unclear' | undefined,
+    advanceMonths: advance?.months,
+  })
 })
 
 /* ================================================================
@@ -526,3 +552,70 @@ Keep it concise and professional. Do NOT include markdown code fences.`
 })
 
 export default router
+
+/* ================================================================
+   Complaint review — admin only.
+
+   The classifier is trained on authored phrasings. These endpoints are how
+   real ones get labelled and fed back, and how the model is scored against
+   what people actually wrote rather than against text we invented.
+   ================================================================ */
+
+const reviewSchema = z.object({
+  labels: z.array(z.string().max(64)).max(10),
+  note: z.string().max(2000).optional(),
+})
+
+router.get('/complaints', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  try {
+    const result = await listComplaints({
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 25,
+      unreviewedOnly: req.query.unreviewed === 'true',
+      abstainedOnly: req.query.abstained === 'true',
+      label: typeof req.query.label === 'string' ? req.query.label : undefined,
+    })
+    success(res, result)
+  } catch (err) {
+    error(res, (err as Error).message || 'Failed to list complaints', 500)
+  }
+})
+
+router.post('/complaints/:id/review', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const parsed = reviewSchema.safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+  const known = new Set(Object.keys(LEGAL_LABELS))
+  const unknown = parsed.data.labels.filter(l => !known.has(l))
+  if (unknown.length > 0) {
+    // A reviewer inventing a label silently poisons the next corpus.
+    error(res, `Unknown label(s): ${unknown.join(', ')}`)
+    return
+  }
+
+  try {
+    const updated = await reviewComplaint(String(req.params.id), parsed.data.labels, req.user!.userId, parsed.data.note)
+    if (!updated) { error(res, 'Complaint not found', 404); return }
+    success(res, updated)
+  } catch (err) {
+    error(res, (err as Error).message || 'Failed to record review', 500)
+  }
+})
+
+router.get('/complaints/scorecard', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  try {
+    const days = Math.min(3650, Math.max(1, Number(req.query.days) || 365))
+    const scorecard = await scoreClassifier(new Date(Date.now() - days * 86_400_000))
+    success(res, {
+      windowDays: days,
+      ...scorecard,
+      note: scorecard.reviewed === 0
+        ? 'No complaints have been reviewed yet. Until they are, the only accuracy figures '
+          + 'available come from scripts/train_legal.py, which measures the model against '
+          + 'authored text rather than against what people actually wrote.'
+        : undefined,
+    })
+  } catch (err) {
+    error(res, (err as Error).message || 'Failed to build scorecard', 500)
+  }
+})
