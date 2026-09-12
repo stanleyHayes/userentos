@@ -131,7 +131,7 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
   // Notify landlord (in_app + email + push)
   const tenant = await User.findById(userId).lean()
   const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'A tenant'
-  notifyApplicationReceived(property.landlordId, tenantName, property.title)
+  void notifyApplicationReceived(property.landlordId, tenantName, property.title)
   dispatchWebhook('application.created', { applicationId: application._id.toString(), tenantId: userId, propertyId, landlordId: property.landlordId }, { userId: property.landlordId })
 
   success(res, { ...application.toObject(), id: application._id.toString() }, 'Application submitted', 201)
@@ -305,7 +305,7 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
       throw err
     }
 
-    notifyApplicationApproved(application.tenantId, property?.title ?? 'a property')
+    void notifyApplicationApproved(application.tenantId, property?.title ?? 'a property')
     dispatchWebhook('application.approved', { applicationId: application._id.toString(), agreementId: agreement._id.toString() }, { userId: application.tenantId })
 
     success(res, {
@@ -320,7 +320,7 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
     application.respondedAt = new Date()
     await application.save()
 
-    notifyApplicationRejected(application.tenantId, property?.title ?? 'a property', notes)
+    void notifyApplicationRejected(application.tenantId, property?.title ?? 'a property', notes)
     dispatchWebhook('application.rejected', { applicationId: application._id.toString(), notes }, { userId: application.tenantId })
 
     success(res, { ...application.toObject(), id: application._id.toString() })

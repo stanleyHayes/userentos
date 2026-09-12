@@ -175,7 +175,7 @@ router.post('/policies', authenticate, async (req, res) => {
     } } },
   )
 
-  notify({
+  void notify({
     userId: req.user!.userId,
     title: 'Insurance Policy Active',
     message: `Your ${product.productName} policy (${policyNumber}) is now active. First premium of GHS ${product.monthlyPremium.toFixed(2)} debited.`,
@@ -222,7 +222,7 @@ router.post('/policies/:id/claim', authenticate, async (req, res) => {
   policy.status = 'claimed'
   await policy.save()
 
-  notify({
+  void notify({
     userId: req.user!.userId,
     title: 'Claim Filed',
     message: `Claim ${claim.id} for GHS ${claim.amount.toFixed(2)} has been received and is pending review.`,

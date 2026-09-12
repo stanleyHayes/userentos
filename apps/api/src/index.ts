@@ -402,10 +402,13 @@ function gracefulShutdown(signal: string) {
   logger.info(`Received ${signal}. Starting graceful shutdown...`)
   httpServer.close(() => {
     logger.info('HTTP server closed.')
-    mongoose.connection.close(false).then(() => {
-      logger.info('MongoDB connection closed.')
-      process.exit(0)
-    })
+    // .catch, not a bare void: if closing the connection rejects, the exit
+    // inside .then never runs and shutdown hangs until the 10s force-exit
+    // below fires with code 1 — a clean shutdown reported as a failure.
+    mongoose.connection.close(false)
+      .then(() => logger.info('MongoDB connection closed.'))
+      .catch((err) => logger.warn(`MongoDB close failed: ${(err as Error).message}`))
+      .finally(() => process.exit(0))
   })
 
   // Force exit after 10s
@@ -417,6 +420,25 @@ function gracefulShutdown(signal: string) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+
+/*
+ * Log an unhandled rejection instead of dying of one.
+ *
+ * Node terminates the process by default, and there was no handler here. The
+ * routes start roughly forty promises without awaiting them — notifications
+ * and audit writes, which are side effects a request should not wait for — so
+ * any one of those rejecting killed the API for every user. notify() and
+ * recordAudit() no longer reject, but this is the backstop for the next
+ * fire-and-forget call someone writes, and the lint rule that catches them at
+ * source is the front line.
+ *
+ * Deliberately NOT applied to uncaughtException: an unhandled rejection in a
+ * side effect is survivable, and a corrupted synchronous stack is not.
+ */
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason))
+  logger.error(`Unhandled promise rejection: ${err.message}`, { stack: err.stack })
+})
 
 async function start() {
   try {
@@ -513,4 +535,9 @@ async function start() {
   }
 }
 
-start()
+// A failed bootstrap must exit non-zero, not vanish into an
+// unhandled rejection that looks like a clean start.
+start().catch((err) => {
+  console.error('Fatal startup error:', err)
+  process.exit(1)
+})

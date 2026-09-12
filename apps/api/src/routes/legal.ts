@@ -25,7 +25,8 @@ router.get('/', async (req, res) => {
 
   const [total, articles] = await Promise.all([
     LegalArticle.countDocuments(filter),
-    LegalArticle.find(filter).sort({ title: 1 }).skip(skip).limit(pageSize).lean(),
+    // Titles are not unique, so title alone cannot order a paged read.
+    LegalArticle.find(filter).sort({ title: 1, _id: 1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = articles.map((a) => ({ ...a, id: (a._id as Types.ObjectId).toString() }))
   success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })

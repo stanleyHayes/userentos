@@ -155,7 +155,7 @@ router.put('/account', authenticate, asyncHandler(async (req, res) => {
     { upsert: true, returnDocument: 'after' },
   )
 
-  recordAudit(req, 'payout_account.updated', 'PayoutAccount', String(account!._id), {
+  void recordAudit(req, 'payout_account.updated', 'PayoutAccount', String(account!._id), {
     type: account!.type,
     bankName: account!.bankName,
   })
@@ -242,7 +242,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     throw err
   }
 
-  recordAudit(req, 'payout.requested', 'Payout', String(payout._id), { amount, reference })
+  void recordAudit(req, 'payout.requested', 'Payout', String(payout._id), { amount, reference })
   success(res, payoutView(payout as never), 'Payout requested — an admin will review it shortly', 201)
 }))
 
@@ -311,7 +311,7 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
     claimed.providerRef = result.providerRef
     await claimed.save()
 
-    recordAudit(req, 'payout.approved', 'Payout', String(claimed._id), {
+    void recordAudit(req, 'payout.approved', 'Payout', String(claimed._id), {
       amount: claimed.amount,
       providerRef: result.providerRef,
     })
@@ -349,7 +349,7 @@ router.post('/:id/decline', authenticate, requirePermission('payments:process'),
     return
   }
 
-  recordAudit(req, 'payout.declined', 'Payout', String(declined._id), { amount: declined.amount, reason: parsed.data.reason })
+  void recordAudit(req, 'payout.declined', 'Payout', String(declined._id), { amount: declined.amount, reason: parsed.data.reason })
   notify({
     userId: declined.userId,
     title: 'Payout declined',

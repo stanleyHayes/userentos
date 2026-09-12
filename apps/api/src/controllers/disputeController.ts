@@ -121,7 +121,7 @@ export const disputeController = {
     // Notify the other party
     const filer = await User.findById(req.user!.userId).select('firstName lastName').lean()
     const filerName = filer ? `${filer.firstName} ${filer.lastName}` : 'Someone'
-    notifyDisputeFiled(parsed.data.filedAgainst, parsed.data.title, filerName)
+    void notifyDisputeFiled(parsed.data.filedAgainst, parsed.data.title, filerName)
     dispatchWebhook('dispute.filed', { disputeId: dispute._id.toString(), title: dispute.title, filedAgainst: dispute.filedAgainst }, { userId: dispute.filedAgainst })
 
     success(res, { ...dispute.toObject(), id: dispute._id.toString() }, 'Dispute filed', 201)
@@ -159,8 +159,8 @@ export const disputeController = {
 
     // Notify both parties of status change
     if (status) {
-      notifyDisputeUpdate(dispute.filedBy, dispute.title, status)
-      notifyDisputeUpdate(dispute.filedAgainst, dispute.title, status)
+      void notifyDisputeUpdate(dispute.filedBy, dispute.title, status)
+      void notifyDisputeUpdate(dispute.filedAgainst, dispute.title, status)
       if (status === 'resolved' || status === 'closed') {
         // Restore the property's market status — previously a resolved dispute
         // left the property stuck at under_dispute forever.

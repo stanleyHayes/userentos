@@ -129,7 +129,7 @@ router.post(
     const property = await Property.findById(agreement.propertyId).select('title').lean()
     const propertyTitle = property?.title ?? 'your property'
     const otherPartyId = initiatedBy === 'tenant' ? agreement.landlordId : agreement.tenantId
-    notify({
+    void notify({
       userId: otherPartyId,
       title: 'Move-out Initiated',
       message: `A move-out has been initiated for "${propertyTitle}" effective ${parsed.data.moveOutDate}.`,
@@ -178,7 +178,7 @@ router.post(
     mo.status = 'inspection_scheduled'
     await mo.save()
 
-    notify({
+    void notify({
       userId: mo.tenantId,
       title: 'Inspection Scheduled',
       message: `Your move-out inspection is scheduled for ${parsed.data.inspectionDate}.`,
@@ -227,7 +227,7 @@ router.post(
     }
     await mo.save()
 
-    notify({
+    void notify({
       userId: mo.tenantId,
       title: 'Inspection Completed',
       message: `Inspection complete. Deductions: GHS ${deductionsTotal.toFixed(2)}. Refund pending: GHS ${refundAmount.toFixed(2)}.`,
@@ -264,7 +264,7 @@ router.post(
     await mo.save()
 
     // Notify landlord + admins
-    notify({
+    void notify({
       userId: mo.landlordId,
       title: 'Move-out Disputed',
       message: 'The tenant has disputed the inspection findings.',
@@ -273,7 +273,7 @@ router.post(
     try {
       const admins = await User.find({ roles: { $in: ['admin', 'super_admin'] } }).select('_id').lean()
       for (const a of admins) {
-        notify({
+        void notify({
           userId: (a._id as Types.ObjectId).toString(),
           title: 'Move-out Dispute',
           message: `A move-out dispute has been raised for agreement ${mo.agreementId.slice(-6)}.`,
@@ -303,7 +303,7 @@ router.post(
     mo.notes.push({ text: 'Tenant withdrew the dispute', by: userId, at: new Date().toISOString() })
     await mo.save()
 
-    notify({
+    void notify({
       userId: mo.landlordId,
       title: 'Dispute Withdrawn',
       message: 'The tenant has withdrawn their move-out dispute. You can now process the refund.',
@@ -351,7 +351,7 @@ router.post(
     await mo.save()
 
     for (const partyId of [mo.tenantId, mo.landlordId]) {
-      notify({
+      void notify({
         userId: partyId,
         title: 'Move-out Dispute Resolved',
         message: `The move-out dispute has been resolved. Refund due: GHS ${mo.refundAmount.toFixed(2)}.`,
@@ -429,7 +429,7 @@ router.post(
       await mo.save()
     }
 
-    notify({
+    void notify({
       userId: mo.tenantId,
       title: 'Refund Processed',
       message: refundAmount > 0
@@ -472,7 +472,7 @@ router.post(
     await mo.save()
 
     const otherPartyId = mo.tenantId === userId ? mo.landlordId : mo.tenantId
-    notify({
+    void notify({
       userId: otherPartyId,
       title: 'Move-out Acknowledged',
       message: mo.status === 'closed' ? 'The move-out has been fully acknowledged and closed.' : 'The other party has acknowledged the move-out.',

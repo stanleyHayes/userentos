@@ -318,7 +318,7 @@ router.post('/:id/decline-renewal', authenticate, asyncHandler(async (req: Reque
   const declinerName = decliner ? `${decliner.firstName} ${decliner.lastName}` : 'A party'
   const property = await Property.findById(agreement.propertyId).select('title').lean()
 
-  notify({
+  void notify({
     userId: otherPartyId,
     title: 'Renewal Declined',
     message: `${declinerName} has indicated they will not be renewing the lease for "${property?.title ?? 'a property'}".`,

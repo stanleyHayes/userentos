@@ -140,4 +140,9 @@ async function main() {
   }
 }
 
-main()
+// A failed bootstrap must exit non-zero, not vanish into an
+// unhandled rejection that looks like a clean start.
+main().catch((err) => {
+  console.error('Fatal startup error:', err)
+  process.exit(1)
+})

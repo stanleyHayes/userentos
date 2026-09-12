@@ -244,7 +244,7 @@ router.post(
     // notify landlord
     const tenant = await User.findById(userId).select('firstName lastName').lean()
     const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'A tenant'
-    notify({
+    void notify({
       userId: property.landlordId,
       title: 'New Maintenance Request',
       message: `${tenantName} reported "${data.title}" at "${property.title}".`,
@@ -317,7 +317,7 @@ router.patch(
     // notify on status change → notify tenant
     if (statusChanged) {
       const property = await Property.findById(request.propertyId).select('title').lean()
-      notify({
+      void notify({
         userId: request.tenantId,
         title: 'Maintenance Update',
         message: `Your request "${request.title}" at "${property?.title ?? 'your property'}" is now ${statusLabel(request.status)} (was ${statusLabel(previousStatus)}).`,
@@ -367,7 +367,7 @@ router.post(
     const otherPartyId =
       request.tenantId === userId.toString() ? request.landlordId : request.tenantId
     const property = await Property.findById(request.propertyId).select('title').lean()
-    notify({
+    void notify({
       userId: otherPartyId,
       title: 'New Note on Maintenance Request',
       message: `New note added to "${request.title}" at "${property?.title ?? 'your property'}".`,
@@ -418,7 +418,7 @@ router.post(
     await request.save()
 
     const property = await Property.findById(request.propertyId).select('title').lean()
-    notify({
+    void notify({
       userId: request.tenantId,
       title: 'Maintenance Completed',
       message: `"${request.title}" at "${property?.title ?? 'your property'}" has been marked completed.`,

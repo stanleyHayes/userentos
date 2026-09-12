@@ -145,7 +145,11 @@ export const paymentController = {
 
     const [total, payments, summaryAgg] = await Promise.all([
       Payment.countDocuments(filter),
-      Payment.find(filter).sort({ [sortField]: sortDir }).skip(skip).limit(pageSize).lean(),
+      // _id breaks the tie. Sorting by `amount` alone is not a total order and
+      // the ties are systematic, not rare: the same rent recurs every month, so
+      // a page boundary landing inside a run of equal amounts shows one payment
+      // twice and hides another entirely.
+      Payment.find(filter).sort({ [sortField]: sortDir, _id: sortDir }).skip(skip).limit(pageSize).lean(),
       // Aggregates over the WHOLE filtered set (not the page) so summary cards stay correct
       Payment.aggregate([
         { $match: filter },

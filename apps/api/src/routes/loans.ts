@@ -82,14 +82,14 @@ router.post('/apply', authenticate, async (req, res) => {
   })
 
   if (approved) {
-    notify({
+    void notify({
       userId: req.user!.userId,
       title: 'Loan Approved',
       message: `Your micro-loan of GHS ${amount.toFixed(2)} has been approved. It will be disbursed to your wallet shortly.`,
       actionUrl: '/savings',
     })
   } else {
-    notify({
+    void notify({
       userId: req.user!.userId,
       title: 'Loan Application Rejected',
       message: `Your micro-loan application was rejected — automatic approval requires a credit score of at least 70 (yours is ${creditScore.score}). Improve your score and apply again.`,
@@ -172,7 +172,7 @@ router.post('/:id/repay', authenticate, async (req, res) => {
   if (updatedLoan.amountPaid >= updatedLoan.totalRepayment && updatedLoan.status !== 'repaid') {
     await Loan.updateOne({ _id: loan._id, status: { $ne: 'repaid' } }, { $set: { status: 'repaid' } })
     updatedLoan.status = 'repaid'
-    notify({
+    void notify({
       userId: req.user!.userId,
       title: 'Loan Repaid',
       message: 'Congratulations! Your micro-loan has been fully repaid.',

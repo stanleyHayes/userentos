@@ -120,7 +120,10 @@ router.get(
     const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
     const docs = await Property.find(filter)
-      .sort({ publishedAt: -1, createdAt: -1 })
+      // _id last: publishedAt and createdAt can both tie for listings
+      // approved in the same batch, and without a total order paging the
+      // public registry can repeat one property and skip another.
+      .sort({ publishedAt: -1, createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .lean()

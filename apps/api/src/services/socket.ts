@@ -76,7 +76,7 @@ export function initSocket(httpServer: HttpServer): Server {
     onlineUsers.get(userId)!.add(socket.id)
 
     // Join personal room for direct events
-    socket.join(`user:${userId}`)
+    void socket.join(`user:${userId}`)
 
     // Tell only this user's chat contacts that they came online — presence is
     // not broadcast platform-wide.
@@ -95,14 +95,14 @@ export function initSocket(httpServer: HttpServer): Server {
       try {
         const convo = await Conversation.findById(conversationId).select('participants').lean()
         if (convo && (convo.participants as string[]).includes(userId)) {
-          socket.join(`chat:${conversationId}`)
+          void socket.join(`chat:${conversationId}`)
           joinedConversations.add(conversationId)
         }
       } catch { /* ignore malformed conversation ids */ }
     })
 
     socket.on('leave:conversation', (conversationId: string) => {
-      socket.leave(`chat:${conversationId}`)
+      void socket.leave(`chat:${conversationId}`)
       joinedConversations.delete(conversationId)
     })
 

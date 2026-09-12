@@ -394,7 +394,7 @@ router.post('/contracts/:id/remind', authenticate, requireRole('financier'), req
   await c.save()
   // Use existing notify
   const { notify } = await import('../services/notify.js')
-  notify({ userId: c.applicantId, title: 'Payment Reminder', message: `Your financing contract ${c._id.toString().slice(-6)} has overdue payments. Please make a payment to avoid further fees.`, actionUrl: `/financing/contracts/${c._id}` })
+  void notify({ userId: c.applicantId, title: 'Payment Reminder', message: `Your financing contract ${c._id.toString().slice(-6)} has overdue payments. Please make a payment to avoid further fees.`, actionUrl: `/financing/contracts/${c._id}` })
   success(res, idOf(c.toObject()))
 })
 
@@ -412,8 +412,8 @@ router.post('/contracts/:id/mark-defaulted', authenticate, requireRole('financie
   if (req.body.reason) c.notes.push({ text: `Marked defaulted: ${req.body.reason}`, by: req.user!.userId, at: new Date().toISOString() })
   await c.save()
   const { notify } = await import('../services/notify.js')
-  notify({ userId: c.applicantId, title: 'Contract Defaulted', message: 'Your financing contract has been marked as defaulted. This will affect your credit score.', actionUrl: `/financing/contracts/${c._id}` })
-  notify({ userId: c.financierId, title: 'Contract Defaulted', message: `Contract ${c._id.toString().slice(-6)} marked defaulted.`, actionUrl: `/financing/contracts/${c._id}` })
+  void notify({ userId: c.applicantId, title: 'Contract Defaulted', message: 'Your financing contract has been marked as defaulted. This will affect your credit score.', actionUrl: `/financing/contracts/${c._id}` })
+  void notify({ userId: c.financierId, title: 'Contract Defaulted', message: `Contract ${c._id.toString().slice(-6)} marked defaulted.`, actionUrl: `/financing/contracts/${c._id}` })
   success(res, idOf(c.toObject()))
 })
 

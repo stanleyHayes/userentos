@@ -16,6 +16,13 @@ export default ts.config(
       },
     },
     rules: {
+      /*
+       * A floating promise here is not a style issue. Node terminates the
+       * process on an unhandled rejection, so an unawaited notification write
+       * that failed took the whole API down. Deliberate fire-and-forget is
+       * still allowed — mark it `void`, which says so at the call site.
+       */
+      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-console': 'off',

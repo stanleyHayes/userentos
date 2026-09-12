@@ -212,7 +212,7 @@ router.post('/accept', async (req, res) => {
   })
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })
-  notifyWelcome(user._id.toString(), firstName)
+  void notifyWelcome(user._id.toString(), firstName)
 
   // User is auto-verified via invitation flow — award profile_verified badge
   checkAndAward(user._id.toString(), 'profile_verified', {})

@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js'
 /**
  * Unified notification service.
  * Sends in_app notification (always) + email (when available) + push (when available).
@@ -36,7 +37,33 @@ function escapeHtml(value: string): string {
  * 2. Sends email if user email is available
  * 3. Sends push notification if device tokens are registered
  */
-export async function notify(opts: NotifyOptions) {
+/**
+ * Best-effort notification. Never rejects.
+ *
+ * This is called ~40 times across the routes WITHOUT await and without a
+ * .catch — deliberately, because a notification is a side effect and the
+ * request should not wait for it. But the first statement here was an
+ * unguarded `await Notification.create(...)`, so a transient database error
+ * rejected this promise with nothing attached to handle it.
+ *
+ * Node terminates the process on an unhandled rejection, and there is no
+ * process-level handler. So a database blip while telling a landlord about a
+ * maintenance request took down the entire API for every user. The email and
+ * push sections below were already written as best-effort with .catch on
+ * each; the in-app write was the one path that could still throw.
+ *
+ * Returns the notification when one was created, null when it could not be.
+ */
+export async function notify(opts: NotifyOptions): Promise<unknown | null> {
+  try {
+    return await createNotification(opts)
+  } catch (err) {
+    logger.warn(`[Notify] failed for user ${opts.userId}: ${(err as Error).message}`)
+    return null
+  }
+}
+
+async function createNotification(opts: NotifyOptions) {
   const { userId, title, message, actionUrl, skipEmail, skipPush } = opts
 
   // 1. In-app notification (always)
@@ -95,6 +122,8 @@ export async function notify(opts: NotifyOptions) {
       data: actionUrl ? { url: actionUrl } : undefined,
     }).catch((err) => console.warn('[Notify] Push failed:', err.message))
   }
+
+  return notification
 }
 
 // ─── Pre-built notification helpers ───

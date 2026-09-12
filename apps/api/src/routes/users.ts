@@ -282,7 +282,7 @@ router.post('/', authenticate, requirePermission('users:create'), async (req, re
   })
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })
-  notifyWelcome(user._id.toString(), firstName)
+  void notifyWelcome(user._id.toString(), firstName)
 
   // Pre-verified by admin — award profile_verified badge
   checkAndAward(user._id.toString(), 'profile_verified', {})
