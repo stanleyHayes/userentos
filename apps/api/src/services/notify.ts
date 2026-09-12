@@ -52,14 +52,18 @@ function escapeHtml(value: string): string {
  * push sections below were already written as best-effort with .catch on
  * each; the in-app write was the one path that could still throw.
  *
- * Returns the notification when one was created, null when it could not be.
+ * Returns true when the in-app notification was written, false when it could
+ * not be. No caller reads it today; it exists so a future one can tell the
+ * difference between "delivered" and "swallowed" without the function having
+ * to throw to say so.
  */
-export async function notify(opts: NotifyOptions): Promise<unknown | null> {
+export async function notify(opts: NotifyOptions): Promise<boolean> {
   try {
-    return await createNotification(opts)
+    await createNotification(opts)
+    return true
   } catch (err) {
     logger.warn(`[Notify] failed for user ${opts.userId}: ${(err as Error).message}`)
-    return null
+    return false
   }
 }
 

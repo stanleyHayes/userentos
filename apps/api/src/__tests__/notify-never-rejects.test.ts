@@ -41,7 +41,7 @@ beforeEach(() => {
 describe('notify', () => {
   it('resolves rather than rejecting when the database write fails', async () => {
     create.mockRejectedValue(new Error('connection reset'))
-    await expect(notify(OPTS)).resolves.toBeNull()
+    await expect(notify(OPTS)).resolves.toBe(false)
   })
 
   it.each([
@@ -50,7 +50,7 @@ describe('notify', () => {
     ['a non-Error rejection', 'something odd'],
   ])('survives %s', async (_label, thrown) => {
     create.mockRejectedValue(thrown)
-    await expect(notify(OPTS)).resolves.toBeNull()
+    await expect(notify(OPTS)).resolves.toBe(false)
   })
 
   it('leaves no unhandled rejection behind when called fire-and-forget', async () => {
@@ -67,15 +67,15 @@ describe('notify', () => {
     expect(unhandled).toEqual([])
   })
 
-  it('still returns the notification when the write succeeds', async () => {
+  it('reports success when the write succeeds', async () => {
     create.mockResolvedValue({ _id: { toString: () => 'n1' } })
-    await expect(notify(OPTS)).resolves.toMatchObject({ _id: expect.anything() })
+    await expect(notify(OPTS)).resolves.toBe(true)
   })
 
   it('survives the socket layer being unavailable', async () => {
     // getIO throws before initSocket runs; that path was already guarded, and
     // this pins it so the guard is not removed as redundant.
     create.mockResolvedValue({ _id: { toString: () => 'n1' } })
-    await expect(notify(OPTS)).resolves.not.toBeNull()
+    await expect(notify(OPTS)).resolves.toBe(true)
   })
 })
