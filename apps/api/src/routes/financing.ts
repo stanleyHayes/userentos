@@ -280,7 +280,7 @@ router.post('/contracts/:id/repay', authenticate, async (req, res) => {
   const wallet = await Wallet.findOneAndUpdate(
     { userId: req.user!.userId, balance: { $gte: payAmount } },
     { $inc: { balance: -payAmount } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!wallet) { error(res, 'Insufficient wallet balance'); return }
 

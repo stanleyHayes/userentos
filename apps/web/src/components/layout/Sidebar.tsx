@@ -173,6 +173,7 @@ const navGroups: NavGroup[] = [
       { label: 'Reviewer Orgs', path: '/admin/reviewer-organizations', icon: <ClipboardCheck size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Audit Log', path: '/admin/audit-logs', icon: <ScrollText size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Model Performance', path: '/admin/model-performance', icon: <Gauge size={20} />, roles: ['admin', 'super_admin'] },
+      { label: 'Complaint Review', path: '/admin/complaint-review', icon: <Scale size={20} />, roles: ['admin', 'super_admin'] },
     ],
   },
   { label: 'Platform Admin', icon: <Crown size={15} />, labelKey: 'nav.platformAdmin', roles: ['admin', 'super_admin'], defaultOpen: false,

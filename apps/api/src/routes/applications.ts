@@ -264,7 +264,7 @@ router.post('/:id/respond', authenticate, asyncHandler(async (req: Request, res:
     const claimed = await Application.findOneAndUpdate(
       { _id: application._id, status: 'pending' },
       { $set: { status: 'approved', landlordNotes: notes, respondedAt: new Date() } },
-      { new: true },
+      { returnDocument: 'after' },
     )
     if (!claimed) {
       error(res, `Cannot respond to an application with status "${application.status}"`, 409)

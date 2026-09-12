@@ -84,7 +84,7 @@ router.post('/exchange', loginLimiter, async (req, res) => {
   const record = await BiometricToken.findOneAndUpdate(
     { tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
     { $set: { revokedAt: new Date(), revokedReason: 'rotated', lastUsedAt: new Date() } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!record) {
     const existing = await BiometricToken.findOne({ tokenHash })

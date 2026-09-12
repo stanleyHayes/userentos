@@ -115,7 +115,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'government', 'legal_off
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const post = await BlogPost.findByIdAndUpdate(param(req.params.id), parsed.data, { new: true }).lean()
+  const post = await BlogPost.findByIdAndUpdate(param(req.params.id), parsed.data, { returnDocument: 'after' }).lean()
   if (!post) { error(res, 'Post not found', 404); return }
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })

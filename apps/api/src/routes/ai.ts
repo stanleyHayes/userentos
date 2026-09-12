@@ -608,6 +608,11 @@ router.get('/complaints/scorecard', authenticate, requireRole('admin', 'super_ad
     const scorecard = await scoreClassifier(new Date(Date.now() - days * 86_400_000))
     success(res, {
       windowDays: days,
+      // The taxonomy travels with the scorecard so a reviewer's UI cannot
+      // drift from the labels the server will accept.
+      labels: Object.entries(LEGAL_LABELS).map(([key, v]) => ({
+        key, title: v.title, law: v.law, severity: v.severity,
+      })),
       ...scorecard,
       note: scorecard.reviewed === 0
         ? 'No complaints have been reviewed yet. Until they are, the only accuracy figures '

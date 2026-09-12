@@ -96,7 +96,7 @@ router.post('/delegations', authenticate, requireRole('landlord'), async (req, r
   const delegation = await Delegation.findOneAndUpdate(
     { propertyId: parsed.data.propertyId, delegateId: delegate._id.toString() },
     { ...parsed.data, delegateId: delegate._id.toString(), ownerId: req.user!.userId, status: 'active' },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
   )
   success(res, idOf(delegation!.toObject()), 'Property delegated', 201)
 })

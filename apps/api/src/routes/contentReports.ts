@@ -162,7 +162,7 @@ router.post('/admin/:id/claim', authenticate, requireRole('admin', 'super_admin'
   const report = await ContentReport.findOneAndUpdate(
     { _id: param(req.params.id), status: 'open' },
     { $set: { status: 'reviewing', handledBy: req.user!.userId } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!report) { error(res, 'That report is not open — someone may already have it.', 409); return }
 

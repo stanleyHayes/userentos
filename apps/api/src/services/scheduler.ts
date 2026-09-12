@@ -115,7 +115,7 @@ export function startScheduler() {
               $inc: { currentAmount: round2(plan.contributionAmount) },
               $set: { lastAutoDebitAt: now.toISOString() },
             },
-            { new: true },
+            { returnDocument: 'after' },
           )
           if (updated && updated.status !== 'completed' && updated.currentAmount >= updated.targetAmount) {
             await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })

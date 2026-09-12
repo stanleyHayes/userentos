@@ -110,7 +110,7 @@ router.post('/:id/disburse', authenticate, async (req, res) => {
   const claimed = await Loan.findOneAndUpdate(
     { _id: loan._id, status: 'approved' },
     { $set: { status: 'active', disbursedAt: new Date().toISOString() } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!claimed) { error(res, 'Loan is not approved'); return }
 
@@ -149,13 +149,13 @@ router.post('/:id/repay', authenticate, async (req, res) => {
   const wallet = await Wallet.findOneAndUpdate(
     { userId: req.user!.userId, balance: { $gte: payAmount } },
     { $inc: { balance: -payAmount } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!wallet) { error(res, 'Insufficient wallet balance'); return }
 
   // Apply the loan progress atomically too, so concurrent repayments don't lose
   // an amountPaid increment via a read-modify-write on the loan document.
-  const updatedLoan = await Loan.findByIdAndUpdate(loan._id, { $inc: { amountPaid: payAmount } }, { new: true }) ?? loan
+  const updatedLoan = await Loan.findByIdAndUpdate(loan._id, { $inc: { amountPaid: payAmount } }, { returnDocument: 'after' }) ?? loan
 
   await Wallet.updateOne(
     { userId: req.user!.userId },

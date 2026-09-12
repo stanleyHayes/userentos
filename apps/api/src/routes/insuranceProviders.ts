@@ -129,7 +129,7 @@ router.patch('/me/products/:id', authenticate, requireApprovedEntity('insurance_
   const product = await InsuranceProduct.findOneAndUpdate(
     { _id: param(req.params.id), providerId: profile._id.toString() },
     parsed.data,
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!product) { error(res, 'Product not found', 404); return }
 

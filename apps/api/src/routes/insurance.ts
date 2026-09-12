@@ -86,7 +86,7 @@ router.patch('/products/:id', authenticate, requireRole('admin', 'super_admin'),
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const product = await InsuranceProduct.findByIdAndUpdate(param(req.params.id), parsed.data, { new: true })
+  const product = await InsuranceProduct.findByIdAndUpdate(param(req.params.id), parsed.data, { returnDocument: 'after' })
   if (!product) { error(res, 'Product not found', 404); return }
 
   success(res, { ...product.toObject(), id: product._id.toString() }, 'Product updated')
@@ -133,7 +133,7 @@ router.post('/policies', authenticate, async (req, res) => {
   const wallet = await Wallet.findOneAndUpdate(
     { userId: req.user!.userId, balance: { $gte: premium } },
     { $inc: { balance: -premium } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!wallet) {
     const exists = await Wallet.exists({ userId: req.user!.userId })
@@ -321,7 +321,7 @@ router.post('/policies/:policyId/claims/:claimId/decide', authenticate, requireR
   const claimed = await InsurancePolicy.findOneAndUpdate(
     { _id: policy._id, claims: { $elemMatch: { id: req.params.claimId, status: 'pending' } } },
     { $set: setFields },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!claimed) { error(res, 'Claim is no longer pending', 409); return }
 
@@ -342,7 +342,7 @@ router.post('/policies/:policyId/claims/:claimId/decide', authenticate, requireR
       const credited = await Wallet.findOneAndUpdate(
         { userId: claimed.userId },
         { $inc: { balance: payout } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       )
       await Wallet.updateOne(
         { userId: claimed.userId },

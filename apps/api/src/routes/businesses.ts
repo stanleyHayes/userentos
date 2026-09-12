@@ -147,7 +147,7 @@ router.patch('/me/inquiries/:id', authenticate, requireRole('business'), async (
   const inquiry = await BusinessInquiry.findOneAndUpdate(
     { _id: param(req.params.id), businessId: business._id.toString() },
     { status: parsed.data.status },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean()
   if (!inquiry) { error(res, 'Inquiry not found', 404); return }
   success(res, idOf(inquiry), 'Inquiry updated')
@@ -266,7 +266,7 @@ router.post('/:id/reviews', authenticate, async (req, res) => {
   const saved = await BusinessReview.findOneAndUpdate(
     { businessId, authorId: req.user!.userId },
     { ...parsed.data, authorName: `${author.firstName} ${author.lastName}`.trim() },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   ).lean()
   const summary = await BusinessReview.aggregate<{ average: number; count: number }>([
     { $match: { businessId } },

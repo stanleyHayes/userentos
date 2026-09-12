@@ -73,7 +73,7 @@ export async function creditWallet(userId: string, amount: number, meta: WalletT
     // updatePipeline is REQUIRED for the array form above: Mongoose 9 rejects an
     // array update without it ("Cannot pass an array to query updates unless the
     // `updatePipeline` option is set"), which made every credit throw at runtime.
-    { new: true, upsert: true, updatePipeline: true },
+    { returnDocument: 'after', upsert: true, updatePipeline: true },
   )
   if (!wallet) throw new Error(`Failed to credit wallet for user ${userId}`)
 }
@@ -118,7 +118,7 @@ export async function debitWallet(userId: string, amount: number, meta: WalletTx
     ],
     // See the note on creditWallet: the array form needs updatePipeline in
     // Mongoose 9, or the debit throws instead of returning false.
-    { new: true, updatePipeline: true },
+    { returnDocument: 'after', updatePipeline: true },
   )
   if (!wallet) return false // insufficient funds (or no wallet — same outcome)
   return true

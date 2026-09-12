@@ -111,7 +111,7 @@ export async function finalizePayment(
     const failed = await Payment.findOneAndUpdate(
       { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
       { $set: { ...baseSet, status: 'failed', failureReason: inferFailureReason(event.raw) } },
-      { new: true },
+      { returnDocument: 'after' },
     )
     if (!failed) return false // lost the race — already terminal
     auditPayment('payment.failed', failed, { source: opts.source, reason: failed.failureReason })
@@ -127,7 +127,7 @@ export async function finalizePayment(
     const flagged = await Payment.findOneAndUpdate(
       { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
       { $set: { ...baseSet, status: 'processing', failureReason: `amount_mismatch: provider reported ${event.amount}, expected ${payment.amount}` } },
-      { new: true },
+      { returnDocument: 'after' },
     )
     if (flagged) {
       logger.warn(`[Payments:${opts.source}] AMOUNT MISMATCH on ${payment.reference}: provider=${event.amount} expected=${payment.amount} — held in 'processing' for manual review`)
@@ -139,7 +139,7 @@ export async function finalizePayment(
   const completed = await Payment.findOneAndUpdate(
     { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
     { $set: { ...baseSet, status: 'completed', paidAt: event.timestamp || nowIso } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!completed) return false // lost the race — another worker already finalized
   auditPayment('payment.completed', completed, { source: opts.source, purpose: completed.purpose })

@@ -381,7 +381,7 @@ router.post(
       const claimed = await MoveOut.findOneAndUpdate(
         { _id: mo._id, status: { $nin: ['refund_paid', 'closed', 'disputed'] } },
         { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: ref } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       if (!claimed) {
         const current = await MoveOut.findById(mo._id).select('status').lean()

@@ -366,7 +366,7 @@ async function claimTransition(id: string, from: CommissionStatus, to: Commissio
   return AffiliateCommission.findOneAndUpdate(
     { _id: id, status: from },
     { $set: set },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean()
 }
 

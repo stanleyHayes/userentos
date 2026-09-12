@@ -148,7 +148,7 @@ router.patch('/workflows/:id', authenticate, async (req, res) => {
       status: parsed.data.status,
       ...(parsed.data.data ? Object.fromEntries(Object.entries(parsed.data.data).map(([key, value]) => [`data.${key}`, value])) : {}),
     } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean()
   if (!item) { error(res, 'Workflow not found', 404); return }
   success(res, idOf(item as unknown as Record<string, unknown>), 'Workflow updated')

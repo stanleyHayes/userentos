@@ -36,7 +36,7 @@ async function notifyBusinessesOfNewMover(agreementId: string, propertyId: strin
   const claimed = await Agreement.findOneAndUpdate(
     { _id: agreementId, moverBusinessesNotifiedAt: { $exists: false } },
     { $set: { moverBusinessesNotifiedAt: new Date() } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean()
   if (!claimed) return
   const property = await Property.findById(propertyId).select('address.city').lean()
@@ -220,7 +220,7 @@ export const agreementController = {
       const occupied = await Property.findOneAndUpdate(
         { _id: agreement.propertyId, status: { $ne: 'occupied' } },
         { $set: { status: 'occupied' } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       if (!occupied) {
         error(res, 'This property is already occupied under another agreement', 409)
@@ -264,7 +264,7 @@ export const agreementController = {
       const occupied = await Property.findOneAndUpdate(
         { _id: fresh.propertyId, status: { $ne: 'occupied' } },
         { $set: { status: 'occupied' } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       if (!occupied) {
         error(res, 'This property is already occupied under another agreement', 409)

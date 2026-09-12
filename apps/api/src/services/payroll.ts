@@ -122,7 +122,7 @@ export async function processPayrollRun(runId: string) {
   const run = await PayrollRun.findOneAndUpdate(
     { _id: runId, status: 'approved' },
     { $set: { status: 'processing' } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!run) {
     const existing = await PayrollRun.findById(runId)
@@ -261,7 +261,7 @@ async function disburseDeduction(ded: IPayrollDeductionRecord, employerOwnerId: 
     }
     case 'savings': {
       if (!ded.targetEntityId) throw new Error('Missing savings plan target')
-      const plan = await SavingsPlan.findByIdAndUpdate(ded.targetEntityId, { $inc: { currentAmount: ded.amount } }, { new: true })
+      const plan = await SavingsPlan.findByIdAndUpdate(ded.targetEntityId, { $inc: { currentAmount: ded.amount } }, { returnDocument: 'after' })
       if (!plan) throw new Error('Savings plan not found')
       if (plan.status !== 'completed' && plan.currentAmount >= plan.targetAmount) {
         await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })

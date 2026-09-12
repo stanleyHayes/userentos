@@ -140,7 +140,7 @@ export async function disburseContract(contractId: string) {
   const contract = await FinancingContract.findOneAndUpdate(
     { _id: contractId, status: 'pending_disbursement', signedByApplicant: true },
     { $set: { status: 'active', disbursedAt: new Date().toISOString(), disbursementReference: ref } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!contract) {
     const existing = await FinancingContract.findById(contractId)

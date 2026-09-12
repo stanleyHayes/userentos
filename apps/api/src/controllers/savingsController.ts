@@ -150,7 +150,7 @@ export const savingsController = {
 
     let updatedPlan
     try {
-      updatedPlan = await SavingsPlan.findByIdAndUpdate(plan._id, { $inc: { currentAmount: round2(amount) } }, { new: true }) ?? plan
+      updatedPlan = await SavingsPlan.findByIdAndUpdate(plan._id, { $inc: { currentAmount: round2(amount) } }, { returnDocument: 'after' }) ?? plan
     } catch (err) {
       // Plan write failed — refund the debit so the user's money isn't burned.
       await creditWallet(req.user!.userId, amount, {

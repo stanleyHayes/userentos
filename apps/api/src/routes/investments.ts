@@ -135,7 +135,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
   const claimed = await Investment.findOneAndUpdate(
     { _id: investment._id, status: { $nin: ['withdrawn', 'matured'] } },
     { $set: { status: newStatus, actualReturn } },
-    { new: true },
+    { returnDocument: 'after' },
   )
   if (!claimed) { error(res, 'Investment already withdrawn'); return }
 

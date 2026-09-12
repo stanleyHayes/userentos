@@ -240,7 +240,7 @@ export class AuthService {
     const record = await RefreshToken.findOneAndUpdate(
       { tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
       { $set: { revokedAt: new Date(), revokedReason: 'rotated', lastUsedAt: new Date() } },
-      { new: true },
+      { returnDocument: 'after' },
     )
 
     if (!record) {

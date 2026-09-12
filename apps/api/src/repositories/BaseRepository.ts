@@ -66,7 +66,7 @@ export class BaseRepository<T extends Document> {
   }
 
   async updateById(id: string, data: UpdateQuery<T>): Promise<T | null> {
-    return this.model.findByIdAndUpdate(id, data, { new: true }).exec()
+    return this.model.findByIdAndUpdate(id, data, { returnDocument: 'after' }).exec()
   }
 
   async deleteById(id: string): Promise<T | null> {
