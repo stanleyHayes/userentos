@@ -16,6 +16,17 @@ export interface IUser extends Document {
   taxReportingConsent: boolean
   profileImage?: string
   subscriptionPackageId?: string
+  /**
+   * The plan VERSION this subscriber signed up on.
+   *
+   * Entitlements are authored per plan version precisely so that changing
+   * commercial terms does not re-price people who already subscribed. Without
+   * this recorded here there is nothing to grandfather against, and every
+   * subscriber silently moves to the newest version the moment it is
+   * published. Absent on older rows, which fall back to the plan's current
+   * version — the behaviour they already had.
+   */
+  subscriptionPlanVersion?: number
   subscriptionStartDate?: Date
   subscriptionEndDate?: Date
   invitedBy?: string
@@ -52,6 +63,7 @@ const userSchema = new Schema<IUser>({
   taxReportingConsent: { type: Boolean, default: false },
   profileImage: String,
   subscriptionPackageId: { type: String },
+  subscriptionPlanVersion: { type: Number },
   subscriptionStartDate: { type: Date },
   subscriptionEndDate: { type: Date },
   invitedBy: { type: String },

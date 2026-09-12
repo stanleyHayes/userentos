@@ -99,7 +99,12 @@ export async function resolveEntitlements(userId: string): Promise<ResolvedEntit
   const plan = await SubscriptionPackage.findById(packageId).lean()
   if (!plan) return { planId: null, planName: 'Free', planVersion: 1, features }
 
-  return applyPlan(plan as PlanLike, features)
+  // Resolve against the version this subscriber bought, not the plan's latest.
+  return applyPlan(
+    plan as PlanLike,
+    features,
+    (user as { subscriptionPlanVersion?: number } | null)?.subscriptionPlanVersion,
+  )
 }
 
 interface PlanLike {
@@ -111,8 +116,22 @@ interface PlanLike {
 }
 
 /** Overlay a plan's legacy columns and then its explicit entitlement grants. */
-async function applyPlan(plan: PlanLike, features: Record<string, FeatureValue>): Promise<ResolvedEntitlements> {
-  const planVersion = plan.version ?? 1
+async function applyPlan(
+  plan: PlanLike,
+  features: Record<string, FeatureValue>,
+  subscribedVersion?: number,
+): Promise<ResolvedEntitlements> {
+  /*
+   * Resolve against the version the subscriber bought.
+   *
+   * This read plan.version — the plan's CURRENT version — so publishing v2 of
+   * a plan re-priced every existing subscriber on that plan the instant it
+   * went live. Versioned entitlements exist to prevent exactly that; nobody
+   * was grandfathered. A subscriber with no recorded version (anyone who
+   * signed up before this was tracked) still falls back to the plan's current
+   * version, which is the behaviour they already had.
+   */
+  const planVersion = subscribedVersion ?? plan.version ?? 1
 
   // Legacy plan columns still feed the engine so existing subscribers keep
   // working before an admin has authored explicit entitlement rows.

@@ -156,6 +156,8 @@ export const subscriptionController = {
       }
 
       user.subscriptionPackageId = pkg._id.toString()
+      // Pin the version bought, so a later re-pricing does not reach back.
+      user.subscriptionPlanVersion = (pkg as { version?: number }).version ?? 1
       user.subscriptionStartDate = now
       user.subscriptionEndDate = endDate
       await user.save()
@@ -267,6 +269,7 @@ export const subscriptionController = {
     }
 
     user.subscriptionPackageId = pkg._id.toString()
+    user.subscriptionPlanVersion = (pkg as { version?: number }).version ?? 1
     user.subscriptionStartDate = now
     user.subscriptionEndDate = endDate
     await user.save()
