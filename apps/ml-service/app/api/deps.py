@@ -1,5 +1,7 @@
 """Shared API dependencies."""
 
+import secrets
+
 from fastapi import Depends, HTTPException, Request
 
 from app.config import get_settings
@@ -16,11 +18,15 @@ def require_api_key(request: Request) -> None:
     The Node server sends the key as `x-api-key`. When unset (dev mode), all
     requests are allowed and a startup warning is logged instead.
     """
-    expected = get_settings().ml_api_key
+    expected = (get_settings().ml_api_key or "").strip()
     if not expected:
         return
-    provided = request.headers.get("x-api-key")
-    if not provided or provided != expected:
+    provided = request.headers.get("x-api-key") or ""
+    # compare_digest, not ==: a plain comparison returns as soon as two bytes
+    # differ, so its timing leaks the key prefix-by-prefix. The Node side uses
+    # timingSafeEqual for exactly this. Encode first — compare_digest rejects
+    # non-ASCII str, which would turn a junk header into a 500.
+    if not secrets.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 

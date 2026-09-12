@@ -1,13 +1,21 @@
 """Shared fixtures for the API tests."""
 
+import atexit
 import os
+import shutil
 import tempfile
 
 # Point model persistence at a throwaway file before app modules import
 # (settings are lru_cached) so tests never clobber data/pricing-model.json.
-os.environ.setdefault(
-    "MODEL_PATH", os.path.join(tempfile.gettempdir(), "rentos-ml-test-model.json")
-)
+#
+# The directory is fresh per run and removed afterwards. With a fixed path,
+# the app lifespan saved the trained singleton on shutdown and LOADED it back
+# on the next run — so every client-based test asserted against whatever
+# model the previous run happened to leave behind, not the fixture's.
+if "MODEL_PATH" not in os.environ:
+    _model_dir = tempfile.mkdtemp(prefix="rentos-ml-test-")
+    atexit.register(shutil.rmtree, _model_dir, True)
+    os.environ["MODEL_PATH"] = os.path.join(_model_dir, "pricing-model.json")
 
 import pytest
 from fastapi.testclient import TestClient

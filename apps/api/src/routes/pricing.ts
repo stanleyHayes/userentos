@@ -128,19 +128,24 @@ router.get('/model-status', authenticate, async (_req, res) => {
   }
 })
 
+// Bounds mirror PropertyInput in ml-service/app/schemas/pricing.py. They have
+// to agree: an input this schema accepts and the ML service rejects comes back
+// as an opaque 422, which /predict-ml swallows as "service unavailable" and
+// answers from the local model instead — so a validation error would surface
+// as a silently worse prediction.
 const predictMlSchema = z.object({
-  city: z.string().min(1),
-  type: z.string().min(1),
-  bedrooms: z.number().int().min(0),
-  bathrooms: z.number().int().min(0).default(1),
-  floorArea: z.number().positive().optional(),
+  city: z.string().min(1).max(200),
+  type: z.string().min(1).max(200),
+  bedrooms: z.number().int().min(0).max(100),
+  bathrooms: z.number().int().min(0).max(100).default(1),
+  floorArea: z.number().positive().max(1_000_000).optional(),
   furnished: z.boolean().default(false),
-  parkingSpaces: z.number().int().min(0).default(0),
-  advanceMonths: z.number().int().min(0).default(1),
-  amenities: z.array(z.string()).default([]),
-  region: z.string().optional(),
-  floor: z.number().int().optional(),
-  yearBuilt: z.number().int().optional(),
+  parkingSpaces: z.number().int().min(0).max(1000).default(0),
+  advanceMonths: z.number().int().min(0).max(120).default(1),
+  amenities: z.array(z.string()).max(100).default([]),
+  region: z.string().max(200).optional(),
+  floor: z.number().int().min(-20).max(300).optional(),
+  yearBuilt: z.number().int().min(1800).max(2200).optional(),
   stayType: z.enum(['short_stay', 'long_stay']).optional(),
 })
 

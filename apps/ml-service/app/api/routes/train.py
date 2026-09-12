@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import guarded_model
 from app.config import Settings, get_settings
@@ -59,17 +59,7 @@ def train(
     settings: Settings = Depends(get_settings),
 ) -> StatusResponse:
     """Train on caller-supplied properties (used by the Node server)."""
-    _train_and_persist(
-        model,
-        settings,
-        req.properties,
-        max_epochs=req.maxEpochs or 10000,
-        learning_rate=req.learningRate or 0.01,
-        lr_decay=req.lrDecay or 0.9995,
-        l2_lambda=req.l2Lambda or 0.001,
-        patience=req.patience or 500,
-        verbose=req.verbose or False,
-    )
+    _train_and_persist(model, settings, req.properties, **req.training_kwargs())
     return StatusResponse(**model.get_status())
 
 
@@ -84,23 +74,12 @@ def train_seed(
     stats = dataset_stats(properties)
     logger.info("Generated seed dataset: %s", stats)
 
-    _train_and_persist(
-        model,
-        settings,
-        properties,
-        max_epochs=req.maxEpochs or 10000,
-        learning_rate=req.learningRate or 0.01,
-        lr_decay=req.lrDecay or 0.9995,
-        l2_lambda=req.l2Lambda or 0.001,
-        patience=req.patience or 500,
-        verbose=req.verbose or False,
-    )
+    _train_and_persist(model, settings, properties, **req.training_kwargs())
     return SeedTrainResponse(**model.get_status(), dataset=stats)
 
 
 @router.post("/reload", response_model=ReloadResponse)
 def reload(
-    request: Request,
     model: RentPriceModel = Depends(guarded_model),
     settings: Settings = Depends(get_settings),
 ) -> ReloadResponse:

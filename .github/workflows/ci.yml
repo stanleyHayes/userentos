@@ -4,6 +4,7 @@ name: CI
 # pipeline stays easy to review:
 #   reusable-server.yml  lint, typecheck, test, build (server)
 #   reusable-client.yml  lint, typecheck, build (client)
+#   reusable-ml.yml      pytest (pricing ML service)
 #   reusable-docker.yml  Docker image build
 #   reusable-e2e.yml     Playwright end-to-end tests
 
@@ -22,6 +23,9 @@ jobs:
 
   client:
     uses: ./.github/workflows/reusable-client.yml
+
+  ml-service:
+    uses: ./.github/workflows/reusable-ml.yml
 
   docker:
     uses: ./.github/workflows/reusable-docker.yml

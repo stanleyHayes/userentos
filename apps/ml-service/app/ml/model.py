@@ -30,6 +30,15 @@ logger = get_logger(__name__)
 # Deterministic weight initialisation so training runs are reproducible.
 WEIGHT_INIT_SEED = 42
 
+# Ceiling on a predicted rent (GHS/month). Far above any real Ghanaian rent;
+# it exists only so an extreme input cannot overflow exp() into inf.
+MAX_RENT = 1e12
+MAX_LOG_RENT = float(np.log(MAX_RENT))
+
+# A feature column whose training std falls below this carries no signal; see
+# _train_unlocked. Mirrors the 1e-6 threshold in pricingModel.ts.
+CONSTANT_STD_EPS = 1e-6
+
 
 class RentPriceModel:
     """Normalised linear regression over the pricing feature vector."""
@@ -67,6 +76,15 @@ class RentPriceModel:
         patience: int = 500,
         verbose: bool = False,
     ) -> None:
+        # Guarded here as well as in the request schema: a non-positive
+        # max_epochs skips the gradient loop entirely and would mark the
+        # randomly initialised weights as a trained model. scripts/ calls
+        # train() directly and never sees the schema.
+        if max_epochs < 1:
+            raise ValueError(f"max_epochs must be at least 1, got {max_epochs}")
+        if patience < 1:
+            raise ValueError(f"patience must be at least 1, got {patience}")
+
         valid = [p for p in properties if float(p.get("rentAmount", 0) or 0) > 0]
         if len(valid) < 20:
             raise ValueError(f"Need at least 20 properties, got {len(valid)}")
@@ -86,10 +104,25 @@ class RentPriceModel:
         y_target = np.log(y)
 
         # Feature + target normalisation.
+        #
+        # A column that does not vary across the training set carries no
+        # signal, and its divisor has to be held at 1. The previous
+        # (std + 1e-8) divisor multiplied such a column's weight by ~1e8 when
+        # de-normalising below, so any prediction where that feature DID vary
+        # landed at exp(+/-1e7): a rent of 0, or inf -- and inf then raises
+        # OverflowError in round(), i.e. a 500. Real datasets hit this easily
+        # (every listing quoting the same advance, every flat wired for
+        # electricity), and it corrupted predictions rather than erroring.
+        #
+        # pricingModel.ts guards this on both counts and the port dropped
+        # both; CONSTANT_STD_EPS matches its absolute 1e-6 floor, with a
+        # relative term added for the target-mean encodings, whose values run
+        # into the thousands.
         self.feature_means = X.mean(axis=0)
-        self.feature_stds = X.std(axis=0) + 1e-8
-        stds = np.where(self.feature_stds == 0, 1.0, self.feature_stds)
-        X_norm = (X - self.feature_means) / stds
+        raw_stds = X.std(axis=0)
+        constant = raw_stds < np.maximum(CONSTANT_STD_EPS, 1e-9 * np.abs(self.feature_means))
+        self.feature_stds = np.where(constant, 1.0, raw_stds)
+        X_norm = (X - self.feature_means) / self.feature_stds
 
         self._target_mean = float(y_target.mean())
         self._target_std = float(y_target.std()) + 1e-8
@@ -126,6 +159,12 @@ class RentPriceModel:
 
             if verbose and epoch % 1000 == 0:
                 logger.info("Epoch %d, loss: %.6f, lr: %.6f", epoch, loss, lr)
+
+        # Constant columns were all-zero after normalisation, so their
+        # gradient was zero throughout and their weight is still the random
+        # init (shrunk by L2). Training gave them no influence; drop them
+        # explicitly so prediction agrees.
+        self.weights[constant] = 0.0
 
         # De-normalise weights so predict() works on raw features (log space).
         self.weights = (self.weights * self._target_std) / self.feature_stds
@@ -166,10 +205,16 @@ class RentPriceModel:
         features = np.array(extract_features(input_data, self.encodings), dtype=np.float64)
         raw = float(features @ self.weights + self.bias)
         if self.target_transform == "log":
-            predicted = float(np.exp(raw + 0.5 * self.residual_variance))
+            # np.exp overflows to inf past ~709, and round(inf) raises
+            # OverflowError -- a 500 instead of an answer. Clamp the exponent:
+            # no request should be able to turn an out-of-range input into a
+            # crash, and nothing above the cap is a rent either way.
+            predicted = float(np.exp(min(raw + 0.5 * self.residual_variance, MAX_LOG_RENT)))
         else:  # legacy linear-in-price artifact
             predicted = raw
-        predicted = max(0.0, predicted)
+        if not np.isfinite(predicted):
+            predicted = 0.0
+        predicted = min(max(0.0, predicted), MAX_RENT)
 
         uncertainty = 0.2 * (1.0 - max(0.0, self.r2_score)) + 0.05
         margin = predicted * uncertainty
@@ -220,26 +265,51 @@ class RentPriceModel:
     def _load_unlocked(self, file_path: str) -> bool:
         if not os.path.exists(file_path):
             return False
+        # Parsed into locals first and committed in one block at the end: a
+        # half-read artifact used to leave the live model spliced together
+        # from two versions -- new weights, old encodings, is_trained still
+        # True -- and load() returned False while /predict quietly served
+        # nonsense. A failed load must leave the running model untouched.
         try:
             with open(file_path) as f:
                 state = json.load(f)
-            self.weights = np.array(state["weights"], dtype=np.float64)
-            self.bias = float(state["bias"])
-            self.feature_means = np.array(state["featureMeans"], dtype=np.float64)
-            self.feature_stds = np.array(state["featureStds"], dtype=np.float64)
-            self.encodings = state["encodings"]
-            self.trained_at = state["trainedAt"]
-            self.sample_count = int(state["sampleCount"])
-            self.final_loss = float(state["finalLoss"])
-            self.r2_score = float(state["r2Score"])
-            self.epochs = int(state["epochs"])
-            self.target_transform = state.get("targetTransform", "linear")
-            self.residual_variance = float(state.get("residualVariance", 0.0))
-            self.is_trained = True
-            return True
+            weights = np.array(state["weights"], dtype=np.float64)
+            bias = float(state["bias"])
+            feature_means = np.array(state["featureMeans"], dtype=np.float64)
+            feature_stds = np.array(state["featureStds"], dtype=np.float64)
+            encodings = state["encodings"]
+            trained_at = state["trainedAt"]
+            sample_count = int(state["sampleCount"])
+            final_loss = float(state["finalLoss"])
+            r2_score = float(state["r2Score"])
+            epochs = int(state["epochs"])
+            target_transform = state.get("targetTransform", "linear")
+            residual_variance = float(state.get("residualVariance", 0.0))
+            if weights.ndim != 1 or weights.shape[0] != len(FEATURE_NAMES):
+                raise ValueError(
+                    f"artifact has {weights.shape} weights, "
+                    f"expected {len(FEATURE_NAMES)}"
+                )
+            if not np.all(np.isfinite(weights)) or not np.isfinite(bias):
+                raise ValueError("artifact contains non-finite weights")
         except Exception as exc:  # corrupt or incompatible artifact
             logger.warning("Failed to load model from %s: %s", file_path, exc)
             return False
+
+        self.weights = weights
+        self.bias = bias
+        self.feature_means = feature_means
+        self.feature_stds = feature_stds
+        self.encodings = encodings
+        self.trained_at = trained_at
+        self.sample_count = sample_count
+        self.final_loss = final_loss
+        self.r2_score = r2_score
+        self.epochs = epochs
+        self.target_transform = target_transform
+        self.residual_variance = residual_variance
+        self.is_trained = True
+        return True
 
     def _get_status_unlocked(self) -> dict[str, Any]:
         return {
