@@ -21,7 +21,7 @@ import { StorefrontEvent } from '../models/StorefrontEvent.js'
 import { Property } from '../models/Property.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { success, error } from '../utils/response.js'
-import { param } from '../utils/params.js'
+import { param, escapeRegex } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { hostingProvider } from '../services/hosting/index.js'
 import { requireEntitlement, getFeature, EntitlementError } from '../services/entitlements.js'
@@ -88,7 +88,10 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     throw err
   }
 
-  const slug = parsed.data.slug.toLowerCase()
+  // trim() as well as lowercase: validateSlug normalises internally before
+  // checking, so a slug with a stray space passed validation and was then
+  // stored WITH the space — unreachable at its own URL, forever.
+  const slug = parsed.data.slug.trim().toLowerCase()
   const valid = validateSlug(slug)
   if (!valid.ok) { error(res, valid.reason); return }
 
@@ -179,15 +182,38 @@ router.post('/me/domains', authenticate, asyncHandler(async (req, res) => {
   const valid = validateDomain(domain)
   if (!valid.ok) { error(res, valid.reason); return }
 
-  const taken = await StorefrontDomain.findOne({ domain, status: { $ne: 'removed' } }).lean()
-  if (taken) { error(res, 'That domain is already connected to a storefront', 409); return }
+  const existing = await StorefrontDomain.findOne({ domain })
+  if (existing && existing.status !== 'removed') {
+    error(res, 'That domain is already connected to a storefront', 409)
+    return
+  }
 
-  const record = await StorefrontDomain.create({
-    storefrontId: String(storefront._id),
-    domain,
-    verificationToken: newVerificationToken(),
-    status: 'pending',
-  })
+  /*
+   * Revive the old row rather than inserting a second one.
+   *
+   * `domain` is uniquely indexed, so create() on a domain that was previously
+   * removed threw a duplicate-key error and surfaced as a 500 — a seller who
+   * removed a domain could never add it back. Reusing the row also means the
+   * previous verification history is not silently duplicated.
+   */
+  let record
+  if (existing) {
+    existing.storefrontId = String(storefront._id)
+    existing.verificationToken = newVerificationToken()
+    existing.status = 'pending'
+    existing.tlsStatus = 'none'
+    existing.tlsChallenges = []
+    existing.verifiedAt = undefined
+    existing.failureReason = undefined
+    record = await existing.save()
+  } else {
+    record = await StorefrontDomain.create({
+      storefrontId: String(storefront._id),
+      domain,
+      verificationToken: newVerificationToken(),
+      status: 'pending',
+    })
+  }
 
   await recordAudit(req, 'storefront.domain_added', 'StorefrontDomain', String(record._id), { domain })
 
@@ -213,7 +239,17 @@ router.post('/me/domains/:id/verify', authenticate, asyncHandler(async (req, res
   record.lastCheckedAt = new Date()
 
   if (!result.verified) {
-    record.status = 'pending'
+    /*
+     * Do not demote a domain that is already serving.
+     *
+     * This set status = 'pending' unconditionally, so re-running verification
+     * on a live ('verified' or 'active') domain during a transient DNS blip
+     * took the seller's site down — the check is also reachable by the seller
+     * themselves, so a curious click could do it. A failed re-check on a live
+     * domain is recorded and reported, not acted on.
+     */
+    const wasLive = record.status === 'verified' || record.status === 'active'
+    if (!wasLive) record.status = 'pending'
     record.failureReason = result.reason
     await record.save()
     error(res, result.reason ?? 'Verification failed', 409)
@@ -439,8 +475,12 @@ export function buildDailySeries(
  * defines the split, and inventing a paywall is worse than not having one.
  */
 router.get('/me/analytics', authenticate, asyncHandler(async (req, res) => {
+  // Allow-list, not a deny-list: this refused only '', 'none' and non-strings,
+  // so any unrecognised value — an admin's typo in the entitlement editor —
+  // granted a paid feature. An entitlement gate must fail closed.
+  const PAID_ANALYTICS_TIERS = ['basic', 'advanced']
   const tier = await getFeature(req.user!.userId, 'storefront.analytics')
-  if (typeof tier !== 'string' || tier === '' || tier === 'none') {
+  if (typeof tier !== 'string' || !PAID_ANALYTICS_TIERS.includes(tier)) {
     handleEntitlement(
       new EntitlementError('storefront.analytics', 'Storefront analytics is not included in your plan.'),
       res,
@@ -711,7 +751,12 @@ router.get('/', authenticate, requireRole('admin', 'super_admin'), asyncHandler(
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : ''
   const filter: Record<string, unknown> = {}
   if (req.query.status) filter.status = req.query.status
-  if (search) filter.$or = [{ slug: new RegExp(search, 'i') }, { name: new RegExp(search, 'i') }]
+  if (search) {
+    // Escaped: an unescaped "(" or "[" from the admin's search box threw
+    // inside RegExp and 500'd the storefront directory.
+    const safe = escapeRegex(search)
+    filter.$or = [{ slug: new RegExp(safe, 'i') }, { name: new RegExp(safe, 'i') }]
+  }
 
   const items = await Storefront.find(filter).sort({ createdAt: -1 }).limit(100).lean()
   success(res, { items: items.map((s) => ({ ...s, id: String(s._id) })), total: items.length })
