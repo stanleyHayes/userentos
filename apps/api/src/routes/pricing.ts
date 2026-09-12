@@ -5,7 +5,7 @@ import { success, error } from '../utils/response.js'
 import { analyzePropertyPricing, getRentTrends, checkFairPrice } from '../services/pricing.js'
 import { rentPriceModel } from '../services/ml/pricingModel.js'
 import { mlClient } from '../services/mlClient.js'
-import { recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
+import { listValuations, recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
 import { Property } from '../models/Property.js'
 
 const router = Router()
@@ -236,6 +236,22 @@ router.get('/model-evaluation', authenticate, requireRole('admin', 'super_admin'
   } catch (err) {
     console.error('[pricing] model evaluation failed:', (err as Error).message)
     error(res, 'Failed to compute model evaluation', 500)
+  }
+})
+
+/** Recent valuations, newest first (roadmap checklist item 6). */
+router.get('/valuations', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  try {
+    const result = await listValuations({
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 25,
+      withOutcomeOnly: req.query.withOutcome === 'true',
+      propertyId: typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined,
+    })
+    success(res, result)
+  } catch (err) {
+    console.error('[pricing] failed to list valuations:', (err as Error).message)
+    error(res, 'Failed to list valuations', 500)
   }
 })
 

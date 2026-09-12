@@ -113,6 +113,7 @@ const AdminStorefrontsPage = lazy(() => import('@/pages/admin/AdminStorefrontsPa
 const AdminSponsorshipsPage = lazy(() => import('@/pages/admin/AdminSponsorshipsPage').then((m) => ({ default: m.AdminSponsorshipsPage })))
 const AdminPromotionsPage = lazy(() => import('@/pages/admin/AdminPromotionsPage').then((m) => ({ default: m.AdminPromotionsPage })))
 const AdminAuditLogPage = lazy(() => import('@/pages/admin/AdminAuditLogPage').then((m) => ({ default: m.AdminAuditLogPage })))
+const AdminModelPerformancePage = lazy(() => import('@/pages/admin/AdminModelPerformancePage').then((m) => ({ default: m.AdminModelPerformancePage })))
 const AdminReviewerOrgsPage = lazy(() => import('@/pages/admin/AdminReviewerOrgsPage').then((m) => ({ default: m.AdminReviewerOrgsPage })))
 const AdminTransactionsPage = lazy(() => import('@/pages/admin/AdminTransactionsPage').then((m) => ({ default: m.AdminTransactionsPage })))
 const AdminAffiliatesPage = lazy(() => import('@/pages/admin/AdminAffiliatesPage').then((m) => ({ default: m.AdminAffiliatesPage })))
@@ -300,6 +301,7 @@ export default function App() {
             <Route path="/admin/sponsorships" element={<RequireRole roles={['admin']}><AdminSponsorshipsPage /></RequireRole>} />
             <Route path="/admin/promotions" element={<RequireRole roles={['admin']}><AdminPromotionsPage /></RequireRole>} />
             <Route path="/admin/audit-logs" element={<RequireRole roles={['admin']}><AdminAuditLogPage /></RequireRole>} />
+            <Route path="/admin/model-performance" element={<RequireRole roles={['admin', 'super_admin']}><AdminModelPerformancePage /></RequireRole>} />
             <Route path="/admin/reviewer-organizations" element={<RequireRole roles={['admin']}><AdminReviewerOrgsPage /></RequireRole>} />
             <Route path="/admin/transactions" element={<RequireRole roles={['admin']}><AdminTransactionsPage /></RequireRole>} />
             <Route path="/admin/affiliates" element={<RequireRole roles={['admin']}><AdminAffiliatesPage /></RequireRole>} />

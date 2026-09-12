@@ -230,3 +230,44 @@ export async function valuationLogSummary(): Promise<{
     coveragePercent: total > 0 ? Math.round((scored / total) * 1000) / 10 : 0,
   }
 }
+
+export interface ValuationPage {
+  items: IValuationLog[]
+  total: number
+  page: number
+  pages: number
+}
+
+/**
+ * Recent valuations for the admin view (roadmap checklist item 6: "an admin
+ * view showing model inputs, output, source dates and override/review
+ * history").
+ *
+ * Sorted by createdAt with an _id tiebreaker — createdAt alone is not a total
+ * order, and two rows written in the same millisecond would otherwise be able
+ * to swap places between pages, duplicating one and hiding the other.
+ */
+export async function listValuations(options: {
+  page?: number
+  limit?: number
+  withOutcomeOnly?: boolean
+  propertyId?: string
+} = {}): Promise<ValuationPage> {
+  const page = Math.max(1, options.page ?? 1)
+  const limit = Math.min(100, Math.max(1, options.limit ?? 25))
+
+  const query: Record<string, unknown> = {}
+  if (options.withOutcomeOnly) query.observedRent = { $exists: true, $gt: 0 }
+  if (options.propertyId) query.propertyId = options.propertyId
+
+  const [items, total] = await Promise.all([
+    ValuationLog.find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean<IValuationLog[]>(),
+    ValuationLog.countDocuments(query),
+  ])
+
+  return { items, total, page, pages: Math.max(1, Math.ceil(total / limit)) }
+}
