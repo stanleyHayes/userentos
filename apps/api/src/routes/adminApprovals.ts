@@ -57,7 +57,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const filter = { approvalStatus: status }
   const skip = (page - 1) * limit
   const [docs, total] = await Promise.all([
-    model.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean() as Promise<(Record<string, unknown> & { _id: Types.ObjectId })[]>,
+    model.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean() as Promise<(Record<string, unknown> & { _id: Types.ObjectId })[]>,
     model.countDocuments(filter),
   ])
 

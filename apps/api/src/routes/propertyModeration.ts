@@ -75,7 +75,7 @@ router.get('/review-queue', authenticate, asyncHandler(async (req, res) => {
   if (city) filter['address.city'] = city
 
   const [items, total] = await Promise.all([
-    Property.find(filter).sort({ createdAt: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Property.find(filter).sort({ createdAt: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     Property.countDocuments(filter),
   ])
 

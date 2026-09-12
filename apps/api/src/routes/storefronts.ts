@@ -720,7 +720,7 @@ router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
   const filter = publicStorefrontScope(storefront) as unknown as Record<string, unknown>
 
   const [items, total] = await Promise.all([
-    Property.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Property.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Property.countDocuments(filter),
   ])
 

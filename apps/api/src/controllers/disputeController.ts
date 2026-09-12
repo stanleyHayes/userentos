@@ -51,7 +51,7 @@ export const disputeController = {
 
     const [total, disputes] = await Promise.all([
       Dispute.countDocuments(filter),
-      Dispute.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+      Dispute.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
     ])
     const items = disputes.map((d) => ({ ...d, id: (d._id as Types.ObjectId).toString() }))
     success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })

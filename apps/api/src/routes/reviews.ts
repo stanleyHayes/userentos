@@ -21,7 +21,7 @@ router.get('/property/:propertyId', async (req, res) => {
   const [reviews, summaryAgg] = await Promise.all([
     // `removed` is set when an admin actions an abuse report; a removed review
     // must not appear anywhere a reader or the rating average can see it.
-    Review.find({ propertyId, removed: { $ne: true } }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    Review.find({ propertyId, removed: { $ne: true } }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
     Review.aggregate([
       { $match: { propertyId, removed: { $ne: true } } },
       { $group: {

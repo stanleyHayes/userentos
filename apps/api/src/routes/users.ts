@@ -207,7 +207,17 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
   const [total, users] = await Promise.all([
     // countDocuments doesn't fire the pre(/^find/) soft-delete hook — filter explicitly
     User.countDocuments({ ...filter, deletedAt: { $exists: false } }),
-    User.find(filter).select('-passwordHash -__v').sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    /*
+     * _id is the tiebreaker, and it is not optional.
+     *
+     * createdAt alone is not a total order — bulk-created users share a
+     * timestamp to the millisecond — and MongoDB is free to order ties
+     * differently per query. With .skip() that means a row can appear on two
+     * pages while another is never returned at all. Observed directly: pages 1
+     * and 2 both contained the same two accounts. _id is unique, so appending
+     * it makes the order total and the paging exact.
+     */
+    User.find(filter).select('-passwordHash -__v').sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))
   success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })

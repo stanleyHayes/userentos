@@ -161,7 +161,7 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
 
   const [total, applications] = await Promise.all([
     Application.countDocuments(filter),
-    Application.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    Application.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
   ])
 
   // Enrich with property titles and tenant names

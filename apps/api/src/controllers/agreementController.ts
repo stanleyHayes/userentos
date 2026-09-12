@@ -81,7 +81,7 @@ export const agreementController = {
 
     const [total, agreements] = await Promise.all([
       Agreement.countDocuments(filter),
-      Agreement.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+      Agreement.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
     ])
 
     // Collect unique user IDs to populate names

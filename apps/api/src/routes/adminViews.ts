@@ -128,7 +128,7 @@ router.get('/employers', adminAuth, adminRole, adminPerm, async (req, res) => {
 
   const [total, employers] = await Promise.all([
     Employer.countDocuments({}),
-    Employer.find({}).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+    Employer.find({}).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
   ])
 
   const employerIds = employers.map((e) => (e._id as Types.ObjectId).toString())

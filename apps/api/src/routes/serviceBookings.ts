@@ -40,7 +40,7 @@ router.get('/', authenticate, async (req, res) => {
 
   const skip = (page - 1) * limit
   const [bookings, total] = await Promise.all([
-    ServiceBooking.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    ServiceBooking.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
     ServiceBooking.countDocuments(filter),
   ])
 

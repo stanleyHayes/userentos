@@ -119,7 +119,7 @@ router.get('/admin/queue', authenticate, requireRole('admin', 'super_admin'), as
   const [items, total] = await Promise.all([
     // Oldest first: the queue is a work list, and the oldest unanswered report
     // is the one that has been failing someone the longest.
-    ContentReport.find(filter).sort({ createdAt: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    ContentReport.find(filter).sort({ createdAt: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     ContentReport.countDocuments(filter),
   ])
 

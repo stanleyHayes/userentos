@@ -12,7 +12,7 @@ export const notificationController = {
 
     const [total, notifications] = await Promise.all([
       Notification.countDocuments({ userId: req.user!.userId }),
-      Notification.find({ userId: req.user!.userId }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
+      Notification.find({ userId: req.user!.userId }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
     ])
     const items = notifications.map((n) => ({ ...n, id: (n._id as Types.ObjectId).toString() }))
     success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
