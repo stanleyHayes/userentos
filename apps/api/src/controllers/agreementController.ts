@@ -3,6 +3,7 @@ import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
+import { attachObservedRent } from '../services/ml/valuationLog.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { User } from '../models/User.js'
 import { Business } from '../models/Business.js'
@@ -207,6 +208,13 @@ export const agreementController = {
 
     if (agreement.landlordSignature && agreement.tenantSignature) {
       agreement.status = 'active'
+      /*
+       * The strongest ground truth the platform has for the pricing model: a
+       * signed agreement is what the property actually let for, not what it
+       * was advertised at. Overwrites nothing — attachObservedRent only fills
+       * valuations that have no outcome yet (roadmap checklist item 7).
+       */
+      void attachObservedRent(agreement.propertyId, Number(agreement.rentAmount), 'agreement_signed')
       // Atomic predicate: only flip a non-occupied property. If another fully-signed
       // agreement already occupies it, that's a double-booking — block it.
       const occupied = await Property.findOneAndUpdate(
@@ -251,6 +259,7 @@ export const agreementController = {
       && (fresh.status === 'draft' || fresh.status === 'pending_signatures')
     ) {
       fresh.status = 'active'
+      void attachObservedRent(fresh.propertyId, Number(fresh.rentAmount), 'agreement_signed')
       // Same atomic predicate as above: only flip a non-occupied property.
       const occupied = await Property.findOneAndUpdate(
         { _id: fresh.propertyId, status: { $ne: 'occupied' } },

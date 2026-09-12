@@ -2,6 +2,7 @@ import { Property } from '../models/Property.js'
 import { rentPriceModel } from './ml/pricingModel.js'
 import type { PredictionResult } from './ml/pricingModel.js'
 import { mlClient } from './mlClient.js'
+import { recordValuation } from './ml/valuationLog.js'
 
 // Escape user-supplied input before embedding it in a RegExp, to prevent
 // catastrophic-backtracking ReDoS and regex injection (e.g. city = '.*').
@@ -178,11 +179,13 @@ export async function analyzePropertyPricing(
 
   // Add ML prediction if model is trained (local or external)
   let mlPrediction: PredictionResult | undefined
+  let mlSource: 'local' | 'ml-service' = 'local'
   const mlInput = { city, type, bedrooms, bathrooms, floorArea, furnished, amenities }
   try {
     if (mlClient.isEnabled()) {
       try {
         mlPrediction = await mlClient.predict(mlInput)
+        mlSource = 'ml-service'
       } catch {
         // External ML service down/slow — fall back to the local model if trained.
         if (rentPriceModel.isTrained) mlPrediction = rentPriceModel.predict(mlInput)
@@ -192,6 +195,14 @@ export async function analyzePropertyPricing(
     }
   } catch {
     // ML prediction optional — don't fail the whole analysis
+  }
+
+  // Written down so it can be scored later against the rent the property
+  // actually went for (roadmap checklist item 7). Fire-and-forget by design.
+  if (mlPrediction) {
+    void recordValuation({
+      input: mlInput, result: mlPrediction, modelSource: mlSource, context: 'pricing_analysis',
+    })
   }
 
   return {

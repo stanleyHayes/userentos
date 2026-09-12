@@ -5,6 +5,7 @@ import { success, error } from '../utils/response.js'
 import { analyzePropertyPricing, getRentTrends, checkFairPrice } from '../services/pricing.js'
 import { rentPriceModel } from '../services/ml/pricingModel.js'
 import { mlClient } from '../services/mlClient.js'
+import { recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
 import { Property } from '../models/Property.js'
 
 const router = Router()
@@ -152,18 +153,31 @@ const predictMlSchema = z.object({
   floor: z.number().int().min(-20).max(300).optional(),
   yearBuilt: z.number().int().min(1800).max(2200).optional(),
   stayType: z.enum(['short_stay', 'long_stay']).optional(),
+  /**
+   * Optional: which property this valuation is for. It is what later lets the
+   * rent the property actually went for be attached to this prediction, so
+   * the model can be scored against reality instead of against the synthetic
+   * data it was trained on (roadmap checklist item 7).
+   */
+  propertyId: z.string().max(64).optional(),
 })
 
 router.post('/predict-ml', authenticate, async (req, res) => {
   const parsed = predictMlSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
+  const { propertyId, ...input } = parsed.data
+
   try {
     if (mlClient.isEnabled()) {
       // External ML service — fall back to the local model if it's down/slow.
       try {
-        const result = await mlClient.predict(parsed.data)
+        const result = await mlClient.predict(input)
         success(res, result)
+        void recordValuation({
+          input, result, modelSource: 'ml-service', context: 'pricing_engine',
+          requestedBy: req.user?.userId, propertyId,
+        })
         return
       } catch (e) {
         console.warn('[pricing] external ML service failed, falling back to local model:', (e as Error).message)
@@ -178,11 +192,50 @@ router.post('/predict-ml', authenticate, async (req, res) => {
       return
     }
 
-    const result = rentPriceModel.predict(parsed.data)
+    const result = rentPriceModel.predict(input)
     success(res, result)
+    // After the response: the estimate is a read, and failing to write the
+    // evaluation row must never turn a good answer into an error.
+    void recordValuation({
+      input, result, modelSource: 'local', context: 'pricing_engine',
+      requestedBy: req.user?.userId, propertyId,
+    })
   } catch (err) {
     console.error('[pricing] ML prediction failed:', (err as Error).message)
     error(res, 'ML prediction failed', 500)
+  }
+})
+
+/**
+ * How the model is actually doing, scored against rents that really happened
+ * (ML roadmap, checklist item 4).
+ *
+ * The model's own r2Score is computed against the data it trained on — today
+ * that is synthetically generated listings, so it measures how well a linear
+ * model recovers the formula that made them. These numbers come from logged
+ * predictions compared with observed outcomes, which is the only measure that
+ * says anything about Ghanaian rents.
+ */
+router.get('/model-evaluation', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  try {
+    const days = Math.min(3650, Math.max(1, Number(req.query.days) || 365))
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    const [summary, scores] = await Promise.all([
+      valuationLogSummary(),
+      scoreValuations({ since }),
+    ])
+    success(res, {
+      windowDays: days,
+      summary,
+      scores,
+      note: scores.length === 0
+        ? 'No valuations have a recorded outcome yet. Outcomes attach when a listing is '
+          + 'approved or an agreement is signed, so this fills in as the platform is used.'
+        : undefined,
+    })
+  } catch (err) {
+    console.error('[pricing] model evaluation failed:', (err as Error).message)
+    error(res, 'Failed to compute model evaluation', 500)
   }
 })
 

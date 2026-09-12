@@ -17,6 +17,7 @@ import { asyncHandler } from '../middleware/errorHandler.js'
 import { Property } from '../models/Property.js'
 import { PropertyReview } from '../models/PropertyReview.js'
 import { User } from '../models/User.js'
+import { attachObservedRent } from '../services/ml/valuationLog.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -235,6 +236,14 @@ router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
   if (action === 'approve') {
     property.publishedAt = new Date()
     property.rejectionReason = undefined
+    /*
+     * Ground truth for the pricing model. An approved listing is the first
+     * point at which a real, human-set asking rent for this property exists,
+     * so it becomes the observed outcome for any valuation that predicted it
+     * (ML roadmap, checklist item 7). Fire-and-forget: a moderation decision
+     * must not fail because an evaluation row could not be written.
+     */
+    void attachObservedRent(property._id.toString(), Number(property.rentAmount), 'listing_published')
   }
   if (action === 'reject' || action === 'request_changes') {
     property.rejectionReason = note || reasonCode || ''
