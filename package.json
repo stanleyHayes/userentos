@@ -18,7 +18,7 @@
     "seed:production": "npm run seed:production --prefix apps/api",
     "backfill:coordinates": "npm run backfill:coordinates --prefix apps/api",
     "e2e:install": "npm install --prefix e2e && npx --prefix e2e playwright install --with-deps chromium",
-    "e2e:dev": "npm run sync-types && MONGO_URI=${MONGO_URI:-mongodb://localhost:27017/rentos_e2e} JWT_SECRET=${JWT_SECRET:-e2e-test-secret} PAYMENTS_PROVIDER_MODE=simulated concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "e2e:dev": "npm run sync-types && MONGO_URI=${MONGO_URI:-mongodb://localhost:28018/rentos_e2e} JWT_SECRET=${JWT_SECRET:-e2e-test-secret} PAYMENTS_PROVIDER_MODE=simulated PORT=${E2E_API_PORT:-3402} VITE_PROXY_TARGET=http://localhost:${E2E_API_PORT:-3402} VITE_API_URL=/api CORS_ALLOWED_ORIGINS=http://localhost:${DEV_CLIENT_PORT:-5474},http://localhost:5475 concurrently \"npm run dev:web\" \"npm run dev:api\"",
     "e2e:test": "npm test --prefix e2e",
     "e2e:test:local": "npm run test:local --prefix e2e",
     "e2e:test:ui": "npm run test:ui --prefix e2e"

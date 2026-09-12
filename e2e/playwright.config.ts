@@ -14,7 +14,14 @@ import { defineConfig, devices } from '@playwright/test'
  * (used by `npm run test:local` which auto-detects the port via detect-port.js).
  * By default Playwright always starts a fresh isolated dev server for you.
  */
-const clientPort = process.env.DEV_CLIENT_PORT || '5174'
+/*
+ * E2E ports, deliberately clear of the dev stack (web 5280, API 3002) and of
+ * the 5173-5175 range Vite hands out by default. They used to overlap, so a
+ * running dev server was silently reused and the suite asserted against the
+ * development database.
+ */
+const clientPort = process.env.DEV_CLIENT_PORT || '5474'
+const apiPort = process.env.E2E_API_PORT || '3402'
 
 export default defineConfig({
   testDir: './tests',
@@ -66,10 +73,9 @@ export default defineConfig({
 
   webServer: {
     // Run from the monorepo root; this script boots both the Vite client and
-    // the Express API via concurrently, using the e2e database and the
-    // DEV_CLIENT_PORT client port (default 5174) to avoid collisions with
-    // other Vite dev servers.
-    command: `cd .. && DEV_CLIENT_PORT=${clientPort} npm run e2e:dev`,
+    // the Express API via concurrently, on the e2e database and the e2e ports
+    // above — clear of the dev stack so both can run at once.
+    command: `cd .. && DEV_CLIENT_PORT=${clientPort} E2E_API_PORT=${apiPort} npm run e2e:dev`,
     // Probe the API health endpoint through the client's /api proxy: the URL
     // only returns 2xx once BOTH the Vite client and the Express API are up,
     // so tests never start against a half-booted stack (login would fail with

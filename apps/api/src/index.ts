@@ -248,10 +248,23 @@ app.use((req, res, next) => {
 // DB is down so "server is up" only passes once MongoDB is connected.
 app.get('/api/health', (_req, res) => {
   const dbUp = mongoose.connection.readyState === 1
+  /*
+   * The database NAME, outside production only.
+   *
+   * Without it nothing can tell a dev API from an e2e API: both answer
+   * {status:'ok'} on the same port shape, so the Playwright port detector
+   * happily attached the whole e2e suite to a running dev server and tested
+   * the development database. Tests then passed or failed according to
+   * whichever database happened to be in front of them.
+   *
+   * Withheld in production — an internal database name is free
+   * reconnaissance and no probe out there needs it.
+   */
+  const database = process.env.NODE_ENV === 'production' ? undefined : mongoose.connection.name
   res.status(dbUp ? 200 : 503).json(
     dbUp
-      ? { status: 'ok', service: 'RentOS API', version: '0.2.0', db: 'connected' }
-      : { status: 'degraded', service: 'RentOS API', version: '0.2.0', db: 'disconnected' },
+      ? { status: 'ok', service: 'RentOS API', version: '0.2.0', db: 'connected', database }
+      : { status: 'degraded', service: 'RentOS API', version: '0.2.0', db: 'disconnected', database },
   )
 })
 

@@ -17,7 +17,9 @@ npm run e2e:dev
 ```
 
 This starts both the Vite client and the Express API server with:
-- `MONGO_URI=mongodb://localhost:27017/rentos_e2e` (isolated local DB)
+- `MONGO_URI=mongodb://localhost:28018/rentos_e2e` (isolated local DB — 28018 is
+  the `rentos-dev-mongo` container; 27017 is the port other projects' MongoDB
+  containers claim by default)
 - `PAYMENTS_PROVIDER_MODE=simulated` (auto-completes payments)
 - `JWT_SECRET=e2e-test-secret`
 

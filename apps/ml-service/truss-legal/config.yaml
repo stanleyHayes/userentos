@@ -1,0 +1,26 @@
+# Truss packaging for the RentOS rental-complaint classifier (ML roadmap §10:
+# "Rentos can progressively serve several specialised models... independently
+# deployed, versioned, monitored and scaled").
+#
+# Second model, separate deployment. It shares nothing with the pricing model
+# at runtime and is versioned on its own — which is the point of hosting them
+# independently rather than behind one endpoint.
+#
+# As with the pricing Truss, the model is NOT redefined here:
+# external_package_dirs bundles the ml-service `app` package so Baseten runs
+# the same classifier, the same feature hashing and the same thresholds that
+# the test suite and scripts/train_legal.py produced.
+model_name: rentos-complaint-classifier
+python_version: "3.11"
+
+external_package_dirs:
+  - ../app
+
+requirements:
+  - numpy>=2.5.0
+
+resources:
+  cpu: "1"
+  memory: 1Gi
+
+environment_variables: {}

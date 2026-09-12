@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, predict, train
+from app.api.routes import health, legal, predict, train
 from app.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.legal.classifier import complaint_classifier
 from app.ml.model import rent_price_model
 
 logger = get_logger(__name__)
@@ -26,6 +27,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     else:
         logger.info("No saved model at %s — train via POST /train or POST /train/seed", settings.model_path)
+
+    if complaint_classifier.load(settings.legal_model_path):
+        logger.info(
+            "Loaded complaint classifier from %s (%d examples, trained %s)",
+            settings.legal_model_path, complaint_classifier.sample_count,
+            complaint_classifier.trained_at,
+        )
+    else:
+        logger.info(
+            "No complaint classifier at %s — run scripts/train_legal.py; "
+            "/legal/classify will answer 503 until then",
+            settings.legal_model_path,
+        )
 
     if not settings.ml_api_key:
         logger.warning(
@@ -61,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(predict.router)
     app.include_router(train.router)
+    app.include_router(legal.router)
 
     return app
 

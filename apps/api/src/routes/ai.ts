@@ -15,6 +15,13 @@ import {
 } from '../services/ai.js'
 import { success, error } from '../utils/response.js'
 import { aiLimiter, publicLimiter } from '../middleware/rateLimit.js'
+import { assessAdvance } from '../services/legal/rentLaw.js'
+import {
+  LEGAL_LABELS,
+  classifyComplaint,
+  describeAdvance,
+  type Violation as LegalViolation,
+} from '../services/legal/abuseCheck.js'
 
 const router = Router()
 
@@ -73,6 +80,13 @@ interface Violation {
   maxPenalty: string
 }
 
+const ADVANCE_VIOLATION: Violation = {
+  law: LEGAL_LABELS.excessive_advance.law,
+  violation: LEGAL_LABELS.excessive_advance.title,
+  explanation: LEGAL_LABELS.excessive_advance.explanation,
+  maxPenalty: LEGAL_LABELS.excessive_advance.maxPenalty,
+}
+
 interface AbuseCheckResponse {
   isViolation: boolean
   severity: 'high' | 'medium' | 'low' | null
@@ -83,6 +97,15 @@ interface AbuseCheckResponse {
     chraj: { name: string; phone: string }
   }
   signUpCta: string
+  /**
+   * What the statute says about any advance mentioned — including when it is
+   * LAWFUL. Telling a worried tenant that three months is within the law is
+   * the most useful thing this feature does, and the keyword version could
+   * not say it.
+   */
+  advance?: { verdict: string; months?: number; message: string }
+  /** Which layers answered, so the result can be judged and reproduced. */
+  analysis?: { source: 'model+statute' | 'keywords+statute'; modelVersion?: string; abstained?: boolean }
 }
 
 // Keywords / pattern matchers for known Ghanaian rental law violations
@@ -91,18 +114,21 @@ const violationRules: Array<{
   violation: Violation
   severity: 'high' | 'medium' | 'low'
 }> = [
+  /*
+   * NOTE: there is deliberately no keyword rule for rent advance.
+   *
+   * It used to be the first rule here, matching the bare word "advance", so
+   * "my landlord asked for 3 months rent advance which I paid happily" — a
+   * lawful arrangement — was reported as an Excessive Rent Advance violation
+   * at HIGH severity, with a stated penalty of imprisonment. So was "my
+   * landlord did not ask for any advance and has been fair".
+   *
+   * Whether an advance is lawful depends on the number of months against the
+   * s.25 six-month limit. That is arithmetic, and it is done in
+   * services/legal/rentLaw.ts.
+   */
   {
-    keywords: [['advance', 'upfront', 'pay ahead', 'year advance', 'years advance', '2 year', '3 year', '1 year', '12 month', '24 month', '18 month', '8 month', '9 month', '10 month', '11 month']],
-    violation: {
-      law: 'Rent Control Act (Act 220), Section 25',
-      violation: 'Excessive Rent Advance',
-      explanation: 'Under Ghanaian law, landlords cannot demand more than 6 months advance rent. Any demand for 7 months or more is illegal, regardless of what the tenancy agreement says.',
-      maxPenalty: 'Fine up to 500 penalty units or imprisonment up to 6 months, or both',
-    },
-    severity: 'high',
-  },
-  {
-    keywords: [['evict', 'kick out', 'throw out', 'remove me', 'vacate', 'leave the house', 'leave the room', 'locked out', 'changed lock', 'change the lock', 'padlock', 'bolt the door']],
+    keywords: [['evict', 'evicting', 'kick out', 'kicked out', 'throw out', 'threw out', 'throw me out', 'remove me', 'locked out', 'lock me out', 'changed the lock', 'changed lock', 'change the lock', 'padlock', 'padlocked', 'bolt the door', 'chase me out', 'must leave', 'pack out']],
     violation: {
       law: 'Rent Control Act (Act 220), Sections 17-20',
       violation: 'Illegal Eviction',
@@ -112,7 +138,7 @@ const violationRules: Array<{
     severity: 'high',
   },
   {
-    keywords: [['increase', 'raise', 'hike', 'double', 'triple', 'went up', 'going up', 'new price', 'higher rent']],
+    keywords: [['increased', 'increase', 'raised', 'hiked', 'doubled', 'tripled', 'went up', 'going up', 'new price', 'higher rent'], ['without notice', 'no notice', 'middle of', 'arbitrar', 'immediately', 'twice this year', 'again', 'without agreement', 'without any']],
     violation: {
       law: 'Rent Control Act (Act 220), Section 25(2)',
       violation: 'Illegal Rent Increase',
@@ -122,7 +148,7 @@ const violationRules: Array<{
     severity: 'medium',
   },
   {
-    keywords: [['deposit', 'security deposit', 'caution money'], ['return', 'refund', 'give back', 'won\'t give', 'not return', 'not giving', 'kept', 'keeping', 'refuse']],
+    keywords: [['deposit', 'security deposit', 'caution money'], ['refuses to return', 'refuse to return', 'refuses to refund', 'refuse to refund', 'will not return', 'will not refund', 'won\'t give', 'won\'t return', 'not returned', 'not refunded', 'not giving', 'never returned', 'is keeping', 'has kept', 'withheld', 'withholding']],
     violation: {
       law: 'Rent Control Act (Act 220), Section 25(4)',
       violation: 'Security Deposit Violation',
@@ -132,7 +158,7 @@ const violationRules: Array<{
     severity: 'medium',
   },
   {
-    keywords: [['water', 'electricity', 'power', 'light', 'utilit', 'ecg', 'gwcl'], ['cut', 'disconnect', 'off', 'shut', 'no water', 'no light', 'no power', 'no electricity']],
+    keywords: [['water', 'electricity', 'power', 'light', 'utility', 'utilities', 'ecg', 'gwcl'], ['cut', 'cut off', 'disconnected', 'disconnect', 'switched off', 'shut off', 'removed the meter', 'no water', 'no light', 'no power', 'no electricity']],
     violation: {
       law: 'Rent Control Act (Act 220), Section 12',
       violation: 'Illegal Disconnection of Utilities (Self-Help Eviction)',
@@ -162,7 +188,7 @@ const violationRules: Array<{
     severity: 'low',
   },
   {
-    keywords: [['repair', 'fix', 'broken', 'leak', 'crack', 'roof', 'plumbing', 'toilet', 'ceiling', 'maintenance', 'mould', 'mold', 'structural', 'not fixed', 'falling apart']],
+    keywords: [['broken', 'leaking', 'leak', 'crack', 'collapsed', 'mould', 'mold', 'falling apart', 'not fixed', 'never fixed'], ['refuses to fix', 'refuse to fix', 'will not fix', 'won\'t fix', 'refuses to repair', 'will not repair', 'has ignored', 'ignores', 'nothing is done', 'nothing has been done', 'not fixed', 'never fixed', 'still not']],
     violation: {
       law: 'Rent Control Act (Act 220), Section 12(1)',
       violation: 'Failure to Maintain Premises',
@@ -188,14 +214,27 @@ const defaultContacts = {
   chraj: { name: 'Commission on Human Rights and Administrative Justice (CHRAJ)', phone: '+233 30 266 2150' },
 }
 
-function analyzeQuery(query: string): AbuseCheckResponse {
+/** Word-boundary phrase match, so "off" does not match "office". */
+function matchesPhrase(haystack: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(haystack)
+}
+
+function analyzeQuery(
+  query: string,
+  options: { useKeywordRules?: boolean } = {},
+): AbuseCheckResponse {
+  const { useKeywordRules = true } = options
   const lowerQuery = query.toLowerCase()
   const matchedViolations: Array<{ violation: Violation; severity: 'high' | 'medium' | 'low' }> = []
 
-  for (const rule of violationRules) {
-    // Each group in rule.keywords must have at least one matching keyword
+  for (const rule of useKeywordRules ? violationRules : []) {
+    // Each group in rule.keywords must have at least one matching keyword.
+    // Matched on word boundaries, not as substrings: `includes('off')` was
+    // true for "office" and `includes('fix')` for "fixed the tap the same
+    // day", which is how lawful situations became accusations.
     const allGroupsMatch = rule.keywords.every(group =>
-      group.some(keyword => lowerQuery.includes(keyword))
+      group.some(keyword => matchesPhrase(lowerQuery, keyword))
     )
 
     if (allGroupsMatch) {
@@ -203,21 +242,12 @@ function analyzeQuery(query: string): AbuseCheckResponse {
     }
   }
 
-  // Also check for the common "advance + amount" pattern specifically
-  const advancePattern = /(?:advance|upfront|pay ahead).*?(\d+)\s*(?:month|year)/i
-  const advanceMatch = query.match(advancePattern)
-  if (advanceMatch) {
-    const unit = advanceMatch[0].toLowerCase().includes('year') ? 12 : 1
-    const amount = parseInt(advanceMatch[1], 10) * unit
-    if (amount > 6) {
-      const alreadyHasAdvanceViolation = matchedViolations.some(v => v.violation.violation === 'Excessive Rent Advance')
-      if (!alreadyHasAdvanceViolation) {
-        matchedViolations.push({
-          violation: violationRules[0].violation,
-          severity: 'high',
-        })
-      }
-    }
+  // Rent advance is decided by statute, not keywords: assessAdvance reads the
+  // number of months and compares it with the s.25 limit. It can also return
+  // "lawful", which no keyword rule could ever do.
+  const advance = assessAdvance(query)
+  if (advance.kind === 'violation') {
+    matchedViolations.push({ violation: ADVANCE_VIOLATION, severity: 'high' })
   }
 
   if (matchedViolations.length === 0) {
@@ -273,7 +303,66 @@ router.post('/abuse-check', publicLimiter, async (req, res) => {
     return
   }
 
-  const result = analyzeQuery(parsed.data.query)
+  const query = parsed.data.query
+
+  /*
+   * The classifier is the better instrument, so when it answers, the keyword
+   * rules stand down entirely rather than adding findings it declined to
+   * make. They disagree in exactly the direction that matters: the keyword
+   * rules said "returned my full deposit within two weeks" was a Security
+   * Deposit Violation, while the classifier — correctly — said nothing.
+   *
+   * They remain as the fallback for when the ML service is unreachable,
+   * because a public page must still answer.
+   */
+  const classified = await classifyComplaint(query)
+  const useKeywords = !classified || classified.abstained
+  const result = analyzeQuery(query, { useKeywordRules: useKeywords })
+
+  // The statutory reading of the advance, attached whatever the classifier
+  // says — including "this is lawful".
+  const advance = describeAdvance(query)
+  if (advance) result.advance = advance
+
+  /*
+   * The classifier names the SUBJECT of the complaint; it never decides that
+   * a violation occurred. Rent advance is the clear case: the model may say
+   * "this is about advance", but only s.25 arithmetic adds the violation, so
+   * a lawful three-month advance can never be turned into an accusation by a
+   * confident model.
+   */
+  if (classified && !classified.abstained) {
+    const known = new Set(result.violations.map(v => v.violation))
+    for (const label of classified.labels) {
+      const entry = LEGAL_LABELS[label]
+      if (!entry) continue
+      if (label === 'excessive_advance') continue // statute decides this one
+      if (known.has(entry.title)) continue
+      result.violations.push({
+        law: entry.law,
+        violation: entry.title,
+        explanation: entry.explanation,
+        maxPenalty: entry.maxPenalty,
+      } satisfies LegalViolation)
+      known.add(entry.title)
+    }
+
+    if (result.violations.length > 0) {
+      result.isViolation = true
+      const order: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      result.severity = result.violations.reduce<'high' | 'medium' | 'low'>((max, v) => {
+        const key = Object.values(LEGAL_LABELS).find(l => l.title === v.violation)?.severity ?? 'low'
+        return order[key] > order[max] ? key : max
+      }, 'low')
+    }
+  }
+
+  result.analysis = {
+    source: classified ? 'model+statute' : 'keywords+statute',
+    modelVersion: classified?.modelVersion,
+    abstained: classified?.abstained,
+  }
+
   success(res, result)
 })
 

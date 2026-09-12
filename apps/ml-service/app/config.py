@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Where the trained model artifact is persisted.
     model_path: str = "data/pricing-model.json"
 
+    # Rental-complaint classifier artifact (npz).
+    legal_model_path: str = "data/legal-classifier.npz"
+
     # Comma-separated CORS origins ("*" allows everything).
     cors_origins: str = "*"
 
