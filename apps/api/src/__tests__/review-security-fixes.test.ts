@@ -59,6 +59,13 @@ describe('marketplace checkout cannot be told its own discount', () => {
     expect(init).toMatch(/if \(!coupon\.valid\)/)
   })
 
+  it('requires a session — it was reachable with no credentials at all', () => {
+    // optionalAuth is global, so req.user was simply undefined and the handler
+    // carried on. A route that asks a PSP to collect money must know who asks,
+    // and per-user coupon limits are unenforceable against an anonymous caller.
+    expect(src).toMatch(/router\.post\('\/initialize', authenticate,/)
+  })
+
   it('feeds the split the derived discount, never the input', () => {
     const init = src.slice(src.indexOf("router.post('/initialize'"))
     const call = init.slice(init.indexOf('calculateSplit('), init.indexOf('const reference'))

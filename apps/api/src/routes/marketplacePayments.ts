@@ -159,7 +159,22 @@ const initSchema = z.object({
  * The fee percentage is read from the seller's plan and SNAPSHOTTED onto the
  * transaction, so a later plan change never rewrites this payment's economics.
  */
-router.post('/initialize', asyncHandler(async (req, res) => {
+/*
+ * Authenticated. This was reachable with no credentials at all — `optionalAuth`
+ * is global, so `req.user` was simply undefined and the handler carried on.
+ * A route that asks a PSP to collect money should know who is asking, and
+ * per-user coupon limits are unenforceable against an anonymous caller.
+ * Nothing in apps/web or apps/mobile calls this endpoint, so requiring a
+ * session breaks no existing flow.
+ *
+ * KNOWN GAP, deliberately not papered over: `amount` is still supplied by the
+ * caller and there is no order or quote to check it against, so an
+ * authenticated buyer can name their own price. Closing that needs a
+ * server-side order/quote record — a design decision, not a one-line guard —
+ * and inventing a price rule here would be guessing at policy. See the review
+ * notes; this is the top open item on this route.
+ */
+router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   const parsed = initSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const input = parsed.data
@@ -207,7 +222,7 @@ router.post('/initialize', asyncHandler(async (req, res) => {
   if (input.couponCode) {
     const coupon = await validateCoupon({
       code: input.couponCode,
-      userId: req.user?.userId ?? input.email,
+      userId: req.user!.userId,
       amount: input.amount,
       sellerId: input.sellerId,
       propertyId: input.propertyId,
@@ -229,7 +244,7 @@ router.post('/initialize', asyncHandler(async (req, res) => {
 
   const transaction = await MarketplaceTransaction.create({
     reference,
-    buyerId: req.user?.userId,
+    buyerId: req.user!.userId,
     buyerEmail: input.email,
     sellerId: input.sellerId,
     storefrontId: input.storefrontId,

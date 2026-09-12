@@ -142,10 +142,25 @@ export default function SavingsScreen() {
         setTimeout(() => void load(), 3500)
         setTimeout(() => void load(), 8000)
       } else {
-        await api.post('/savings/wallet/withdraw', { amount: Number(walletAmount), method: walletMethod })
+        /*
+         * Withdrawals live on the payout rail, not on savings.
+         *
+         * POST /savings/wallet/withdraw has been retired server-side: it now
+         * answers 410 with "Use POST /api/payouts ...", and this screen showed
+         * that developer message to the user in an Alert. The payout rail
+         * debits the wallet, sends the money through the PSP and refunds if
+         * the transfer fails, which is why the old endpoint refuses to act.
+         *
+         * It takes only an amount — the destination comes from the user's
+         * saved payout account — so `method` is no longer sent.
+         */
+        await api.post('/payouts', { amount: Number(walletAmount) })
         setShowWalletModal(false)
         setWalletMethod('')
-        Alert.alert('Success', 'Withdrawal successful')
+        Alert.alert(
+          'Withdrawal requested',
+          'Your payout is being reviewed. The money is sent to your saved payout account once approved.',
+        )
         await load()
       }
     } catch (e) {
