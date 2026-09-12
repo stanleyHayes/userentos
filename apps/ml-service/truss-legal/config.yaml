@@ -11,7 +11,9 @@
 # the same classifier, the same feature hashing and the same thresholds that
 # the test suite and scripts/train_legal.py produced.
 model_name: rentos-complaint-classifier
-python_version: "3.11"
+# The CLI expects the pyNNN form, not "3.11" — the docs show the latter.
+# 3.11 is the floor: the model code uses datetime.UTC and `X | None`.
+python_version: py311
 
 external_package_dirs:
   - ../app

@@ -71,3 +71,60 @@ describe('payment rail availability', () => {
     expect(isMethodAvailable('bank_transfer')).toBe(true)
   })
 })
+
+describe('test key in live mode', () => {
+  /**
+   * PAYMENTS_PROVIDER_MODE=live with sk_test_ is a real integration against
+   * Paystack's TEST environment: the webhook flow, signature check and
+   * settlement all run the production code path, and no money moves. Right
+   * for staging, and the single most dangerous configuration to reach real
+   * tenants — charges "succeed" and the platform marks rent paid.
+   */
+  it('warns when live mode runs on a test key', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('PAYMENTS_PROVIDER_MODE', 'live')
+    vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_abc123')
+
+    const { warnOnTestKeyInLiveMode } = await import('../services/payments/index.js')
+    warnOnTestKeyInLiveMode()
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('NO REAL MONEY WILL MOVE'))
+    warn.mockRestore()
+  })
+
+  it('stays silent on a live key', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('PAYMENTS_PROVIDER_MODE', 'live')
+    vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_live_abc123')
+
+    const { warnOnTestKeyInLiveMode } = await import('../services/payments/index.js')
+    warnOnTestKeyInLiveMode()
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('warns when live mode has no key at all', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('PAYMENTS_PROVIDER_MODE', 'live')
+    vi.stubEnv('PAYSTACK_SECRET_KEY', '')
+
+    const { warnOnTestKeyInLiveMode } = await import('../services/payments/index.js')
+    warnOnTestKeyInLiveMode()
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('every collection will fail'))
+    warn.mockRestore()
+  })
+
+  it('says nothing in simulated mode, where a test key is simply correct', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('PAYMENTS_PROVIDER_MODE', 'simulated')
+    vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_abc123')
+
+    const { warnOnTestKeyInLiveMode } = await import('../services/payments/index.js')
+    warnOnTestKeyInLiveMode()
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})

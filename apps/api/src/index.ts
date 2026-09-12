@@ -19,6 +19,7 @@ import { authenticate, optionalAuth, requireRole } from './middleware/auth.js'
 import { success } from './utils/response.js'
 import { runBootstrap } from './models/BootstrapState.js'
 import { rateLimitBackend } from './middleware/rateLimit.js'
+import { warnOnTestKeyInLiveMode } from './services/payments/index.js'
 import { basetenClient } from './services/ml/baseten.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
@@ -525,6 +526,7 @@ async function start() {
       // are counted per instance, so the effective limit is N times the
       // number configured.
       logger.info(`Rate limiting: ${rateLimitBackend()}-backed`)
+      warnOnTestKeyInLiveMode()
 
       /*
        * Absorb the Baseten cold start here rather than on a user's first

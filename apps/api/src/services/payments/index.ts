@@ -52,6 +52,35 @@ export function isMethodAvailable(method: ProviderId): boolean {
   return true
 }
 
+/**
+ * Warn when live mode is running on a Paystack TEST key.
+ *
+ * `PAYMENTS_PROVIDER_MODE=live` with `sk_test_` is a real integration against
+ * Paystack's test environment — the webhook flow, the signature check and
+ * settlement all exercise the production code path. That is exactly right for
+ * staging, and it is the single most dangerous configuration to reach real
+ * tenants: charges "succeed", the platform marks rent paid, and no money has
+ * moved. The difference is one character in an env var, so it should never be
+ * silent.
+ *
+ * Called once at boot.
+ */
+export function warnOnTestKeyInLiveMode(): void {
+  if (getMode() !== 'live') return
+  const key = envOptional('PAYSTACK_SECRET_KEY') ?? ''
+  if (!key) {
+    console.warn('[Payments] WARNING: live mode with no PAYSTACK_SECRET_KEY — every collection will fail.')
+    return
+  }
+  if (key.startsWith('sk_test_')) {
+    console.warn(
+      '[Payments] WARNING: live mode is using a Paystack TEST key (sk_test_). '
+      + 'Charges will appear to succeed and NO REAL MONEY WILL MOVE. '
+      + 'Fine for staging; swap in sk_live_ before real tenants pay.',
+    )
+  }
+}
+
 /** The rails a payer may actually choose right now. */
 export function availableMethods(): ProviderId[] {
   return (['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer'] as ProviderId[])

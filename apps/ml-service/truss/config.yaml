@@ -6,7 +6,9 @@
 # suite run. A second copy of the feature vector is how train/serve skew
 # starts — two of the three bugs fixed in this model came from precisely that.
 model_name: rentos-rent-pricing
-python_version: "3.11"
+# The CLI expects the pyNNN form, not "3.11" — the docs show the latter.
+# 3.11 is the floor: the model code uses datetime.UTC and `X | None`.
+python_version: py311
 
 # Bundles apps/ml-service/app as an importable `app` package.
 external_package_dirs:
