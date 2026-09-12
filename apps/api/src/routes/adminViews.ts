@@ -94,7 +94,7 @@ router.get('/financing/contracts', adminAuth, adminRole, adminPerm, async (req, 
   const [total, contracts] = await Promise.all([
     FinancingContract.countDocuments(filter),
     FinancingContract.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(pageSize)
       .lean(),
@@ -191,7 +191,7 @@ router.get('/maintenance', adminAuth, adminRole, adminPerm, async (req, res) => 
   const [total, requests] = await Promise.all([
     MaintenanceRequest.countDocuments(filter),
     MaintenanceRequest.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(pageSize)
       .lean(),
@@ -242,7 +242,7 @@ router.get('/insurance/policies', adminAuth, adminRole, adminPerm, async (req, r
   const [total, policies] = await Promise.all([
     InsurancePolicy.countDocuments(filter),
     InsurancePolicy.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(pageSize)
       .lean(),

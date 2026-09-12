@@ -134,14 +134,27 @@ export const chatController = {
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 50)))
     const skip = (page - 1) * pageSize
 
-    const [messages, total] = await Promise.all([
+    /*
+     * Page backwards from the newest message.
+     *
+     * This sorted OLDEST first and the client never paged, so opening a
+     * conversation with 200 messages showed the first 50 — the beginning of
+     * the history — and the recent messages were unreachable. A chat has to
+     * open at the bottom.
+     *
+     * So: select descending (page 1 = the 50 most recent, page 2 = the 50
+     * before those), then reverse for the response so the client still
+     * receives them in chronological order and needs no change.
+     */
+    const [newestFirst, total] = await Promise.all([
       Message.find({ conversationId })
-        .sort({ createdAt: 1 })
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(pageSize)
         .lean(),
       Message.countDocuments({ conversationId }),
     ])
+    const messages = newestFirst.reverse()
 
     // Gather sender names
     const senderIds = [...new Set(messages.map((m) => m.senderId))]
