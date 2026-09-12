@@ -4,7 +4,15 @@ Mirrors server/src/services/ml/features.ts — keep the feature order in sync
 with FEATURE_NAMES; the persisted model weights depend on it.
 """
 
+import math
 from typing import Any
+
+# Marker for "the caller did not tell us", as distinct from a real zero.
+# The model imputes these with the training mean of the column; see
+# RentPriceModel._predict_unlocked. Imputing 0 instead reads "unknown year
+# built" as "built in year 0" and "city we have never seen" as "a city where
+# rent is GHS 0", which a linear model turns into a wildly low price.
+MISSING = math.nan
 
 FEATURE_NAMES = [
     "bedrooms",
@@ -83,8 +91,9 @@ def extract_features(input_data: dict[str, Any], encodings: EncodingMaps) -> lis
     amenities = input_data.get("amenities") or []
 
     def _num(key: str) -> float:
+        """A supplied 0 means zero; an absent field means unknown."""
         value = input_data.get(key)
-        return float(value) if value is not None else 0.0
+        return float(value) if value is not None else MISSING
 
     return [
         _num("bedrooms"),
@@ -93,10 +102,14 @@ def extract_features(input_data: dict[str, Any], encodings: EncodingMaps) -> lis
         1.0 if input_data.get("furnished") else 0.0,
         _num("parkingSpaces"),
         _num("advanceMonths"),
-        float(len(amenities)),
-        encodings["city"].get(city, 0.0),
-        encodings["type"].get(prop_type, 0.0),
-        encodings["region"].get(region, 0.0),
+        float(len(amenities)),  # an empty/absent list means no amenities, not unknown
+        # A city/type/region the model never saw in training is unknown, not
+        # worthless. These are target-mean encodings in the thousands of GHS,
+        # so defaulting to 0.0 knocked ~65% off the price of every listing in
+        # an unseen town.
+        encodings["city"].get(city, MISSING),
+        encodings["type"].get(prop_type, MISSING),
+        encodings["region"].get(region, MISSING),
         1.0 if _has_keyword(amenities, ["water"]) else 0.0,
         1.0 if _has_keyword(amenities, ["electric", "power"]) else 0.0,
         1.0 if _has_keyword(amenities, ["security", "guard", "cctv"]) else 0.0,

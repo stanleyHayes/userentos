@@ -23,6 +23,26 @@ export const FEATURE_NAMES = [
 
 export type FeatureVector = number[]
 
+/**
+ * "The caller did not tell us", as distinct from a real zero.
+ *
+ * The model imputes these with the training mean of the column (see
+ * pricingModel.predict). Imputing 0 instead reads "unknown year built" as
+ * "built in year 0" and "a city we have never seen" as "a city where rent is
+ * GHS 0" — and since this is a linear model, that is a confident, badly low
+ * price rather than an error. analyzePropertyPricing sends 7 of the 13
+ * fields, and was getting an estimate ~39% under the same property described
+ * in full.
+ */
+export const MISSING = NaN
+
+/** A supplied 0 means zero; an absent field means unknown. */
+function num(value: unknown): number {
+  if (value === undefined || value === null || value === '') return MISSING
+  const n = Number(value)
+  return Number.isFinite(n) ? n : MISSING
+}
+
 export interface Encodings {
   city: Record<string, number>
   type: Record<string, number>
@@ -108,23 +128,25 @@ export function extractFeatures(input: PropertyInput, encodings: Encodings): Fea
   const amenities = input.amenities || []
 
   return [
-    Number(input.bedrooms) || 0,
-    Number(input.bathrooms) || 0,
-    Number(input.floorArea) || 0,
+    num(input.bedrooms),
+    num(input.bathrooms),
+    num(input.floorArea),
     input.furnished ? 1 : 0,
-    Number(input.parkingSpaces) || 0,
-    Number(input.advanceMonths) || 0,
-    amenities.length,
-    encodings.city[cityKey] ?? 0,
-    encodings.type[typeKey] ?? 0,
-    encodings.region[regionKey] ?? 0,
+    num(input.parkingSpaces),
+    num(input.advanceMonths),
+    amenities.length, // an empty/absent list means no amenities, not unknown
+    // A city/type/region never seen in training is unknown, not worthless:
+    // these are target-mean encodings in the thousands of GHS.
+    encodings.city[cityKey] ?? MISSING,
+    encodings.type[typeKey] ?? MISSING,
+    encodings.region[regionKey] ?? MISSING,
     hasKeyword(amenities, ['water']) ? 1 : 0,
     hasKeyword(amenities, ['electric', 'power']) ? 1 : 0,
     hasKeyword(amenities, ['security', 'guard', 'cctv']) ? 1 : 0,
     hasKeyword(amenities, ['wifi', 'internet']) ? 1 : 0,
     hasKeyword(amenities, ['ac', 'air condition', 'aircond']) ? 1 : 0,
-    Number(input.floor) || 0,
-    Number(input.yearBuilt) || 0,
+    num(input.floor),
+    num(input.yearBuilt),
     input.stayType === 'short_stay' ? 1 : 0,
   ]
 }

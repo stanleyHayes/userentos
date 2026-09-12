@@ -123,6 +123,27 @@ export class RentPriceModel {
     const n = X.length
     const m = X[0].length
 
+    // Impute "unknown" (NaN from features.MISSING) with the column mean,
+    // which is the neutral value: the bias term subtracts
+    // sum(weight * featureMean), so an imputed feature contributes exactly
+    // what the bias takes back out and the estimate falls through to what the
+    // other features say. Property documents routinely omit floorArea or
+    // yearBuilt, and those rows used to train the model on a literal 0.
+    const columnMeans: number[] = Array(m).fill(0)
+    for (let j = 0; j < m; j++) {
+      let sum = 0
+      let count = 0
+      for (const row of X) {
+        if (Number.isFinite(row[j])) { sum += row[j]; count++ }
+      }
+      columnMeans[j] = count > 0 ? sum / count : 0
+    }
+    for (const row of X) {
+      for (let j = 0; j < m; j++) {
+        if (!Number.isFinite(row[j])) row[j] = columnMeans[j]
+      }
+    }
+
     // Compute feature means and stds for normalization
     this.featureMeans = Array(m).fill(0)
     this.featureStds = Array(m).fill(0)
@@ -249,6 +270,13 @@ export class RentPriceModel {
     if (!this.isTrained) throw new Error('Model not trained')
 
     const features = extractFeatures(input, this.encodings)
+    // Same imputation as training. Without it an omitted optional field
+    // entered the model as 0 — "unknown year built" priced as year 0 — and
+    // the caller got a confident, badly low number with no warning.
+    for (let j = 0; j < features.length; j++) {
+      if (!Number.isFinite(features[j])) features[j] = this.featureMeans[j] ?? 0
+    }
+
     const predictedRent = this.weights.reduce((s, w, j) => s + w * features[j], 0) + this.bias
     const clampedRent = Math.max(0, predictedRent)
 

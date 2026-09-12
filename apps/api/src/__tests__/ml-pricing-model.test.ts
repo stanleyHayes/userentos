@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { RentPriceModel } from '../services/ml/pricingModel.js'
+import { extractFeatures, FEATURE_NAMES } from '../services/ml/features.js'
 import type { IProperty } from '../models/Property.js'
 
 function makeProperty(overrides: Partial<IProperty> = {}): IProperty {
@@ -196,5 +197,97 @@ describe('RentPriceModel', () => {
       const model2 = new RentPriceModel()
       expect(model2.load('/tmp/nonexistent-model.json')).toBe(false)
     })
+  })
+})
+
+describe('missing vs zero feature values', () => {
+  /**
+   * Regression: extractFeatures used `Number(x) || 0` and `encodings[k] ?? 0`,
+   * so any field the caller omitted entered the model as a literal 0 —
+   * "unknown year built" priced as year 0, "a city we have never seen" as a
+   * city where rent is GHS 0. analyzePropertyPricing sends 7 of the 13 fields
+   * and was getting an estimate far below the same property described in full.
+   */
+  function trainingSet(): IProperty[] {
+    const cities: [string, string, number][] = [
+      ['Accra', 'Greater Accra', 3200],
+      ['Kumasi', 'Ashanti', 2100],
+      ['Tamale', 'Northern', 1300],
+    ]
+    const props: IProperty[] = []
+    for (let i = 0; i < 60; i++) {
+      const [city, region, base] = cities[i % 3]
+      props.push(makeProperty({
+        address: { street: 'Test St', city, region },
+        rentAmount: base + (i % 5) * 150,
+        bedrooms: 1 + (i % 4),
+        bathrooms: 1 + (i % 3),
+        floorArea: 60 + i,
+        yearBuilt: 2010 + (i % 10),
+        floor: i % 5,
+        parkingSpaces: i % 3,
+        advanceMonths: 1 + (i % 6),
+      }) as IProperty)
+    }
+    return props
+  }
+
+  it('treats an omitted field as unknown, not as zero', () => {
+    const model = new RentPriceModel()
+    model.train(trainingSet(), { maxEpochs: 800 })
+
+    const full = {
+      city: 'Accra', type: 'apartment', bedrooms: 2, bathrooms: 1,
+      floorArea: 80, furnished: false, parkingSpaces: 1, advanceMonths: 2,
+      amenities: [], region: 'Greater Accra', floor: 1, yearBuilt: 2015,
+      stayType: 'long_stay' as const,
+    }
+    const baseline = model.predict(full).predictedRent
+    expect(baseline).toBeGreaterThan(500)
+
+    // What analyzePropertyPricing actually sends.
+    const partial = {
+      city: 'Accra', type: 'apartment', bedrooms: 2, bathrooms: 1,
+      floorArea: 80, furnished: false, amenities: [],
+    }
+    const got = model.predict(partial).predictedRent
+    expect(Math.abs(got - baseline) / baseline).toBeLessThan(0.25)
+  })
+
+  it('prices an unseen city near the average rather than at zero', () => {
+    const model = new RentPriceModel()
+    model.train(trainingSet(), { maxEpochs: 800 })
+
+    const base = {
+      city: 'Accra', type: 'apartment', bedrooms: 2, bathrooms: 1,
+      floorArea: 80, region: 'Greater Accra', yearBuilt: 2015,
+      stayType: 'long_stay' as const,
+    }
+    const known = model.predict(base).predictedRent
+    const unseen = model.predict({ ...base, city: 'Nsawam' }).predictedRent
+
+    expect(unseen).toBeGreaterThan(known * 0.5)
+
+    // The mechanism, asserted directly so this does not depend on how much
+    // the city encoding happens to be worth in a given training set: an
+    // unseen city must extract as MISSING for the model to impute it.
+    const cityIdx = FEATURE_NAMES.indexOf('cityEncoded')
+    const raw = extractFeatures({ ...base, city: 'Nsawam' }, model.encodings)
+    expect(Number.isNaN(raw[cityIdx])).toBe(true)
+    expect(Number.isNaN(extractFeatures(base, model.encodings)[cityIdx])).toBe(false)
+  })
+
+  it('does not swallow a deliberate zero', () => {
+    const model = new RentPriceModel()
+    model.train(trainingSet(), { maxEpochs: 800 })
+
+    const base = {
+      city: 'Accra', type: 'apartment', bedrooms: 2, bathrooms: 1,
+      floorArea: 80, region: 'Greater Accra', yearBuilt: 2015,
+      stayType: 'long_stay' as const,
+    }
+    const explicitZero = model.predict({ ...base, parkingSpaces: 0, floor: 0 }).predictedRent
+    const omitted = model.predict(base).predictedRent
+    expect(explicitZero).not.toBe(omitted)
   })
 })

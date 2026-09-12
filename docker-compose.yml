@@ -41,7 +41,10 @@ services:
 
   ml-service:
     build:
-      context: ./ml-service
+      # apps/ml-service, not ./ml-service — the apps moved under apps/ and
+      # this path was never updated, so `docker compose up` failed at build.
+      # Nothing caught it: CI builds the root Dockerfile only.
+      context: ./apps/ml-service
       dockerfile: Dockerfile
     container_name: rentos-ml-service
     # No published port — only reachable from the api container on the internal

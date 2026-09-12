@@ -5,6 +5,7 @@ the previous code before the fix landed.
 """
 
 import json
+import math
 import os
 
 import numpy as np
@@ -15,7 +16,7 @@ from starlette.requests import Request
 
 from app.config import get_settings
 from app.main import create_app
-from app.ml.features import FEATURE_NAMES
+from app.ml.features import FEATURE_NAMES, extract_features
 from app.ml.model import MAX_RENT, RentPriceModel
 from app.schemas.pricing import TrainRequest
 from app.seed.generator import generate_properties
@@ -193,3 +194,83 @@ def test_blank_api_key_env_is_treated_as_unset(monkeypatch):
 ])
 def test_predict_rejects_out_of_range_input(client, payload):
     assert client.post("/predict", json=payload).status_code == 422
+
+
+def test_omitted_optional_field_barely_moves_the_estimate(trained_model):  # noqa: F811
+    """An absent field is unknown, not zero.
+
+    `_num` returned 0.0 for any field the caller left out, so "yearBuilt not
+    supplied" entered the linear model as year 0 and "city not in training"
+    as a city where rent is GHS 0. services/pricing.ts sends seven of the
+    thirteen fields, and was getting an estimate ~39% below the same property
+    described in full.
+    """
+    full = {
+        "bedrooms": 2, "bathrooms": 2, "floorArea": 95, "furnished": False,
+        "parkingSpaces": 1, "advanceMonths": 3,
+        "amenities": ["Water", "Electricity", "Security"], "city": "Accra",
+        "type": "apartment", "region": "Greater Accra", "floor": 2,
+        "yearBuilt": 2018, "stayType": "long_stay",
+    }
+    baseline = trained_model.predict(full)["predictedRent"]
+
+    # The mechanism, which is what actually matters: an omitted field must
+    # reach the model as the training mean, not as 0. Asserted directly so the
+    # test does not depend on how much any one feature happens to be worth.
+    for dropped in ("yearBuilt", "floorArea", "parkingSpaces", "advanceMonths", "floor"):
+        idx = FEATURE_NAMES.index(dropped)
+        raw = extract_features({k: v for k, v in full.items() if k != dropped},
+                               trained_model.encodings)
+        assert math.isnan(raw[idx]), f"{dropped} should extract as MISSING"
+
+    # And the estimate stays in the same neighbourhood. 25%, not 5%: dropping
+    # `region` legitimately pulls an Accra property toward the national
+    # average, because region carries real signal. The bug was the other
+    # thing — a 39% collapse from imputing zeros.
+    for dropped in ("yearBuilt", "floorArea", "region", "floor", "parkingSpaces", "advanceMonths"):
+        partial = {k: v for k, v in full.items() if k != dropped}
+        got = trained_model.predict(partial)["predictedRent"]
+        assert abs(got - baseline) / baseline < 0.25, f"omitting {dropped}: {got} vs {baseline}"
+
+    # The payload services/pricing.ts actually sends: 7 of the 13 fields.
+    node_shaped = {k: full[k] for k in
+                   ("city", "type", "bedrooms", "bathrooms", "floorArea", "furnished", "amenities")}
+    got = trained_model.predict(node_shaped)["predictedRent"]
+    assert abs(got - baseline) / baseline < 0.25, f"node-shaped: {got} vs {baseline}"
+
+
+def test_unknown_city_falls_back_to_the_average(trained_model):  # noqa: F811
+    """An unseen city priced at the encoding's 0.0 default, i.e. ~65% low."""
+    full = {"bedrooms": 2, "bathrooms": 2, "floorArea": 95, "city": "Accra",
+            "type": "apartment", "region": "Greater Accra", "yearBuilt": 2018}
+    known = trained_model.predict(full)["predictedRent"]
+    unknown = trained_model.predict({**full, "city": "Nsawam"})["predictedRent"]
+
+    # Not equal — Accra is genuinely dearer than the national average — but
+    # within the same order of magnitude rather than a near-zero.
+    assert unknown > known * 0.5
+
+
+def test_supplied_zero_is_not_treated_as_missing(trained_model):  # noqa: F811
+    """Imputation must not swallow a deliberate 0 (ground floor, no parking)."""
+    base = {"bedrooms": 2, "bathrooms": 2, "city": "Accra", "type": "apartment",
+            "region": "Greater Accra", "floorArea": 95, "yearBuilt": 2018}
+    explicit_zero = trained_model.predict({**base, "parkingSpaces": 0, "floor": 0})
+    omitted = trained_model.predict(base)
+    assert explicit_zero["predictedRent"] != omitted["predictedRent"]
+
+
+def test_training_imputes_missing_property_fields():
+    """Mongo documents routinely omit floorArea/yearBuilt; those rows used to
+    train the model on a literal 0, dragging the column mean toward zero."""
+    props = generate_properties(200, seed=9)
+    for p in props[:100]:  # half the corpus is missing two fields
+        p.pop("yearBuilt")
+        p.pop("floorArea")
+
+    model = RentPriceModel()
+    model.train(props, max_epochs=500)
+
+    year_mean = model.feature_means[FEATURE_NAMES.index("yearBuilt")]
+    assert 1985 <= year_mean <= 2026, f"mean year built imputed as {year_mean}"
+    assert model.r2_score > 0.5

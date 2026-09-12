@@ -11,6 +11,7 @@ linear-in-price model still load (targetTransform defaults to "linear").
 import json
 import os
 import threading
+import warnings
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,6 +39,13 @@ MAX_LOG_RENT = float(np.log(MAX_RENT))
 # A feature column whose training std falls below this carries no signal; see
 # _train_unlocked. Mirrors the 1e-6 threshold in pricingModel.ts.
 CONSTANT_STD_EPS = 1e-6
+
+
+def _nanmean(X: np.ndarray) -> np.ndarray:
+    """Column means ignoring NaN; an all-NaN column yields NaN, not a warning."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        return np.nanmean(X, axis=0)
 
 
 class RentPriceModel:
@@ -96,6 +104,15 @@ class RentPriceModel:
             dtype=np.float64,
         )
         y = np.array([float(p["rentAmount"]) for p in valid], dtype=np.float64)
+
+        # Impute "unknown" (NaN from features.MISSING) with the column mean,
+        # which is the neutral value: the bias term below subtracts
+        # weights @ feature_means, so an imputed feature contributes exactly
+        # what the bias takes back out and the estimate falls through to what
+        # the other features say. Mongo documents routinely omit floorArea or
+        # yearBuilt, and those rows used to train the model on a literal 0.
+        column_means = np.nan_to_num(_nanmean(X), nan=0.0)
+        X = np.where(np.isnan(X), column_means, X)
 
         n, m = X.shape
 
@@ -203,6 +220,14 @@ class RentPriceModel:
             raise RuntimeError("Model not trained")
 
         features = np.array(extract_features(input_data, self.encodings), dtype=np.float64)
+        # Same imputation as training. Without it an omitted optional field
+        # entered the model as 0 — "unknown year built" priced as year 0 —
+        # and the caller got a confident, badly low number with no warning.
+        # Legacy artifacts without usable means fall back to 0 as before.
+        if self.feature_means is not None and self.feature_means.shape == features.shape:
+            features = np.where(np.isnan(features), self.feature_means, features)
+        features = np.nan_to_num(features, nan=0.0)
+
         raw = float(features @ self.weights + self.bias)
         if self.target_transform == "log":
             # np.exp overflows to inf past ~709, and round(inf) raises
