@@ -248,7 +248,17 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
 // ─── Admin queue ───
 
-router.get('/admin/queue', authenticate, requirePermission('payments:view'), asyncHandler(async (req, res) => {
+/*
+ * payments:process, matching approve and decline below.
+ *
+ * This was gated on payments:view, which government, legal_officer and
+ * financier all hold by default (types/shared.ts ROLE_DEFAULT_PERMISSIONS) —
+ * so three roles with no business in the payout pipeline could read the whole
+ * queue, including every payee's destination account number and phone. The
+ * two actions on this queue already require payments:process; reading it
+ * should not be the weakest link beside them.
+ */
+router.get('/admin/queue', authenticate, requirePermission('payments:process'), asyncHandler(async (req, res) => {
   // Narrow the query param to the enum — an arbitrary string must never reach
   // the query, and an unknown one falls back to the queue that matters.
   const requested = typeof req.query.status === 'string' ? req.query.status : ''

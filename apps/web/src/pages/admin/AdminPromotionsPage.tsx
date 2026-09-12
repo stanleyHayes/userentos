@@ -533,7 +533,7 @@ export function AdminPromotionsPage() {
                       {state === 'disabled' ? (
                         <span className="text-[11px] text-muted dark:text-gray-500">Already off</span>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => setDisabling(promotion)}>
+                        <Button size="sm" variant="outline" onClick={() => { setReason(''); setDisabling(promotion) }}>
                           <Ban size={14} /> Switch off
                         </Button>
                       )}
@@ -659,7 +659,8 @@ export function AdminPromotionsPage() {
         </div>
       </Modal>
 
-      <Modal open={Boolean(disabling)} onClose={() => setDisabling(null)} title="Switch this promotion off">
+      {/* Same reset-on-open/close as the payout decline modal. */}
+      <Modal open={Boolean(disabling)} onClose={() => { setDisabling(null); setReason('') }} title="Switch this promotion off">
         <div className="space-y-4">
           <p className="text-sm text-muted dark:text-gray-400">
             {disabling

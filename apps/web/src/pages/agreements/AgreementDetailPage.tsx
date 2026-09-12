@@ -10,7 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
-import { useAgreements, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
+import { useAgreement, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
 import { useRenewalOffers, useCreateRenewalOffer, useRespondToRenewal } from '@/hooks/useRenewals'
 import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
 import { DatePicker } from '@/components/ui/DatePicker'
@@ -46,7 +46,13 @@ export function AgreementDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { data, isLoading } = useAgreements()
+  // Fetch THIS agreement, not page one of the list.
+  //
+  // This used useAgreements() and searched the result for the id. The list
+  // endpoint pages at 20, so any agreement older than the 20 most recent was
+  // simply not in the response and the page rendered "not found" for a link
+  // that is perfectly valid. GET /agreements/:id has always existed.
+  const { data: agreement, isLoading } = useAgreement(id ?? '')
   const { data: moveOutsData } = useMoveOuts()
   const signAgreement = useSignAgreement()
   const updateAgreement = useUpdateAgreement()
@@ -59,7 +65,6 @@ export function AgreementDetailPage() {
     { enabled: user?.activeRole === 'tenant' },
   )
 
-  const agreement = data?.items?.find((a) => a.id === id)
   const existingMoveOut = moveOutsData?.items?.find((m) => m.agreementId === id)
 
   // Move-in essentials: tenants see local businesses in the property's city.

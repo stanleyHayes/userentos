@@ -149,7 +149,7 @@ export function PayoutsPage() {
                     <Button onClick={() => onApprove(payout)} disabled={approve.isPending}>
                       <Check size={14} /> Approve &amp; send
                     </Button>
-                    <Button variant="outline" onClick={() => setDeclining(payout)}>
+                    <Button variant="outline" onClick={() => { setReason(''); setDeclining(payout) }}>
                       <X size={14} /> Decline
                     </Button>
                   </div>
@@ -160,7 +160,10 @@ export function PayoutsPage() {
         </div>
       )}
 
-      <Modal open={Boolean(declining)} onClose={() => setDeclining(null)} title="Decline this payout">
+      {/* Reset on open AND on close: `reason` was only cleared on success, so
+          cancelling one decline and starting another carried the first
+          reason into the second — and the payee is shown it. */}
+      <Modal open={Boolean(declining)} onClose={() => { setDeclining(null); setReason('') }} title="Decline this payout">
         <div className="space-y-4">
           <p className="text-sm text-muted dark:text-gray-400">
             {declining ? `${formatCurrency(declining.amount)} goes straight back to their wallet. They will see the reason below.` : ''}
