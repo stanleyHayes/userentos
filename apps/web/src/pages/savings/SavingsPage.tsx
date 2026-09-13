@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { WithdrawModal } from './WithdrawModal'
-import { useWallet, useDeposit, useSavingsPlans, useCreateSavingsPlan, useContributeToSavings } from '@/hooks/useApi'
+import { useWallet, usePaymentMethods, useDeposit, useSavingsPlans, useCreateSavingsPlan, useContributeToSavings } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PiggyBank, Plus, ArrowUpRight, ArrowDownRight, FileText } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
@@ -19,12 +19,7 @@ import { InvestmentsTab } from './InvestmentsTab'
 import { LoansTab } from './LoansTab'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
-const methodOptions = [
-  { value: 'mtn_momo', label: 'MTN Mobile Money' },
-  { value: 'telecel_cash', label: 'Telecel Cash' },
-  { value: 'airteltigo_money', label: 'AirtelTigo Money' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-]
+
 
 const frequencyOptions = [
   { value: 'daily', label: 'Daily' },
@@ -35,8 +30,8 @@ const frequencyOptions = [
 export function SavingsPage() {
   const [tab, setTab] = useState<'savings' | 'investments' | 'loans'>('savings')
   const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
-  const { data: wallet, isLoading: walletLoading } = useWallet()
-  const { data: plansData, isLoading: plansLoading } = useSavingsPlans()
+  const { data: wallet, isLoading: walletLoading, isError: walletError, refetch: refetchWallet, isFetching: walletFetching } = useWallet()
+  const { data: plansData, isLoading: plansLoading, isError: plansError, refetch: refetchPlans, isFetching: plansFetching } = useSavingsPlans()
   const plans = plansData?.items ?? []
   const [showDeposit, setShowDeposit] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
@@ -83,6 +78,12 @@ export function SavingsPage() {
 
       {tab !== 'savings' ? null : isLoading ? (
         <DashboardSkeleton />
+      ) : walletError || plansError ? (
+        <div role="alert" className="rounded-xl border border-border p-6 space-y-3">
+          <p>Could not load wallet and savings data.</p>
+          <p>Your balance and transactions are unavailable. Please retry.</p>
+          <Button disabled={walletFetching || plansFetching} onClick={() => { void refetchWallet(); void refetchPlans() }}>Retry wallet and savings</Button>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -190,20 +191,23 @@ export function SavingsPage() {
 /** Deposits only — withdrawals go through the payout rail in WithdrawModal. */
 function WalletActionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const deposit = useDeposit()
+  const methods = usePaymentMethods()
+  const methodOptions = (methods.data?.methods ?? []).map(method => ({ value: method.id, label: method.label }))
   const qc = useQueryClient()
   const mutation = deposit
-  const [form, setForm] = useState({ amount: '', method: 'mtn_momo', phone: '' })
+  const [form, setForm] = useState({ amount: '', method: '', phone: '' })
   const [instructions, setInstructions] = useState<string | null>(null)
 
   function handleClose() {
     onClose()
-    setForm({ amount: '', method: 'mtn_momo', phone: '' })
+    setForm({ amount: '', method: '', phone: '' })
     setInstructions(null)
     mutation.reset()
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (methods.isError || !methodOptions.some(method => method.value === form.method)) return
     try {
       // A deposit initiates a REAL payment collection — the wallet is credited
       // only after the provider confirms, so show the payer instructions and
@@ -237,14 +241,17 @@ function WalletActionModal({ open, onClose }: { open: boolean; onClose: () => vo
     <Modal open={open} onClose={handleClose} title="Deposit to Wallet">
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <Input id="amount" label="Amount (GHS)" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required min="1" />
-        <Select id="method" label="Method" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} options={methodOptions} />
-        {form.method !== 'bank_transfer' && (
+        <Select id="method" label="Method" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} options={[{ value: '', label: 'Choose a payment method' }, ...methodOptions]} />
+        {methods.isLoading && <p role="status">Loading payment methods…</p>}
+        {methods.isError && <div role="alert">Could not load payment methods. <button type="button" onClick={() => void methods.refetch()}>Retry payment methods</button></div>}
+        {!methods.isLoading && !methods.isError && methodOptions.length === 0 && <p role="status">No deposit methods are available right now.</p>}
+        {form.method && form.method !== 'bank_transfer' && (
           <Input id="phone" label="Mobile money number" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="0241234567" required />
         )}
         {mutation.isError && <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">{(mutation.error as Error).message}</div>}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending || (form.method !== 'bank_transfer' && form.phone.trim().length < 9)} variant="accent">
+          <Button type="submit" disabled={mutation.isPending || methods.isError || !methodOptions.some(method => method.value === form.method) || (form.method !== 'bank_transfer' && form.phone.trim().length < 9)} variant="accent">
             {mutation.isPending ? 'Processing...' : 'Deposit'}
           </Button>
         </div>

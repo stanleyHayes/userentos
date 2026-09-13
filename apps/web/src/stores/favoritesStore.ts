@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '@/lib/api'
+import { getSessionGeneration, useAuthStore } from '@/stores/authStore'
 
 interface FavoritesState {
   ids: string[]
@@ -17,15 +18,17 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   toggling: new Set(),
 
   load: async () => {
+    const generation = getSessionGeneration()
     try {
       const data = await api.get<{ propertyIds: string[] }>('/properties/favorites/me')
-      set({ ids: data.propertyIds ?? [], loaded: true })
+      if (generation === getSessionGeneration()) set({ ids: data.propertyIds ?? [], loaded: true })
     } catch {
-      set({ loaded: true })
+      if (generation === getSessionGeneration()) set({ loaded: true })
     }
   },
 
   toggle: async (propertyId: string) => {
+    const generation = getSessionGeneration()
     const { ids, toggling } = get()
     if (toggling.has(propertyId)) return
 
@@ -40,6 +43,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
     try {
       const result = await api.post<{ favorited: boolean }>(`/properties/${propertyId}/favorite`, {})
 
+      if (generation !== getSessionGeneration()) return
       // Only update if the server disagrees with our optimistic state
       const currentIds = get().ids
       const serverSaysFavorited = result.favorited
@@ -53,6 +57,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
         })
       }
     } catch {
+      if (generation !== getSessionGeneration()) return
       // Revert optimistic update on error
       set({
         ids: wasFavorited
@@ -60,7 +65,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
           : get().ids.filter((x) => x !== propertyId),
       })
     } finally {
-      set((s) => {
+      if (generation === getSessionGeneration()) set((s) => {
         const next = new Set(s.toggling)
         next.delete(propertyId)
         return { toggling: next }
@@ -72,3 +77,13 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
 
   clear: () => set({ ids: [], loaded: false, toggling: new Set() }),
 }))
+
+let favoriteSession = getSessionGeneration()
+const unsubscribeFavorites = useAuthStore.subscribe(() => {
+  const next = getSessionGeneration()
+  if (next !== favoriteSession) {
+    favoriteSession = next
+    useFavoritesStore.getState().clear()
+  }
+})
+if (import.meta.hot) import.meta.hot.dispose(unsubscribeFavorites)

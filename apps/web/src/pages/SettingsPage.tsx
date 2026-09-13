@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { PrivacyControls } from './settings/PrivacyControls'
 import { ProfileTab } from './settings/ProfileTab'
 import { SecurityTab } from './settings/SecurityTab'
 import { PayoutTab } from './settings/PayoutTab'
@@ -27,6 +28,7 @@ type MeUser = UserType & { verificationStatus?: VerificationStatus; taxReporting
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: <User size={16} /> },
+  { id: 'privacy', label: 'Privacy', icon: <ShieldCheck size={16} /> },
   { id: 'security', label: 'Security', icon: <Shield size={16} /> },
   { id: 'payouts', label: 'Payouts', icon: <Wallet size={16} /> },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
@@ -52,7 +54,7 @@ export function SettingsPage() {
       </div>
 
       {/* Tab navigation */}
-      <div ref={pillAttach} className="surface-track relative isolate flex w-fit gap-1.5 rounded-full border border-border/40 p-1 dark:border-[#252a3a]/40">
+      <div ref={pillAttach} className="surface-track relative isolate flex max-w-full w-fit overflow-x-auto gap-1.5 rounded-full border border-border/40 p-1 dark:border-[#252a3a]/40">
         <span
           aria-hidden
           className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-[#161927]"
@@ -85,6 +87,7 @@ export function SettingsPage() {
             {activeRole === 'landlord' && <TaxConsentCard />}
           </div>
         )}
+        {activeTab === 'privacy' && <PrivacyControls />}
         {activeTab === 'security' && <SecurityTab />}
         {activeTab === 'payouts' && <PayoutTab />}
         {activeTab === 'appearance' && <AppearanceTab />}

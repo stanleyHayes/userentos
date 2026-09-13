@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getSessionGeneration, useAuthStore } from '@/stores/authStore'
 import type { Notification } from '@/types'
 
 interface NotificationState {
@@ -39,3 +40,13 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
 
   reset: () => set({ notifications: [], unreadCount: 0 }),
 }))
+
+let notificationSession = getSessionGeneration()
+const unsubscribeNotifications = useAuthStore.subscribe(() => {
+  const next = getSessionGeneration()
+  if (next !== notificationSession) {
+    notificationSession = next
+    useNotificationStore.getState().reset()
+  }
+})
+if (import.meta.hot) import.meta.hot.dispose(unsubscribeNotifications)

@@ -17,8 +17,8 @@ import {
  * rent payment lands.
  */
 export function PayoutTab() {
-  const { data: account, isLoading } = usePayoutAccount()
-  const { data: destinationData, isLoading: loadingDestinations, isError: destinationsFailed } = usePayoutDestinations()
+  const { data: account, isLoading, isError: accountFailed, refetch: retryAccount, isFetching: fetchingAccount } = usePayoutAccount()
+  const { data: destinationData, isLoading: loadingDestinations, isError: destinationsFailed, refetch: retryDestinations, isFetching: fetchingDestinations } = usePayoutDestinations()
   const saveAccount = useSavePayoutAccount()
   const removeAccount = useRemovePayoutAccount()
 
@@ -30,15 +30,17 @@ export function PayoutTab() {
     [destinationData?.items, form.type],
   )
 
-  const canSave = Boolean(form.bankCode && form.accountNumber.trim().length >= 6 && form.accountName.trim().length >= 2)
+  const canSave = Boolean(!isLoading && !accountFailed && !loadingDestinations && !destinationsFailed && options.some(d => d.code === form.bankCode) && form.accountNumber.trim().length >= 6 && form.accountNumber.trim().length <= 24 && form.accountName.trim().length >= 2 && form.accountName.trim().length <= 120)
 
   function save() {
+    if (!canSave || saveAccount.isPending) return
     saveAccount.mutate(
       { type: form.type, bankCode: form.bankCode, accountNumber: form.accountNumber.trim(), accountName: form.accountName.trim() },
       {
         onSuccess: (saved) => {
           toast.success(`Verified as ${saved.accountName}`)
           setEditing(false)
+          setForm({ type: 'mobile_money', bankCode: '', accountNumber: '', accountName: '' })
         },
         // The server returns 422 when the provider cannot resolve the account,
         // which is the common case — a wrong digit or the wrong network.
@@ -48,6 +50,7 @@ export function PayoutTab() {
   }
 
   if (isLoading) return <Skeleton className="h-48 w-full" />
+  if (accountFailed) return <div role="alert" className="space-y-3"><p>Could not load your payout account. Your saved destination is unavailable.</p><Button disabled={fetchingAccount} onClick={() => void retryAccount()}>Retry payout account</Button></div>
 
   return (
     <div className="space-y-5">
@@ -59,6 +62,9 @@ export function PayoutTab() {
               Where your withdrawals are sent. Rent you receive lands in your RentOS wallet first, then you withdraw it here.
             </p>
           </div>
+
+          {saveAccount.isError && <p role="alert" className="text-sm text-danger">{saveAccount.error instanceof Error ? saveAccount.error.message : 'Could not verify that account'}</p>}
+          {removeAccount.isError && <p role="alert" className="text-sm text-danger">{removeAccount.error instanceof Error ? removeAccount.error.message : 'Could not remove the account'}</p>}
 
           {account && !editing ? (
             <div className="space-y-4">
@@ -113,7 +119,8 @@ export function PayoutTab() {
               {destinationsFailed && (
                 <div className="flex items-start gap-2 rounded-xl bg-warning/10 p-3 text-xs text-warning">
                   <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                  The list of networks and banks could not be loaded. Try again shortly.
+                  The list of networks and banks could not be loaded.
+                  <Button disabled={fetchingDestinations} onClick={() => void retryDestinations()}>Retry payout destinations</Button>
                 </div>
               )}
 

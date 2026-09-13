@@ -61,7 +61,7 @@ export function FinancingApplicationsPage() {
                 <p className="text-sm text-primary-dark dark:text-gray-300 mb-3">{a.purpose}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                   <Stat label="Credit score" value={a.creditScoreAtApply ?? '—'} />
-                  <Stat label="Monthly income" value={a.monthlyIncomeAtApply ? formatCurrency(a.monthlyIncomeAtApply) : '—'} />
+                  <Stat label="Monthly income" value={a.monthlyIncomeAtApply ? formatCurrency(a.monthlyIncomeAtApply, a.monthlyIncomeCurrency ?? 'GHS') : '—'} />
                   <Stat label="Payroll deduction" value={a.willUsePayrollDeduction ? 'Yes' : 'No'} />
                   <Stat label="Has employer" value={a.employerId ? 'Yes' : 'No'} />
                 </div>

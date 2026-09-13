@@ -1,9 +1,13 @@
 import { create } from 'zustand'
+import toast from 'react-hot-toast'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import type { User, UserRole } from '@/types'
 import { portal } from '@/hooks/usePortal'
 import { getBestRoleForPortal } from '@/lib/subdomain'
+
+let sessionGeneration = 0
+export const getSessionGeneration = () => sessionGeneration
 
 interface AuthState {
   user: User | null
@@ -11,6 +15,7 @@ interface AuthState {
   refreshToken: string | null
   isAuthenticated: boolean
   isLoading: boolean
+  sessionId: string | null
 
   login: (user: User, token: string, refreshToken?: string) => void
   logout: () => void
@@ -27,8 +32,11 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
+      sessionId: null,
 
       login: (user, token, refreshToken) => {
+        sessionGeneration++
+        toast.remove()
         // On portal subdomains, auto-switch to the best matching role
         if (portal !== 'www') {
           const bestRole = getBestRoleForPortal(user.roles, portal)
@@ -36,11 +44,13 @@ export const useAuthStore = create<AuthState>()(
             user = { ...user, activeRole: bestRole }
           }
         }
-        set({ user, token, refreshToken: refreshToken ?? null, isAuthenticated: true, isLoading: false })
+        set({ user, token, refreshToken: refreshToken ?? null, isAuthenticated: true, isLoading: false, sessionId: crypto.randomUUID() })
       },
 
       logout: () => {
-        set({ user: null, token: null, refreshToken: null, isAuthenticated: false })
+        sessionGeneration++
+        toast.remove()
+        set({ user: null, token: null, refreshToken: null, isAuthenticated: false, sessionId: null })
       },
 
       switchRole: (role) =>
@@ -65,10 +75,28 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        sessionId: state.sessionId,
       }) as unknown as AuthState,
     }
   )
 )
+
+// Cover hydration and direct account replacement as well as the public actions.
+// Access-token rotation and ordinary profile updates keep current notifications.
+const unsubscribeNotificationSession = useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id || state.isAuthenticated !== previous.isAuthenticated || state.sessionId !== previous.sessionId) { sessionGeneration++; toast.remove() }
+})
+function syncAuthStorage(event: StorageEvent) {
+  if (event.storageArea !== localStorage || (event.key !== 'rentos-auth' && event.key !== null)) return
+  // Re-read current storage rather than replaying an event that may already be stale.
+  if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+  else void useAuthStore.persist.rehydrate()
+}
+window.addEventListener('storage', syncAuthStorage)
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  unsubscribeNotificationSession()
+  window.removeEventListener('storage', syncAuthStorage)
+})
 
 /**
  * Returns true once the auth store has finished hydrating from localStorage.
@@ -83,119 +111,135 @@ export function useAuthHydrated(): boolean {
 }
 
 /**
- * Silently rotate the session via the refresh token. Returns the new access
- * token on success, null otherwise. Mirrors the refresh flow in lib/api.ts —
- * duplicated here to avoid a circular import between the store and the client.
+ * Request rotated credentials without mutating a possibly replaced session.
+ * Null means rejected credentials; temporary failures throw.
  */
 // Bound the auth-verification calls: without a timeout a hung connection would
 // leave the app on the loading screen indefinitely (fetch has no default timeout).
 const AUTH_CHECK_TIMEOUT_MS = 4_000
 
-async function tryRefreshSession(): Promise<string | null> {
-  const { refreshToken } = useAuthStore.getState()
-  if (!refreshToken) return null
+async function tryRefreshSession(refreshToken: string | null, isCurrent: () => boolean): Promise<{ token: string; refreshToken: string } | null> {
+  if (!refreshToken || !isCurrent()) return null
+  const base = import.meta.env.VITE_API_URL || '/api'
+  const res = await fetch(`${base}/auth/refresh`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }), signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
+  })
+  if (!isCurrent()) return null
+  if (res.status === 401 || res.status === 403) return null
+  if (!res.ok) throw new Error('Session refresh is temporarily unavailable')
+  const data = await res.json()
+  if (!isCurrent()) return null
+  const { token, refreshToken: rotated } = data.data ?? {}
+  if (typeof token !== 'string' || !token || (rotated !== undefined && (typeof rotated !== 'string' || !rotated))) throw new Error('Incomplete refresh response')
+  return { token, refreshToken: rotated ?? refreshToken }
+}
+
+let refreshAttempt: { generation: number; promise: Promise<boolean> } | null = null
+
+/** One refresh for API requests and restoration within the current login session. */
+export function refreshCurrentSession(rejectedToken: string | null): Promise<boolean> {
+  const origin = useAuthStore.getState()
+  const generation = sessionGeneration
+  // Another request may already have rotated the token while this 401 travelled.
+  if (origin.token && origin.token !== rejectedToken) return Promise.resolve(true)
+  if (refreshAttempt?.generation === generation) return refreshAttempt.promise
+  const performRefresh = async () => {
+    // Storage events may still be queued when this tab acquires the origin lock.
+    if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+    else await useAuthStore.persist.rehydrate()
+    const latest = useAuthStore.getState()
+    if (generation !== sessionGeneration || latest.user?.id !== origin.user?.id || latest.sessionId !== origin.sessionId || latest.isAuthenticated !== origin.isAuthenticated) throw new Error('Account session changed. Please try again.')
+    if (latest.token && latest.token !== rejectedToken) return true
+    const isCurrent = () => {
+      const current = useAuthStore.getState()
+      return generation === sessionGeneration && current.user?.id === latest.user?.id && current.sessionId === latest.sessionId && current.token === latest.token && current.refreshToken === latest.refreshToken && current.isAuthenticated === latest.isAuthenticated
+    }
+    const rotated = await tryRefreshSession(latest.refreshToken, isCurrent)
+    if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+    else await useAuthStore.persist.rehydrate()
+    if (!isCurrent()) throw new Error('Account session changed. Please try again.')
+    if (!rotated) return false
+    useAuthStore.setState(rotated)
+    return true
+  }
+  const promise = (async () => {
+    if (navigator.locks) return await navigator.locks.request(`rentos-auth-refresh:${origin.sessionId ?? 'legacy'}`, { signal: AbortSignal.timeout(10_000) }, performRefresh)
+    return performRefresh()
+  })().finally(() => { if (refreshAttempt?.promise === promise) refreshAttempt = null })
+  refreshAttempt = { generation, promise }
+  return promise
+}
+
+/** Storage events can lag behind another tab's login/logout or token rotation. */
+function matchesStoredSession(origin: AuthState): boolean {
   try {
-    const base = import.meta.env.VITE_API_URL || '/api'
-    const res = await fetch(`${base}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-      signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const { token, refreshToken: newRefreshToken } = data.data ?? {}
-    if (!token) return null
-    useAuthStore.setState({ token, refreshToken: newRefreshToken ?? refreshToken })
-    return token as string
+    const raw = localStorage.getItem('rentos-auth')
+    if (raw === null) { useAuthStore.getState().logout(); return false }
+    const saved = JSON.parse(raw)?.state
+    const matches = saved && saved.token === origin.token && saved.refreshToken === origin.refreshToken && saved.user?.id === origin.user?.id && saved.isAuthenticated === origin.isAuthenticated && (saved.sessionId ?? null) === (origin.sessionId ?? null)
+    if (!matches) void useAuthStore.persist.rehydrate()
+    return Boolean(matches)
   } catch {
-    return null
+    // Unreadable storage is not permission to overwrite a potentially newer session.
+    return false
   }
 }
 
-/**
- * After localStorage hydration restores `token`, verify it with the server
- * and fetch the full user. An expired 15-minute access token is silently
- * refreshed via the 7-day refresh token — previously this force-logged-out
- * the user on every reload, defeating the whole point of refresh tokens.
- * Only redirects to login if the session is truly dead.
- */
+/** Verify a restored session without letting old responses change a newer login. */
 export function useAuthRehydrate(): boolean {
   const { token, isAuthenticated, user, logout } = useAuthStore()
+  const userId = user?.id
   const hasHydrated = useAuthHydrated()
   const [ready, setReady] = useState(false)
-  const validationStarted = useRef(false)
 
   useEffect(() => {
     if (!hasHydrated) return
-
-    // No token — nothing to verify
     if (!token || !isAuthenticated) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- gating async server verification
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- gate restored session verification
       setReady(true)
       return
     }
-
-    if (validationStarted.current) return
-    validationStarted.current = true
-
-    // A persisted user lets the shell render immediately. We still validate the
-    // token in the background below so revoked/expired sessions are cleared.
-    if (user) {
-      setReady(true)
-    }
-
-    // Verify token with server and fetch user
+    if (userId) setReady(true)
     let cancelled = false
+    const origin = useAuthStore.getState()
+    const generation = sessionGeneration
+    const isCurrent = () => {
+      const current = useAuthStore.getState()
+      return !cancelled && generation === sessionGeneration && current.token === origin.token && current.refreshToken === origin.refreshToken && current.user?.id === origin.user?.id && current.isAuthenticated === origin.isAuthenticated && matchesStoredSession(origin)
+    }
     const base = import.meta.env.VITE_API_URL || '/api'
-    const fetchMe = (bearer: string) =>
-      fetch(`${base}/users/me`, {
-        headers: { Authorization: `Bearer ${bearer}` },
-        signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
-      })
-
-    ;(async () => {
-      let res = await fetchMe(token)
-      // Expired access token — rotate via the refresh token and retry once.
+    const fetchMe = (bearer: string) => fetch(`${base}/users/me`, {
+      headers: { Authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
+    })
+    void (async () => {
+      const res = await fetchMe(token)
+      if (!isCurrent()) return
       if (res.status === 401) {
-        const newToken = await tryRefreshSession()
-        if (newToken) {
-          res = await fetchMe(newToken)
-        } else {
-          // Refresh token also dead — session is over.
-          if (!cancelled) {
-            logout()
-            setReady(true)
-          }
-          return
-        }
-      }
-      if (cancelled) return
-      if (!res.ok) {
-        logout()
-        setReady(true)
+        const refreshed = await refreshCurrentSession(token)
+        if (!isCurrent()) return
+        if (!refreshed) { logout(); setReady(true); return }
+        // Keep rotated credentials even if the subsequent profile request is offline.
+        // The token change starts a new guarded verification effect.
         return
       }
+      if (res.status === 401 || res.status === 403) { logout(); setReady(true); return }
+      if (!res.ok) throw new Error('Account verification is temporarily unavailable')
       const data = await res.json()
-      if (cancelled) return
+      if (!isCurrent()) return
       const fetchedUser = data.data as User
-      // Apply portal role override
+      if (!fetchedUser || typeof fetchedUser.id !== 'string' || !Array.isArray(fetchedUser.roles) || (origin.user?.id && fetchedUser.id !== origin.user.id)) throw new Error('Account verification response does not match the session')
       if (portal !== 'www') {
         const bestRole = getBestRoleForPortal(fetchedUser.roles, portal)
         if (bestRole) fetchedUser.activeRole = bestRole
       }
-      // Re-login with fetched user to restore full state
       useAuthStore.setState({ user: fetchedUser, isAuthenticated: true })
       setReady(true)
     })().catch(() => {
-      // Network error — keep the session and mark ready; React Query surfaces
-      // its own error states. Never log out a possibly-valid session on a
-      // flaky connection.
-      if (!cancelled) setReady(true)
+      // Outages and malformed responses are not proof that credentials were revoked.
+      if (isCurrent()) setReady(true)
     })
-
     return () => { cancelled = true }
-  }, [hasHydrated, token, isAuthenticated, user, logout])
-
+  }, [hasHydrated, token, isAuthenticated, userId, logout])
   return ready
 }

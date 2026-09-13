@@ -1,3 +1,4 @@
+import { AiConsentDeclined } from '@/lib/aiConsent'
 import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { api } from '@/lib/api'
@@ -45,7 +46,8 @@ export function LegalAssistant({ onBack }: { onBack: () => void }) {
         language: i18n.language,
       })
       setMessages([...newMessages, { role: 'assistant', content: data.reply }])
-    } catch {
+    } catch (error) {
+      if (error instanceof AiConsentDeclined) { setMessages(messages); setInput(msg); return }
       setMessages([...newMessages, { role: 'assistant', content: 'Sorry, I could not process your request. Please try again.' }])
     } finally {
       setLoading(false)

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
-import { Toaster } from '@/components/ui/Toaster'
 import { useAuthStore, useAuthRehydrate } from '@/stores/authStore'
 import { useSidebarStore } from '@/stores/sidebarStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
@@ -119,6 +118,12 @@ export function DashboardLayout() {
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className={`relative z-10 transition-all duration-300 ease-in-out ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
         <Header onMenuToggle={() => setMobileOpen(true)} />
+        {user?.suspendedAt && <div role="alert" className="m-4 p-4 border border-amber-500 rounded-xl bg-amber-50 text-gray-900">
+          <strong>Account suspended</strong>
+          <p>{user.suspensionReason || 'Your account access has been restricted following moderation review.'}</p>
+          <p>You can still <a className="underline" href="/agreements">view your agreements</a> and <a className="underline" href="/payments">view payments or pay rent on active agreements</a>.</p>
+          <p><a className="underline" href="/delete-account">Export your data or delete your account</a>. For an appeal or help with existing obligations, contact <a className="underline" href="mailto:info@userentos.com?subject=Account%20suspension%20appeal">info@userentos.com</a>.</p>
+        </div>}
         <main className="p-3 sm:p-4 md:p-6">
           <div className="max-w-[1480px] mx-auto pb-10">
             <div key={location.pathname} className="page-enter">
@@ -127,7 +132,6 @@ export function DashboardLayout() {
           </div>
         </main>
       </div>
-      <Toaster />
       <OnboardingTour />
     </div>
   )

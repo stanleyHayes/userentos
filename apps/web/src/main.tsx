@@ -4,12 +4,14 @@ import './lib/sentry'
 import './index.css'
 import './lib/i18n'
 import App from './App'
+import { Toaster } from '@/components/ui/Toaster'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <App />
+      <Toaster />
     </ErrorBoundary>
   </StrictMode>
 )

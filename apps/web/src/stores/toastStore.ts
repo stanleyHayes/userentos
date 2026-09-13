@@ -1,26 +1,17 @@
 import { create } from 'zustand'
+import toast from 'react-hot-toast'
 
-export interface Toast {
-  id: string
-  message: string
-  type: 'success' | 'error' | 'info'
-}
-
+// Preserve existing callers while sending every notification to the same renderer.
 interface ToastState {
-  toasts: Toast[]
-  addToast: (message: string, type?: Toast['type']) => void
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void
   removeToast: (id: string) => void
 }
 
-export const useToastStore = create<ToastState>()((set) => ({
-  toasts: [],
+export const useToastStore = create<ToastState>()(() => ({
   addToast: (message, type = 'info') => {
-    const id = Math.random().toString(36).slice(2)
-    set((state) => ({ toasts: [...state.toasts, { id, message, type }] }))
-    setTimeout(() => {
-      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }))
-    }, 4000)
+    if (type === 'error') toast.error(message)
+    else if (type === 'success') toast.success(message)
+    else toast(message)
   },
-  removeToast: (id) =>
-    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  removeToast: (id) => toast.dismiss(id),
 }))

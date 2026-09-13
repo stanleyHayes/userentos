@@ -1,3 +1,4 @@
+import { joinSocketRoom } from '../../../../packages/shared/socketRoom'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useSearchParams } from 'react-router-dom'
@@ -22,6 +23,9 @@ import {
   Send, ArrowLeft, Plus, Search, Building2, MessageCircle,  MessageSquare } from 'lucide-react'
 import type { Conversation, ChatMessage } from '@/types'
 import { IconWatermark } from '@/components/ui/Watermark'
+import { api } from '@/lib/api'
+import { useToastStore } from '@/stores/toastStore'
+import { ReportMessageButton } from '@/components/chat/ReportMessageButton'
 
 function formatMessageTime(dateStr: string) {
   const d = new Date(dateStr)
@@ -93,7 +97,6 @@ export function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const prevConversationRef = useRef<string | null>(null)
 
   const { data: conversations, isLoading: convosLoading } = useConversations()
   const { data: messagesData } = useMessages(activeConversationId)
@@ -105,6 +108,33 @@ export function ChatPage() {
   const activeConversation = conversations?.find(
     (c: Conversation) => c.id === activeConversationId
   )
+  const [blocking, setBlocking] = useState(false)
+  async function toggleBlock() {
+    const target = activeConversation?.otherUser?.id
+    if (!target || blocking) return
+    setBlocking(true)
+    try {
+      if (activeConversation.blockedByMe) await api.delete(`/chat/blocks/${target}`)
+      else await api.put(`/chat/blocks/${target}`, {})
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      useToastStore.getState().addToast(activeConversation.blockedByMe ? 'Your block was removed.' : 'User blocked. Messaging is disabled in both directions.', 'success')
+    } catch (error) { useToastStore.getState().addToast((error as Error).message, 'error') }
+    finally { setBlocking(false) }
+  }
+  useEffect(() => {
+    if (!socket) return
+    const changed = ({ userId }: { userId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      setOnlineUsers(previous => { const next = new Set(previous); next.delete(userId); return next })
+      setTypingUsers(new Map())
+      if (activeConversationId) socket.emit('join:conversation', activeConversationId)
+      socket.emit('get:online')
+    }
+    socket.on('contact:changed', changed)
+    const removed = () => { queryClient.invalidateQueries({ queryKey: ['messages'] }); queryClient.invalidateQueries({ queryKey: ['conversations'] }) }
+    socket.on('message:removed', removed)
+    return () => { socket.off('contact:changed', changed); socket.off('message:removed', removed) }
+  }, [socket, queryClient, activeConversationId])
 
   // Filter conversations by search
   const filteredConversations = (conversations ?? []).filter((c: Conversation) => {
@@ -234,26 +264,32 @@ export function ChatPage() {
   useEffect(() => {
     if (!socket) return
 
-    // Leave previous room
-    if (prevConversationRef.current) {
-      socket.emit('leave:conversation', prevConversationRef.current)
+    const leaveRoom = activeConversationId ? joinSocketRoom(socket, activeConversationId) : undefined
+    const resetTyping = () => {
+      isTypingRef.current = false
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      setTypingUsers(new Map())
     }
-    // Join new room
-    if (activeConversationId) {
-      socket.emit('join:conversation', activeConversationId)
+    socket.on('connect', resetTyping)
+    socket.on('disconnect', resetTyping)
+    const catchUp = () => {
+      if (activeConversationId) void queryClient.invalidateQueries({ queryKey: ['messages', activeConversationId], exact: true })
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      void queryClient.invalidateQueries({ queryKey: ['unread-count'] })
     }
-    prevConversationRef.current = activeConversationId
+    socket.on('connect', catchUp)
 
     // Clear typing state when switching conversations (synced with socket room change)
     // eslint-disable-next-line react-hooks/set-state-in-effect -- side-effect of socket join/leave
     setTypingUsers(new Map())
 
     return () => {
-      if (activeConversationId) {
-        socket.emit('leave:conversation', activeConversationId)
-      }
+      leaveRoom?.()
+      socket.off('connect', resetTyping)
+      socket.off('disconnect', resetTyping)
+      socket.off('connect', catchUp)
     }
-  }, [socket, activeConversationId])
+  }, [socket, activeConversationId, queryClient])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -531,6 +567,11 @@ export function ChatPage() {
                 </div>
               </div>
 
+              {activeConversation.otherUser && <div className="px-4 py-2 flex items-center justify-between gap-3">
+                <span className="text-sm">{activeConversation.contactBlocked ? 'Messaging is unavailable for this contact.' : 'Stop unwanted contact at any time.'}</span>
+                <ReportMessageButton messageId={activeConversation.otherUser.id} targetType="user" />
+                <Button size="sm" variant="outline" disabled={blocking} onClick={toggleBlock}>{activeConversation.blockedByMe ? 'Unblock user' : 'Block user'}</Button>
+              </div>}
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
                 {groupedMessages.map((group, gi) => (
@@ -562,6 +603,7 @@ export function ChatPage() {
                             )}
                           >
                             <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                            {!isMine && !msg.removed && <ReportMessageButton messageId={msg.id} />}
                             <p
                               className={cn(
                                 'text-[10px] mt-1',
@@ -597,6 +639,7 @@ export function ChatPage() {
                     ref={inputRef}
                     type="text"
                     placeholder="Type a message..."
+                    disabled={activeConversation.contactBlocked}
                     value={messageText}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
@@ -604,7 +647,7 @@ export function ChatPage() {
                   />
                   <Button
                     onClick={handleSend}
-                    disabled={!messageText.trim() || sendMessage.isPending}
+                    disabled={activeConversation.contactBlocked || !messageText.trim() || sendMessage.isPending}
                     className="h-10 w-10 !p-0 rounded-xl"
                   >
                     <Send size={16} />

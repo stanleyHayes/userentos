@@ -229,12 +229,13 @@ function ProductCard({ product, onBuy }: { product: InsuranceProduct; onBuy: () 
 }
 
 function BuyPolicyModal({ product, onClose }: { product: InsuranceProduct; onClose: () => void }) {
-  const { data: wallet } = useWallet()
+  const { data: wallet, isLoading: walletLoading, isError: walletError, refetch: refetchWallet, isFetching: walletFetching } = useWallet()
   const buy = useBuyPolicy()
   const balance = wallet?.balance ?? 0
   const insufficient = balance < product.monthlyPremium
 
   async function handleBuy() {
+    if (walletLoading || walletError || !wallet || insufficient) return
     try {
       await buy.mutateAsync({ productId: product.id, termMonths: 12 })
       useToastStore.getState().addToast(`Policy ${product.productName} activated.`, 'success')
@@ -243,6 +244,9 @@ function BuyPolicyModal({ product, onClose }: { product: InsuranceProduct; onClo
       useToastStore.getState().addToast((err as Error).message || 'Failed to buy policy', 'error')
     }
   }
+
+  if (walletLoading) return <Modal open onClose={onClose} title="Confirm Policy Purchase"><p role="status">Checking wallet balance…</p></Modal>
+  if (walletError || !wallet) return <Modal open onClose={onClose} title="Confirm Policy Purchase"><div role="alert" className="space-y-3"><p>Could not load your wallet balance. Please retry before purchasing.</p><Button disabled={walletFetching} onClick={() => void refetchWallet()}>Retry wallet balance</Button></div></Modal>
 
   return (
     <Modal open onClose={onClose} title="Confirm Policy Purchase">

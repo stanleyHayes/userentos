@@ -159,6 +159,11 @@ export default defineConfig({
       'legal.localhost',
     ],
     proxy: {
+      '/socket.io': {
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3002',
+        ws: true,
+        changeOrigin: true,
+      },
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:3002',
         changeOrigin: true,

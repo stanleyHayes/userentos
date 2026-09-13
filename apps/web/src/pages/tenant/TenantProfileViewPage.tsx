@@ -128,7 +128,6 @@ export function TenantProfileViewPage() {
             <Field label="Gender" value={p.gender} />
             <Field label="Marital Status" value={p.maritalStatus} />
             <Field label="Nationality" value={p.nationality} icon={<Globe size={12} />} />
-            <Field label="Religion" value={p.religion} />
             <Field label="Hometown" value={p.hometown} icon={<MapPin size={12} />} />
           </div>
           {p.languagesSpoken?.length > 0 && (
@@ -170,7 +169,7 @@ export function TenantProfileViewPage() {
               <Field label="Status" value={p.employmentStatus} />
               <Field label="Occupation" value={p.occupation} />
               <Field label="Employer" value={p.employer} icon={<Building2 size={12} />} />
-              <Field label="Monthly Income" value={p.monthlyIncome ? `GHS ${Number(p.monthlyIncome).toLocaleString()}` : null} icon={<DollarSign size={12} />} />
+              <Field label="Monthly Income" value={p.monthlyIncome ? `${p.primaryCurrency ?? 'GHS'} ${Number(p.monthlyIncome).toLocaleString()}` : null} icon={<DollarSign size={12} />} />
               <Field label="Duration" value={p.employmentDuration} />
               <Field label="Work Phone" value={p.workPhone} icon={<Phone size={12} />} />
             </div>

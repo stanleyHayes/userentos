@@ -20,7 +20,7 @@ interface WithdrawModalProps {
  * an instant transfer.
  */
 export function WithdrawModal({ open, onClose }: WithdrawModalProps) {
-  const { data: availability, isLoading } = usePayoutAvailability()
+  const { data: availability, isLoading, isError, refetch, isFetching } = usePayoutAvailability()
   const requestPayout = useRequestPayout()
   const [amount, setAmount] = useState('')
 
@@ -29,9 +29,10 @@ export function WithdrawModal({ open, onClose }: WithdrawModalProps) {
   const value = Number(amount)
   const tooSmall = amount !== '' && value < minimum
   const tooBig = value > balance
-  const canSubmit = amount !== '' && value > 0 && !tooSmall && !tooBig
+  const canSubmit = !isLoading && !isError && availability?.hasVerifiedAccount && !availability.payoutInProgress && amount !== '' && Number.isFinite(value) && value > 0 && !tooSmall && !tooBig
 
   function submit() {
+    if (!canSubmit) return
     requestPayout.mutate({ amount: value }, {
       onSuccess: () => {
         toast.success('Payout requested — you will be notified once it is sent')
@@ -45,7 +46,9 @@ export function WithdrawModal({ open, onClose }: WithdrawModalProps) {
   function body() {
     if (isLoading) return <p className="text-sm text-muted dark:text-gray-400">Checking your balance…</p>
 
-    if (!availability?.hasVerifiedAccount) {
+    if (isError || !availability) return <div role="alert" className="space-y-3"><p>Could not check payout availability. Your balance and account status are unavailable.</p><Button disabled={isFetching} onClick={() => void refetch()}>Retry payout availability</Button></div>
+
+    if (!availability.hasVerifiedAccount) {
       return (
         <div className="space-y-4">
           <div className="flex items-start gap-2 rounded-xl bg-warning/10 p-4 text-sm text-warning">

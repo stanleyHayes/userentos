@@ -1,11 +1,14 @@
+import { ContentReportsPage } from '@/pages/admin/ContentReportsPage'
 import { useState, useCallback, lazy, Suspense } from 'react'
 import { useStorefrontHost } from '@/hooks/useStorefrontHost'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { lightTheme, darkTheme } from '@/lib/muiTheme'
 import { useThemeStore } from '@/stores/themeStore'
+import { useAuthStore } from '@/stores/authStore'
+import { queryClient, querySessionKey } from '@/lib/queryClient'
 import { SplashScreen } from '@/components/ui/SplashScreen'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -58,6 +61,7 @@ const SavedPropertiesPage = lazy(() => import('@/pages/SavedPropertiesPage').the
 const ApplicationsPage = lazy(() => import('@/pages/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })))
 const TenantsPage = lazy(() => import('@/pages/TenantsPage').then((m) => ({ default: m.TenantsPage })))
 const TenantProfileViewPage = lazy(() => import('@/pages/tenant/TenantProfileViewPage').then((m) => ({ default: m.TenantProfileViewPage })))
+const DeleteAccountPage = lazy(() => import('@/pages/legal/DeleteAccountPage').then((m) => ({ default: m.DeleteAccountPage })))
 const PrivacyPage = lazy(() => import('@/pages/legal/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
 const TermsPage = lazy(() => import('@/pages/legal/TermsPage').then((m) => ({ default: m.TermsPage })))
 const DataProtectionPage = lazy(() => import('@/pages/legal/DataProtectionPage').then((m) => ({ default: m.DataProtectionPage })))
@@ -128,15 +132,6 @@ const RoleCapabilitiesPage = lazy(() => import('@/pages/RoleCapabilitiesPage').t
 const PublicAgencyPage = lazy(() => import('@/pages/PublicAgencyPage').then((m) => ({ default: m.PublicAgencyPage })))
 const PublicDevelopmentsPage = lazy(() => import('@/pages/PublicDevelopmentsPage').then((m) => ({ default: m.PublicDevelopmentsPage })))
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-})
-
 // Suspense fallback rendered while a lazy chunk is loading. We pass a no-op
 // onFinished — the SplashScreen schedules its own timers but unmounts as soon
 // as the lazy chunk resolves, so the timer never fires user-visibly.
@@ -162,6 +157,7 @@ function HomeRoute({ isPortal }: { isPortal: boolean }) {
 }
 
 export default function App() {
+  const querySession = useAuthStore(querySessionKey)
   const { resolvedTheme } = useThemeStore()
   const muiTheme = resolvedTheme() === 'dark' ? darkTheme : lightTheme
   const [showSplash, setShowSplash] = useState(
@@ -178,7 +174,7 @@ export default function App() {
     <PortalContext.Provider value={portalValue}>
     <ThemeProvider theme={muiTheme}>
     <CssBaseline enableColorScheme />
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider key={querySession} client={queryClient}>
       {showSplash && <SplashScreen onFinished={handleSplashFinished} />}
       <ConfettiBurstPortal />
       <BrowserRouter>
@@ -191,6 +187,7 @@ export default function App() {
               did while the settings screen advertised that URL as live. */}
           <Route path="/" element={<HomeRoute isPortal={isPortal} />} />
           <Route element={<PublicLayout />}>
+            <Route path="/delete-account" element={<DeleteAccountPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/data-protection" element={<DataProtectionPage />} />
@@ -303,6 +300,7 @@ export default function App() {
             <Route path="/admin/promotions" element={<RequireRole roles={['admin']}><AdminPromotionsPage /></RequireRole>} />
             <Route path="/admin/audit-logs" element={<RequireRole roles={['admin']}><AdminAuditLogPage /></RequireRole>} />
             <Route path="/admin/model-performance" element={<RequireRole roles={['admin', 'super_admin']}><AdminModelPerformancePage /></RequireRole>} />
+            <Route path="/admin/content-reports" element={<RequireRole roles={['admin', 'super_admin']}><ContentReportsPage /></RequireRole>} />
             <Route path="/admin/complaint-review" element={<RequireRole roles={['admin', 'super_admin']}><AdminComplaintReviewPage /></RequireRole>} />
             <Route path="/admin/reviewer-organizations" element={<RequireRole roles={['admin']}><AdminReviewerOrgsPage /></RequireRole>} />
             <Route path="/admin/transactions" element={<RequireRole roles={['admin']}><AdminTransactionsPage /></RequireRole>} />

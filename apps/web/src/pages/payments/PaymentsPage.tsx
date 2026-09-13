@@ -18,6 +18,7 @@ import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { PaymentStatus, Payment } from '@/types'
+import { RentReceiptControl } from './RentReceiptControl'
 
 const statusVariant: Record<PaymentStatus, 'warning' | 'default' | 'success' | 'danger' | 'muted'> = {
   pending: 'warning',
@@ -82,7 +83,7 @@ export function PaymentsPage() {
     return () => clearTimeout(t)
   }, [searchQuery])
 
-  const { data, isLoading, isFetching } = usePayments({
+  const { data, isLoading, isFetching, isError, refetch } = usePayments({
     page,
     pageSize: perPage,
     status: statusFilter || undefined,
@@ -213,6 +214,11 @@ export function PaymentsPage() {
 
           {isLoading ? (
             <ListSkeleton rows={4} />
+          ) : isError ? (
+            <div className="space-y-3 py-6 text-center">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">Could not load payment history. Please try again.</p>
+              <Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>Retry payment history</Button>
+            </div>
           ) : payments.length === 0 ? (
             hasActiveFilters ? (
               <div className="text-center py-8">
@@ -342,10 +348,8 @@ export function PaymentsPage() {
                 <p className="font-mono text-xs text-primary-dark dark:text-white mt-0.5">{selectedPayment.agreementId?.slice(0, 12)}...</p>
               </div>
             </div>
-            {selectedPayment.receiptUrl && (
-              <a href={selectedPayment.receiptUrl} target="_blank" rel="noopener noreferrer" className="block">
-                <Button variant="outline" className="w-full">View Receipt</Button>
-              </a>
+            {['completed', 'refunded'].includes(selectedPayment.status) && (user?.id === selectedPayment.tenantId || user?.id === selectedPayment.landlordId) && (
+              <RentReceiptControl key={selectedPayment.id} paymentId={selectedPayment.id} />
             )}
           </div>
         </Modal>
@@ -393,12 +397,14 @@ function MakePaymentModal({
   const { data: agreementData } = useAgreements()
   const agreements = (agreementData?.items ?? []).filter((a) => a.status === 'active')
   const defaultAgreementId = agreements[0]?.id ?? ''
-  const [form, setForm] = useState({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo', phone: user?.phone ?? '' })
+  const [form, setForm] = useState({ agreementId: defaultAgreementId, amount: '', periodStart: '', periodEnd: '', method: 'mtn_momo', phone: user?.phone ?? '' })
 
   // Default to the first active agreement once it becomes available.
   if (form.agreementId === '' && defaultAgreementId !== '') {
     setForm((prev) => ({ ...prev, agreementId: defaultAgreementId }))
   }
+
+  const selectedAgreement = agreements.find(item => item.id === form.agreementId)
 
   function update(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -409,13 +415,14 @@ function MakePaymentModal({
     try {
       const result = await createPayment.mutateAsync({
         agreementId: form.agreementId,
+        rentPeriod: { startDate: form.periodStart, endDate: form.periodEnd },
         amount: Number(form.amount),
         method: form.method,
         phone: form.phone.trim() || undefined,
       })
       celebrate('payment', 'Payment initiated!')
       onClose()
-      setForm({ agreementId: defaultAgreementId, amount: '', method: 'mtn_momo', phone: user?.phone ?? '' })
+      setForm({ agreementId: defaultAgreementId, amount: '', periodStart: '', periodEnd: '', method: 'mtn_momo', phone: user?.phone ?? '' })
       if (result?.instructions) {
         onInstructions(result.instructions)
       }
@@ -452,6 +459,10 @@ function MakePaymentModal({
             placeholder="UUID of active agreement"
           />
         )}
+
+        <TextField id="rent-period-start" label="Rent period from" type="date" value={form.periodStart} onChange={(e) => update('periodStart', e.target.value)} required slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: selectedAgreement?.startDate, max: selectedAgreement?.endDate } }} />
+        <TextField id="rent-period-end" label="Rent period through" type="date" value={form.periodEnd} onChange={(e) => update('periodEnd', e.target.value)} required slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: selectedAgreement?.startDate, max: selectedAgreement?.endDate } }} />
+        <p className="text-sm text-muted">Select the dates this payment is towards. This does not mark the whole period as fully paid.</p>
 
         <TextField
           id="amount"

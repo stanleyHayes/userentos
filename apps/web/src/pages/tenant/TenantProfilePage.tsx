@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { tenantProfilePatch } from '@/types/shared'
 import type { TenantProfile } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { EmptyState as SharedEmptyState } from '@/components/ui/EmptyState'
@@ -68,7 +69,7 @@ export function TenantProfilePage() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
-    await updateMutation.mutateAsync(form)
+    await updateMutation.mutateAsync(tenantProfilePatch(form))
     setDirty(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -213,8 +214,6 @@ function PersonalSection({ form, u }: { form: Profile; u: (f: string, v: unknown
         </FormGrid>
         <FormGrid columns={3}>
           <Select id="nationality" label="Nationality" value={form.nationality ?? ''} onChange={(e) => u('nationality', e.target.value)} required options={[{ value: '', label: 'Select...' }, { value: 'Ghanaian', label: 'Ghanaian' }, { value: 'Nigerian', label: 'Nigerian' }, { value: 'Togolese', label: 'Togolese' }, { value: 'Ivorian', label: 'Ivorian' }, { value: 'British', label: 'British' }, { value: 'American', label: 'American' }, { value: 'Other', label: 'Other' }]} />
-          <Select id="religion" label="Religion" value={form.religion ?? ''} onChange={(e) => u('religion', e.target.value)} required options={[{ value: '', label: 'Select...' }, { value: 'christian', label: 'Christian' }, { value: 'muslim', label: 'Muslim' }, { value: 'traditional', label: 'Traditional' }, { value: 'hindu', label: 'Hindu' }, { value: 'none', label: 'None' }, { value: 'other', label: 'Other' }]} />
-          <Select id="ethnicGroup" label="Ethnic Group" value={form.ethnicGroup ?? ''} onChange={(e) => u('ethnicGroup', e.target.value)} options={[{ value: '', label: 'Select...' }, { value: 'Akan', label: 'Akan' }, { value: 'Ashanti', label: 'Ashanti' }, { value: 'Fante', label: 'Fante' }, { value: 'Ewe', label: 'Ewe' }, { value: 'Ga-Dangme', label: 'Ga-Dangme' }, { value: 'Mole-Dagbon', label: 'Mole-Dagbon' }, { value: 'Guan', label: 'Guan' }, { value: 'Gurma', label: 'Gurma' }, { value: 'Grusi', label: 'Grusi' }, { value: 'Mande', label: 'Mande' }, { value: 'Other', label: 'Other' }]} />
         </FormGrid>
         <FormGrid columns={2}>
           <Input id="hometown" label="Hometown" value={form.hometown ?? ''} onChange={(e) => u('hometown', e.target.value)} placeholder="e.g. Kumasi" />
@@ -271,7 +270,7 @@ function ProfessionalSection({ form, u }: { form: Profile; u: (f: string, v: unk
   const primaryCurrency = form.primaryCurrency ?? 'GHS'
 
   const primaryIncome = form.monthlyIncome ?? 0
-  const additionalTotal = incomeSources.reduce((sum, s) => sum + (s.amount || 0), 0)
+  const additionalTotal = incomeSources.filter(s => s.currency === primaryCurrency).reduce((sum, s) => sum + (s.amount || 0), 0)
   const totalIncome = primaryIncome + additionalTotal
 
   function addIncomeSource() {
@@ -366,7 +365,7 @@ function ProfessionalSection({ form, u }: { form: Profile; u: (f: string, v: unk
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <DollarSign size={18} className="text-primary dark:text-blue-400" />
-                  <span className="text-sm font-semibold text-primary-dark dark:text-white">Total Monthly Income</span>
+                  <span className="text-sm font-semibold text-primary-dark dark:text-white">Monthly total in {primaryCurrency}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-xl font-extrabold text-primary dark:text-blue-400">
@@ -377,7 +376,7 @@ function ProfessionalSection({ form, u }: { form: Profile; u: (f: string, v: unk
                     <p className="text-[11px] text-muted dark:text-gray-500 mt-0.5">
                       Primary: {CURRENCY_SYMBOLS[primaryCurrency]}{primaryIncome.toLocaleString()}
                       {' + '}
-                      {incomeSources.length} additional source{incomeSources.length > 1 ? 's' : ''}
+                      same-currency sources. Other currencies are listed separately above; no conversion is applied.
                     </p>
                   )}
                 </div>
@@ -665,7 +664,7 @@ function VerifyBadge({ label, verified }: { label: string; verified: boolean }) 
 
 function getTabProgress(tab: string, form: Profile): number {
   switch (tab) {
-    case 'personal': return [form.dateOfBirth, form.gender, form.maritalStatus, form.nationality, form.religion].filter(Boolean).length * 20
+    case 'personal': return [form.dateOfBirth, form.gender, form.maritalStatus, form.nationality].filter(Boolean).length * 25
     case 'academic': return form.highestEducation ? (form.highestEducation === 'none' ? 100 : [form.institution, form.fieldOfStudy].filter(Boolean).length * 50) : 0
     case 'professional': return form.employmentStatus ? (form.employmentStatus === 'unemployed' ? 100 : [form.occupation, form.monthlyIncome, form.employmentDuration].filter(Boolean).length * 33) : 0
     case 'family': return [form.numberOfOccupants, form.hasSpouse !== undefined, form.hasChildren !== undefined].filter(Boolean).length * 33

@@ -8,7 +8,7 @@ export function PrivacyPage() {
       title="Privacy Policy"
       subtitle="How we collect, use, and protect your data"
       icon="shield"
-      lastUpdated="March 20, 2026"
+      lastUpdated="September 12, 2026"
       headerExtra={<DoodleStars className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />}
       sections={[
         {
@@ -55,7 +55,7 @@ export function PrivacyPage() {
             <>
               <p>We may share your information with:</p>
               <ul className="list-disc pl-5 space-y-2 mt-2">
-                <li><strong>Licensed Partner Banks:</strong> For processing payments and managing RentGuard savings wallets. Funds are held by these partners, not by RentOS.</li>
+                <li><strong>Payment Providers:</strong> For processing payments and managing RentGuard savings wallets. The payment provider and applicable terms are disclosed during the transaction.</li>
                 <li><strong>Licensed Investment Firms:</strong> If you opt into the investment layer, your data is shared with the selected fund manager.</li>
                 <li><strong>Government Authorities:</strong> The Rent Control Department and Ministry of Works & Housing may access anonymized data. Individual data is shared only pursuant to lawful requests.</li>
                 <li><strong>Dispute Parties:</strong> Information relevant to a filed dispute is shared with the other party and mediators.</li>
@@ -69,7 +69,7 @@ export function PrivacyPage() {
           title: 'Data Security',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li>End-to-end encryption for sensitive data transmission.</li>
+              <li>Production connections use HTTPS encryption in transit. RentOS servers and service providers process data to deliver features; messages are not end-to-end encrypted.</li>
               <li>Hashed and salted password storage (bcrypt).</li>
               <li>Role-based access control limiting data access to authorized users.</li>
               <li>Audit logging of all document and agreement actions.</li>
@@ -80,7 +80,7 @@ export function PrivacyPage() {
         {
           id: 'retention',
           title: 'Data Retention',
-          content: <p>We retain your data for as long as your account is active or as needed to provide services. Financial transaction records are retained for a minimum of 7 years in compliance with Ghanaian financial regulations. You may request deletion of your account and personal data at any time, subject to legal retention requirements.</p>,
+          content: <p>We retain your data for as long as your account is active or as needed to provide services. Financial, agreement and dispute records may be retained where needed for legal obligations or claims. You can close your account in Settings → Privacy or at /delete-account. Core profile details are erased immediately; related personal records are scheduled for deletion after 30 days. You may also request deletion of specific data by contacting us.</p>,
         },
         {
           id: 'your-rights',
@@ -99,13 +99,18 @@ export function PrivacyPage() {
           ),
         },
         {
+          id: 'deletion',
+          title: 'Account and Data Deletion',
+          content: <p><a className="underline" href="/delete-account">Delete your RentOS account or request removal of personal data</a>. Account closure cannot be undone and does not settle outstanding balances or terminate tenancy obligations.</p>,
+        },
+        {
           id: 'contact',
           title: 'Contact Us',
           content: (
             <div className="rounded-xl bg-surface dark:bg-[#161927] border border-border dark:border-[#252a3a] p-4">
               <p className="font-medium text-primary-dark dark:text-white">Data Protection Officer</p>
               <p className="mt-2">Email: {CONTACT_EMAIL.info}</p>
-              <p>Phone: +233 30 XXX XXXX</p>
+
               <p>Address: Accra, Ghana</p>
             </div>
           ),

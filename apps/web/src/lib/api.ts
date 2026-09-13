@@ -1,35 +1,9 @@
-import { useAuthStore } from '@/stores/authStore'
+import { checkoutRequest } from './checkoutRequests'
+import { isProviderCheckout } from '../../../../packages/shared/checkoutRequests'
+import { AiConsentDeclined, AI_SHARING_VERSION, confirmAiSharing, needsAiConsent } from './aiConsent'
+import { getSessionGeneration, refreshCurrentSession, useAuthStore } from '@/stores/authStore'
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api'
-
-let refreshingPromise: Promise<boolean> | null = null
-
-async function attemptRefresh(): Promise<boolean> {
-  const refreshToken = useAuthStore.getState().refreshToken
-  if (!refreshToken) return false
-
-  try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-      // Bound the wait — a hung connection would otherwise leave callers spinning forever.
-      signal: AbortSignal.timeout(10_000),
-    })
-
-    if (!res.ok) return false
-
-    const data = await res.json()
-    const { token, refreshToken: newRefreshToken } = data.data ?? {}
-    if (token) {
-      useAuthStore.setState({ token, refreshToken: newRefreshToken ?? refreshToken })
-      return true
-    }
-    return false
-  } catch {
-    return false
-  }
-}
 
 class ApiClient {
   private getToken(): string | null {
@@ -50,31 +24,34 @@ class ApiClient {
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken()
+    const owner = useAuthStore.getState().user?.id
+    const generation = getSessionGeneration()
+    const assertOwner = () => {
+      if (getSessionGeneration() !== generation || useAuthStore.getState().user?.id !== owner) throw new Error('Account session changed. Please try again.')
+    }
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...((options.headers as Record<string, string>) || {}),
     }
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const doRequest = (): Promise<Response> =>
-      fetch(`${BASE_URL}${path}`, {
+    const doRequest = (): Promise<Response> => {
+      assertOwner()
+      return fetch(`${BASE_URL}${path}`, {
         ...options,
         headers,
       })
+    }
 
     let res = await doRequest()
+    assertOwner()
 
     // Silent refresh on 401 (except auth paths)
     if (res.status === 401 && !path.startsWith('/auth/')) {
-      // Deduplicate concurrent refresh attempts
-      if (!refreshingPromise) {
-        refreshingPromise = attemptRefresh().finally(() => {
-          refreshingPromise = null
-        })
-      }
-      const refreshed = await refreshingPromise
+      const refreshed = await refreshCurrentSession(token)
+      assertOwner()
 
       if (refreshed) {
         // Retry original request with new token
@@ -91,6 +68,7 @@ class ApiClient {
     }
 
     const data = await this.parseBody(res)
+    assertOwner()
 
     if (!res.ok) {
       throw new Error(data.error || `Request failed (${res.status})`)
@@ -103,8 +81,27 @@ class ApiClient {
     return this.request<T>(path)
   }
 
-  post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) })
+  async post<T>(path: string, body: unknown): Promise<T> {
+    let payload = JSON.stringify(body)
+    if (needsAiConsent(path)) {
+      const session = getSessionGeneration()
+      if (!await confirmAiSharing(path)) throw new AiConsentDeclined()
+      if (getSessionGeneration() !== session) throw new Error('Account session changed. Please try again.')
+      payload = JSON.stringify({ ...JSON.parse(payload), aiSharingConsent: AI_SHARING_VERSION })
+    }
+    if (isProviderCheckout(path, body)) {
+      const origin = useAuthStore.getState()
+      const generation = getSessionGeneration()
+      const owner = origin.user?.id
+      if (!owner) throw new Error('Sign in before starting a payment.')
+      return checkoutRequest(owner, path, payload, async (key, signal) => {
+        if (getSessionGeneration() !== generation || useAuthStore.getState().user?.id !== owner) throw new Error('Account session changed. Please try again.')
+        const result = await this.request<T>(path, { method: 'POST', body: payload, signal, headers: { 'Idempotency-Key': key } })
+        if (getSessionGeneration() !== generation || useAuthStore.getState().user?.id !== owner) throw new Error('Account session changed. Please try again.')
+        return result
+      })
+    }
+    return this.request<T>(path, { method: 'POST', body: payload })
   }
 
   patch<T>(path: string, body: unknown): Promise<T> {
@@ -120,44 +117,7 @@ class ApiClient {
   }
 
   async upload<T>(path: string, formData: FormData): Promise<T> {
-    const getAuthHeader = (): Record<string, string> => {
-      const t = this.getToken()
-      return t ? { Authorization: `Bearer ${t}` } : {}
-    }
-
-    let res = await fetch(`${BASE_URL}${path}`, {
-      method: 'POST',
-      headers: getAuthHeader(),
-      body: formData,
-    })
-
-    // Silent refresh on 401
-    if (res.status === 401 && !path.startsWith('/auth/')) {
-      if (!refreshingPromise) {
-        refreshingPromise = attemptRefresh().finally(() => {
-          refreshingPromise = null
-        })
-      }
-      const refreshed = await refreshingPromise
-      if (refreshed) {
-        res = await fetch(`${BASE_URL}${path}`, {
-          method: 'POST',
-          headers: getAuthHeader(),
-          body: formData,
-        })
-      } else {
-        useAuthStore.getState().logout()
-        throw new Error('Session expired')
-      }
-    }
-
-    const data = await this.parseBody(res)
-
-    if (!res.ok) {
-      throw new Error(data.error || `Upload failed (${res.status})`)
-    }
-
-    return data.data as T
+    return this.request<T>(path, { method: 'POST', body: formData })
   }
 }
 

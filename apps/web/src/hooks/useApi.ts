@@ -294,7 +294,7 @@ export function usePayment(id: string) {
 export function useCreatePayment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { agreementId: string; amount: number; method: string; phone?: string }) =>
+    mutationFn: (body: { agreementId: string; amount: number; method: string; phone?: string; rentPeriod: { startDate: string; endDate: string } }) =>
       api.post<{ payment: Payment; instructions?: string }>('/payments', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payments'] }),
   })
@@ -304,7 +304,11 @@ export function useCreatePayment() {
 export function useWallet() {
   return useQuery({
     queryKey: ['wallet'],
-    queryFn: () => api.get<Wallet>('/savings/wallet'),
+    queryFn: async () => {
+      const wallet = await api.get<Wallet>('/savings/wallet')
+      if (!wallet || !Number.isFinite(wallet.balance) || !Array.isArray(wallet.transactions)) throw new Error('Wallet response is incomplete')
+      return wallet
+    },
   })
 }
 
@@ -652,24 +656,36 @@ export interface Payout {
 export function usePayoutDestinations() {
   return useQuery({
     queryKey: ['payout-destinations'],
-    queryFn: () => api.get<{ items: PayoutDestination[] }>('/payouts/destinations'),
+    queryFn: async () => {
+      const data = await api.get<{ items: PayoutDestination[] }>('/payouts/destinations')
+      if (!Array.isArray(data?.items) || data.items.some(d => !d || !['mobile_money', 'ghipss'].includes(d.type) || typeof d.code !== 'string' || typeof d.name !== 'string')) throw new Error('Payout destinations response is incomplete')
+      return data
+    },
     // Telco and bank lists barely change; no need to re-fetch per visit.
     staleTime: 60 * 60 * 1000,
   })
 }
 
+function validatePayoutAccount(data: PayoutAccount | null) {
+  if (data !== null && (!data || !['mobile_money', 'ghipss'].includes(data.type) || typeof data.bankCode !== 'string' || typeof data.bankName !== 'string' || typeof data.accountNumber !== 'string' || typeof data.accountName !== 'string' || typeof data.verified !== 'boolean')) throw new Error('Payout account response is incomplete')
+  return data
+}
+
 export function usePayoutAccount() {
   return useQuery({
     queryKey: ['payout-account'],
-    queryFn: () => api.get<PayoutAccount | null>('/payouts/account'),
+    queryFn: async () => validatePayoutAccount(await api.get<PayoutAccount | null>('/payouts/account')),
   })
 }
 
 export function useSavePayoutAccount() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { type: string; accountNumber: string; bankCode: string; accountName: string }) =>
-      api.put<PayoutAccount>('/payouts/account', body),
+    mutationFn: async (body: { type: string; accountNumber: string; bankCode: string; accountName: string }) => {
+      const saved = validatePayoutAccount(await api.put<PayoutAccount>('/payouts/account', body))
+      if (!saved?.verified) throw new Error('Account verification was not confirmed. Reload your payout account before retrying.')
+      return saved
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payout-account'] })
       qc.invalidateQueries({ queryKey: ['payout-availability'] })
@@ -692,7 +708,11 @@ export function useRemovePayoutAccount() {
 export function usePayoutAvailability() {
   return useQuery({
     queryKey: ['payout-availability'],
-    queryFn: () => api.get<{ balance: number; minimum: number; hasVerifiedAccount: boolean; payoutInProgress: boolean }>('/payouts/available'),
+    queryFn: async () => {
+      const data = await api.get<{ balance: number; minimum: number; hasVerifiedAccount: boolean; payoutInProgress: boolean }>('/payouts/available')
+      if (!data || !Number.isFinite(data.balance) || !Number.isFinite(data.minimum) || data.minimum <= 0 || typeof data.hasVerifiedAccount !== 'boolean' || typeof data.payoutInProgress !== 'boolean') throw new Error('Payout availability response is incomplete')
+      return data
+    },
   })
 }
 

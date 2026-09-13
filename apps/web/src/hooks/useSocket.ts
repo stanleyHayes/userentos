@@ -1,7 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/authStore'
+import { api } from '@/lib/api'
+import { createSocketRecovery } from '../../../../packages/shared/socketRecovery'
+import { getSessionGeneration, useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 
 let socket: Socket | null = null
@@ -24,18 +26,27 @@ function emitSocketChange(): void {
 }
 
 function getServerUrl(): string {
-  // In production, use the API URL (without /api suffix)
-  const apiUrl = import.meta.env.VITE_SOCKET_URL
-  if (apiUrl) return apiUrl
-  // In dev, socket connects to the server directly (not through Vite proxy)
-  return import.meta.env.DEV ? 'http://localhost:3002' : window.location.origin
+  if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL
+  // Follow the HTTP API's origin. Relative APIs use the same-origin socket
+  // proxy in development, including isolated test servers on alternate ports.
+  return new URL(import.meta.env.VITE_API_URL || '/api', window.location.origin).origin
 }
 
 function connectSocket(token: string): Socket {
   // Reuse the live instance: a socket that is mid-connect or temporarily
   // disconnected (auto-reconnect in progress) must not be replaced by a
   // second, orphaned connection. Only an explicitly destroyed socket is recreated.
-  if (socket) return socket
+  if (socket) {
+    // Shared consumers may keep the singleton alive while HTTP refresh rotates
+    // its token. Future reconnects must authenticate with the current session.
+    const previousToken = (socket.auth as { token?: string }).token
+    if (previousToken !== token) {
+      socket.disconnect()
+      socket.auth = { token }
+      socket.connect()
+    }
+    return socket
+  }
 
   socket = io(getServerUrl(), {
     auth: { token },
@@ -49,6 +60,10 @@ function connectSocket(token: string): Socket {
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket?.id)
   })
+  socket.on('account:suspended', (data: { suspendedAt: string }) => {
+    const user = useAuthStore.getState().user
+    if (user) useAuthStore.setState({ user: { ...user, suspendedAt: data.suspendedAt } })
+  })
 
   socket.on('connect_error', (err) => {
     console.warn('[Socket] Connection error:', err.message)
@@ -56,8 +71,8 @@ function connectSocket(token: string): Socket {
 
   socket.on('disconnect', (reason) => {
     console.log('[Socket] Disconnected:', reason)
-    // socket.io does not auto-reconnect after a server-initiated disconnect
-    if (reason === 'io server disconnect') socket?.connect()
+    // Server-initiated disconnection is terminal (for example account closure).
+    // Transport failures still use Socket.IO's normal automatic reconnection.
   })
 
   emitSocketChange()
@@ -88,6 +103,17 @@ export function useSocket(): Socket | null {
     if (isAuthenticated && token) {
       connectionCount++
       const s = connectSocket(token)
+      const generation = getSessionGeneration()
+      const recovery = createSocketRecovery(
+        () => getSessionGeneration() === generation && useAuthStore.getState().isAuthenticated,
+        () => api.get('/users/me'),
+        () => {
+          const currentToken = useAuthStore.getState().token
+          if (socket === s && currentToken && currentToken !== token) connectSocket(currentToken)
+        },
+      )
+      const handleExpiry = () => { void recovery.run() }
+      s.on('session:expired', handleExpiry)
 
       // Listen for real-time notifications → show toast
       const handleNotification = (data: { title: string; message: string }) => {
@@ -117,6 +143,8 @@ export function useSocket(): Socket | null {
       s.on('booking:reviewed', handleBookingEvent)
 
       return () => {
+        recovery.dispose()
+        s.off('session:expired', handleExpiry)
         s.off('notification:new', handleNotification)
         s.off('badges:update', handleBadgeUpdate)
         s.off('booking:created', handleBookingEvent)
