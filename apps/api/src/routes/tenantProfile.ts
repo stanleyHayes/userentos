@@ -9,11 +9,11 @@ import { param } from '../utils/params.js'
 
 const router = Router()
 
-// Recalculate score if stale (0 but profile has data)
+// Recalculate persisted completion against the current requirements.
 async function ensureScore<T extends object>(profile: T): Promise<T> {
   const score = calcScore(profile)
   const raw = profile as Record<string, unknown> & { _id: unknown; completionScore?: number; profileComplete?: boolean }
-  if (score !== raw.completionScore) {
+  if (score !== raw.completionScore || raw.profileComplete !== (score >= 100)) {
     await TenantProfile.updateOne(
       { _id: raw._id as string },
       { completionScore: score, profileComplete: score >= 100 }
@@ -38,13 +38,13 @@ router.get('/me', authenticate, async (req, res) => {
 // Update my profile
 // Allowlist-validated: only known profile fields, bounded sizes/types — the
 // previous blocklist approach let callers mass-assign garbage of any size/type.
-const profilePatchSchema = z.object({
+export const profilePatchSchema = z.object({
   dateOfBirth: z.string().max(30).optional(),
   gender: z.string().max(30).optional(),
   maritalStatus: z.string().max(30).optional(),
   nationality: z.string().max(60).optional(),
-  religion: z.string().max(60).optional(),
-  ethnicGroup: z.string().max(60).optional(),
+  religion: z.literal('').optional(),
+  ethnicGroup: z.literal('').optional(),
   hometown: z.string().max(120).optional(),
   languagesSpoken: z.array(z.string().max(40)).max(20).optional(),
   bio: z.string().max(2000).optional(),
@@ -57,6 +57,8 @@ const profilePatchSchema = z.object({
   occupation: z.string().max(120).optional(),
   employer: z.string().max(120).optional(),
   employerAddress: z.string().max(300).optional(),
+  primaryCurrency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  incomeSources: z.array(z.object({ source: z.string().max(120), amount: z.number().min(0).max(1e9), currency: z.string().regex(/^[A-Z]{3}$/) })).max(20).optional(),
   monthlyIncome: z.number().min(0).max(1e9).optional(),
   employmentDuration: z.string().max(60).optional(),
   workPhone: z.string().max(20).optional(),
@@ -143,6 +145,8 @@ router.patch('/me', authenticate, async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   Object.assign(profile, parsed.data)
+  if (parsed.data.religion === '') profile.religion = undefined
+  if (parsed.data.ethnicGroup === '') profile.ethnicGroup = undefined
   await profile.save() // pre-save hook calculates score
 
   success(res, { ...profile.toObject(), id: profile._id.toString() })
@@ -171,7 +175,8 @@ router.get('/:userId', authenticate, async (req, res) => {
   const profile = await TenantProfile.findOne({ userId: targetUserId }).lean()
   if (!profile) { error(res, 'Profile not found', 404); return }
   const scored = await ensureScore(profile)
-  success(res, { ...scored, id: (scored._id as Types.ObjectId).toString() })
+  const { religion: _religion, ethnicGroup: _ethnicGroup, ...shared } = scored
+  success(res, { ...shared, id: (scored._id as Types.ObjectId).toString() })
 })
 
 export default router

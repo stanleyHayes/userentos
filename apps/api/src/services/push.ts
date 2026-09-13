@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app'
 import { getMessaging } from 'firebase-admin/messaging'
 import { DeviceToken, type DevicePlatform } from '../models/DeviceToken.js'
+import { pushTokenSchema, pushPlatformSchema } from './push/input.js'
 import { logger } from '../utils/logger.js'
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -31,7 +32,8 @@ export async function registerDeviceToken(
   token: string,
   platform?: DevicePlatform,
 ): Promise<void> {
-  const resolvedPlatform = platform ?? detectPlatform(token)
+  pushTokenSchema.parse(token)
+  const resolvedPlatform = platform === undefined ? detectPlatform(token) : pushPlatformSchema.parse(platform)
   await DeviceToken.findOneAndUpdate(
     { token },
     { userId, token, platform: resolvedPlatform, lastSeenAt: new Date() },
@@ -40,6 +42,7 @@ export async function registerDeviceToken(
 }
 
 export async function unregisterDeviceToken(userId: string, token: string): Promise<void> {
+  pushTokenSchema.parse(token)
   // Scope deletion to the owner — an attacker must not be able to unregister
   // another user's device by guessing/knowing their push token.
   await DeviceToken.deleteOne({ token, userId })

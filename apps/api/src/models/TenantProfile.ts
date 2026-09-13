@@ -27,6 +27,8 @@ export interface ITenantProfile extends Document {
   employer?: string
   employerAddress?: string
   monthlyIncome?: number
+  primaryCurrency?: string
+  incomeSources?: { source: string; amount: number; currency: string }[]
   employmentDuration?: string
   workPhone?: string
   linkedinUrl?: string
@@ -110,7 +112,7 @@ export function calcScore(p: object): number {
   }
 
   // Personal (15)
-  total += check([raw.dateOfBirth, raw.gender, raw.maritalStatus, raw.nationality, raw.religion], 15)
+  total += check([raw.dateOfBirth, raw.gender, raw.maritalStatus, raw.nationality], 15)
   // Academic (10)
   total += check([raw.highestEducation, raw.institution || raw.highestEducation === 'none', raw.fieldOfStudy || raw.highestEducation === 'none'], 10)
   // Professional (15)
@@ -150,6 +152,8 @@ const tenantProfileSchema = new Schema<ITenantProfile>({
   currentlyStudying: { type: Boolean, default: false },
 
   employmentStatus: String, occupation: String, employer: String, employerAddress: String,
+  primaryCurrency: { type: String, default: 'GHS' },
+  incomeSources: [{ source: String, amount: Number, currency: String }],
   monthlyIncome: Number, employmentDuration: String, workPhone: String, linkedinUrl: String, professionalLicense: String,
 
   hasSpouse: { type: Boolean, default: false }, spouseName: String, spouseOccupation: String,

@@ -37,6 +37,7 @@ function emit(event: WebhookEvent) {
 }
 
 class SimulatorProvider implements PaymentProvider {
+  source = 'simulated' as const
   id: ProviderId
   constructor(id: ProviderId) {
     this.id = id
@@ -51,6 +52,7 @@ class SimulatorProvider implements PaymentProvider {
         providerRef,
         status: 'completed',
         amount: input.amount,
+        currency: 'GHS',
         timestamp: new Date().toISOString(),
         raw: { simulated: true, providerId: this.id, narration: input.narration },
       })
@@ -75,15 +77,16 @@ class SimulatorProvider implements PaymentProvider {
       providerRef: data.providerRef,
       status: (data.status ?? 'completed') as ProviderStatus,
       amount: Number(data.amount ?? 0),
+      currency: data.currency,
       timestamp: data.timestamp ?? new Date().toISOString(),
       raw: data,
     }
   }
 
-  async queryStatus(providerRef: string): Promise<ProviderStatus> {
+  async queryStatus(_providerRef: string): Promise<ProviderStatus> {
     // In simulator mode, anything that hasn't fired yet is still pending.
     // The async setTimeout above will mark it completed via the listener path.
-    return providerRef.startsWith('SIM-') ? 'pending' : 'completed'
+    return 'pending'
   }
 }
 

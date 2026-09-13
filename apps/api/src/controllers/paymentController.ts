@@ -1,7 +1,10 @@
+import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { captureReceiptContext } from '../services/payments/receiptContext.js'
+import { rentPeriodError } from '../services/payments/rentPeriod.js'
 import { Request, Response } from 'express'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
-import { Payment } from '../models/Payment.js'
+import { Payment, type IPayment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
@@ -14,6 +17,7 @@ const MOBILE_MONEY_METHODS = new Set(['mtn_momo', 'telecel_cash', 'airteltigo_mo
 
 const createSchema = z.object({
   agreementId: z.string().min(1),
+  rentPeriod: z.object({ startDate: z.string(), endDate: z.string() }).strict(),
   method: z.enum(['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer']),
   amount: z.number().positive().optional(),
   phone: z.string().min(9).max(15).optional(),
@@ -23,7 +27,10 @@ export const paymentController = {
   create: async (req: Request, res: Response) => {
     const parsed = createSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-    const { agreementId, method, amount: requestedAmount, phone } = parsed.data
+    const { agreementId, method, amount: requestedAmount, phone, rentPeriod } = parsed.data
+
+    const periodError = rentPeriodError(rentPeriod)
+    if (periodError) { error(res, periodError); return }
 
     // The provider collects from this number — without it every live
     // mobile-money collection is guaranteed to fail.
@@ -41,12 +48,15 @@ export const paymentController = {
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
       if (existing) {
         const samePayload = existing.agreementId === agreementId
+          && existing.method === method
+          && existing.rentPeriod?.startDate === rentPeriod.startDate
+          && existing.rentPeriod?.endDate === rentPeriod.endDate
           && (requestedAmount === undefined || round2(requestedAmount) === existing.amount)
         if (!samePayload) {
           error(res, 'Idempotency-Key was already used for a different payment', 409)
           return
         }
-        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
+        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
         return
       }
     }
@@ -57,6 +67,13 @@ export const paymentController = {
       error(res, 'Not authorized', 403)
       return
     }
+
+    if (req.user!.suspended && agreement.status !== 'active') {
+      error(res, 'During suspension, online rent payments are available only for your active agreements. Contact support for other outstanding obligations.', 403); return
+    }
+
+    const agreementPeriodError = rentPeriodError(rentPeriod, agreement)
+    if (agreementPeriodError) { error(res, agreementPeriodError); return }
 
     const amount = round2(requestedAmount ?? agreement.rentAmount)
     if (amount <= 0) {
@@ -70,6 +87,7 @@ export const paymentController = {
 
     const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 
+    let payment: IPayment | undefined
     try {
       // Refuse a rail that is not configured, BEFORE writing a Payment row.
       // Bank transfer falls back to a placeholder deposit account when unset, so
@@ -79,7 +97,10 @@ export const paymentController = {
         return
       }
 
-      const payment = await Payment.create({
+      const receiptContext = await captureReceiptContext(agreement)
+      const provider = getProvider(method as ProviderId)
+      payment = await Payment.create({
+        collectionSource: provider.source,
         agreementId,
         tenantId: req.user!.userId,
         landlordId: agreement.landlordId,
@@ -88,10 +109,11 @@ export const paymentController = {
         status: 'pending',
         reference,
         purpose: 'rent',
+        rentPeriod,
+        ...(receiptContext ? { receiptContext } : {}),
         ...(idempotencyKey ? { idempotencyKey } : {}),
       })
 
-      const provider = getProvider(method as ProviderId)
       const result = await provider.initiateCollection({
         amount,
         phone: phone ?? '',
@@ -100,14 +122,13 @@ export const paymentController = {
         payerEmail: req.user!.email,
       })
 
-      payment.providerRef = result.providerRef
-      payment.providerStatus = result.status
-      await payment.save()
+      const recorded = await recordCollectionInitiation(payment._id.toString(), result)
+      if (!recorded) throw new Error('Payment record unavailable after initiation')
 
       success(
         res,
         {
-          payment: { ...payment.toObject(), id: payment._id.toString() },
+          payment: { ...recorded, id: recorded._id.toString() },
           instructions: result.instructions,
         },
         'Payment initiated',
@@ -118,18 +139,22 @@ export const paymentController = {
       if (idempotencyKey && (err as { code?: number }).code === 11000) {
         const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
         if (existing) {
-          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
+          if (existing.agreementId !== agreementId || existing.method !== method || existing.amount !== amount || existing.rentPeriod?.startDate !== rentPeriod.startDate || existing.rentPeriod?.endDate !== rentPeriod.endDate) {
+            error(res, 'Idempotency-Key was already used for a different payment', 409); return
+          }
+          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
           return
         }
       }
+      if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw err
     }
   },
 
   list: async (req: Request, res: Response) => {
     const userId = req.user!.userId
-    const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
-    const delegated = await delegatedPropertyIds(userId, 'payments')
+    const isAdmin = !req.user!.suspended && (req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin'))
+    const delegated = req.user!.suspended ? [] : await delegatedPropertyIds(userId, 'payments')
     const delegatedAgreements = delegated.length ? await Agreement.find({ propertyId: { $in: delegated } }).select('_id').lean() : []
     const filter: Record<string, unknown> = isAdmin ? {} : { $or: [{ tenantId: userId }, { landlordId: userId }, { agreementId: { $in: delegatedAgreements.map((item) => item._id.toString()) } }] }
 
@@ -195,9 +220,9 @@ export const paymentController = {
     if (!payment) { error(res, 'Payment not found', 404); return }
 
     const userId = req.user!.userId
-    const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
+    const isAdmin = !req.user!.suspended && (req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin'))
     const agreement = payment.agreementId ? await Agreement.findById(payment.agreementId).select('propertyId').lean() : null
-    const delegatedAccess = agreement ? await hasDelegatedScope(userId, agreement.propertyId, 'payments') : false
+    const delegatedAccess = !req.user!.suspended && agreement ? await hasDelegatedScope(userId, agreement.propertyId, 'payments') : false
     if (payment.tenantId !== userId && payment.landlordId !== userId && !isAdmin && !delegatedAccess) {
       error(res, 'Not authorized', 403)
       return

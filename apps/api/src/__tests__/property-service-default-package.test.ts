@@ -19,6 +19,8 @@ vi.mock('../models/PlanEntitlement.js', () => ({
 function makeRepo(count: number) {
   return {
     count: vi.fn().mockResolvedValue(count),
+    ensureQuotaIndex: vi.fn().mockResolvedValue(undefined),
+    findMany: vi.fn().mockResolvedValue(Array.from({ length: count }, () => ({}))),
     create: vi.fn().mockImplementation(async (data: Record<string, unknown>) => ({
       ...data,
       _id: { toString: () => 'prop-1' },
@@ -104,19 +106,28 @@ describe('PropertyService.create — default package enforcement', () => {
     expect(repo.create).not.toHaveBeenCalled()
   })
 
-  it('blocks expired subscriptions regardless of remaining quota', async () => {
+  it('fails closed when the quota index cannot be established', async () => {
+    const repo = makeRepo(0)
+    repo.ensureQuotaIndex.mockRejectedValueOnce(new Error('Index unavailable'))
+    const svc = new PropertyService(repo as never, fakeLogger as never)
+    await expect(svc.create(createData, 'u1')).rejects.toThrow('Index unavailable')
+    expect(repo.findMany).not.toHaveBeenCalled()
+    expect(repo.create).not.toHaveBeenCalled()
+  })
+
+  it.each([0, 1])('uses the configured free quota after expiry with %s existing properties', async count => {
     mockUser({
       _id: 'u1',
       subscriptionPackageId: 'pkg-pro',
       subscriptionEndDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
     })
-    const repo = makeRepo(0)
+    mockDefaultPackage({ _id: 'free', name: 'Free', maxProperties: 1 })
+    const repo = makeRepo(count)
     const svc = new PropertyService(repo as never, fakeLogger as never)
 
     const result = await svc.create(createData, 'u1')
 
-    expect(result.status).toBe(403)
-    expect((result as { error?: string }).error).toMatch(/expired/)
-    expect(repo.create).not.toHaveBeenCalled()
+    expect(result.status).toBe(count === 0 ? 201 : 403)
+    expect(repo.create).toHaveBeenCalledTimes(count === 0 ? 1 : 0)
   })
 })

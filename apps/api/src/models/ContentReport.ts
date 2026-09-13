@@ -17,7 +17,7 @@ import mongoose, { Schema, type Document } from 'mongoose'
  * resolution that claims to have suspended an account while the account keeps
  * working would be worse than not offering the option.
  */
-export const REPORT_TARGET_TYPES = ['property', 'storefront', 'blog_post', 'review'] as const
+export const REPORT_TARGET_TYPES = ['property', 'storefront', 'blog_post', 'review', 'message', 'user'] as const
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number]
 
 /**
@@ -41,7 +41,7 @@ export const REPORT_STATUSES = ['open', 'reviewing', 'actioned', 'dismissed'] as
 export type ReportStatus = (typeof REPORT_STATUSES)[number]
 
 /** What an admin did about it. 'none' is a dismissal with no action taken. */
-export const REPORT_ACTIONS = ['none', 'warned', 'content_removed'] as const
+export const REPORT_ACTIONS = ['none', 'warned', 'content_removed', 'account_suspended'] as const
 export type ReportAction = (typeof REPORT_ACTIONS)[number]
 
 export interface IContentReport extends Document {
@@ -59,6 +59,8 @@ export interface IContentReport extends Document {
   resolutionNote?: string
   handledBy?: string
   handledAt?: Date
+  pendingAction?: ReportAction
+  pendingNote?: string
   ipAddress?: string
   createdAt: Date
   updatedAt: Date
@@ -77,6 +79,8 @@ const contentReportSchema = new Schema<IContentReport>({
   resolutionNote: String,
   handledBy: String,
   handledAt: Date,
+  pendingAction: { type: String, enum: REPORT_ACTIONS },
+  pendingNote: String,
   ipAddress: String,
 }, { timestamps: true })
 

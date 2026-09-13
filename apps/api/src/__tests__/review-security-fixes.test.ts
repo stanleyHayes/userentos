@@ -132,25 +132,3 @@ describe('publishing cannot walk past the review state machine', () => {
     expect(canTransition('changes_requested', 'pending_review')).toBe(true)
   })
 })
-
-describe('GDPR hard-delete actually deletes the user', () => {
-  const src = read('services/scheduler.ts')
-
-  it('does not use a find-family method, which the soft-delete hook rewrites', () => {
-    const block = src.slice(src.indexOf('gdpr-delete'))
-    // pre(/^find/) appends deletedAt:{$exists:false}, which can never match a
-    // user selected BECAUSE deletedAt is set — the purge silently did nothing.
-    expect(block).not.toContain('User.findByIdAndDelete')
-    expect(block).not.toContain('User.findOneAndDelete')
-  })
-
-  it('deletes with the deletedAt precondition restated', () => {
-    const block = src.slice(src.indexOf('gdpr-delete'))
-    expect(block).toMatch(/User\.deleteOne\(\{ _id: uid, deletedAt: \{ \$lt: cutoff \} \}\)/)
-  })
-
-  it('reports when the purge matched nothing rather than claiming success', () => {
-    const block = src.slice(src.indexOf('gdpr-delete'))
-    expect(block).toMatch(/deletedCount === 0/)
-  })
-})

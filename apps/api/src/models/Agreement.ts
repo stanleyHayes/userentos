@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
 
 export interface IAgreement extends Document {
   propertyId: string
@@ -58,6 +59,11 @@ const agreementSchema = new Schema<IAgreement>({
   moverBusinessesNotifiedAt: Date,
   lastLeaseReminderAt: String,
 }, { timestamps: true })
+
+// Includes application-created drafts and other model-based creation paths.
+agreementSchema.pre('validate', function () {
+  this.complianceFlags = checkAgreementCompliance(this)
+})
 
 // Performance indexes
 agreementSchema.index({ status: 1, endDate: 1 })

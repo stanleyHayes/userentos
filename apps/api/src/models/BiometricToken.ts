@@ -7,6 +7,8 @@ import mongoose, { Schema, type Document } from 'mongoose'
  */
 export interface IBiometricToken extends Document {
   userId: string
+  biometricVersion?: number
+  sessionVersion?: number
   /** SHA-256 hex digest of the opaque refresh token */
   tokenHash: string
   /** Stable per-install device identifier supplied by the client (uuid) */
@@ -23,6 +25,8 @@ export interface IBiometricToken extends Document {
 const schema = new Schema<IBiometricToken>({
   userId: { type: String, required: true, index: true },
   tokenHash: { type: String, required: true, unique: true },
+  biometricVersion: { type: Number, default: 0, immutable: true },
+  sessionVersion: { type: Number, default: 0, immutable: true },
   deviceId: { type: String, required: true },
   deviceLabel: { type: String },
   lastUsedAt: { type: Date },

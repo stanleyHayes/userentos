@@ -25,9 +25,11 @@ describe('plan versions grandfather existing subscribers (spec §7.3)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     planFindById.mockReturnValue(lean(PLAN))
+    planFindOne.mockReturnValue(lean({ _id: 'free', name: 'Free', version: 3, maxProperties: 1 }))
     grantsByVersion({
       1: [{ featureKey: 'blog.limit', value: 50 }],
       2: [{ featureKey: 'blog.limit', value: 5 }],
+      3: [{ featureKey: 'blog.limit', value: 2 }],
     })
   })
 
@@ -77,8 +79,9 @@ describe('plan versions grandfather existing subscribers (spec §7.3)', () => {
 
     const r = await resolveEntitlements('u4')
 
-    expect(r.planName).toBe('Expired')
-    // Back to the registry default, not the grandfathered grant.
-    expect(r.features['blog.limit']).toBe(0)
+    expect(r.planName).toBe('Free')
+    expect(r.planVersion).toBe(3)
+    // The current free plan applies after expiry, not the old paid grant.
+    expect(r.features['blog.limit']).toBe(2)
   })
 })

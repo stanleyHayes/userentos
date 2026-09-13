@@ -16,6 +16,7 @@ export interface IFinancingApplication extends Document {
   decidedAt?: string
   creditScoreAtApply?: number
   monthlyIncomeAtApply?: number
+  monthlyIncomeCurrency?: string
   employerId?: string
   willUsePayrollDeduction: boolean
 }
@@ -36,6 +37,7 @@ const applicationSchema = new Schema<IFinancingApplication>({
   decidedAt: String,
   creditScoreAtApply: Number,
   monthlyIncomeAtApply: Number,
+  monthlyIncomeCurrency: { type: String, default: 'GHS' },
   employerId: String,
   willUsePayrollDeduction: { type: Boolean, default: false },
 }, { timestamps: true })

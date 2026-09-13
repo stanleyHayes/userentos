@@ -1,3 +1,5 @@
+import { StorePurchase } from '../models/StorePurchase.js'
+import { UserBlock } from '../models/UserBlock.js'
 import { Router } from 'express'
 import { Types } from 'mongoose'
 import multer from 'multer'
@@ -7,6 +9,7 @@ import { z } from 'zod'
 import { authenticate, requireRole, requirePermission, isSuperAdmin } from '../middleware/auth.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
+import { WalletCredit } from '../models/WalletCredit.js'
 import { Agreement } from '../models/Agreement.js'
 import { Payment } from '../models/Payment.js'
 import { Application } from '../models/Application.js'
@@ -18,10 +21,13 @@ import { AuditLog } from '../models/AuditLog.js'
 import { recordAudit } from '../utils/audit.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { success, error } from '../utils/response.js'
-import { uploadToCloudinary } from '../utils/cloudinary.js'
+import { uploadAvatar, rememberLegacyAvatar } from '../services/avatarStorage.js'
 import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
+import { BiometricToken } from '../models/BiometricToken.js'
+import { DeviceToken } from '../models/DeviceToken.js'
+import { disconnectUser } from '../services/socket.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
 
@@ -34,8 +40,9 @@ router.get('/me', authenticate, async (req, res) => {
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe())
 })
 
-// GDPR: export all personal data
+// Export the supported personal-data groups.
 router.get('/me/export', authenticate, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
   const userId = req.user!.userId
   const [
     user,
@@ -49,10 +56,13 @@ router.get('/me/export', authenticate, async (req, res) => {
     wallet,
     savingsPlans,
     auditLogs,
+    blockedUsers,
+    storePurchases,
+    walletCredits,
   ] = await Promise.all([
     // Never export credential material — mfaSecret also carries schema-level
     // select:false, this is defense-in-depth.
-    User.findById(userId).select('-passwordHash -mfaSecret -__v').lean(),
+    User.findById(userId).select('+storeAccountToken -passwordHash -mfaSecret -__v').lean(),
     TenantProfile.findOne({ userId }).lean(),
     Agreement.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
     Payment.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
@@ -63,10 +73,15 @@ router.get('/me/export', authenticate, async (req, res) => {
     Wallet.findOne({ userId }).lean(),
     SavingsPlan.find({ userId }).lean(),
     AuditLog.find({ userId }).sort({ createdAt: -1 }).limit(1000).lean(),
+    UserBlock.find({ blockerId: userId }).select('blockedId createdAt').lean(),
+    StorePurchase.find({ userId }).select('-tokenCiphertext').lean(),
+    WalletCredit.find({ userId }).select('operationKey amount type reference state appliedAt createdAt updatedAt').lean(),
   ])
 
   success(res, {
     exportedAt: new Date().toISOString(),
+    walletCredits,
+    storePurchases,
     user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,
     tenantProfile,
     agreements,
@@ -78,14 +93,17 @@ router.get('/me/export', authenticate, async (req, res) => {
     wallet,
     savingsPlans,
     auditLogs,
+    blockedUsers,
   })
 })
 
-// GDPR: soft delete (30-day grace period)
+// Erase core identity now; scheduled cleanup removes related personal records after 30 days.
 router.delete('/me', authenticate, async (req, res) => {
   const userId = req.user!.userId
   const user = await User.findById(userId)
   if (!user) { error(res, 'User not found', 404); return }
+
+  await rememberLegacyAvatar(userId, user.profileImage)
 
   // Scramble PII
   const scramble = crypto.randomBytes(8).toString('hex')
@@ -96,8 +114,12 @@ router.delete('/me', authenticate, async (req, res) => {
   user.passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), config.bcryptRounds)
   user.ghanaCardId = undefined
   user.profileImage = undefined
+  user.mfaSecret = undefined
+  user.markModified('mfaSecret')
+  user.mfaEnabled = false
   user.deletedAt = new Date()
   await user.save()
+  disconnectUser(userId)
 
   // Revoke all refresh tokens
   await RefreshToken.updateMany(
@@ -105,7 +127,8 @@ router.delete('/me', authenticate, async (req, res) => {
     { $set: { revokedAt: new Date().toISOString(), revokedReason: 'gdpr_deletion' } },
   )
 
-  success(res, null, 'Account scheduled for deletion. You have 30 days to contact support to restore it.')
+  await Promise.all([BiometricToken.deleteMany({ userId }), DeviceToken.deleteMany({ userId })])
+  success(res, null, 'Account closed and core profile erased. Related personal records are scheduled for deletion after 30 days. Records needed for legal obligations or disputes may be retained. This action cannot be undone.')
 })
 
 router.patch('/me', authenticate, async (req, res) => {
@@ -128,16 +151,16 @@ router.post('/me/photo', authenticate, upload.single('photo'), async (req, res) 
   if (!req.file) { error(res, 'No file uploaded'); return }
   if (!req.file.mimetype.startsWith('image/')) { error(res, 'Only image files are allowed'); return }
 
-  const uploaded = await uploadToCloudinary(req.file.buffer, {
-    folder: 'avatars',
-    resourceType: 'image',
-  })
-
   const user = await User.findById(req.user!.userId)
   if (!user) { error(res, 'User not found', 404); return }
-
-  user.profileImage = uploaded.url
-  await user.save()
+  await rememberLegacyAvatar(req.user!.userId, user.profileImage)
+  const uploaded = await uploadAvatar(req.user!.userId, req.file.buffer)
+  // An upload must not resurrect the profile of an account deleted mid-request.
+  const updated = await User.findOneAndUpdate(
+    { _id: req.user!.userId, deletedAt: { $exists: false } },
+    { $set: { profileImage: uploaded.url } },
+  )
+  if (!updated) { error(res, 'Account no longer available', 404); return }
 
   success(res, { profileImage: uploaded.url }, 'Profile photo updated')
 })

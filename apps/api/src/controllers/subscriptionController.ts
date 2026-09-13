@@ -1,6 +1,11 @@
+import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { resolveFreeSubscription, resolvePackageEntitlements } from '../services/entitlements.js'
+import { assignSubscription } from '../services/assignSubscription.js'
+import { effectiveStoreSubscription } from '../services/storeBilling/activeEntitlements.js'
 import { Request, Response } from 'express'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
+import { StoreProduct } from '../models/StoreProduct.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
@@ -8,9 +13,10 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
-import { getProvider } from '../services/payments/index.js'
+import { getProvider, isMethodAvailable } from '../services/payments/index.js'
 import type { ProviderId } from '../services/payments/types.js'
-import { round2 } from '../utils/money.js'
+import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
+import { currentPaidSubscription } from '../services/payments/paidSubscription.js'
 
 const packageSchema = z.object({
   name: z.string().min(1),
@@ -87,6 +93,10 @@ export const subscriptionController = {
     const pkg = await SubscriptionPackage.findById(param(req.params.id))
     if (!pkg) { error(res, 'Package not found', 404); return }
 
+    if (await StoreProduct.exists({ packageId: pkg._id.toString() })) {
+      error(res, 'This package has store product mappings. Deactivate it to preserve purchase history.', 409); return
+    }
+
     // Check if any users are on this package
     const subscriberCount = await User.countDocuments({ subscriptionPackageId: pkg._id.toString() })
     if (subscriberCount > 0) {
@@ -104,24 +114,45 @@ export const subscriptionController = {
     const user = await User.findById(req.user!.userId).lean()
     if (!user) { error(res, 'User not found', 404); return }
 
-    const isExpired = !!user.subscriptionEndDate && new Date(user.subscriptionEndDate) < new Date()
-
-    let pkg = null
-    if (user.subscriptionPackageId && !isExpired) {
-      pkg = await SubscriptionPackage.findById(user.subscriptionPackageId).lean()
-      if (pkg) pkg = { ...pkg, id: (pkg._id as Types.ObjectId).toString() }
+    const store = await effectiveStoreSubscription(req.user!.userId, user)
+    if (store) {
+      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+      const limit = Number(store.snapshot.features['property.limit'])
+      success(res, {
+        package: { id: store.snapshot.planId, name: store.snapshot.planName, version: store.snapshot.planVersion, billingCycle: store.snapshot.billingCycle, benefits: store.snapshot.benefits, maxProperties: limit },
+        billingSource: store.billingSource, subscriptionStartDate: new Date(store.startedAt), subscriptionEndDate: store.expiresAt,
+        isExpired: false, propertyCount, maxProperties: limit, canAddProperty: limit === -1 || propertyCount < limit,
+      })
+      return
     }
 
-    const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+    const isExpired = !!user.subscriptionEndDate && (!Number.isFinite(new Date(user.subscriptionEndDate).getTime()) || new Date(user.subscriptionEndDate).getTime() <= Date.now())
+    const paid = await currentPaidSubscription(user)
+    if (paid?.active && 'terms' in paid) {
+      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+      const limit = paid.active && 'terms' in paid ? Number(paid.features['property.limit']) : 0
+      success(res, { package: paid.active && 'terms' in paid ? { id: paid.terms.packageId, name: paid.terms.packageName, version: paid.terms.packageVersion, price: paid.terms.amount, billingCycle: paid.terms.billingCycle, benefits: paid.terms.benefits, maxProperties: limit } : null, billingSource: 'provider', subscriptionStartDate: user.subscriptionStartDate, subscriptionEndDate: user.subscriptionEndDate, isExpired: !paid.active, propertyCount, maxProperties: limit, canAddProperty: paid.active && (limit === -1 || propertyCount < limit) })
+      return
+    }
 
+    const assigned = !paid && user.subscriptionPackageId && !isExpired
+      ? await SubscriptionPackage.findById(user.subscriptionPackageId).lean() : null
+    const fallback = assigned ? null : await resolveFreeSubscription()
+    const pkg = assigned ?? fallback?.plan ?? null
+    const resolved = assigned ? await resolvePackageEntitlements(assigned, user.subscriptionPlanVersion) : fallback!.entitlements
+    const limit = Number(resolved.features['property.limit'])
+    const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
     success(res, {
-      package: pkg,
-      subscriptionStartDate: user.subscriptionStartDate,
-      subscriptionEndDate: user.subscriptionEndDate,
-      isExpired,
+      package: pkg ? { ...pkg, id: String(pkg._id), version: resolved.planVersion, maxProperties: limit } : null,
+      billingSource: fallback ? 'free' : undefined,
+      subscriptionStartDate: fallback ? undefined : user.subscriptionStartDate,
+      subscriptionEndDate: fallback ? undefined : user.subscriptionEndDate,
+      isExpired: false,
+      previousSubscriptionInactive: isExpired || !!paid || (!!user.subscriptionPackageId && !assigned),
+      fallbackApplied: !!fallback,
       propertyCount,
-      maxProperties: pkg?.maxProperties ?? 0,
-      canAddProperty: pkg ? (pkg.maxProperties === -1 || propertyCount < pkg.maxProperties) : false,
+      maxProperties: limit,
+      canAddProperty: limit === -1 || propertyCount < limit,
     })
   },
 
@@ -139,6 +170,19 @@ export const subscriptionController = {
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
     const { packageId, method, phone } = parsed.data
 
+    // Resolve retries before reading today's package; saved purchases survive
+    // catalogue changes and remain scoped to the original payer and method.
+    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
+    const matchesRetry = (payment: { purpose: string; purposeMeta?: Record<string, unknown>; method: string; subscriptionTerms?: { packageId: string } }) => payment.purpose === 'subscription' && (payment.subscriptionTerms?.packageId ?? payment.purposeMeta?.packageId) === packageId && (!method || payment.method === method)
+    if (idempotencyKey) {
+      const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
+      if (existing) {
+        if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return }
+        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
+        return
+      }
+    }
+
     const pkg = await SubscriptionPackage.findById(packageId)
     if (!pkg || !pkg.isActive) { error(res, 'Package not found or inactive', 404); return }
 
@@ -148,19 +192,9 @@ export const subscriptionController = {
     // Free packages need no payment — activate immediately.
     if (pkg.price <= 0) {
       const now = new Date()
-      const endDate = new Date(now)
-      if (pkg.billingCycle === 'yearly') {
-        endDate.setFullYear(endDate.getFullYear() + 1)
-      } else {
-        endDate.setMonth(endDate.getMonth() + 1)
-      }
-
-      user.subscriptionPackageId = pkg._id.toString()
-      // Pin the version bought, so a later re-pricing does not reach back.
-      user.subscriptionPlanVersion = (pkg as { version?: number }).version ?? 1
-      user.subscriptionStartDate = now
-      user.subscriptionEndDate = endDate
-      await user.save()
+      const assigned = await assignSubscription(user, pkg, now)
+      if (!assigned) { error(res, 'Subscription changed. Refresh and try again.', 409); return }
+      const endDate = assigned.subscriptionEndDate
 
       success(res, {
         package: { ...pkg.toObject(), id: pkg._id.toString() },
@@ -174,55 +208,43 @@ export const subscriptionController = {
     if (!method) { error(res, 'method is required for paid packages'); return }
     if (method !== 'bank_transfer' && !phone) { error(res, 'phone is required for mobile money payments'); return }
 
-    // Idempotency: a retried request returns the original pending payment
-    // instead of initiating a duplicate collection (same pattern as rent payments).
-    // Scoped to the caller, and only a short-circuit when the retry is for the
-    // SAME package — a key reused for a different package is a conflict.
-    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
-    if (idempotencyKey) {
-      const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
-      if (existing) {
-        const existingPackageId = (existing.purposeMeta as { packageId?: string } | undefined)?.packageId
-        if (existingPackageId !== pkg._id.toString()) {
-          error(res, 'Idempotency-Key was already used for a different subscription', 409)
-          return
-        }
-        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
-        return
-      }
+    if (!isMethodAvailable(method as ProviderId)) {
+      error(res, 'That payment method is not available right now. Please choose another.', 422); return
     }
 
     const reference = `SUB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const subscriptionTerms = await captureSubscriptionTerms(pkg)
     let payment: IPayment | undefined
     try {
+      const provider = getProvider(method as ProviderId)
       payment = await Payment.create({
+        collectionSource: provider.source,
         tenantId: req.user!.userId,
-        amount: round2(pkg.price),
+        amount: subscriptionTerms.amount,
         method,
         status: 'pending',
         reference,
         purpose: 'subscription',
         purposeMeta: { packageId: pkg._id.toString() },
+        subscriptionTerms,
         ...(idempotencyKey ? { idempotencyKey } : {}),
       })
 
-      const provider = getProvider(method as ProviderId)
       const result = await provider.initiateCollection({
-        amount: round2(pkg.price),
+        amount: subscriptionTerms.amount,
         phone: phone ?? '',
         reference,
         narration: `RentOS subscription: ${pkg.name}`,
         payerEmail: req.user!.email,
       })
 
-      payment.providerRef = result.providerRef
-      payment.providerStatus = result.status
-      await payment.save()
+      const recorded = await recordCollectionInitiation(payment._id.toString(), result)
+      if (!recorded) throw new Error('Payment record unavailable after initiation')
 
       success(
         res,
         {
-          payment: { ...payment.toObject(), id: payment._id.toString() },
+          payment: { ...recorded, id: recorded._id.toString() },
           instructions: result.instructions,
         },
         'Payment initiated — your subscription activates once the payment is confirmed',
@@ -233,18 +255,14 @@ export const subscriptionController = {
       if (idempotencyKey && (err as { code?: number }).code === 11000) {
         const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
         if (existing) {
-          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() } }, 'Payment already initiated')
+          if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return }
+          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
           return
         }
       }
-      // The provider call failed AFTER the payment row was created — mark it
-      // failed (same terminal state the finalizer uses) so the pending record
-      // doesn't pin the idempotency key forever.
-      if (payment) {
-        payment.status = 'failed'
-        payment.failureReason = (err as Error).message
-        await payment.save().catch(() => undefined)
-      }
+      // A timeout may follow provider acceptance. Keep the original key and
+      // payment available for reconciliation; never downgrade a raced webhook.
+      if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw err
     }
   },
@@ -260,19 +278,9 @@ export const subscriptionController = {
     const user = await User.findById(userId)
     if (!user) { error(res, 'User not found', 404); return }
 
-    const now = new Date()
-    const endDate = new Date(now)
-    if (pkg.billingCycle === 'yearly') {
-      endDate.setFullYear(endDate.getFullYear() + 1)
-    } else {
-      endDate.setMonth(endDate.getMonth() + 1)
-    }
-
-    user.subscriptionPackageId = pkg._id.toString()
-    user.subscriptionPlanVersion = (pkg as { version?: number }).version ?? 1
-    user.subscriptionStartDate = now
-    user.subscriptionEndDate = endDate
-    await user.save()
+    const assigned = await assignSubscription(user, pkg)
+    if (!assigned) { error(res, 'Subscription changed. Refresh and try again.', 409); return }
+    const endDate = assigned.subscriptionEndDate
 
     await recordAudit(req, 'subscriptions.assign', 'User', user._id.toString(), { packageId: pkg._id.toString(), packageName: pkg.name })
     success(res, { userId, packageId, subscriptionEndDate: endDate }, 'Package assigned')

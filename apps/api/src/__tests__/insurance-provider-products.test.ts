@@ -8,6 +8,8 @@ import { InsuranceProviderProfile } from '../models/InsuranceProviderProfile.js'
 import { InsuranceProduct } from '../models/InsuranceProduct.js'
 import { recordAudit } from '../utils/audit.js'
 
+// The authenticated fixtures represent active persisted accounts.
+vi.mock('../models/User.js', () => ({ User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }) } }))
 vi.mock('../models/InsuranceProviderProfile.js', () => ({
   InsuranceProviderProfile: { findOne: vi.fn() },
 }))

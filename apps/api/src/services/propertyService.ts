@@ -3,7 +3,6 @@ import { requireQuota, EntitlementError } from './entitlements.js'
 import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
-import { User } from '../models/User.js'
 import { hasDelegatedScope } from './delegation.js'
 
 interface CreatePropertyData {
@@ -140,33 +139,30 @@ export class PropertyService {
     // than reading plan columns directly (spec §7.3). The engine resolves the
     // subscriber's plan version, applies its `property.limit` grant and falls
     // back to the free-tier default, so no code here branches on a plan name.
-    const user = await User.findById(userId).lean()
-    if (user?.subscriptionPackageId) {
-      const isExpired = !!user.subscriptionEndDate && new Date(user.subscriptionEndDate) < new Date()
-      if (isExpired) {
-        return { error: 'Your subscription has expired. Renew it to add more properties.', status: 403 }
+    await this.propertyRepo.ensureQuotaIndex()
+    for (let attempt = 0; attempt < 8; attempt++) {
+      // One projected read provides both the occupancy count and slot inventory.
+      // Legacy documents without a slot still consume quota. Always choosing the
+      // lowest vacant slot makes competing requests meet at the unique index.
+      const existing = await this.propertyRepo.findMany({ landlordId: userId }, { select: 'quotaSlot', lean: true })
+      try { await requireQuota(userId, 'property.limit', existing.length, 'Active property limit') }
+      catch (err) {
+        if (err instanceof EntitlementError) return { error: err.message, status: 403 }
+        throw err
+      }
+      const occupied = new Set(existing.map(item => item.quotaSlot).filter((slot): slot is number => typeof slot === 'number'))
+      let quotaSlot = 0
+      while (occupied.has(quotaSlot)) quotaSlot++
+      try {
+        const property = await this.propertyRepo.create({ ...data, landlordId: userId, quotaSlot, status: 'available', listingStatus: 'draft' } as Partial<IProperty>)
+        this.logger.info(`Property created: "${data.title}" by user ${userId}`)
+        return { data: { ...property.toObject(), id: property._id.toString() }, status: 201 }
+      } catch (failure) {
+        const duplicate = failure as { code?: number; keyPattern?: Record<string, number> }
+        if (duplicate.code !== 11000 || duplicate.keyPattern?.landlordId !== 1 || duplicate.keyPattern?.quotaSlot !== 1) throw failure
       }
     }
-
-    try {
-      const activeCount = await this.propertyRepo.count({ landlordId: userId })
-      await requireQuota(userId, 'property.limit', activeCount, 'Active property limit')
-    } catch (err) {
-      if (err instanceof EntitlementError) {
-        return { error: err.message, status: 403 }
-      }
-      throw err
-    }
-
-    const property = await this.propertyRepo.create({
-      ...data,
-      landlordId: userId,
-      status: 'available',
-      listingStatus: 'draft',
-    } as Partial<IProperty>)
-
-    this.logger.info(`Property created: "${data.title}" by user ${userId}`)
-    return { data: { ...property.toObject(), id: property._id.toString() }, status: 201 }
+    return { error: 'Another property is being created. Please try again.', status: 409 }
   }
 
   async update(id: string, data: UpdatePropertyData, userId: string) {

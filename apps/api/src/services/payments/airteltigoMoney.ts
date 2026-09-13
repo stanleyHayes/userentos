@@ -65,6 +65,7 @@ function mapStatus(s: string | undefined | null): ProviderStatus {
 
 class AirtelTigoMoneyProvider implements PaymentProvider {
   id = 'airteltigo_money' as const
+  source = 'airteltigo_money' as const
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     const token = await getAccessToken()
@@ -114,6 +115,7 @@ class AirtelTigoMoneyProvider implements PaymentProvider {
     const data = JSON.parse(rawBody) as {
       transaction?: { id?: string; status_code?: string; message?: string; airtel_money_id?: string }
       reference?: string
+      currency?: string
       amount?: number | string
     }
     return {
@@ -121,6 +123,7 @@ class AirtelTigoMoneyProvider implements PaymentProvider {
       providerRef: data.transaction?.airtel_money_id ?? data.transaction?.id ?? '',
       status: mapStatus(data.transaction?.status_code),
       amount: Number(data.amount ?? 0),
+      currency: data.currency,
       timestamp: new Date().toISOString(),
       raw: data,
     }

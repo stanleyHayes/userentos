@@ -65,6 +65,7 @@ function mapStatus(s: string | undefined | null): ProviderStatus {
 
 class TelecelCashProvider implements PaymentProvider {
   id = 'telecel_cash' as const
+  source = 'telecel_cash' as const
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     const token = await getAccessToken()
@@ -119,6 +120,7 @@ class TelecelCashProvider implements PaymentProvider {
       transactionId?: string
       externalReference?: string
       status?: string
+      currency?: string
       amount?: number | string
       timestamp?: string
     }
@@ -127,6 +129,7 @@ class TelecelCashProvider implements PaymentProvider {
       providerRef: data.transactionId ?? '',
       status: mapStatus(data.status),
       amount: Number(data.amount ?? 0),
+      currency: data.currency,
       timestamp: data.timestamp ?? new Date().toISOString(),
       raw: data,
     }

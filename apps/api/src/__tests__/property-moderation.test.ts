@@ -14,7 +14,7 @@ vi.mock('../models/Property.js', () => ({
 vi.mock('../models/PropertyReview.js', () => ({
   PropertyReview: { create: vi.fn().mockResolvedValue({}), find: vi.fn() },
 }))
-vi.mock('../models/User.js', () => ({ User: { find: vi.fn(), findById: vi.fn() } }))
+vi.mock('../models/User.js', () => ({ User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }), find: vi.fn(), findById: vi.fn() } }))
 vi.mock('../services/notify.js', () => ({
   notifyPropertyApproved: vi.fn(), notifyPropertyRejected: vi.fn(), notifyPropertyChangesRequested: vi.fn(), notify: vi.fn(),
 }))

@@ -234,7 +234,7 @@ router.get('/developer/market', authenticate, requireRole('developer', 'landlord
     { $group: { _id: { city: '$address.city', type: '$type' }, listings: { $sum: 1 }, averageRent: { $avg: '$rentAmount' }, bedrooms: { $avg: '$bedrooms' } } },
     { $sort: { listings: -1 } },
   ]), TenantProfile.aggregate([
-    { $group: { _id: '$employmentStatus', households: { $sum: 1 }, averageIncome: { $avg: '$monthlyIncome' }, averageOccupants: { $avg: '$numberOfOccupants' } } },
+    { $group: { _id: '$employmentStatus', households: { $sum: 1 }, averageIncome: { $avg: { $cond: [{ $eq: [{ $ifNull: ['$primaryCurrency', 'GHS'] }, 'GHS'] }, '$monthlyIncome', null] } }, averageOccupants: { $avg: '$numberOfOccupants' } } },
     { $sort: { households: -1 } },
   ])])
   success(res, {

@@ -179,7 +179,7 @@ router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: R
 
   // ─── Header ───
   pdf.heading('Rental Agreement', 1)
-  pdf.text('RentOS Ghana — Verified Tenancy Document', { size: 10 })
+  pdf.text('RentOS Ghana — Tenancy Record', { size: 10 })
   pdf.kv('Agreement ID', agId)
   pdf.kv('Generated', formatDateLong(new Date()))
   pdf.hr()
@@ -220,7 +220,7 @@ router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: R
   // ─── Compliance ───
   pdf.heading('Compliance', 2)
   if (!agreement.complianceFlags?.length) {
-    pdf.text('No compliance flags. This agreement passed all automated checks.', { size: 10 })
+    pdf.text('No flags were recorded by the automated checks. This is not legal certification; statutory rights and court processes still apply.', { size: 10 })
   } else {
     for (const flag of agreement.complianceFlags) {
       pdf.text(`• [${flag.type}] ${flag.message}`, { size: 10, font: 'Helvetica-Bold' })

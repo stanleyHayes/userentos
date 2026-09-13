@@ -32,6 +32,8 @@ export const Conversation = mongoose.model<IConversation>('Conversation', conver
 // ─── Message ───
 
 export interface IMessage extends Document {
+  removed?: boolean
+  removedReason?: string
   conversationId: string
   senderId: string
   text: string
@@ -39,6 +41,8 @@ export interface IMessage extends Document {
 }
 
 const messageSchema = new Schema<IMessage>({
+  removed: { type: Boolean, default: false },
+  removedReason: String,
   conversationId: { type: String, required: true, index: true },
   senderId: { type: String, required: true },
   text: { type: String, required: true },

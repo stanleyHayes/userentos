@@ -132,6 +132,7 @@ router.post('/applications', authenticate, async (req, res) => {
     status: 'submitted',
     creditScoreAtApply: credit?.score,
     monthlyIncomeAtApply: employment?.netMonthlySalary ?? profile?.monthlyIncome,
+    monthlyIncomeCurrency: employment?.netMonthlySalary != null ? 'GHS' : profile?.primaryCurrency ?? 'GHS',
     employerId: employment?.employerId,
     willUsePayrollDeduction: parsed.data.willUsePayrollDeduction,
   })

@@ -7,6 +7,8 @@ import { config } from '../config/index.js'
 import { Worker } from '../models/Worker.js'
 import { Business } from '../models/Business.js'
 
+// The authenticated fixtures represent active persisted accounts.
+vi.mock('../models/User.js', () => ({ User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }) } }))
 vi.mock('../models/Worker.js', () => ({
   Worker: { findById: vi.fn(), findOne: vi.fn() },
 }))

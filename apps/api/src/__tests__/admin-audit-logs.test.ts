@@ -12,7 +12,7 @@ import { User } from '../models/User.js'
 vi.mock('../models/AuditLog.js', () => ({
   AuditLog: { find: vi.fn(), countDocuments: vi.fn(), distinct: vi.fn() },
 }))
-vi.mock('../models/User.js', () => ({ User: { find: vi.fn() } }))
+vi.mock('../models/User.js', () => ({ User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }), find: vi.fn() } }))
 
 const { default: auditRouter, buildAuditLogFilter, AUDIT_LOG_DEFAULT_LIMIT, AUDIT_LOG_MAX_LIMIT } =
   await import('../routes/adminAuditLogs.js')

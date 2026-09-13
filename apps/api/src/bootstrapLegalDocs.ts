@@ -1,3 +1,4 @@
+import { RECEIPT_LEGAL_DOCUMENT, correctLegacyReceiptDocuments } from './services/legal/receiptCorpus.js'
 /**
  * Idempotent bootstrap for legal document RAG corpus.
  * Seeds Ghanaian rental law documents with embeddings.
@@ -85,30 +86,7 @@ Section 20 — Compensation:
     section: '17-20',
     tags: ['eviction', 'notice period', 'court order', 'compensation', 'wrongful eviction'],
   },
-  {
-    title: 'Rent Act Section 23 — Rent Receipts',
-    content: `Section 23 of the Rent Act, 1963 requires landlords to provide rent receipts:
-
-1. Mandatory Receipts: Every landlord must provide a written receipt for every rent payment received.
-
-2. Receipt Contents: The receipt must include:
-   - Date of payment
-   - Amount paid
-   - Period covered by payment
-   - Name of tenant
-   - Address of premises
-
-3. Refusal Penalty: A landlord who refuses to issue a receipt commits an offense punishable by a fine up to 100 penalty units.
-
-4. Evidence: Rent receipts are admissible as evidence in rent tribunal proceedings and court cases.
-
-Tenants should always demand and keep receipts as proof of payment.`,
-    source: 'Rent Act, 1963 (Act 220)',
-    category: 'act',
-    year: 1963,
-    section: '23',
-    tags: ['rent receipt', 'proof of payment', 'penalty', 'evidence'],
-  },
+  RECEIPT_LEGAL_DOCUMENT,
   {
     title: 'Rent Act Section 25 — Rent Advances and Increases',
     content: `Section 25 of the Rent Act, 1963 regulates rent advances and increases:
@@ -282,6 +260,8 @@ Best Practices:
 async function run() {
   await mongoose.connect(config.mongoUri)
   console.log('Connected to MongoDB.')
+  const corrected = await correctLegacyReceiptDocuments()
+  console.log(`Corrected legacy receipt documents: ${corrected.modifiedCount}`)
 
   let created = 0
   let skipped = 0

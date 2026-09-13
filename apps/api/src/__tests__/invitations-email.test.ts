@@ -25,7 +25,7 @@ vi.mock('../models/Invitation.js', async () => {
   }
 })
 vi.mock('../models/User.js', () => ({
-  User: { findOne: vi.fn(), findById: vi.fn(), create: vi.fn() },
+  User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }), findOne: vi.fn(), findById: vi.fn(), create: vi.fn() },
 }))
 vi.mock('../models/Wallet.js', () => ({
   Wallet: { create: vi.fn().mockResolvedValue({}) },

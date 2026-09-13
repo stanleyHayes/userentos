@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { requireAiSharingConsent } from '../middleware/aiConsent.js'
 import { Router } from 'express'
 import { Types } from 'mongoose'
 import multer from 'multer'
@@ -43,9 +45,9 @@ router.post('/:id/images', authenticate, upload.array('images', 10), asyncHandle
 router.post('/:id/favorite', authenticate, asyncHandler(propertyController.toggleFavorite))
 
 // ─── Semantic Search ───
-router.post('/search/semantic', asyncHandler(async (req, res) => {
+router.post('/search/semantic', requireAiSharingConsent, asyncHandler(async (req, res) => {
   const schema = z.object({
-    query: z.string().min(1),
+    query: z.string().trim().min(1).max(4000),
     city: z.string().optional(),
     region: z.string().optional(),
     type: z.string().optional(),
@@ -60,7 +62,7 @@ router.post('/search/semantic', asyncHandler(async (req, res) => {
   const { query, city, region, type, minRent, maxRent, topK } = parsed.data
 
   // Check cache
-  const cacheKey = `semantic-search:${query}:${city ?? ''}:${region ?? ''}:${type ?? ''}:${minRent ?? ''}:${maxRent ?? ''}:${topK}`
+  const cacheKey = `semantic-search:${createHash('sha256').update(JSON.stringify([query, city, region, type, minRent, maxRent, topK])).digest('hex')}`
   const cached = await cache.get<{ items: unknown[] }>(cacheKey)
   if (cached) {
     success(res, cached)

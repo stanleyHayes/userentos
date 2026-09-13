@@ -1,5 +1,6 @@
 /**
- * Central wallet ledger — the ONLY place wallet balances may change.
+ * Atomic wallet ledger operations. Retriable external-payment credits use the
+ * durableWalletCredit journal/marker protocol rather than retrying creditWallet.
  *
  * Guarantees:
  *  - atomic balance mutation (one findOneAndUpdate per op, no read-modify-write)

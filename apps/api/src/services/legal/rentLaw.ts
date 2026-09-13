@@ -26,13 +26,16 @@
 /** Statutory limits, each carrying the provision it comes from. */
 export const RENT_LAW = {
   /**
-   * Rent Act, 1963 (Act 220) s.25: a landlord cannot demand more than six
-   * months' rent in advance. Six is lawful; seven is not.
+   * Six-month threshold for tenancies exceeding six months, under s.25(5).
+   * Monthly or shorter tenancies have a separate one-month threshold below.
+   * An advance amount alone does not establish the tenancy classification.
    */
   maxAdvanceMonths: 6,
+  monthlyTenancyMaxAdvanceMonths: 1,
+  monthlyAdvanceCitation: 'Rent Act, 1963 (Act 220), Section 25(5)',
   advanceCitation: 'Rent Act, 1963 (Act 220), Section 25',
   evictionCitation: 'Rent Act, 1963 (Act 220), Sections 17-20',
-  receiptCitation: 'Rent Act, 1963 (Act 220), Section 23',
+  receiptCitation: 'Rent Act, 1963 (Act 220), Section 33',
   maintenanceCitation: 'Rent Act, 1963 (Act 220), Section 12',
 } as const
 

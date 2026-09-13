@@ -5,8 +5,41 @@ import { asyncHandler } from '../middleware/errorHandler.js'
 import { chatController } from '../controllers/chatController.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
+import { UserBlock } from '../models/UserBlock.js'
+import { blockedContacts } from '../services/userBlocks.js'
+import { param } from '../utils/params.js'
+import { isValidObjectId } from 'mongoose'
+import { getIO } from '../services/socket.js'
+import { Conversation } from '../models/Conversation.js'
 
 const router = Router()
+
+router.put('/blocks/:userId', authenticate, asyncHandler(async (req, res) => {
+  const target = param(req.params.userId)
+  const owner = req.user!.userId
+  if (!isValidObjectId(target) || target === owner) { error(res, 'Invalid user'); return }
+  if (!await User.exists({ _id: target, deletedAt: { $exists: false } })) { error(res, 'User not found', 404); return }
+  await UserBlock.updateOne({ blockerId: owner, blockedId: target }, { $setOnInsert: { blockerId: owner, blockedId: target } }, { upsert: true })
+  const conversations = await Conversation.find({ participants: { $all: [owner, target] } }).select('_id').lean()
+  try {
+    const io = getIO()
+    for (const conversation of conversations) io.in(`chat:${conversation._id}`).socketsLeave(`chat:${conversation._id}`)
+    io.to(`user:${owner}`).emit('contact:changed', { userId: target })
+    io.to(`user:${target}`).emit('contact:changed', { userId: owner })
+  } catch { /* HTTP enforcement remains authoritative when realtime is unavailable. */ }
+  success(res, null, 'User blocked. Neither of you can send messages until the block is removed.')
+}))
+
+router.delete('/blocks/:userId', authenticate, asyncHandler(async (req, res) => {
+  const owner = req.user!.userId
+  const target = param(req.params.userId)
+  await UserBlock.deleteOne({ blockerId: owner, blockedId: target })
+  try {
+    getIO().to(`user:${owner}`).emit('contact:changed', { userId: target })
+    getIO().to(`user:${target}`).emit('contact:changed', { userId: owner })
+  } catch { /* Clients can also refresh over HTTP. */ }
+  success(res, null, 'Your block was removed.')
+}))
 
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -27,7 +60,9 @@ router.get('/users', authenticate, asyncHandler(async (req: Request, res: Respon
   const escaped = escapeRegex(search)
   const regex = new RegExp(escaped, 'i')
   const filter: Record<string, unknown> = {
-    _id: { $ne: userId },
+    _id: { $nin: [userId, ...await blockedContacts(userId)] },
+    deletedAt: { $exists: false },
+    suspendedAt: { $exists: false },
     $or: [
       { firstName: regex },
       { lastName: regex },

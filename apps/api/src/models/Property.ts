@@ -2,6 +2,7 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export interface IProperty extends Document {
   landlordId: string
+  quotaSlot?: number
   title: string
   description: string
   type: string
@@ -78,6 +79,7 @@ export interface IProperty extends Document {
 
 const propertySchema = new Schema<IProperty>({
   landlordId: { type: String, required: true, index: true },
+  quotaSlot: { type: Number, min: 0, immutable: true, validate: Number.isSafeInteger },
   title: { type: String, required: true },
   description: { type: String, required: true },
   type: { type: String, required: true, enum: ['apartment', 'house', 'room', 'commercial', 'warehouse', 'studio', 'townhouse', 'hostel', 'shared_room'] },
@@ -162,6 +164,7 @@ propertySchema.index({ createdAt: -1 })
 propertySchema.index({ 'address.city': 1, 'address.region': 1 })
 propertySchema.index({ rentAmount: 1 })
 propertySchema.index({ landlordId: 1, status: 1 })
+propertySchema.index({ landlordId: 1, quotaSlot: 1 }, { name: 'property_landlord_quota_slot', unique: true, partialFilterExpression: { quotaSlot: { $type: 'number' } } })
 
 // Text index for search
 propertySchema.index({ title: 'text', description: 'text', 'address.city': 'text', 'address.neighborhood': 'text' })

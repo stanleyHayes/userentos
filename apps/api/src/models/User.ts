@@ -14,6 +14,7 @@ export interface IUser extends Document {
   /** Identity-verification workflow state: none → pending → verified (admin action). */
   verificationStatus: 'none' | 'pending' | 'verified'
   taxReportingConsent: boolean
+  storeAccountToken?: string
   profileImage?: string
   subscriptionPackageId?: string
   /**
@@ -27,13 +28,20 @@ export interface IUser extends Document {
    * version — the behaviour they already had.
    */
   subscriptionPlanVersion?: number
+  subscriptionPaymentId?: string
+  subscriptionSnapshotJson?: string
   subscriptionStartDate?: Date
   subscriptionEndDate?: Date
   invitedBy?: string
   deletedAt?: Date
+  suspendedAt?: Date
+  suspensionReason?: string
+  suspensionReportId?: string
   mfaEnabled: boolean
   mfaSecret?: string
   /** Set whenever the password changes — invalidates reset tokens issued before. */
+  biometricVersion?: number
+  sessionVersion?: number
   credentialsChangedAt?: Date
   settings?: {
     theme: string
@@ -61,19 +69,27 @@ const userSchema = new Schema<IUser>({
   isVerified: { type: Boolean, default: false },
   verificationStatus: { type: String, enum: ['none', 'pending', 'verified'], default: 'none' },
   taxReportingConsent: { type: Boolean, default: false },
+  storeAccountToken: { type: String, select: false, unique: true, sparse: true },
   profileImage: String,
   subscriptionPackageId: { type: String },
   subscriptionPlanVersion: { type: Number },
+  subscriptionPaymentId: String,
+  subscriptionSnapshotJson: String,
   subscriptionStartDate: { type: Date },
   subscriptionEndDate: { type: Date },
   invitedBy: { type: String },
   deletedAt: { type: Date, index: true },
+  suspendedAt: Date,
+  suspensionReason: String,
+  suspensionReportId: String,
   mfaEnabled: { type: Boolean, default: false },
   // select:false — the TOTP seed must never ride along in general queries
   // (the admin user list previously leaked every user's seed). Code that
   // verifies codes opts in explicitly with .select('+mfaSecret').
   mfaSecret: { type: String, select: false },
   credentialsChangedAt: { type: Date },
+  biometricVersion: { type: Number, default: 0 },
+  sessionVersion: { type: Number, default: 0 },
   settings: {
     theme: { type: String, default: 'system' },
     language: { type: String, default: 'en' },

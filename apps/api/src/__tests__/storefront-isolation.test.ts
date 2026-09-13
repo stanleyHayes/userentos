@@ -12,6 +12,8 @@ import {
   RESERVED_SLUGS, checkDomainOwnership,
 } from '../services/storefront.js'
 
+// The authenticated fixtures represent active persisted accounts.
+vi.mock('../models/User.js', () => ({ User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }) } }))
 vi.mock('../models/Storefront.js', () => ({
   Storefront: { findOne: vi.fn(), findById: vi.fn(), find: vi.fn(), create: vi.fn() },
 }))

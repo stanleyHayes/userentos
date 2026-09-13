@@ -124,7 +124,16 @@ export function getRail(): PaymentRail {
  * own adapter regardless of rail — a caller asking for a bank collection gets
  * one rather than a confusing failure.
  */
-export function getProvider(method: ProviderId): PaymentProvider {
+export function getProvider(method: ProviderId, source?: PaymentProvider['source']): PaymentProvider {
+  if (source === 'simulated') return makeSimulator(method)
+  if (source === 'paystack') {
+    if (method === 'bank_transfer') throw new Error('Invalid saved collection source')
+    return paystackRentProviders[method]
+  }
+  if (source) {
+    if (source !== method) throw new Error('Invalid saved collection source')
+    return directProviders[method]
+  }
   if (getMode() !== 'live') return makeSimulator(method)
   if (getRail() === 'paystack' && method !== 'bank_transfer') {
     return paystackRentProviders[method]

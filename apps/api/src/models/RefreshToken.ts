@@ -8,6 +8,7 @@ import crypto from 'crypto'
  */
 export interface IRefreshToken extends Document {
   userId: string
+  sessionVersion?: number
   /** SHA-256 hex digest of the opaque refresh token */
   tokenHash: string
   /** Optional client hint, e.g. 'Chrome 125 / macOS' */
@@ -23,6 +24,7 @@ export interface IRefreshToken extends Document {
 const schema = new Schema<IRefreshToken>({
   userId: { type: String, required: true, index: true },
   tokenHash: { type: String, required: true, unique: true },
+  sessionVersion: { type: Number, default: 0, immutable: true },
   deviceLabel: { type: String },
   ipAddress: { type: String },
   lastUsedAt: { type: Date },

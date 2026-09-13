@@ -2,8 +2,14 @@ import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { config } from '../config/index.js'
 import { error } from '../utils/response.js'
+import { User } from '../models/User.js'
+import { sessionVersionFilter, biometricVersionFilter } from '../services/sessionVersion.js'
+import { suspendedAccess } from '../services/suspendedAccess.js'
 
 export interface AuthPayload {
+  biometricVersion?: number
+  sessionVersion?: number
+  suspended?: boolean
   userId: string
   email: string
   roles: string[]
@@ -31,7 +37,7 @@ export function isSuperAdmin(req: Request): boolean {
   return req.user?.roles.includes('super_admin') === true
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
     error(res, 'Authentication required', 401)
@@ -47,6 +53,13 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
       error(res, 'Invalid or expired token', 401)
       return
     }
+    const active = await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } })
+    if (!active) {
+      const existing = await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false } })
+      if (!existing) { error(res, 'Invalid or expired token', 401); return }
+      if (!suspendedAccess(req.method, req.originalUrl || '')) { error(res, 'Your account is suspended. You can access your existing agreements and rent payments, export or delete your data, or contact info@userentos.com to appeal.', 403); return }
+    }
+    payload.suspended = !active
     // Ensure permissions array exists (for tokens issued before this feature)
     if (!payload.permissions) payload.permissions = []
     req.user = payload
@@ -57,13 +70,13 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 }
 
 // Optional auth — sets req.user if token present, but doesn't reject
-export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization
   if (header?.startsWith('Bearer ')) {
     try {
       const token = header.slice(7)
       const payload = jwt.verify(token, config.jwtSecret) as AuthPayload
-      if (payload.purpose === 'session') {
+      if (payload.purpose === 'session' && await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
         if (!payload.permissions) payload.permissions = []
         req.user = payload
       }
@@ -78,7 +91,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
  * query param. Session tokens are deliberately NOT accepted here, so a leaked
  * download URL never yields account access.
  */
-export function authenticateDownload(req: Request, res: Response, next: NextFunction) {
+export async function authenticateDownload(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization
   const bearer = header?.startsWith('Bearer ') ? header.slice(7) : undefined
   const query = typeof req.query.token === 'string' ? req.query.token : undefined
@@ -94,6 +107,11 @@ export function authenticateDownload(req: Request, res: Response, next: NextFunc
       error(res, 'Invalid or expired download token', 401)
       return
     }
+    const active = await User.exists({ _id: payload.userId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })
+    if (!active && (!suspendedAccess(req.method, req.originalUrl || '') || !await User.exists({ _id: payload.userId, deletedAt: { $exists: false } }))) {
+      error(res, 'Invalid or expired download token', 401); return
+    }
+    payload.suspended = !active
     if (!payload.permissions) payload.permissions = []
     req.user = payload
     next()

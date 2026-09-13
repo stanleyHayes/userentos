@@ -47,6 +47,7 @@ function mapStatus(s: string | undefined | null): ProviderStatus {
 
 class BankTransferProvider implements PaymentProvider {
   id = 'bank_transfer' as const
+  source = 'bank_transfer' as const
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     // No upstream call — generate a local correlator. The PSP echoes our
@@ -81,6 +82,7 @@ class BankTransferProvider implements PaymentProvider {
       narration?: string
       transactionId?: string
       status?: string
+      currency?: string
       amount?: number | string
       valueDate?: string
     }
@@ -92,6 +94,7 @@ class BankTransferProvider implements PaymentProvider {
       providerRef: data.transactionId ?? '',
       status: mapStatus(data.status),
       amount: Number(data.amount ?? 0),
+      currency: data.currency,
       timestamp: data.valueDate ?? new Date().toISOString(),
       raw: data,
     }

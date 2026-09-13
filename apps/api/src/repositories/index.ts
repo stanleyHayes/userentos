@@ -29,8 +29,15 @@ export class UserRepository extends BaseRepository<IUser> {
 // ─── Property ───
 
 export class PropertyRepository extends BaseRepository<IProperty> {
+  private quotaIndex?: Promise<string>
   constructor() {
     super(Property)
+  }
+
+  /** Never admit concurrent creation without the uniqueness constraint, even if autoIndex is disabled. */
+  async ensureQuotaIndex(): Promise<void> {
+    this.quotaIndex ??= this.model.collection.createIndex({ landlordId: 1, quotaSlot: 1 }, { name: 'property_landlord_quota_slot', unique: true, partialFilterExpression: { quotaSlot: { $type: 'number' } } }).catch(failure => { this.quotaIndex = undefined; throw failure })
+    await this.quotaIndex
   }
 
   async findByLandlord(landlordId: string): Promise<IProperty[]> {

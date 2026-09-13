@@ -13,6 +13,9 @@
  */
 import { ContentReport, type ReportTargetType, type ReportAction } from '../models/ContentReport.js'
 import { Property } from '../models/Property.js'
+import { User } from '../models/User.js'
+import { Message, Conversation } from '../models/Conversation.js'
+import { getIO } from './socket.js'
 import { Storefront } from '../models/Storefront.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { Review } from '../models/Review.js'
@@ -61,8 +64,19 @@ export interface ResolvedTarget {
 }
 
 /** Confirm the reported thing exists, and capture who owns it and what it is called. */
-export async function resolveReportTarget(type: ReportTargetType, id: string): Promise<ResolvedTarget> {
+export async function resolveReportTarget(type: ReportTargetType, id: string, reporterId?: string): Promise<ResolvedTarget> {
   switch (type) {
+    case 'user': {
+      const user = await User.findById(id).select('firstName lastName').lean()
+      return user ? { exists: true, label: `${user.firstName} ${user.lastName}`, ownerId: id } : { exists: false }
+    }
+    case 'message': {
+      if (!reporterId) return { exists: false }
+      const message = await Message.findById(id).lean()
+      if (!message || message.removed) return { exists: false }
+      const conversation = await Conversation.exists({ _id: message.conversationId, participants: reporterId })
+      return conversation ? { exists: true, label: message.text.slice(0, 2000), ownerId: message.senderId } : { exists: false }
+    }
     case 'property': {
       const p = await Property.findById(id).select('title landlordId').lean()
       return p ? { exists: true, label: p.title, ownerId: p.landlordId } : { exists: false }
@@ -94,6 +108,18 @@ export async function removeReportedContent(
   reason: string,
 ): Promise<boolean> {
   switch (type) {
+    case 'user': return false // Account enforcement uses suspendAccount, never content removal.
+    case 'message': {
+      const message = await Message.findById(id).lean()
+      if (!message) return false
+      await Message.updateOne({ _id: id }, { $set: { removed: true, removedReason: reason } })
+      await Conversation.updateOne({ _id: message.conversationId, 'lastMessage.text': message.text, 'lastMessage.senderId': message.senderId }, { $unset: { lastMessage: 1 } })
+      const conversation = await Conversation.findById(message.conversationId).select('participants').lean()
+      try {
+        for (const participant of conversation?.participants ?? []) getIO().to(`user:${participant}`).emit('message:removed', { conversationId: message.conversationId, messageId: id })
+      } catch { /* HTTP history masks the removed content independently. */ }
+      return true
+    }
     case 'property': {
       const res = await Property.updateOne(
         { _id: id },

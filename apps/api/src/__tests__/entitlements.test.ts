@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { User } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { PlanEntitlement } from '../models/PlanEntitlement.js'
+import { Payment } from '../models/Payment.js'
 import {
   resolveEntitlements, requireEntitlement, requireQuota, getNumericFeature,
-  EntitlementError, FEATURE_REGISTRY,
+  EntitlementError, FEATURE_REGISTRY, snapshotPackageEntitlements, isFeatureKey,
 } from '../services/entitlements.js'
 
 vi.mock('../models/User.js', () => ({ User: { findById: vi.fn() } }))
@@ -12,6 +13,7 @@ vi.mock('../models/SubscriptionPackage.js', () => ({
   SubscriptionPackage: { findById: vi.fn(), findOne: vi.fn() },
 }))
 vi.mock('../models/PlanEntitlement.js', () => ({ PlanEntitlement: { find: vi.fn() } }))
+vi.mock('../models/Payment.js', () => ({ Payment: { exists: vi.fn().mockResolvedValue(null) } }))
 
 const mockUser = (doc: unknown) => vi.mocked(User.findById).mockReturnValue({ lean: vi.fn().mockResolvedValue(doc) } as never)
 const mockPlan = (doc: unknown) => vi.mocked(SubscriptionPackage.findById).mockReturnValue({ lean: vi.fn().mockResolvedValue(doc) } as never)
@@ -23,6 +25,21 @@ describe('entitlement engine', () => {
     vi.clearAllMocks()
     mockGrants([])
     mockDefaultPlan(null)
+  })
+
+  it('captures complete plan terms including legacy limits independently from future changes', async () => {
+    const plan = { _id: 'plan', name: 'Pro', version: 2, maxProperties: 8, platformFeePercent: 4 }
+    mockGrants([{ featureKey: 'blog.limit', value: 12 }])
+    const snapshot = await snapshotPackageEntitlements(plan)
+    plan.maxProperties = 2; plan.platformFeePercent = 9; plan.version = 3
+    expect(snapshot).toMatchObject({ planId: 'plan', planName: 'Pro', planVersion: 2, features: { 'property.limit': 8, 'platform.fee_percent': 4, 'blog.limit': 12, 'affiliate.enabled': false } })
+  })
+  it.each(['__proto__', 'constructor', 'toString'])('does not treat inherited key %s as a capability', key => {
+    expect(isFeatureKey(key)).toBe(false)
+  })
+  it('refuses to snapshot malformed grants instead of persisting invalid purchase terms', async () => {
+    mockGrants([{ featureKey: 'property.limit', value: 'unlimited' }])
+    await expect(snapshotPackageEntitlements({ _id: 'plan' })).rejects.toThrow('Invalid entitlement value')
   })
 
   it('gives a user with no plan the free-tier defaults, never a paid capability', async () => {
@@ -66,7 +83,7 @@ describe('entitlement engine', () => {
 
     const { features, planName } = await resolveEntitlements('u1')
 
-    expect(planName).toBe('Expired')
+    expect(planName).toBe('Free')
     expect(features['storefront.enabled']).toBe(false)
     expect(SubscriptionPackage.findById).not.toHaveBeenCalled()
   })
@@ -77,8 +94,28 @@ describe('entitlement engine', () => {
 
     const { features, planName } = await resolveEntitlements('u1')
 
+    expect(SubscriptionPackage.findOne).toHaveBeenCalledWith({ isDefault: true, isActive: true, price: 0 })
     expect(planName).toBe('Starter')
     expect(features['property.limit']).toBe(2)
+  })
+  it.each(['expired', 'missing', 'invalid-date'])('uses configured free entitlements for %s legacy subscriptions', async scenario => {
+    mockUser({ _id: 'u1', subscriptionPackageId: 'old', ...(scenario === 'missing' ? {} : { subscriptionEndDate: scenario === 'expired' ? new Date(0) : new Date('invalid') }) })
+    mockPlan(null)
+    mockDefaultPlan({ _id: 'free', name: 'Configured free', version: 4, maxProperties: 1 })
+    mockGrants([{ featureKey: 'blog.limit', value: 2 }])
+    const resolved = await resolveEntitlements('u1')
+    expect(resolved).toMatchObject({ planId: 'free', planVersion: 4, features: { 'property.limit': 1, 'blog.limit': 2, 'storefront.enabled': false } })
+    expect(PlanEntitlement.find).toHaveBeenLastCalledWith({ planId: 'free', planVersion: 4 })
+  })
+  it.each(['expired', 'refunded'])('uses configured free limits after a saved purchase becomes %s', async status => {
+    const startsAt = new Date(Date.now() - 60_000).toISOString()
+    const endsAt = new Date(status === 'expired' ? Date.now() - 1000 : Date.now() + 60_000).toISOString()
+    mockUser({ _id: 'u1', subscriptionPackageId: 'paid', subscriptionPlanVersion: 2, subscriptionPaymentId: 'purchase', subscriptionStartDate: new Date(startsAt), subscriptionEndDate: new Date(endsAt), subscriptionSnapshotJson: JSON.stringify({ paymentId: 'purchase', startsAt, endsAt, terms: { packageId: 'paid', packageVersion: 2, featuresJson: JSON.stringify({ 'property.limit': 50, 'blog.limit': 100 }) } }) })
+    vi.mocked(Payment.exists).mockResolvedValue(null)
+    mockDefaultPlan({ _id: 'free', name: 'Configured free', version: 4, maxProperties: 1 })
+    mockGrants([{ featureKey: 'blog.limit', value: 2 }])
+    expect((await resolveEntitlements('u1')).features).toMatchObject({ 'property.limit': 1, 'blog.limit': 2 })
+    await expect(requireQuota('u1', 'property.limit', 1)).rejects.toBeInstanceOf(EntitlementError)
   })
 
   it('blocks a capability the plan does not include, and names it', async () => {

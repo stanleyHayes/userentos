@@ -1,3 +1,4 @@
+import appleNotifications from './routes/appleNotifications.js'
 import './instrument.js'
 import * as Sentry from '@sentry/node'
 import express from 'express'
@@ -71,6 +72,8 @@ import settingsRoutes from './routes/settings.js'
 import invitationRoutes from './routes/invitations.js'
 import badgeRoutes from './routes/badges.js'
 import subscriptionRoutes from './routes/subscriptions.js'
+import storeBillingRoutes from './routes/storeBilling.js'
+import googlePlayNotifications from './routes/googlePlayNotifications.js'
 import financingRoutes from './routes/financing.js'
 import employerRoutes from './routes/employers.js'
 import businessRoutes from './routes/businesses.js'
@@ -163,7 +166,7 @@ app.use(sanitizeRequest)
 // In `PAYMENTS_PROVIDER_MODE !== 'live'`, the simulator dispatches a completion
 // event in-process. Wire it to the same finalize path the webhooks use.
 onSimulatedComplete((event) => {
-  finalizePayment(event, { source: 'simulator' }).catch((err) => {
+  finalizePayment(event, { source: 'simulator', providerSource: 'simulated' }).catch((err) => {
     console.error('[Simulator] finalize threw:', (err as Error).message)
   })
 })
@@ -344,6 +347,9 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/invitations', invitationRoutes)
 app.use('/api/badges', badgeRoutes)
 app.use('/api/subscriptions', subscriptionRoutes)
+app.use('/api/store-billing', storeBillingRoutes)
+app.use('/api/webhooks/google-play', googlePlayNotifications)
+app.use('/api/webhooks/apple', appleNotifications)
 app.use('/api/financing', financingRoutes)
 app.use('/api/employers', employerRoutes)
 app.use('/api/businesses', businessRoutes)

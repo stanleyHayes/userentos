@@ -9,6 +9,8 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { getIO } from '../services/socket.js'
 import { logger } from '../utils/logger.js'
+import { contactBlocked, blockedContacts } from '../services/userBlocks.js'
+import { UserBlock } from '../models/UserBlock.js'
 
 const createConversationSchema = z.object({
   participantId: z.string().min(1),
@@ -22,6 +24,9 @@ const sendMessageSchema = z.object({
 export const chatController = {
   listConversations: async (req: Request, res: Response) => {
     const userId = req.user!.userId
+
+    const blocked = await blockedContacts(userId)
+    const myBlocks = new Set((await UserBlock.find({ blockerId: userId }).lean()).map(block => block.blockedId))
 
     const conversations = await Conversation.find({ participants: userId })
       .sort({ updatedAt: -1 })
@@ -51,6 +56,8 @@ export const chatController = {
       return {
         id: (c._id as Types.ObjectId).toString(),
         participants: c.participants,
+        contactBlocked: blocked.has(otherId),
+        blockedByMe: myBlocks.has(otherId),
         otherUser: otherUser ? { id: otherId, firstName: otherUser.firstName, lastName: otherUser.lastName } : undefined,
         propertyId: c.propertyId,
         propertyTitle: property?.title,
@@ -76,9 +83,10 @@ export const chatController = {
     const { participantId, propertyId } = parsed.data
 
     if (participantId === userId) { error(res, 'Cannot message yourself'); return }
+    if (await contactBlocked(userId, participantId)) { error(res, 'Messaging is unavailable for this contact.', 403); return }
 
     // Participant must be an existing user
-    const otherUser = await User.findById(participantId).select('firstName lastName').lean()
+    const otherUser = await User.findOne({ _id: participantId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } }).select('firstName lastName').lean()
     if (!otherUser) { error(res, 'Participant not found', 404); return }
 
     // Check if conversation already exists between these two users (optionally for same property)
@@ -168,7 +176,8 @@ export const chatController = {
         conversationId: m.conversationId,
         senderId: m.senderId,
         senderName: sender ? `${sender.firstName} ${sender.lastName}` : undefined,
-        text: m.text,
+        text: m.removed ? 'Message removed by moderation' : m.text,
+        removed: !!m.removed,
         read: m.read,
         createdAt: (m as unknown as { createdAt: string }).createdAt,
       }
@@ -189,6 +198,10 @@ export const chatController = {
       error(res, 'Conversation not found', 404); return
     }
 
+    const recipientId = conversation.participants.find(p => p !== userId)
+    if (!recipientId || await contactBlocked(userId, recipientId) || !await User.exists({ _id: recipientId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
+      error(res, 'Messaging is unavailable for this contact.', 403); return
+    }
     const message = await Message.create({
       conversationId,
       senderId: userId,

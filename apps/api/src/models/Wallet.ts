@@ -14,12 +14,14 @@ export interface IWallet extends Document {
   balance: number
   bankAccountRef?: string
   transactions: IWalletTransaction[]
+  pendingCredit?: { operationKey: string; claim: string; phase: 'prepared' | 'applied' }
 }
 
 const walletSchema = new Schema<IWallet>({
   userId: { type: String, required: true, unique: true, index: true },
   balance: { type: Number, default: 0 },
   bankAccountRef: String,
+  pendingCredit: { type: new Schema({ operationKey: { type: String, required: true }, claim: { type: String, required: true }, phase: { type: String, enum: ['prepared', 'applied'], required: true } }, { _id: false }) },
   transactions: [{
     type: { type: String, required: true },
     amount: { type: Number, required: true },

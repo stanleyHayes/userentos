@@ -14,6 +14,7 @@ export type ProviderId =
   | 'bank_transfer'
 
 export type ProviderStatus = 'pending' | 'completed' | 'failed'
+export type CollectionSource = ProviderId | 'paystack' | 'simulated'
 
 export interface CollectionInput {
   /** Amount in GHS major units (e.g. 250.00). Adapters convert to minor units / strings as needed. */
@@ -45,6 +46,8 @@ export interface InitiateResult {
 }
 
 export interface WebhookEvent {
+  /** Provider-reported currency; missing currency cannot authorize completion. */
+  currency?: string
   /** The server-side reference we sent on initiate (PAY-XXXX-XXXX). */
   reference: string
   /** Provider-side reference. */
@@ -60,6 +63,7 @@ export interface WebhookEvent {
 }
 
 export interface PaymentProvider {
+  source: CollectionSource
   id: ProviderId
   /**
    * Begin a collection / pull request from the payer's mobile-money wallet
@@ -77,4 +81,12 @@ export interface PaymentProvider {
   parseWebhook(rawBody: string): WebhookEvent
   /** Reconciliation poll — used by the scheduler to catch missed webhooks. */
   queryStatus(providerRef: string): Promise<ProviderStatus>
+  /** Verified financial facts. Status-only polling must never authorize settlement. */
+  queryCollection?(providerRef: string): Promise<{
+    reference: string
+    status: ProviderStatus
+    amount: number
+    currency: string
+    paidAt?: string
+  } | null>
 }

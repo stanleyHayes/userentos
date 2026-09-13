@@ -1,3 +1,10 @@
+import { reconciliationEvidence } from './payments/reconciliationEvidence.js'
+import { recoverPaymentWalletCredits } from './payments/paymentWalletCredit.js'
+import { recoverPaidSubscriptions } from './payments/paidSubscription.js'
+import { recoverApplePurchases } from './storeBilling/recoverApplePurchases.js'
+import { recoverRentReceipts } from './payments/recoverRentReceipts.js'
+import { expireSubscription } from './subscriptionExpiry.js'
+import { recoverGooglePurchases } from './storeBilling/recoverPurchases.js'
 import cron from 'node-cron'
 import { Types } from 'mongoose'
 import { SavingsPlan } from '../models/SavingsPlan.js'
@@ -16,16 +23,7 @@ import { round2 } from '../utils/money.js'
 import type { ProviderId } from './payments/types.js'
 import { logger } from '../utils/logger.js'
 import { AuditLog } from '../models/AuditLog.js'
-import { RefreshToken } from '../models/RefreshToken.js'
-import { BiometricToken } from '../models/BiometricToken.js'
-import { DeviceToken } from '../models/DeviceToken.js'
-import { Notification } from '../models/Notification.js'
-import { TenantProfile } from '../models/TenantProfile.js'
-import { ProfileAccess } from '../models/ProfileAccess.js'
-import { Favorite } from '../models/Favorite.js'
-import { CreditScore } from '../models/CreditScore.js'
-import { Review } from '../models/Review.js'
-import { Conversation, Message } from '../models/Conversation.js'
+import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
@@ -71,6 +69,40 @@ async function batchPropertyTitles<T extends { propertyId: string }>(
 }
 
 export function startScheduler() {
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverPaidSubscriptions()
+      if (result.completed || result.deferred) logger.info('[Scheduler] Paid subscription recovery', result)
+    } catch { logger.error('[Scheduler] Paid subscription recovery failed; retry scheduled') }
+  }, { timezone: GHANA_TZ })
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverPaymentWalletCredits()
+      if (result.completed || result.deferred) logger.info('[Scheduler] Payment wallet credit recovery', result)
+    } catch { logger.error('[Scheduler] Payment wallet credit recovery failed; retry scheduled') }
+  }, { timezone: GHANA_TZ })
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverRentReceipts()
+      if (result.issued || result.deferred) logger.info('[Scheduler] Rent receipt recovery', result)
+    } catch { logger.error('[Scheduler] Rent receipt recovery failed; retry scheduled for the next run') }
+  }, { timezone: GHANA_TZ })
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverApplePurchases()
+      if (result.processed) logger.info('[Scheduler] Apple purchase recovery', result)
+    } catch {
+      logger.error('[Scheduler] Apple purchase recovery failed; retry scheduled for the next run')
+    }
+  }, { timezone: GHANA_TZ })
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverGooglePurchases()
+      if (result.processed) logger.info('[Scheduler] Google purchase recovery', result)
+    } catch {
+      logger.error('[Scheduler] Google purchase recovery failed; retry scheduled for the next run')
+    }
+  }, { timezone: GHANA_TZ })
   // Auto-debit: runs every day at 8am
   cron.schedule('0 8 * * *', async () => {
     if (!(await acquireCronLock('auto-debit', LOCK_TTL_DAILY))) return
@@ -538,7 +570,7 @@ export function startScheduler() {
 
   // ─── Payment status reconciliation: every 5 minutes ───
   // Catches missed webhooks. Looks at processing/pending payments older than
-  // 2 minutes that have a providerRef, calls the adapter's queryStatus, and
+  // 2 minutes that have a providerRef, requests verified financial facts, and
   // applies the result through the same finalize path used by webhooks.
   cron.schedule('*/5 * * * *', async () => {
     if (!(await acquireCronLock('payment-reconcile', LOCK_TTL_RECONCILE))) return
@@ -552,24 +584,10 @@ export function startScheduler() {
       for (const payment of stale) {
         if (!payment.providerRef) continue
         try {
-          const provider = getProvider(payment.method as ProviderId)
-          const status = await provider.queryStatus(payment.providerRef)
-          if (status === 'pending') {
-            payment.lastProviderCheckAt = new Date().toISOString()
-            await payment.save()
-            continue
-          }
-          await finalizePayment(
-            {
-              reference: payment.reference,
-              providerRef: payment.providerRef,
-              status,
-              amount: payment.amount,
-              timestamp: new Date().toISOString(),
-              raw: { reconciled: true },
-            },
-            { source: 'reconciliation' },
-          )
+          const provider = getProvider(payment.method as ProviderId, payment.collectionSource)
+          const event = await reconciliationEvidence(provider, payment)
+          await Payment.updateOne({ _id: payment._id }, { $set: { lastProviderCheckAt: new Date().toISOString() } })
+          if (event) await finalizePayment(event, { source: 'reconciliation', providerSource: provider.source })
         } catch (err) {
           logger.warn(`[Scheduler] reconcile ${payment.reference} failed:`, (err as Error).message)
         }
@@ -593,7 +611,7 @@ export function startScheduler() {
       const windowEnd = new Date(windowStart); windowEnd.setDate(windowEnd.getDate() + 1)
       const expiring = await User.find({
         subscriptionEndDate: { $gte: windowStart, $lt: windowEnd },
-      }).select('_id subscriptionPackageId subscriptionEndDate').lean()
+      }).select('_id subscriptionPackageId subscriptionEndDate subscriptionPaymentId subscriptionSnapshotJson subscriptionStartDate subscriptionPlanVersion').lean()
 
       // Free packages renew at no cost — no renewal nudge for a GHS 0 plan.
       const pkgIds = [...new Set(expiring.map((u) => u.subscriptionPackageId).filter((id): id is string => !!id))]
@@ -620,7 +638,7 @@ export function startScheduler() {
 
     // (b) Downgrade expired paid subscriptions to the default (free) package.
     try {
-      const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
+      const defaultPkg = await SubscriptionPackage.findOne({ isDefault: true, isActive: true, price: 0 }).lean()
       if (!defaultPkg) {
         logger.warn('[Scheduler] No default subscription package configured — skipping expiry downgrades')
         return
@@ -628,29 +646,25 @@ export function startScheduler() {
       const expiredUsers = await User.find({
         subscriptionPackageId: { $exists: true, $ne: null },
         subscriptionEndDate: { $lt: now },
-      }).select('_id subscriptionPackageId').lean()
+      }).select('_id subscriptionPackageId subscriptionEndDate subscriptionPaymentId subscriptionSnapshotJson subscriptionStartDate subscriptionPlanVersion').lean()
 
       for (const u of expiredUsers) {
         const uid = (u._id as Types.ObjectId).toString()
-        // Only downgrade PAID packages — a free default-package sub with a stray
-        // end date just has the date cleared.
-        const pkg = u.subscriptionPackageId
-          ? await SubscriptionPackage.findById(u.subscriptionPackageId).select('price name').lean()
-          : null
-        if (pkg && pkg.price > 0 && u.subscriptionPackageId !== defaultPkg._id.toString()) {
-          await User.updateOne(
-            { _id: uid },
-            { $set: { subscriptionPackageId: defaultPkg._id.toString(), subscriptionStartDate: now }, $unset: { subscriptionEndDate: 1 } },
-          )
+        try {
+          if (!u.subscriptionPackageId || !u.subscriptionEndDate) continue
+          const result = await expireSubscription({ userId: uid, packageId: u.subscriptionPackageId, expiresAt: new Date(u.subscriptionEndDate), subscriptionPaymentId: u.subscriptionPaymentId, subscriptionSnapshotJson: u.subscriptionSnapshotJson, subscriptionStartDate: u.subscriptionStartDate, subscriptionPlanVersion: u.subscriptionPlanVersion }, {
+            id: defaultPkg._id.toString(), price: defaultPkg.price, version: defaultPkg.version ?? 1,
+          }, now)
+          if (!result.downgradedFrom) continue
           notify({
             userId: uid,
             title: 'Subscription Expired',
-            message: `Your ${pkg.name} subscription has expired and your account was moved to the free ${defaultPkg.name} plan. Resubscribe to restore your previous limits.`,
+            message: `Your ${result.downgradedFrom} subscription has expired and your account was moved to the free ${defaultPkg.name} plan. Resubscribe to restore your previous limits.`,
             actionUrl: '/subscriptions',
           }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           logger.info(`[Scheduler] Downgraded expired subscription for user ${uid.slice(0, 8)}...`)
-        } else {
-          await User.updateOne({ _id: uid }, { $unset: { subscriptionEndDate: 1 } })
+        } catch (err) {
+          logger.error(`[Scheduler] Subscription expiry failed for user ${uid.slice(0, 8)}; retained for retry`, err)
         }
       }
     } catch (err) {
@@ -743,58 +757,13 @@ export function startScheduler() {
     }
   }, { timezone: GHANA_TZ })
 
-  // ─── GDPR: hard-delete users after 30-day grace period ───
+  // ─── Account erasure: retry incomplete cleanup after the disclosed delay ───
   cron.schedule('0 4 * * *', async () => {
     if (!(await acquireCronLock('gdpr-delete', LOCK_TTL_DAILY))) return
     try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      const users = await User.find({ deletedAt: { $lt: cutoff } }).select('_id').lean()
-      if (users.length === 0) return
-
-      for (const u of users) {
-        const uid = (u._id as Types.ObjectId).toString()
-        // Erase credentials, tokens, and PII-bearing records. Financial records
-        // (payments, agreements, loans) are RETAINED for compliance — they only
-        // reference userId, and with the User doc gone the reference is anonymous.
-        await Promise.all([
-          RefreshToken.deleteMany({ userId: uid }),
-          BiometricToken.deleteMany({ userId: uid }),
-          DeviceToken.deleteMany({ userId: uid }),
-          Notification.deleteMany({ userId: uid }),
-          TenantProfile.deleteMany({ userId: uid }),
-          ProfileAccess.deleteMany({ $or: [{ requesterId: uid }, { tenantId: uid }] }),
-          Favorite.deleteMany({ userId: uid }),
-          CreditScore.deleteMany({ userId: uid }),
-          Message.deleteMany({ senderId: uid }),
-          // Anonymize marketplace content that embeds the user's name
-          Review.updateMany({ userId: uid }, { $set: { userName: 'Deleted User' } }),
-          Conversation.updateMany({ participants: uid }, { $pull: { participants: uid } }),
-        ])
-        /*
-         * deleteOne, not findByIdAndDelete.
-         *
-         * User has a pre(/^find/) hook that appends
-         * `deletedAt: { $exists: false }` to any query that does not already
-         * mention deletedAt. findByIdAndDelete goes through findOneAndDelete,
-         * so the hook fired and the delete became
-         * `{ _id, deletedAt: { $exists: false } }` — which can never match a
-         * user selected precisely BECAUSE deletedAt is set. Every related
-         * record was erased while the User document itself, holding the email,
-         * name, phone and password hash, survived indefinitely: the erasure
-         * looked successful and was not.
-         *
-         * deleteOne is not matched by the hook, and restating the deletedAt
-         * precondition re-checks atomically that this user is still eligible.
-         */
-        const purged = await User.deleteOne({ _id: uid, deletedAt: { $lt: cutoff } })
-        if (purged.deletedCount === 0) {
-          logger.warn(`[Scheduler] GDPR purge matched no user document for ${uid.slice(0, 8)}...`)
-          continue
-        }
-        logger.info(`[Scheduler] Hard-deleted user ${uid.slice(0, 8)}... after 30-day grace period`)
-      }
-    } catch (err) {
-      logger.error('[Scheduler] GDPR hard-delete error:', err)
+      await purgeExpiredAccounts()
+    } catch {
+      logger.error('[Scheduler] Account erasure scan failed; retry scheduled for the next run')
     }
   }, { timezone: GHANA_TZ })
 

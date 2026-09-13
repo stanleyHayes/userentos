@@ -1,0 +1,50 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { completeGooglePurchase } from '../services/storeBilling/completePurchase.js'
+const mocks = vi.hoisted(() => ({ record: vi.fn(), prepare: vi.fn(), activate: vi.fn(), acknowledge: vi.fn(), update: vi.fn() }))
+vi.mock('../services/storeBilling/purchaseJournal.js', () => ({ recordGooglePurchase: mocks.record, StorePurchaseConflict: class extends Error { constructor() { super('Purchase changed') } } }))
+vi.mock('../services/storeBilling/prepareEntitlements.js', () => ({ prepareGoogleEntitlements: mocks.prepare }))
+vi.mock('../services/storeBilling/activeEntitlements.js', () => ({ activateGoogleEntitlements: mocks.activate }))
+vi.mock('../services/storeBilling/googlePlay.js', () => ({ acknowledgeGoogleSubscription: mocks.acknowledge }))
+vi.mock('../models/StorePurchase.js', () => ({ StorePurchase: { updateOne: mocks.update } }))
+beforeEach(() => {
+  vi.resetAllMocks()
+  mocks.record.mockResolvedValue({ _id: 'purchase', revision: 4 })
+  mocks.prepare.mockResolvedValue({})
+  mocks.activate.mockResolvedValue({ acknowledged: false, providerState: 'SUBSCRIPTION_STATE_ACTIVE', entitlementState: 'active', preparedGrants: [{ productId: 'rentos.pro' }] })
+  mocks.acknowledge.mockResolvedValue(undefined)
+  mocks.update.mockResolvedValue({ matchedCount: 1 })
+})
+describe('Google purchase completion', () => {
+  it('acknowledges only after durable activation and conditionally records success', async () => {
+    expect(await completeGooglePurchase('owner', 'secret-token')).toEqual({ purchaseId: 'purchase', revision: 4, purchaseState: 'SUBSCRIPTION_STATE_ACTIVE', entitlementState: 'active', acknowledged: true })
+    const order = [mocks.record, mocks.prepare, mocks.activate, mocks.acknowledge, mocks.update].map(fn => fn.mock.invocationCallOrder[0])
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(mocks.acknowledge).toHaveBeenCalledWith('secret-token', 'rentos.pro')
+    expect(mocks.update).toHaveBeenCalledWith({ _id: 'purchase', userId: 'owner', revision: 4, preparedRevision: 4, entitlementState: 'active' }, { $set: { acknowledged: true } })
+  })
+  it.each(['record', 'prepare', 'activate'] as const)('never acknowledges when %s fails', async stage => {
+    mocks[stage].mockRejectedValue(new Error('interrupted'))
+    await expect(completeGooglePurchase('owner', 'token')).rejects.toThrow('interrupted')
+    expect(mocks.acknowledge).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+  it('recovers a lost acknowledgement response from fresh verification without a second POST', async () => {
+    mocks.acknowledge.mockRejectedValueOnce(new Error('provider_unavailable'))
+    await expect(completeGooglePurchase('owner', 'token')).rejects.toThrow('provider_unavailable')
+    expect(mocks.update).not.toHaveBeenCalled()
+    mocks.record.mockResolvedValue({ _id: 'purchase', revision: 5 })
+    mocks.activate.mockResolvedValue({ acknowledged: true, providerState: 'SUBSCRIPTION_STATE_ACTIVE', entitlementState: 'active', preparedGrants: [{ productId: 'rentos.pro' }] })
+    expect(await completeGooglePurchase('owner', 'token')).toMatchObject({ acknowledged: true, revision: 5 })
+    expect(mocks.record).toHaveBeenCalledTimes(2)
+    expect(mocks.acknowledge).toHaveBeenCalledTimes(1)
+  })
+  it('does not acknowledge pending or expired purchases without active access', async () => {
+    mocks.activate.mockResolvedValue({ acknowledged: false, entitlementState: 'revoked', preparedGrants: [] })
+    expect(await completeGooglePurchase('owner', 'token')).toMatchObject({ acknowledged: false, entitlementState: 'revoked' })
+    expect(mocks.acknowledge).not.toHaveBeenCalled()
+  })
+  it('requires re-verification when an observation changes during acknowledgement', async () => {
+    mocks.update.mockResolvedValue({ matchedCount: 0 })
+    await expect(completeGooglePurchase('owner', 'token')).rejects.toThrow('Purchase changed')
+  })
+})

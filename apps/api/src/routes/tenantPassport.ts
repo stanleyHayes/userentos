@@ -39,6 +39,7 @@ interface LeanTenantProfile {
   employer?: string
   employmentDuration?: string
   monthlyIncome?: number
+  primaryCurrency?: string
 }
 
 const router = Router()
@@ -131,7 +132,7 @@ async function buildPassportData(userId: string) {
       employment = {
         employer: tp.employer,
         tenure: tp.employmentDuration,
-        salaryBand: salaryBand(tp.monthlyIncome),
+        salaryBand: !tp.primaryCurrency || tp.primaryCurrency === 'GHS' ? salaryBand(tp.monthlyIncome) : `Reported in ${tp.primaryCurrency}; not converted to GHS`,
       }
     }
   }

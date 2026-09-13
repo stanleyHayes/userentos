@@ -78,6 +78,7 @@ function mapStatus(s: string | undefined | null): ProviderStatus {
 
 class MtnMomoProvider implements PaymentProvider {
   id = 'mtn_momo' as const
+  source = 'mtn_momo' as const
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     const token = await getAccessToken()
@@ -159,6 +160,7 @@ class MtnMomoProvider implements PaymentProvider {
       providerRef: data.referenceId ?? data.financialTransactionId ?? '',
       status: mapStatus(data.status),
       amount: Number(data.amount ?? 0),
+      currency: data.currency,
       timestamp: new Date().toISOString(),
       raw: data,
     }

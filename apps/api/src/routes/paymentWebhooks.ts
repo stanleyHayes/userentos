@@ -61,11 +61,13 @@ function makeHandler(provider: PaymentProvider) {
     }
 
     try {
-      await finalizePayment(event, { source: 'webhook' })
+      await finalizePayment(event, { source: 'webhook', providerSource: provider.source })
     } catch (err) {
       console.error(`[Webhook:${provider.id}] finalize threw:`, (err as Error).message)
-      // Still ack 200 so the provider doesn't retry on our internal bug —
-      // we have the raw body in logs and will reconcile via cron.
+      // Delivery was not processed. Ask the provider to retry; a status poll
+      // may be unavailable and the raw request is deliberately not logged.
+      res.status(503).json({ success: false, error: 'Payment processing temporarily unavailable' })
+      return
     }
     res.status(200).json({ success: true })
   }

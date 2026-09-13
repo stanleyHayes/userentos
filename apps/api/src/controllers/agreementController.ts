@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
 import { attachObservedRent } from '../services/ml/valuationLog.js'
-import { TenantProfile } from '../models/TenantProfile.js'
+import { TenantProfile, calcScore } from '../models/TenantProfile.js'
 import { User } from '../models/User.js'
 import { Business } from '../models/Business.js'
 import { notify, notifyAgreementSigned, notifyAgreementFullySigned } from '../services/notify.js'
@@ -12,6 +12,7 @@ import { checkAndAward } from '../services/achievements.js'
 import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
 
 const createAgreementSchema = z.object({
   propertyId: z.string(),
@@ -51,29 +52,12 @@ async function notifyBusinessesOfNewMover(agreementId: string, propertyId: strin
   })))
 }
 
-function checkCompliance(data: { advanceMonths: number; terms: string[] }) {
-  const flags: { type: string; message: string; clause?: string; law?: string }[] = []
-  if (data.advanceMonths > 6) {
-    flags.push({ type: 'violation', message: 'Rent advance exceeds the legal maximum of 6 months', law: 'Rent Act, 2024 (proposed)' })
-  }
-  const illegalKeywords = ['forfeit deposit', 'no refund', 'waive rights']
-  for (const term of data.terms) {
-    const lower = term.toLowerCase()
-    for (const keyword of illegalKeywords) {
-      if (lower.includes(keyword)) {
-        flags.push({ type: 'warning', message: `Potentially illegal clause detected: "${term}"`, clause: term })
-      }
-    }
-  }
-  return flags
-}
-
 export const agreementController = {
   list: async (req: Request, res: Response) => {
     const userId = req.user!.userId
     const roles = req.user!.roles
     const User = (await import('../models/User.js')).User
-    const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+    const isAdmin = !req.user!.suspended && (roles.includes('admin') || roles.includes('super_admin') || roles.includes('government'))
     const filter = isAdmin ? {} : { $or: [{ landlordId: userId }, { tenantId: userId }] }
 
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
@@ -116,7 +100,7 @@ export const agreementController = {
     // Only the parties or staff may read an agreement's financial terms & signatures.
     const userId = req.user!.userId
     const roles = req.user!.roles
-    const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+    const isAdmin = !req.user!.suspended && (roles.includes('admin') || roles.includes('super_admin') || roles.includes('government'))
     if (!isAdmin && agreement.tenantId !== userId && agreement.landlordId !== userId) {
       error(res, 'Not authorized to view this agreement', 403); return
     }
@@ -147,7 +131,7 @@ export const agreementController = {
     const tenant = await User.findById(parsed.data.tenantId).select('_id').lean()
     if (!tenant) { error(res, 'Tenant not found', 404); return }
 
-    const complianceFlags = checkCompliance(parsed.data)
+    const complianceFlags = checkAgreementCompliance(parsed.data)
     const agreement = await Agreement.create({
       ...parsed.data,
       landlordId: req.user!.userId,
@@ -179,9 +163,10 @@ export const agreementController = {
 
     // Hard compliance violations (e.g. illegal rent advance) block signing so an
     // unlawful lease can never become active/binding. Warnings do not block.
-    const hasViolation = (agreement.complianceFlags ?? []).some((f: { type?: string }) => f.type === 'violation')
+    agreement.complianceFlags = checkAgreementCompliance(agreement)
+    const hasViolation = agreement.complianceFlags.some((f: { type?: string }) => f.type === 'violation')
     if (hasViolation) {
-      error(res, 'This agreement violates Ghana rental law (see compliance flags) and cannot be signed until the landlord corrects it.')
+      error(res, `Agreement cannot be signed: ${agreement.complianceFlags.filter(f => f.type === 'violation').map(f => f.message).join(' ')}`)
       return
     }
 
@@ -191,8 +176,9 @@ export const agreementController = {
     } else if (userId === agreement.tenantId) {
       // Check tenant profile completion
       const profile = await TenantProfile.findOne({ userId })
-      if (!profile || !profile.profileComplete) {
-        error(res, `Your tenant profile is ${profile?.completionScore ?? 0}% complete. You need 100% to sign agreements. Complete your profile at /my-profile.`)
+      const completionScore = profile ? calcScore(profile) : 0
+      if (completionScore < 100) {
+        error(res, `Your tenant profile is ${completionScore}% complete. You need 100% to sign agreements. Complete your profile at /my-profile.`)
         return
       }
       agreement.tenantSignature = now
@@ -290,7 +276,7 @@ export const agreementController = {
     const agreement = await Agreement.findById(param(req.params.id))
     if (!agreement) { error(res, 'Agreement not found', 404); return }
     if (agreement.landlordId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
-    if (agreement.status === 'active') { error(res, 'Cannot modify active agreement'); return }
+    if (!['draft', 'pending_signatures'].includes(agreement.status)) { error(res, 'Only draft or pending agreements can be modified', 409); return }
 
     const parsed = updateAgreementSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
@@ -304,7 +290,7 @@ export const agreementController = {
     if (advanceMonths !== undefined) agreement.advanceMonths = advanceMonths
     if (securityDeposit !== undefined) agreement.securityDeposit = securityDeposit
 
-    agreement.complianceFlags = checkCompliance({ advanceMonths: agreement.advanceMonths, terms: agreement.terms })
+    agreement.complianceFlags = checkAgreementCompliance(agreement)
     agreement.version += 1
     // Clear signatures on edit (requires re-signing)
     agreement.landlordSignature = undefined

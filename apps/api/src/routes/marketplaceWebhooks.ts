@@ -96,7 +96,7 @@ router.post('/paystack', rawBody, async (req: Request, res: Response) => {
       // a rent/savings/subscription charge arrives here too. Before this it was
       // logged and dropped, which would have left every Paystack-rail rent
       // payment stuck at pending until the reconcile sweep caught it.
-      const handled = await finalizePayment(paystackMtnProvider.parseWebhook(raw), { source: 'webhook' })
+      const handled = await finalizePayment(paystackMtnProvider.parseWebhook(raw), { source: 'webhook', providerSource: 'paystack' })
       if (!handled) {
         logger.warn(`[MarketplaceWebhook] reference ${reference} matched no marketplace transaction and no payment`)
       }

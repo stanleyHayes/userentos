@@ -1,0 +1,66 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { recoverGooglePurchases } from '../services/storeBilling/recoverPurchases.js'
+const mocks = vi.hoisted(() => ({ claim: vi.fn(), update: vi.fn(), complete: vi.fn(), decrypt: vi.fn(), lean: vi.fn(), select: vi.fn() }))
+vi.mock('../models/StorePurchase.js', () => ({ StorePurchase: { findOneAndUpdate: mocks.claim, updateOne: mocks.update } }))
+vi.mock('../services/storeBilling/completePurchase.js', () => ({ completeGooglePurchase: mocks.complete }))
+vi.mock('../services/storeBilling/tokenVault.js', () => ({ decryptStoreToken: mocks.decrypt }))
+import { purchaseTokenHash, StoreVerificationError } from '../services/storeBilling/googlePlay.js'
+const row = { _id: 'purchase', userId: 'owner', tokenHash: purchaseTokenHash('private-token'), tokenCiphertext: 'encrypted', recoveryAttempts: 1 }
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.stubEnv('GOOGLE_PLAY_PACKAGE_NAME', 'gh.rentos.mobile')
+  vi.stubEnv('GOOGLE_PLAY_SERVICE_ACCOUNT_FILE', '/fixture/key.json')
+  vi.stubEnv('STORE_BILLING_ENCRYPTION_KEY', 'a'.repeat(64))
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', 'true')
+  mocks.claim.mockReturnValue({ select: mocks.select })
+  mocks.select.mockReturnValue({ lean: mocks.lean })
+  mocks.lean.mockResolvedValueOnce(row).mockResolvedValue(null)
+  mocks.decrypt.mockReturnValue('private-token')
+  mocks.complete.mockResolvedValue({ acknowledged: true })
+  mocks.update.mockResolvedValue({ matchedCount: 1 })
+})
+afterEach(() => vi.unstubAllEnvs())
+describe('Google purchase background recovery', () => {
+  it('claims due unlocked production rows, completes them, and fences lease release', async () => {
+    expect(await recoverGooglePurchases()).toEqual({ processed: 1, failed: 0, skipped: false })
+    const [filter, update] = mocks.claim.mock.calls[0]
+    expect(filter).toMatchObject({ platform: 'google', applicationId: 'gh.rentos.mobile', environment: { $in: ['production'] } })
+    expect(filter.$and).toHaveLength(3)
+    expect(filter.$and[0].$or[1].providerState.$in).toEqual(expect.arrayContaining(['SUBSCRIPTION_STATE_PENDING', 'SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_ON_HOLD', 'SUBSCRIPTION_STATE_PAUSED']))
+    expect(filter.$and[0].$or[1].providerState.$in).not.toContain('SUBSCRIPTION_STATE_EXPIRED')
+    expect(filter.$and[2].$or).toContainEqual({ recoveryLeaseUntil: { $exists: false } })
+    expect(update.$set.recoveryLeaseId).toEqual(expect.any(String))
+    expect(mocks.complete).toHaveBeenCalledWith('owner', 'private-token')
+    expect(mocks.update.mock.calls[0][0]).toEqual({ _id: 'purchase', recoveryLeaseId: update.$set.recoveryLeaseId })
+    expect(mocks.update.mock.calls[0][1].$unset).toMatchObject({ recoveryLastError: 1, recoveryLeaseId: 1, recoveryLeaseUntil: 1 })
+  })
+  it('backs off provider failures without persisting raw secrets and continues the batch', async () => {
+    mocks.complete.mockRejectedValueOnce(new StoreVerificationError('provider_unavailable'))
+    mocks.lean.mockReset().mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, _id: 'second' }).mockResolvedValue(null)
+    expect(await recoverGooglePurchases()).toEqual({ processed: 2, failed: 1, skipped: false })
+    expect(mocks.update.mock.calls[0][1].$set.recoveryLastError).toBe('provider_unavailable')
+    expect(JSON.stringify(mocks.update.mock.calls)).not.toContain('private-token')
+    expect(mocks.complete).toHaveBeenCalledTimes(2)
+  })
+  it('refuses corrupt decrypted tokens and records only a generic failure', async () => {
+    mocks.decrypt.mockReturnValue('wrong-token')
+    expect(await recoverGooglePurchases()).toMatchObject({ failed: 1 })
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.update.mock.calls[0][1].$set.recoveryLastError).toBe('completion_failed')
+  })
+  it('caps attempts per batch and never reads credentials when not configured', async () => {
+    mocks.lean.mockReset().mockResolvedValue(row)
+    expect(await recoverGooglePurchases(2)).toMatchObject({ processed: 2 })
+    expect(mocks.claim).toHaveBeenCalledTimes(2)
+    vi.stubEnv('GOOGLE_PLAY_SERVICE_ACCOUNT_FILE', '')
+    expect(await recoverGooglePurchases()).toEqual({ processed: 0, failed: 0, skipped: true })
+    expect(mocks.claim).toHaveBeenCalledTimes(2)
+  })
+  it('does not process a row when no eligible lease can be claimed', async () => {
+    mocks.lean.mockReset().mockResolvedValue(null)
+    expect(await recoverGooglePurchases()).toMatchObject({ processed: 0 })
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+})

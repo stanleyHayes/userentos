@@ -59,7 +59,11 @@ export function uploadToCloudinary(
  * Delete a file from Cloudinary by public ID.
  */
 export async function deleteFromCloudinary(publicId: string, resourceType: 'image' | 'video' | 'raw' = 'image') {
-  return cloudinary.uploader.destroy(publicId, { resource_type: resourceType })
+  const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true })
+  if (result.result !== 'ok' && result.result !== 'not found') {
+    throw new Error('Storage provider did not confirm asset deletion')
+  }
+  return result
 }
 
 export { cloudinary }

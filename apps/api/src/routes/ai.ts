@@ -1,3 +1,4 @@
+import { requireAiSharingConsent } from '../middleware/aiConsent.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { authenticate, requireRole } from '../middleware/auth.js'
@@ -40,7 +41,7 @@ const chatSchema = z.object({
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 
-router.post('/chat', authenticate, aiLimiter, async (req, res) => {
+router.post('/chat', authenticate, aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = chatSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -58,7 +59,7 @@ const generateSchema = z.object({
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 
-router.post('/generate', authenticate, aiLimiter, async (req, res) => {
+router.post('/generate', authenticate, aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = generateSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -187,10 +188,10 @@ const violationRules: Array<{
   {
     keywords: [['receipt', 'proof of payment', 'record of payment'], ['refuse', 'won\'t give', 'no receipt', 'doesn\'t give', 'never give', 'not giving', 'won\'t provide', 'don\'t get']],
     violation: {
-      law: 'Rent Control Act (Act 220), Section 23',
+      law: LEGAL_LABELS.receipt_refusal.law,
       violation: 'Refusal to Issue Rent Receipt',
       explanation: 'Your landlord is legally required to provide a receipt for every rent payment. Refusing to issue receipts is a violation of the Rent Control Act.',
-      maxPenalty: 'Fine up to 100 penalty units',
+      maxPenalty: 'Requires review of applicable enforcement provisions',
     },
     severity: 'low',
   },
@@ -418,7 +419,7 @@ const listingSchema = z.object({
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 
-router.post('/listing', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
+router.post('/listing', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = listingSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -440,7 +441,7 @@ const formalizeSchema = z.object({
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 
-router.post('/formalize', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
+router.post('/formalize', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = formalizeSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -458,7 +459,7 @@ const translateSchema = z.object({
   targetLanguage: z.enum(['en', 'tw', 'ga', 'ee']),
 })
 
-router.post('/translate', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, async (req, res) => {
+router.post('/translate', authenticate, requireRole('landlord', 'property_manager', 'admin'), aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = translateSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -505,7 +506,7 @@ const caseSummarySchema = z.object({
   language: z.enum(['en', 'tw', 'ga', 'ee']).default('en'),
 })
 
-router.post('/case-summary', authenticate, requireRole('government', 'admin', 'legal_officer'), aiLimiter, async (req, res) => {
+router.post('/case-summary', authenticate, requireRole('government', 'admin', 'legal_officer'), aiLimiter, requireAiSharingConsent, async (req, res) => {
   const parsed = caseSummarySchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -546,8 +547,8 @@ Keep it concise and professional. Do NOT include markdown code fences.`
     success(res, { summary: block.text.trim() })
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) { error(res, 'AI is not configured. Please set ANTHROPIC_API_KEY.', 500); return }
-    console.error('[AI] Case summary error:', e.message)
+    if (e.status === 401) { error(res, 'AI is temporarily unavailable. Please try again later.', 500); return }
+    console.error('[AI] Case summary generation failed')
     error(res, 'Failed to generate case summary', 500)
   }
 })

@@ -165,6 +165,8 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'rent_payment' | 'inves
 // --- Core Models ---
 
 export interface User {
+  suspendedAt?: string
+  suspensionReason?: string
   id: string
   email: string
   phone: string
@@ -628,6 +630,7 @@ export interface FinancingApplication {
   decidedAt?: string
   creditScoreAtApply?: number
   monthlyIncomeAtApply?: number
+  monthlyIncomeCurrency?: string
   employerId?: string
   willUsePayrollDeduction: boolean
   createdAt: string
@@ -945,6 +948,8 @@ export interface UserSettings {
 // --- Chat / Messaging ---
 
 export interface Conversation {
+  contactBlocked?: boolean
+  blockedByMe?: boolean
   id: string
   participants: string[]
   participantNames?: string[]
@@ -958,6 +963,7 @@ export interface Conversation {
 }
 
 export interface ChatMessage {
+  removed?: boolean
   id: string
   conversationId: string
   senderId: string
@@ -1156,4 +1162,12 @@ export interface InsurancePolicy {
   claims: InsuranceClaim[]
   createdAt: string
   updatedAt: string
+}
+
+/** Editable tenant fields; server-owned verification and response metadata are excluded. */
+export const TENANT_PROFILE_EDITABLE_FIELDS = ["dateOfBirth", "gender", "maritalStatus", "nationality", "hometown", "languagesSpoken", "bio", "highestEducation", "institution", "fieldOfStudy", "graduationYear", "currentlyStudying", "employmentStatus", "occupation", "employer", "employerAddress", "primaryCurrency", "incomeSources", "monthlyIncome", "employmentDuration", "workPhone", "linkedinUrl", "professionalLicense", "hasSpouse", "spouseName", "spouseOccupation", "hasChildren", "numberOfChildren", "childrenAges", "numberOfDependents", "numberOfOccupants", "occupantDetails", "smoker", "drinker", "pets", "petType", "petCount", "noiseLevel", "workSchedule", "hobbies", "clubs", "dietaryRestrictions", "vehicleOwner", "vehicleType", "personalReferences", "professionalReferences", "previousRentals", "hasBeenEvicted", "evictionDetails", "emergencyContact", "idType", "idNumber", "idDocumentUrl", "proofOfIncomeUrl", "proofOfAddressUrl", "selfieUrl", "searchPreferences"] as const
+
+export function tenantProfilePatch(input: object): Record<string, unknown> {
+  const allowed = new Set<string>(TENANT_PROFILE_EDITABLE_FIELDS)
+  return Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)))
 }

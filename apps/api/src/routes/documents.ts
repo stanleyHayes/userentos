@@ -6,6 +6,7 @@ import { DocumentModel } from '../models/Document.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { eraseDocumentFile } from '../services/documentErasure.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
 
 const router = Router()
@@ -78,6 +79,8 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
     type: type || 'other',
     mimeType: req.file.mimetype,
     fileUrl: uploaded.url,
+    storagePublicId: uploaded.publicId,
+    storageResourceType: resourceType,
     fileSize: uploaded.bytes,
     version: 1,
     linkedEntityId,
@@ -119,6 +122,8 @@ router.post('/:id/version', authenticate, upload.single('file'), async (req, res
     type: existing.type,
     mimeType: req.file.mimetype,
     fileUrl: uploaded.url,
+    storagePublicId: uploaded.publicId,
+    storageResourceType: resourceType,
     fileSize: uploaded.bytes,
     version: existing.version + 1,
     parentId: existing._id.toString(),
@@ -164,6 +169,7 @@ router.delete('/:id', authenticate, async (req, res) => {
   if (!doc) { error(res, 'Document not found', 404); return }
   if (doc.ownerId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
+  await eraseDocumentFile(doc)
   await doc.deleteOne()
   await AuditLog.create({
     userId: req.user!.userId,

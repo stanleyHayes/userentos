@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js'
 import type { AuthPayload } from '../middleware/auth.js'
 import { config } from '../config/index.js'
 import { BiometricToken } from '../models/BiometricToken.js'
+import { disconnectBiometricUser } from '../services/socket.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -42,6 +43,10 @@ router.post('/enroll', loginLimiter, authenticate, async (req, res) => {
 
   const user = await User.findById(req.user!.userId)
   if (!user) { error(res, 'User not found', 404); return }
+  if ((req.user!.sessionVersion ?? 0) !== (user.sessionVersion ?? 0) ||
+      (req.user!.biometricVersion !== undefined && req.user!.biometricVersion !== (user.biometricVersion ?? 0))) {
+    error(res, 'Session expired. Please log in again.', 401); return
+  }
   const validPassword = await bcrypt.compare(parsed.data.password, user.passwordHash)
   if (!validPassword) { error(res, 'Password is incorrect', 401); return }
 
@@ -57,6 +62,8 @@ router.post('/enroll', loginLimiter, authenticate, async (req, res) => {
 
   await BiometricToken.create({
     userId: req.user!.userId,
+    sessionVersion: req.user!.sessionVersion ?? 0,
+    biometricVersion: user.biometricVersion ?? 0,
     tokenHash,
     deviceId: parsed.data.deviceId,
     deviceLabel: parsed.data.deviceLabel,
@@ -90,6 +97,8 @@ router.post('/exchange', loginLimiter, async (req, res) => {
     const existing = await BiometricToken.findOne({ tokenHash })
     if (existing?.revokedAt) {
       // Replayed an already-rotated token — possible compromise. Revoke ALL of this user's tokens.
+      await User.updateOne({ _id: existing.userId }, { $inc: { biometricVersion: 1 } })
+      disconnectBiometricUser(existing.userId)
       await BiometricToken.updateMany(
         { userId: existing.userId, revokedAt: { $exists: false } },
         { $set: { revokedAt: new Date(), revokedReason: 'replay_detected' } },
@@ -112,11 +121,18 @@ router.post('/exchange', loginLimiter, async (req, res) => {
     return
   }
 
+  if ((record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0) ||
+      (record.biometricVersion ?? 0) !== (user.biometricVersion ?? 0)) {
+    error(res, 'Invalid refresh token', 401); return
+  }
+
   const newToken = generateOpaqueToken()
   const newHash = hashToken(newToken)
   const newExpiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000)
   await BiometricToken.create({
     userId: record.userId,
+    sessionVersion: record.sessionVersion ?? 0,
+    biometricVersion: record.biometricVersion ?? 0,
     tokenHash: newHash,
     deviceId: record.deviceId,
     deviceLabel: record.deviceLabel,
@@ -125,6 +141,8 @@ router.post('/exchange', loginLimiter, async (req, res) => {
 
   // Mint a session JWT (same shape as a normal login — 'session' purpose required by authenticate)
   const payload: AuthPayload = {
+    biometricVersion: record.biometricVersion ?? 0,
+    sessionVersion: user.sessionVersion ?? 0,
     userId: user._id.toString(),
     email: user.email,
     roles: user.roles,
@@ -169,6 +187,8 @@ router.post('/devices/:id/revoke', authenticate, async (req, res) => {
 // Revoke all biometric sessions for the current user (panic button).
 // ────────────────────────────────────────
 router.post('/revoke-all', authenticate, async (req, res) => {
+  await User.updateOne({ _id: req.user!.userId }, { $inc: { biometricVersion: 1 } })
+  disconnectBiometricUser(req.user!.userId)
   const result = await BiometricToken.updateMany(
     { userId: req.user!.userId, revokedAt: { $exists: false } },
     { $set: { revokedAt: new Date(), revokedReason: 'user_revoked_all' } },

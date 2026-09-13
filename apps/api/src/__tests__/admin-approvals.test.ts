@@ -23,7 +23,7 @@ vi.mock('../models/InsuranceProviderProfile.js', () => ({
   InsuranceProviderProfile: { find: vi.fn(), countDocuments: vi.fn(), findById: vi.fn() },
 }))
 vi.mock('../models/User.js', () => ({
-  User: { find: vi.fn() },
+  User: { exists: vi.fn().mockResolvedValue({ _id: 'active-user' }), find: vi.fn() },
 }))
 vi.mock('../utils/audit.js', () => ({
   recordAudit: vi.fn().mockResolvedValue(undefined),

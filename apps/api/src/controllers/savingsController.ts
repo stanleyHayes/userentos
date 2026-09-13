@@ -1,13 +1,14 @@
+import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
 import { Request, Response } from 'express'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { Wallet } from '../models/Wallet.js'
-import { Payment } from '../models/Payment.js'
+import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAndAward } from '../services/achievements.js'
-import { getProvider } from '../services/payments/index.js'
+import { getProvider, isMethodAvailable } from '../services/payments/index.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { round2 } from '../utils/money.js'
@@ -62,38 +63,42 @@ export const savingsController = {
       return
     }
 
+    const roundedAmount = round2(amount)
+    if (roundedAmount <= 0 || !Number.isSafeInteger(Math.round(roundedAmount * 100))) {
+      error(res, 'Enter a valid amount of at least GHS 0.01'); return
+    }
+    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
+    const matches = (existing: { purpose: string; method: string; amount: number }) => existing.purpose === 'wallet_deposit' && existing.method === method && existing.amount === roundedAmount
+    const existingResult = async () => {
+      if (!idempotencyKey) return false
+      const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
+      if (!existing) return false
+      if (!matches(existing)) { error(res, 'Idempotency-Key was already used for a different payment', 409); return true }
+      success(res, { payment: { ...existing, id: existing._id.toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
+      return true
+    }
+    if (await existingResult()) return
+    if (!isMethodAvailable(method as ProviderId)) {
+      error(res, 'That payment method is not available right now. Please choose another.', 422); return
+    }
     const reference = `DEP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
-    const payment = await Payment.create({
-      tenantId: req.user!.userId,
-      amount: round2(amount),
-      method,
-      status: 'pending',
-      reference,
-      purpose: 'wallet_deposit',
-    })
-
     const provider = getProvider(method as ProviderId)
-    const result = await provider.initiateCollection({
-      amount: round2(amount),
-      phone: phone ?? '',
-      reference,
-      narration: 'RentOS wallet deposit',
-      payerEmail: req.user!.email,
-    })
-
-    payment.providerRef = result.providerRef
-    payment.providerStatus = result.status
-    await payment.save()
-
-    success(
-      res,
-      {
-        payment: { ...payment.toObject(), id: payment._id.toString() },
-        instructions: result.instructions,
-      },
-      'Deposit initiated — your wallet is credited once the payment is confirmed',
-      201,
-    )
+    let payment: IPayment | undefined
+    try {
+      payment = await Payment.create({
+        collectionSource: provider.source, tenantId: req.user!.userId, amount: roundedAmount,
+        method, status: 'pending', reference, purpose: 'wallet_deposit',
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      })
+      const result = await provider.initiateCollection({ amount: roundedAmount, phone: phone ?? '', reference, narration: 'RentOS wallet deposit', payerEmail: req.user!.email })
+      const recorded = await recordCollectionInitiation(payment._id.toString(), result)
+      if (!recorded) throw new Error('Payment record unavailable after initiation')
+      success(res, { payment: { ...recorded, id: recorded._id.toString() }, instructions: result.instructions }, 'Deposit initiated — your wallet is credited after confirmation', 201)
+    } catch (failure) {
+      if (!payment && (failure as { code?: number }).code === 11000 && await existingResult()) return
+      if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+      throw failure
+    }
   },
 
   withdraw: async (req: Request, res: Response) => {

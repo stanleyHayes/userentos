@@ -8,10 +8,12 @@ import { notifyWelcome } from './notify.js'
 import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
 import { BiometricToken } from '../models/BiometricToken.js'
+import { DeviceToken } from '../models/DeviceToken.js'
 import { User } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
 import QRCode from 'qrcode'
+import { disconnectUser } from './socket.js'
 
 interface RegisterData {
   email: string
@@ -43,12 +45,13 @@ export class AuthService {
     private readonly logger: Logger,
   ) {}
 
-  private async createRefreshToken(userId: string, deviceLabel?: string, ipAddress?: string) {
+  private async createRefreshToken(userId: string, sessionVersion: number, deviceLabel?: string, ipAddress?: string) {
     const plain = generateRefreshToken()
     const tokenHash = hashRefreshToken(plain)
     await RefreshToken.create({
       userId,
       tokenHash,
+      sessionVersion,
       deviceLabel,
       ipAddress,
       expiresAt: expiresIn(config.jwtRefreshExpiresIn),
@@ -102,9 +105,9 @@ export class AuthService {
       }
     }
 
-    const payload: AuthPayload = { userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User registered: ${email} (${role})`)
@@ -134,7 +137,7 @@ export class AuthService {
     // MFA challenge: password is valid but a TOTP code is still required.
     if (user.mfaEnabled) {
       const mfaToken = jwt.sign(
-        { userId: user._id.toString(), purpose: 'mfa' },
+        { userId: user._id.toString(), purpose: 'mfa', sessionVersion: user.sessionVersion ?? 0 },
         config.jwtSecret,
         { expiresIn: 300 },
       )
@@ -142,9 +145,9 @@ export class AuthService {
       return { data: { mfaRequired: true, mfaToken } }
     }
 
-    const payload: AuthPayload = { userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in: ${email}`)
@@ -155,8 +158,11 @@ export class AuthService {
   /** Second step of login for MFA-enabled accounts: verify the TOTP code. */
   async verifyMfaLogin(mfaToken: string, code: string, deviceLabel?: string, ipAddress?: string) {
     let userId: string
+    let challengeVersion: number
     try {
-      const payload = jwt.verify(mfaToken, config.jwtSecret) as { purpose?: string; userId?: string }
+      const payload = jwt.verify(mfaToken, config.jwtSecret) as { purpose?: string; userId?: string; sessionVersion?: number }
+      challengeVersion = payload.sessionVersion === undefined ? 0 : payload.sessionVersion
+      if (!Number.isSafeInteger(challengeVersion) || challengeVersion < 0) throw new Error('Invalid MFA session version')
       if (payload.purpose !== 'mfa' || !payload.userId) throw new Error('Invalid token purpose')
       userId = payload.userId
     } catch {
@@ -168,14 +174,18 @@ export class AuthService {
       return { error: 'MFA is not enabled for this account', status: 400 }
     }
 
+    if ((user.sessionVersion ?? 0) !== challengeVersion) {
+      return { error: 'MFA session expired. Please log in again.', status: 401 }
+    }
+
     if (!verifyTotp(user.mfaSecret, code)) {
       this.logger.warn(`Failed MFA attempt for user: ${userId}`)
       return { error: 'Invalid authentication code', status: 401 }
     }
 
-    const payload: AuthPayload = { userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in with MFA: ${user.email}`)
@@ -261,18 +271,25 @@ export class AuthService {
       return { error: 'User not found', status: 404 }
     }
 
-    const payload: AuthPayload = { userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    if ((record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+      return { error: 'Invalid or expired refresh token', status: 401 }
+    }
+
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
-    const newRefreshToken = await this.createRefreshToken(user._id.toString(), deviceLabel, ipAddress)
+    const newRefreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
 
     this.logger.info(`Token refreshed for user: ${user._id}`)
     return { data: { token, refreshToken: newRefreshToken } }
   }
 
-  /** Revoke every session credential the user holds (refresh + biometric). */
+  /** Revoke refresh/biometric credentials and remove current push enrollments. */
   private async revokeAllSessions(userId: string, reason: string) {
     const now = new Date()
+    await User.updateOne({ _id: userId }, { $inc: { sessionVersion: 1 } })
+    disconnectUser(userId)
     await Promise.all([
+      DeviceToken.deleteMany({ userId }),
       RefreshToken.updateMany(
         { userId, revokedAt: { $exists: false } },
         { $set: { revokedAt: now, revokedReason: reason } },

@@ -14,12 +14,14 @@
  */
 
 import { Payment } from '../../models/Payment.js'
+import { activatePaidSubscription } from './paidSubscription.js'
+import { recoverRentReceipt } from './recoverRentReceipts.js'
 import { User } from '../../models/User.js'
 import { SubscriptionPackage } from '../../models/SubscriptionPackage.js'
 import { notifyPaymentConfirmed, notifyPaymentReceived } from '../notify.js'
 import { checkAndAward } from '../achievements.js'
 import { dispatchWebhook } from '../webhooks.js'
-import { creditWallet } from './walletLedger.js'
+import { paymentCreditIntent, recoverPaymentWalletCredit } from './paymentWalletCredit.js'
 import { AuditLog } from '../../models/AuditLog.js'
 import { logger } from '../../utils/logger.js'
 import type { WebhookEvent } from './types.js'
@@ -60,6 +62,7 @@ async function activateSubscription(userId: string, packageId?: string): Promise
 }
 
 export interface FinalizeOptions {
+  providerSource?: import('./types.js').CollectionSource
   /** Where this finalize call originated, for logging only. */
   source: 'webhook' | 'simulator' | 'reconciliation'
 }
@@ -72,16 +75,29 @@ export async function finalizePayment(
   event: WebhookEvent,
   opts: FinalizeOptions,
 ): Promise<boolean> {
+  if (!['pending', 'completed', 'failed'].includes(event.status)) {
+    logger.warn(`[Payments:${opts.source}] Unsupported normalized payment status ignored`)
+    return false
+  }
   // Locate the Payment. Prefer reference (always our PAY-XXXX-XXXX), fall back
   // to providerRef in case the event lacks the external reference.
+  const candidates = !event.reference && event.providerRef ? await Payment.find({ providerRef: event.providerRef }).limit(2) : []
+  if (candidates.length > 1) {
+    logger.warn(`[Payments:${opts.source}] Ambiguous provider reference; payment unchanged`)
+    return false
+  }
   const payment = event.reference
     ? await Payment.findOne({ reference: event.reference })
-    : event.providerRef
-      ? await Payment.findOne({ providerRef: event.providerRef })
-      : null
+    : candidates[0] ?? null
 
   if (!payment) {
     logger.warn(`[Payments:${opts.source}] no Payment found for ref=${event.reference} providerRef=${event.providerRef}`)
+    return false
+  }
+
+  // Source comes from the verified callback route, never the callback body.
+  if (payment.collectionSource && payment.collectionSource !== opts.providerSource) {
+    logger.warn(`[Payments:${opts.source}] Collection source mismatch; payment unchanged`)
     return false
   }
 
@@ -92,9 +108,12 @@ export async function finalizePayment(
 
   // Pending events aren't actionable.
   if (event.status === 'pending') {
-    payment.lastProviderCheckAt = new Date().toISOString()
-    if (event.providerRef && !payment.providerRef) payment.providerRef = event.providerRef
-    await payment.save()
+    // The read above may predate completion or another provider-reference
+    // assignment. A stale document save must not overwrite that evidence.
+    await Payment.updateOne(
+      { _id: payment._id, status: { $nin: [...TERMINAL_STATES] }, providerRef: payment.providerRef === undefined ? { $exists: false } : payment.providerRef },
+      { $set: { lastProviderCheckAt: new Date().toISOString(), ...(event.providerRef && !payment.providerRef ? { providerRef: event.providerRef } : {}) } },
+    )
     return false
   }
 
@@ -121,9 +140,18 @@ export async function finalizePayment(
   }
 
   // status === 'completed'
+  if (event.currency !== 'GHS') {
+    await Payment.updateOne(
+      { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
+      { $set: { ...baseSet, status: 'processing', failureReason: 'currency_unverified: completion requires provider-confirmed GHS' } },
+    )
+    return false
+  }
   // Validate the provider-reported amount against what we recorded, so a small
   // transfer (or a tampered/replayed event) cannot finalize a large obligation.
-  if (Number.isFinite(event.amount) && Math.abs(round2(event.amount) - round2(payment.amount)) > 0.01) {
+  const receivedMinor = Math.round(round2(event.amount) * 100)
+  const expectedMinor = Math.round(round2(payment.amount) * 100)
+  if (!Number.isSafeInteger(receivedMinor) || !Number.isSafeInteger(expectedMinor) || receivedMinor <= 0 || expectedMinor <= 0 || receivedMinor !== expectedMinor) {
     const flagged = await Payment.findOneAndUpdate(
       { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
       { $set: { ...baseSet, status: 'processing', failureReason: `amount_mismatch: provider reported ${event.amount}, expected ${payment.amount}` } },
@@ -135,53 +163,32 @@ export async function finalizePayment(
     return false
   }
 
-  // Atomic terminal transition — guarantees the completion side-effects run once.
+  // Capture the credit obligation in the same write as confirmation.
+  const walletCreditIntent = paymentCreditIntent(payment)
   const completed = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
-    { $set: { ...baseSet, status: 'completed', paidAt: event.timestamp || nowIso } },
-    { returnDocument: 'after' },
+    { _id: payment._id, status: { $nin: [...TERMINAL_STATES] }, amount: payment.amount, tenantId: payment.tenantId, landlordId: payment.landlordId, purpose: payment.purpose, reference: payment.reference },
+    { $set: { ...baseSet, status: 'completed', paidAt: event.timestamp || nowIso, ...(walletCreditIntent ? { walletCreditIntent } : {}) }, $unset: { failureReason: 1, collectionInitiationUncertainAt: 1 } },
+    { returnDocument: 'after', overwriteImmutable: true, runValidators: true },
   )
   if (!completed) return false // lost the race — another worker already finalized
   auditPayment('payment.completed', completed, { source: opts.source, purpose: completed.purpose })
+  if (completed.purpose === 'rent') {
+    try { await recoverRentReceipt(String(completed._id)) }
+    catch { logger.warn('[Payments] Rent receipt issuance deferred to scheduled recovery') }
+  }
 
   // Funds are verified — apply what the payment was FOR.
-  if (completed.purpose === 'wallet_deposit') {
-    try {
-      await creditWallet(completed.tenantId, completed.amount, {
-        type: 'deposit',
-        reference: completed.reference,
-        description: 'Wallet deposit',
-      })
-      console.log(`[Payments:${opts.source}] wallet credited for deposit ${completed.reference}`)
-    } catch (err) {
-      // Payment is terminal but the wallet wasn't credited — needs reconciliation.
-      console.error(`[Payments:${opts.source}] CRITICAL: deposit ${completed.reference} completed but wallet credit failed: ${(err as Error).message}`)
-    }
+  if (completed.walletCreditIntent) {
+    try { await recoverPaymentWalletCredit(String(completed._id)) }
+    catch { logger.error('[Payments] Confirmed payment credit deferred to scheduled recovery') }
   } else if (completed.purpose === 'subscription') {
     try {
-      await activateSubscription(completed.tenantId, (completed.purposeMeta as { packageId?: string } | undefined)?.packageId)
-      console.log(`[Payments:${opts.source}] subscription activated for payment ${completed.reference}`)
+      if (completed.subscriptionTerms) {
+        const processed = await activatePaidSubscription(String(completed._id))
+        if (!processed) logger.warn('[Payments] Paid subscription activation deferred to recovery')
+      } else await activateSubscription(completed.tenantId, (completed.purposeMeta as { packageId?: string } | undefined)?.packageId)
     } catch (err) {
       console.error(`[Payments:${opts.source}] CRITICAL: subscription payment ${completed.reference} completed but activation failed: ${(err as Error).message}`)
-    }
-  } else if (completed.purpose === 'rent' && completed.landlordId) {
-    // Rent is collected into the platform's merchant account, so the landlord's
-    // claim on it only exists as a wallet balance — which they then withdraw
-    // through the payout rail. Skipping this would leave rent collected with
-    // no record of who it belongs to.
-    //
-    // The conditional status update above is what makes this safe to run here:
-    // exactly one caller wins the transition to 'completed', so a retried
-    // webhook cannot credit the landlord twice.
-    try {
-      await creditWallet(completed.landlordId, completed.amount, {
-        type: 'rent_payment',
-        reference: completed.reference,
-        description: 'Rent received',
-      })
-      console.log(`[Payments:${opts.source}] landlord credited for rent ${completed.reference}`)
-    } catch (err) {
-      console.error(`[Payments:${opts.source}] CRITICAL: rent ${completed.reference} completed but the landlord credit failed: ${(err as Error).message}`)
     }
   }
 

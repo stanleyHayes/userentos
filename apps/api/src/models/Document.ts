@@ -6,6 +6,8 @@ export interface IDocument extends MongoDoc {
   type: 'rental_agreement' | 'receipt' | 'legal_notice' | 'evidence' | 'identity' | 'other'
   mimeType: string
   fileUrl: string
+  storagePublicId?: string
+  storageResourceType?: 'image' | 'video' | 'raw'
   fileSize: number
   version: number
   parentId?: string // for version chains
@@ -20,6 +22,8 @@ const documentSchema = new Schema<IDocument>({
   type: { type: String, required: true, enum: ['rental_agreement', 'receipt', 'legal_notice', 'evidence', 'identity', 'other'] },
   mimeType: { type: String, required: true },
   fileUrl: { type: String, required: true },
+  storagePublicId: String,
+  storageResourceType: { type: String, enum: ['image', 'video', 'raw'] },
   fileSize: { type: Number, required: true },
   version: { type: Number, default: 1 },
   parentId: String,

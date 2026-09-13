@@ -137,6 +137,7 @@ interface PaystackChargeEvent {
     id?: number | string
     status?: string
     amount?: number
+    currency?: string
     paid_at?: string
     created_at?: string
   }
@@ -150,6 +151,18 @@ interface PaystackChargeEvent {
 function makePaystackProvider(id: Exclude<ProviderId, 'bank_transfer'>): PaymentProvider {
   return {
     id,
+    source: 'paystack',
+
+    async queryCollection(providerRef) {
+      try {
+        const data = await call<{ reference?: string; status?: string; amount?: number; currency?: string; paid_at?: string }>(`/transaction/verify/${encodeURIComponent(providerRef)}`)
+        if (typeof data.reference !== 'string' || typeof data.amount !== 'number' || !Number.isSafeInteger(data.amount) || data.amount <= 0 || typeof data.currency !== 'string') return null
+        return { reference: data.reference, status: mapChargeStatus(data.status), amount: data.amount / 100, currency: data.currency, paidAt: data.paid_at }
+      } catch {
+        logger.warn('[paystack-rent] Financial verification unavailable; payment remains unresolved')
+        return null
+      }
+    },
 
     async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
       const data = await call<ChargeResponse>('/charge', {
@@ -207,6 +220,7 @@ function makePaystackProvider(id: Exclude<ProviderId, 'bank_transfer'>): Payment
         status: event.event === 'charge.success' ? 'completed' : mapChargeStatus(data.status),
         // Paystack speaks pesewas on the wire; our domain speaks cedis.
         amount: typeof data.amount === 'number' ? data.amount / 100 : 0,
+        currency: data.currency,
         timestamp: data.paid_at ?? data.created_at ?? new Date().toISOString(),
         raw: event,
       }

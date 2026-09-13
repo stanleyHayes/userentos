@@ -11,7 +11,9 @@
  */
 import { PlanEntitlement } from '../models/PlanEntitlement.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
+import { effectiveStoreSubscription } from './storeBilling/activeEntitlements.js'
 import { User } from '../models/User.js'
+import { currentPaidSubscription } from './payments/paidSubscription.js'
 
 export type FeatureValue = boolean | number | string
 
@@ -38,7 +40,7 @@ export const FEATURE_REGISTRY = {
 export type FeatureKey = keyof typeof FEATURE_REGISTRY
 
 export function isFeatureKey(key: string): key is FeatureKey {
-  return key in FEATURE_REGISTRY
+  return Object.hasOwn(FEATURE_REGISTRY, key)
 }
 
 /** Thrown when a caller lacks a capability. Routes map this to 402/403. */
@@ -76,28 +78,34 @@ function defaults(): Record<string, FeatureValue> {
  */
 export async function resolveEntitlements(userId: string): Promise<ResolvedEntitlements> {
   const features = defaults()
+  const fallback = async () => (await resolveFreeSubscription()).entitlements
 
   const user = await User.findById(userId).lean()
   const packageId = (user as { subscriptionPackageId?: string } | null)?.subscriptionPackageId
+  if (user) {
+    const store = await effectiveStoreSubscription(userId, user)
+    if (store) return { planId: store.snapshot.planId, planName: store.snapshot.planName, planVersion: store.snapshot.planVersion, features: { ...features, ...store.snapshot.features } }
+    const paid = await currentPaidSubscription(user)
+    if (paid) return paid.active && 'terms' in paid ? { planId: paid.terms.packageId, planName: paid.terms.packageName, planVersion: paid.terms.packageVersion, features: { ...features, ...paid.features } } : fallback()
+  }
+
 
   // No subscription: fall back to the plan marked default rather than the bare
   // registry defaults. The free tier is a real, admin-editable plan, and
   // skipping it here would silently ignore the limits an admin configured.
   if (!packageId) {
-    const defaultPlan = await SubscriptionPackage.findOne({ isDefault: true, isActive: true }).lean()
-    if (!defaultPlan) return { planId: null, planName: 'Free', planVersion: 1, features }
-    return applyPlan(defaultPlan as PlanLike, features)
+    return fallback()
   }
 
   // An expired subscription degrades to the free defaults rather than keeping
   // paid capability alive (§7.3 downgrade policy: degrade, never delete).
   const endDate = (user as { subscriptionEndDate?: Date } | null)?.subscriptionEndDate
-  if (endDate && new Date(endDate) < new Date()) {
-    return { planId: packageId, planName: 'Expired', planVersion: 1, features }
+  if (endDate && (!Number.isFinite(new Date(endDate).getTime()) || new Date(endDate).getTime() <= Date.now())) {
+    return fallback()
   }
 
   const plan = await SubscriptionPackage.findById(packageId).lean()
-  if (!plan) return { planId: null, planName: 'Free', planVersion: 1, features }
+  if (!plan) return fallback()
 
   // Resolve against the version this subscriber bought, not the plan's latest.
   return applyPlan(
@@ -107,12 +115,41 @@ export async function resolveEntitlements(userId: string): Promise<ResolvedEntit
   )
 }
 
+/** Shared by feature enforcement and the subscription summary. */
+export async function resolveFreeSubscription() {
+  const plan = await SubscriptionPackage.findOne({ isDefault: true, isActive: true, price: 0 }).lean()
+  const entitlements = plan ? await applyPlan(plan as PlanLike, defaults()) : { planId: null, planName: 'Free', planVersion: 1, features: defaults() }
+  return { plan, entitlements }
+}
+
+export function resolvePackageEntitlements(plan: PlanLike, version?: number) {
+  return applyPlan(plan, defaults(), version)
+}
+
 interface PlanLike {
   _id: unknown
   name?: string
   version?: number
   maxProperties?: number
   platformFeePercent?: number
+}
+
+export interface StoreEntitlementSnapshot extends ResolvedEntitlements {
+  billingCycle: 'monthly' | 'yearly'
+  benefits: string[]
+}
+
+/** Freeze the complete current terms for a store product before sale. */
+export async function snapshotPackageEntitlements(plan: PlanLike & { billingCycle?: 'monthly' | 'yearly'; benefits?: string[] }): Promise<StoreEntitlementSnapshot> {
+  const snapshot = await applyPlan(plan, defaults())
+  if (!Number.isInteger(snapshot.planVersion) || snapshot.planVersion < 1) throw new Error('Invalid plan version')
+  for (const [feature, metadata] of Object.entries(FEATURE_REGISTRY)) {
+    const value = snapshot.features[feature]
+    if (typeof value !== metadata.type || (typeof value === 'number' && !Number.isFinite(value))) {
+      throw new Error(`Invalid entitlement value for ${feature}`)
+    }
+  }
+  return { ...snapshot, billingCycle: plan.billingCycle ?? 'monthly', benefits: [...(plan.benefits ?? [])] }
 }
 
 /** Overlay a plan's legacy columns and then its explicit entitlement grants. */
