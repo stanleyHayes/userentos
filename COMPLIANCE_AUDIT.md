@@ -1045,3 +1045,10 @@ Web publication checkpoint (13 September): published `9efdfdd` (`feat(web): conn
 ### Mobile publication — 13 September 2026
 
 Mobile publication checkpoint (13 September): published `c305af8` (`feat(mobile): add compliance flows and resilient session recovery`) to origin/main. All 79 existing mobile checks pass. A new mounted regression reproduced deletion confirmation disappearing on logout; the persistent root notification fix passes its separate check, including visibility beyond the ordinary toast timeout. Independent-checkout typecheck/lint pass. After a clean cached lockfile install without lifecycle scripts, Android/iOS/web exports pass. The failed reused-symlink export and verification limits are recorded in docs/compliance/mobile-release.md. Native-device/provider/store approval and broader compliance gaps remain open. Overall goal remains IN PROGRESS.
+
+
+### Apple purchase data export — 13 September 2026
+
+Apple purchase export checkpoint (13 September): reproduced omission of the Apple purchase journal from account export. Added ownership-scoped applePurchases with an explicit product/date/renewal/access allowlist, excluding encrypted identifiers and recovery internals; updated API documentation. New real-Mongo HTTP tests verify inclusion, query-parameter impersonation resistance, private-field exclusion and authentication. All 1,101 API tests across 112 files pass, plus typecheck/lint. This closes the Apple journal omission; other collection coverage, retention classification and wider compliance gates remain open. Overall goal remains IN PROGRESS.
+
+Evidence: the baseline Apple export test failed because `data.applePurchases` was absent. The final suite passes with opt-in isolated MongoDB enabled (`/tmp/rentos-apple-export-tests.log`); typecheck and lint pass. The HTTP test uses real journal records and queries while mocking only account admission, and cleans up its own fixture rows. This is API export evidence, not a native share-sheet or complete data-inventory audit.

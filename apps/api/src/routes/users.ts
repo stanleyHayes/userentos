@@ -1,3 +1,4 @@
+import { ApplePurchase } from '../models/ApplePurchase.js'
 import { StorePurchase } from '../models/StorePurchase.js'
 import { UserBlock } from '../models/UserBlock.js'
 import { Router } from 'express'
@@ -58,6 +59,7 @@ router.get('/me/export', authenticate, async (req, res) => {
     auditLogs,
     blockedUsers,
     storePurchases,
+    applePurchases,
     walletCredits,
   ] = await Promise.all([
     // Never export credential material — mfaSecret also carries schema-level
@@ -75,6 +77,9 @@ router.get('/me/export', authenticate, async (req, res) => {
     AuditLog.find({ userId }).sort({ createdAt: -1 }).limit(1000).lean(),
     UserBlock.find({ blockerId: userId }).select('blockedId createdAt').lean(),
     StorePurchase.find({ userId }).select('-tokenCiphertext').lean(),
+    // Explicit public fields prevent recovery metadata and encrypted identifiers
+    // from becoming export data when the purchase journal gains new fields.
+    ApplePurchase.find({ userId }).select('applicationId environment productId subscriptionGroupId providerStatus purchasedAt originalPurchasedAt expiresAt verifiedAt revokedAt upgraded autoRenewing graceExpiresAt accessExpiresAt accessEligible entitlementState createdAt updatedAt').lean(),
     WalletCredit.find({ userId }).select('operationKey amount type reference state appliedAt createdAt updatedAt').lean(),
   ])
 
@@ -82,6 +87,7 @@ router.get('/me/export', authenticate, async (req, res) => {
     exportedAt: new Date().toISOString(),
     walletCredits,
     storePurchases,
+    applePurchases,
     user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,
     tenantProfile,
     agreements,
