@@ -1,3 +1,7 @@
+import { Favorite } from '../models/Favorite.js'
+import { Notification } from '../models/Notification.js'
+import { Achievement } from '../models/Achievement.js'
+import { PaymentStreak } from '../models/PaymentStreak.js'
 import { Investment } from '../models/Investment.js'
 import { InsurancePolicy } from '../models/InsurancePolicy.js'
 import { FinancingApplication } from '../models/FinancingApplication.js'
@@ -73,6 +77,10 @@ router.get('/me/export', authenticate, async (req, res) => {
     creditScore,
     investments,
     insurancePolicies,
+    favorites,
+    notifications,
+    achievements,
+    paymentStreak,
   ] = await Promise.all([
     // Never export credential material — mfaSecret also carries schema-level
     // select:false, this is defense-in-depth.
@@ -100,6 +108,10 @@ router.get('/me/export', authenticate, async (req, res) => {
     CreditScore.findOne({ userId }).select('-__v').lean(),
     Investment.find({ userId }).select('-__v').lean(),
     InsurancePolicy.find({ userId }).select('-__v').lean(),
+    Favorite.find({ userId }).select('-__v').lean(),
+    Notification.find({ userId }).select('-__v').lean(),
+    Achievement.find({ userId }).select('-__v').lean(),
+    PaymentStreak.findOne({ userId }).select('-__v').lean(),
   ])
 
   success(res, {
@@ -111,6 +123,10 @@ router.get('/me/export', authenticate, async (req, res) => {
     creditScore,
     investments,
     insurancePolicies,
+    favorites,
+    notifications,
+    achievements,
+    paymentStreak,
     storePurchases,
     applePurchases,
     user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,
