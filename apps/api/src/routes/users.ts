@@ -76,7 +76,7 @@ router.get('/me/export', authenticate, async (req, res) => {
     SavingsPlan.find({ userId }).lean(),
     AuditLog.find({ userId }).sort({ createdAt: -1 }).limit(1000).lean(),
     UserBlock.find({ blockerId: userId }).select('blockedId createdAt').lean(),
-    StorePurchase.find({ userId }).select('-tokenCiphertext').lean(),
+    StorePurchase.find({ userId }).select('platform applicationId providerState environment acknowledged voidedOrderIds startedAt verifiedAt entitlementState createdAt updatedAt items.productId items.basePlanId items.offerId items.expiresAt items.autoRenewing items.latestOrderId items.accessEligible').lean(),
     // Explicit public fields prevent recovery metadata and encrypted identifiers
     // from becoming export data when the purchase journal gains new fields.
     ApplePurchase.find({ userId }).select('applicationId environment productId subscriptionGroupId providerStatus purchasedAt originalPurchasedAt expiresAt verifiedAt revokedAt upgraded autoRenewing graceExpiresAt accessExpiresAt accessEligible entitlementState createdAt updatedAt').lean(),
