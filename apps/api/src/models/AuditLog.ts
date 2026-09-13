@@ -22,6 +22,7 @@ const auditLogSchema = new Schema<IAuditLog>({
 // which the userId index helps with. Without these, every page of the audit log
 // is a collection scan — fine now, and the reason the log stops being opened
 // once it is large.
+auditLogSchema.index({ userId: 1, createdAt: -1, _id: -1 })
 auditLogSchema.index({ createdAt: -1 })
 auditLogSchema.index({ entityType: 1, createdAt: -1 })
 auditLogSchema.index({ action: 1, createdAt: -1 })

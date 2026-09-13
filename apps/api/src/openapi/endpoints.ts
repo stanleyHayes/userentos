@@ -453,7 +453,7 @@ registry.registerPath({
   path: '/users/me/export',
   tags: ['Privacy'],
   summary: 'Export the authenticated account and associated personal records',
-  description: 'Returns the currently supported account, tenant profile, agreements, payments, applications, disputes, reviews, sent messages, wallet, wallet credits, savings, blocked contacts, Google store purchases, Apple purchases and up to 1000 audit records. Google and Apple purchase exports contain ownership-scoped product, order, renewal, access and date fields; encrypted identifiers, token hashes and internal recovery fields are excluded. Password hashes and MFA secrets are excluded. This export is sensitive personal data.',
+  description: 'Returns the currently supported account, tenant profile, agreements, payments, applications, disputes, reviews, sent messages, wallet, wallet credits, savings, blocked contacts, Google store purchases, Apple purchases and the full retained audit history for the authenticated user. Google and Apple purchase exports contain ownership-scoped product, order, renewal, access and date fields; encrypted identifiers, token hashes and internal recovery fields are excluded. Password hashes and MFA secrets are excluded. This export is sensitive personal data.',
   security: [{ bearerAuth: [] }],
   responses: {
     200: { description: 'JSON response envelope containing data.exportedAt and the supported record groups' },

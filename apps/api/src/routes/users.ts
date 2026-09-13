@@ -74,7 +74,7 @@ router.get('/me/export', authenticate, async (req, res) => {
     Message.find({ senderId: userId }).lean(),
     Wallet.findOne({ userId }).lean(),
     SavingsPlan.find({ userId }).lean(),
-    AuditLog.find({ userId }).sort({ createdAt: -1 }).limit(1000).lean(),
+    AuditLog.find({ userId }).sort({ createdAt: -1, _id: -1 }).lean(),
     UserBlock.find({ blockerId: userId }).select('blockedId createdAt').lean(),
     StorePurchase.find({ userId }).select('platform applicationId providerState environment acknowledged voidedOrderIds startedAt verifiedAt entitlementState createdAt updatedAt items.productId items.basePlanId items.offerId items.expiresAt items.autoRenewing items.latestOrderId items.accessEligible').lean(),
     // Explicit public fields prevent recovery metadata and encrypted identifiers
