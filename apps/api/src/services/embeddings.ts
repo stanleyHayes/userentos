@@ -1,3 +1,4 @@
+import { createAiFetch } from './aiTransport.js'
 import OpenAI from 'openai'
 import { logger } from '../utils/logger.js'
 
@@ -9,7 +10,7 @@ function getClient(): OpenAI {
   if (!apiKey) {
     throw new Error('Missing required environment variable: OPENAI_API_KEY')
   }
-  openai = new OpenAI({ apiKey })
+  openai = new OpenAI({ apiKey, maxRetries: 0, timeout: 35_000, fetch: createAiFetch('https://api.openai.com') })
   return openai
 }
 
@@ -45,9 +46,8 @@ export async function embed(text: string): Promise<EmbeddingResult> {
     }
 
     return { embedding: vector, model: DEFAULT_MODEL, dimensions: vector.length }
-  } catch (err) {
-    const e = err as { message?: string }
-    logger.warn(`[Embeddings] OpenAI failed: ${e.message}. Falling back to zero vector.`)
+  } catch {
+    logger.warn('[Embeddings] OpenAI request failed; using a zero vector.')
     return { embedding: new Array(DEFAULT_DIMENSIONS).fill(0), model: 'fallback', dimensions: DEFAULT_DIMENSIONS }
   }
 }
@@ -56,7 +56,8 @@ export async function embed(text: string): Promise<EmbeddingResult> {
  * Batch embed multiple texts efficiently.
  */
 export async function embedBatch(texts: string[]): Promise<EmbeddingResult[]> {
-  const validTexts = texts.map((t) => t.trim().slice(0, 8000)).filter(Boolean)
+  const indexedTexts = texts.map((text, originalIndex) => ({ text: text.trim().slice(0, 8000), originalIndex })).filter(item => item.text.length > 0)
+  const validTexts = indexedTexts.map(item => item.text)
   if (validTexts.length === 0) {
     return texts.map(() => ({ embedding: new Array(DEFAULT_DIMENSIONS).fill(0), model: 'fallback', dimensions: DEFAULT_DIMENSIONS }))
   }
@@ -71,7 +72,8 @@ export async function embedBatch(texts: string[]): Promise<EmbeddingResult[]> {
     const results: EmbeddingResult[] = []
     const embeddingMap = new Map<number, number[]>()
     for (const d of response.data) {
-      embeddingMap.set(d.index, d.embedding)
+      const input = indexedTexts[d.index]
+      if (input) embeddingMap.set(input.originalIndex, d.embedding)
     }
 
     for (let i = 0; i < texts.length; i++) {
@@ -83,9 +85,8 @@ export async function embedBatch(texts: string[]): Promise<EmbeddingResult[]> {
       }
     }
     return results
-  } catch (err) {
-    const e = err as { message?: string }
-    logger.warn(`[Embeddings] Batch OpenAI failed: ${e.message}. Falling back to zero vectors.`)
+  } catch {
+    logger.warn('[Embeddings] OpenAI batch request failed; using zero vectors.')
     return texts.map(() => ({ embedding: new Array(DEFAULT_DIMENSIONS).fill(0), model: 'fallback', dimensions: DEFAULT_DIMENSIONS }))
   }
 }

@@ -1,3 +1,4 @@
+import { createAiFetch } from './aiTransport.js'
 import Anthropic from '@anthropic-ai/sdk'
 import { retrieveLegalChunks, buildRagSystemPrompt } from './rag.js'
 
@@ -11,7 +12,7 @@ export function getClient(): Anthropic {
   if (!anthropicApiKey) {
     throw new Error('Missing required environment variable: ANTHROPIC_API_KEY')
   }
-  client = new Anthropic({ apiKey: anthropicApiKey })
+  client = new Anthropic({ apiKey: anthropicApiKey, maxRetries: 0, timeout: 35_000, fetch: createAiFetch('https://api.anthropic.com') })
   return client
 }
 
@@ -93,10 +94,12 @@ Rules:
   } catch (err) {
     const e = err as { status?: number; message?: string }
     if (e.status === 401) {
-      throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
+      // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+      throw new Error('AI is temporarily unavailable. Please try again later.')
     }
-    console.error('[AI] Generate error:', e.message)
-    throw new Error('Failed to generate text. Please try again.', { cause: err })
+    console.error('[AI] Generate error:')
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    throw new Error('Failed to generate text. Please try again.')
   }
 }
 
@@ -200,9 +203,11 @@ Do NOT include markdown code fences. Output raw JSON only.`
     }
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
-    console.error('[AI] Listing generation error:', e.message)
-    throw new Error('Failed to generate listing. Please try again.', { cause: err })
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
+    console.error('[AI] Listing generation error:')
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    throw new Error('Failed to generate listing. Please try again.')
   }
 }
 
@@ -231,9 +236,11 @@ Rules:
     return text
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
-    console.error('[AI] Formalize error:', e.message)
-    throw new Error('Failed to formalize text. Please try again.', { cause: err })
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
+    console.error('[AI] Formalize error:')
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    throw new Error('Failed to formalize text. Please try again.')
   }
 }
 
@@ -260,9 +267,11 @@ Rules:
     return text
   } catch (err) {
     const e = err as { status?: number; message?: string }
-    if (e.status === 401) throw new Error('AI is not configured. Please set ANTHROPIC_API_KEY.', { cause: err })
-    console.error('[AI] Translation error:', e.message)
-    throw new Error('Failed to translate text. Please try again.', { cause: err })
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
+    console.error('[AI] Translation error:')
+    // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
+    throw new Error('Failed to translate text. Please try again.')
   }
 }
 
@@ -344,8 +353,8 @@ export async function chat(messages: ChatMessage[], language = 'en'): Promise<st
     if (chunks.length > 0) {
       systemPrompt = buildRagSystemPrompt(SYSTEM_PROMPT + langInstruction, chunks)
     }
-  } catch (err) {
-    console.warn('[AI] RAG retrieval failed:', (err as Error).message)
+  } catch {
+    console.warn('[AI] Legal document retrieval failed')
     // Continue with base prompt if RAG fails
   }
 
@@ -366,9 +375,9 @@ export async function chat(messages: ChatMessage[], language = 'en'): Promise<st
   } catch (err) {
     const e = err as { status?: number; message?: string }
     if (e.status === 401) {
-      return 'AI Legal Assistant is not configured yet. Please provide a valid Anthropic API key in the ANTHROPIC_API_KEY environment variable.'
+      return 'AI Legal Assistant is temporarily unavailable. Please try again later.'
     }
-    console.error('[AI] Error:', e.message)
+    console.error('[AI] Error:')
     return 'I apologize, there was an error processing your request. Please try again.'
   }
 }

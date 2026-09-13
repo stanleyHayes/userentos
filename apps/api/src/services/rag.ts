@@ -53,7 +53,7 @@ export async function retrieveLegalChunks(query: string, topK: number = 5): Prom
   scored.sort((a, b) => b.similarity - a.similarity)
   const results = scored.slice(0, topK)
 
-  logger.debug(`[RAG] Retrieved ${results.length} chunks in ${Date.now() - start}ms for query: "${query.slice(0, 60)}..."`)
+  logger.debug(`[RAG] Retrieved ${results.length} chunks in ${Date.now() - start}ms`)
   return results
 }
 
