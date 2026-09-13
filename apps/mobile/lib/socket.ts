@@ -1,4 +1,5 @@
 import Constants from 'expo-constants'
+import { createSocketConnection } from './socketConnection'
 import { io, Socket } from 'socket.io-client'
 
 // Resolve the Socket.IO origin the same way lib/api.ts resolves the REST base:
@@ -19,33 +20,8 @@ function resolveServerUrl(): string {
 
 const SERVER_URL = resolveServerUrl()
 
-let socket: Socket | null = null
-let activeToken: string | null = null
-
-/**
- * Get the current socket instance (may be null if not connected).
- */
-export function getSocket(): Socket | null {
-  return socket
-}
-
-/**
- * Connect to the Socket.IO server with the given auth token.
- * Re-uses the existing connection UNLESS the token changed (e.g. after a
- * silent refresh) — a stale token makes every auto-reconnect fail forever.
- */
-export function connectSocket(token: string): Socket {
-  if (socket?.connected && activeToken === token) return socket
-
-  // Clean up any stale socket before creating a new one
-  if (socket) {
-    socket.removeAllListeners()
-    socket.disconnect()
-    socket = null
-  }
-  activeToken = token
-
-  socket = io(SERVER_URL, {
+const connection = createSocketConnection<Socket>(token => {
+  const socket = io(SERVER_URL, {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,
@@ -67,16 +43,8 @@ export function connectSocket(token: string): Socket {
   })
 
   return socket
-}
+})
 
-/**
- * Disconnect from the Socket.IO server and clean up listeners.
- */
-export function disconnectSocket(): void {
-  if (socket) {
-    socket.removeAllListeners()
-    socket.disconnect()
-    socket = null
-  }
-  activeToken = null
-}
+export function getSocket(): Socket | null { return connection.get() }
+export function connectSocket(token: string): Socket { return connection.connect(token) }
+export function disconnectSocket(): void { connection.disconnect() }
