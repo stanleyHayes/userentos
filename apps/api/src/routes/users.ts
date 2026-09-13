@@ -1,3 +1,7 @@
+import { FinancingApplication } from '../models/FinancingApplication.js'
+import { FinancingContract } from '../models/FinancingContract.js'
+import { Loan } from '../models/Loan.js'
+import { CreditScore } from '../models/CreditScore.js'
 import { ApplePurchase } from '../models/ApplePurchase.js'
 import { StorePurchase } from '../models/StorePurchase.js'
 import { UserBlock } from '../models/UserBlock.js'
@@ -61,6 +65,10 @@ router.get('/me/export', authenticate, async (req, res) => {
     storePurchases,
     applePurchases,
     walletCredits,
+    financingApplications,
+    financingContracts,
+    loans,
+    creditScore,
   ] = await Promise.all([
     // Never export credential material — mfaSecret also carries schema-level
     // select:false, this is defense-in-depth.
@@ -81,11 +89,20 @@ router.get('/me/export', authenticate, async (req, res) => {
     // from becoming export data when the purchase journal gains new fields.
     ApplePurchase.find({ userId }).select('applicationId environment productId subscriptionGroupId providerStatus purchasedAt originalPurchasedAt expiresAt verifiedAt revokedAt upgraded autoRenewing graceExpiresAt accessExpiresAt accessEligible entitlementState createdAt updatedAt').lean(),
     WalletCredit.find({ userId }).select('operationKey amount type reference state appliedAt createdAt updatedAt').lean(),
+    // Personal export follows borrower identity, not privileged portfolio access.
+    FinancingApplication.find({ applicantId: userId }).select('-__v').lean(),
+    FinancingContract.find({ applicantId: userId }).select('-__v').lean(),
+    Loan.find({ userId }).select('-__v').lean(),
+    CreditScore.findOne({ userId }).select('-__v').lean(),
   ])
 
   success(res, {
     exportedAt: new Date().toISOString(),
     walletCredits,
+    financingApplications,
+    financingContracts,
+    loans,
+    creditScore,
     storePurchases,
     applePurchases,
     user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,

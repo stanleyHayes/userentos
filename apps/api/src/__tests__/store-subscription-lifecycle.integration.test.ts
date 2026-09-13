@@ -95,5 +95,7 @@ describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('store subscript
     expect(await activeStoreSubscription(userId.toString())).toBeNull()
     expect(await poll()).toMatchObject({ processed: 0 })
     expect(acknowledgeGoogleSubscription).toHaveBeenCalledTimes(1)
-  })
+  // This scenario performs multiple renewal, hold, refund and recovery cycles
+  // through real MongoDB; allow its sequential I/O to finish under suite load.
+  }, 20_000)
 })
