@@ -1,9 +1,12 @@
 import { create } from 'zustand'
-import * as SecureStore from 'expo-secure-store'
+import { useNotificationStore } from './notificationStore'
+import { credentialStorage as SecureStore } from '../lib/credentialStorage'
 
 const AUTH_KEY = 'rentos_auth'
 
 export interface User {
+  suspendedAt?: string
+  suspensionReason?: string
   id: string
   email: string
   phone: string
@@ -15,6 +18,7 @@ export interface User {
 }
 
 interface AuthState {
+  sessionVersion: number
   user: User | null
   token: string | null
   refreshToken: string | null
@@ -31,7 +35,8 @@ interface AuthState {
   hydrate: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  sessionVersion: 0,
   user: null,
   token: null,
   refreshToken: null,
@@ -40,13 +45,15 @@ export const useAuthStore = create<AuthState>()((set) => ({
   hydrated: false,
 
   login: (user, token, refreshToken, opts) => {
+    useNotificationStore.getState().reset()
     const biometricSession = opts?.biometricSession ?? false
-    set({ user, token, refreshToken: refreshToken ?? null, biometricSession, isAuthenticated: true })
+    set({ user, token, refreshToken: refreshToken ?? null, biometricSession, isAuthenticated: true, sessionVersion: get().sessionVersion + 1 })
     SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({ user, token, refreshToken, biometricSession })).catch(() => {})
   },
 
   logout: () => {
-    set({ user: null, token: null, refreshToken: null, biometricSession: false, isAuthenticated: false })
+    useNotificationStore.getState().reset()
+    set({ user: null, token: null, refreshToken: null, biometricSession: false, isAuthenticated: false, sessionVersion: get().sessionVersion + 1 })
     SecureStore.deleteItemAsync(AUTH_KEY).catch(() => {})
   },
 
@@ -96,12 +103,15 @@ export const useAuthStore = create<AuthState>()((set) => ({
     }),
 
   hydrate: async () => {
+    const version = get().sessionVersion
     try {
       const raw = await SecureStore.getItemAsync(AUTH_KEY)
+      if (get().sessionVersion !== version) { set({ hydrated: true }); return }
       if (raw) {
         const { user, token, refreshToken, biometricSession } = JSON.parse(raw)
         if (user && token) {
-          set({ user, token, refreshToken: refreshToken ?? null, biometricSession: !!biometricSession, isAuthenticated: true, hydrated: true })
+          useNotificationStore.getState().reset()
+          set({ user, token, refreshToken: refreshToken ?? null, biometricSession: !!biometricSession, isAuthenticated: true, hydrated: true, sessionVersion: version + 1 })
           return
         }
       }

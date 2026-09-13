@@ -3,6 +3,8 @@ import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import { api } from './api'
+import { useAuthStore } from '../stores/authStore'
+import { registerSessionPush } from './pushSession'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -30,37 +32,30 @@ async function getProjectId(): Promise<string | undefined> {
   )
 }
 
-export async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) return null
-  await ensureAndroidChannel()
-
-  const settings = await Notifications.getPermissionsAsync()
-  let status = settings.status
-  if (status !== 'granted') {
-    const req = await Notifications.requestPermissionsAsync()
-    status = req.status
-  }
-  if (status !== 'granted') return null
-
-  const projectId = await getProjectId()
-  const tokenData = await Notifications.getExpoPushTokenAsync(
-    projectId ? { projectId } : undefined,
-  )
-  const token = tokenData.data
-  if (!token) return null
-
-  try {
-    await api.post('/push/register', { token, platform: 'expo' })
-  } catch {
-    // best-effort — server unreachable shouldn't block app boot
-  }
-  return token
+export async function registerForPushNotifications(isActive: () => boolean = () => true): Promise<string | null> {
+  const origin = useAuthStore.getState()
+  const isCurrent = () => isActive() && origin.isAuthenticated && useAuthStore.getState().isAuthenticated && useAuthStore.getState().sessionVersion === origin.sessionVersion && useAuthStore.getState().user?.id === origin.user?.id
+  return registerSessionPush(isCurrent, async () => {
+    if (!Device.isDevice) return null
+    await ensureAndroidChannel()
+    if (!isCurrent()) return null
+    const settings = await Notifications.getPermissionsAsync()
+    if (!isCurrent()) return null
+    let status = settings.status
+    if (status !== 'granted') {
+      const req = await Notifications.requestPermissionsAsync()
+      if (!isCurrent()) return null
+      status = req.status
+    }
+    if (status !== 'granted') return null
+    const projectId = await getProjectId()
+    if (!isCurrent()) return null
+    const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+    return tokenData.data || null
+  }, token => api.post('/push/register', { token, platform: 'expo' }))
 }
 
-export async function unregisterPushToken(token: string): Promise<void> {
-  try {
-    await api.post('/push/unregister', { token })
-  } catch {
-    // best-effort
-  }
+export async function unregisterPushToken(token: string, sessionVersion: number): Promise<void> {
+  if (!useAuthStore.getState().isAuthenticated || useAuthStore.getState().sessionVersion !== sessionVersion) return
+  try { await api.post('/push/unregister', { token }) } catch { /* best effort */ }
 }

@@ -2,32 +2,53 @@ import { useEffect } from 'react'
 import { AppState, Vibration, type AppStateStatus } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
-import { connectSocket, disconnectSocket } from '../lib/socket'
+import { connectSocket, disconnectSocket, getSocket } from '../lib/socket'
 import { api } from '../lib/api'
+import { createSocketRecovery } from '../../../packages/shared/socketRecovery'
+import { createSessionCallbackGuard } from '../lib/sessionCallbacks'
 
 /**
  * Connects to Socket.IO at the app root level and feeds in-app notifications.
  * Should be called once in the root layout (after auth).
  */
 export function useAppSocket() {
-  const { token, isAuthenticated } = useAuthStore()
+  const { token, isAuthenticated, sessionVersion } = useAuthStore()
   const { setUnreadMessages, incrementUnread, pushToast } = useNotificationStore()
 
   // Fetch initial unread count from API
   useEffect(() => {
     if (!isAuthenticated || !token) return
+    const guard = createSessionCallbackGuard(() => useAuthStore.getState().sessionVersion)
+    const owner = useAuthStore.getState().user?.id
+    api.get<import('../stores/authStore').User>('/users/me').then(guard.wrap(user => { if (user.id === owner) useAuthStore.getState().updateUser(user) })).catch(() => {})
     api.get<{ count: number }>('/chat/unread-count')
-      .then((data) => setUnreadMessages(data.count))
+      .then(guard.wrap(data => setUnreadMessages(data.count)))
       .catch(() => {})
-  }, [isAuthenticated, token])
+    return () => guard.dispose()
+  }, [isAuthenticated, token, sessionVersion])
 
   // Connect socket and listen for events
   useEffect(() => {
     if (!token || !isAuthenticated) return
 
+    const guard = createSessionCallbackGuard(() => useAuthStore.getState().sessionVersion)
+    const owner = useAuthStore.getState().user?.id
     const socket = connectSocket(token)
+    const recovery = createSocketRecovery(
+      () => useAuthStore.getState().isAuthenticated && useAuthStore.getState().sessionVersion === sessionVersion,
+      () => api.get('/users/me'),
+      () => {
+        // Token updates rerun this effect and install listeners on the new socket.
+        const current = useAuthStore.getState()
+        if (getSocket() === socket && current.token && current.token !== token) connectSocket(current.token)
+      },
+    )
+    const handleExpiry = () => { void recovery.run() }
+    socket.on('session:expired', handleExpiry)
+    const suspended = guard.wrap((data: { suspendedAt: string }) => useAuthStore.getState().updateUser(data))
+    socket.on('account:suspended', suspended)
 
-    const handleUnreadUpdate = (data: {
+    const handleUnreadUpdate = guard.wrap((data: {
       conversationId: string
       unreadCount: number
       lastMessage: { text: string; senderId: string; createdAt: string }
@@ -44,9 +65,9 @@ export function useAppSocket() {
         type: 'message',
         route: `/chat/${data.conversationId}`,
       })
-    }
+    })
 
-    const handleNotification = (data: {
+    const handleNotification = guard.wrap((data: {
       title?: string
       message?: string
       type?: string
@@ -60,27 +81,32 @@ export function useAppSocket() {
         type,
         route: data.actionUrl,
       })
-    }
+    })
 
     socket.on('unread:update', handleUnreadUpdate)
     socket.on('notification:new', handleNotification)
 
     // Refetch unread count when app comes back to foreground
-    const handleAppState = (state: AppStateStatus) => {
+    const handleAppState = guard.wrap((state: AppStateStatus) => {
       if (state === 'active') {
+        api.get<import('../stores/authStore').User>('/users/me').then(guard.wrap(user => { if (user.id === owner) useAuthStore.getState().updateUser(user) })).catch(() => {})
         api.get<{ count: number }>('/chat/unread-count')
-          .then((data) => setUnreadMessages(data.count))
+          .then(guard.wrap(data => setUnreadMessages(data.count)))
           .catch(() => {})
       }
-    }
+    })
     const subscription = AppState.addEventListener('change', handleAppState)
 
     return () => {
+      guard.dispose()
+      recovery.dispose()
+      socket.off('session:expired', handleExpiry)
       socket.off('unread:update', handleUnreadUpdate)
+      socket.off('account:suspended', suspended)
       socket.off('notification:new', handleNotification)
       subscription.remove()
     }
-  }, [token, isAuthenticated])
+  }, [token, isAuthenticated, sessionVersion])
 
   // Disconnect on logout
   useEffect(() => {

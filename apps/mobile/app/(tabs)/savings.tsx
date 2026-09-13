@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -24,12 +24,9 @@ const frequencies = [
   { value: 'monthly', label: 'Monthly' },
 ]
 
-const paymentMethods = [
-  { value: 'mtn_momo', label: 'MTN MoMo', icon: 'phone-portrait-outline' },
-  { value: 'telecel_cash', label: 'Telecel Cash', icon: 'phone-portrait-outline' },
-  { value: 'airteltigo_money', label: 'AirtelTigo Money', icon: 'phone-portrait-outline' },
-  { value: 'bank_transfer', label: 'Bank Transfer', icon: 'business-outline' },
-] as const
+interface PayoutAvailability {
+  balance: number; minimum: number; hasVerifiedAccount: boolean; payoutInProgress: boolean
+}
 
 const tabs = ['Savings', 'Investments', 'Loans'] as const
 type Tab = typeof tabs[number]
@@ -43,6 +40,8 @@ export default function SavingsScreen() {
   const [plans, setPlans] = useState<SavingsPlan[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const loadGeneration = useRef(0)
 
   // New Plan modal state
   const [showPlanModal, setShowPlanModal] = useState(false)
@@ -59,19 +58,55 @@ export default function SavingsScreen() {
   const [walletMethod, setWalletMethod] = useState('')
   const [walletPhone, setWalletPhone] = useState('')
   const [submittingWallet, setSubmittingWallet] = useState(false)
+  const [depositMethods, setDepositMethods] = useState<{ value: string; label: string }[]>([])
+  const [methodsLoading, setMethodsLoading] = useState(false)
+  const [methodsError, setMethodsError] = useState(false)
+  const [methodsRetry, setMethodsRetry] = useState(0)
+  const [payoutAvailability, setPayoutAvailability] = useState<PayoutAvailability | null>(null)
+  const [payoutLoading, setPayoutLoading] = useState(false)
+  const [payoutError, setPayoutError] = useState(false)
+  const [payoutRetry, setPayoutRetry] = useState(0)
+  useEffect(() => {
+    if (!showWalletModal || walletAction !== 'withdraw') return
+    let cancelled = false
+    setPayoutLoading(true); setPayoutError(false); setPayoutAvailability(null)
+    api.get<PayoutAvailability>('/payouts/available').then(data => {
+      if (!data || !Number.isFinite(data.balance) || !Number.isFinite(data.minimum) || data.minimum <= 0 || typeof data.hasVerifiedAccount !== 'boolean' || typeof data.payoutInProgress !== 'boolean') throw new Error('Payout availability is incomplete')
+      if (!cancelled) setPayoutAvailability(data)
+    }).catch(() => { if (!cancelled) setPayoutError(true) })
+      .finally(() => { if (!cancelled) setPayoutLoading(false) })
+    return () => { cancelled = true }
+  }, [showWalletModal, walletAction, payoutRetry])
+  const canWithdraw = !payoutLoading && !payoutError && payoutAvailability?.hasVerifiedAccount && !payoutAvailability.payoutInProgress && Number.isFinite(Number(walletAmount)) && Number(walletAmount) >= payoutAvailability.minimum && Number(walletAmount) <= payoutAvailability.balance
+  const [depositInstructions, setDepositInstructions] = useState<string | null>(null)
+  useEffect(() => {
+    if (!showWalletModal || walletAction !== 'deposit') return
+    let cancelled = false
+    setMethodsLoading(true); setMethodsError(false); setDepositMethods([])
+    api.get<{ methods: { id: string; label: string }[] }>('/payments/methods')
+      .then(data => { if (!cancelled) setDepositMethods(data.methods.map(method => ({ value: method.id, label: method.label }))) })
+      .catch(() => { if (!cancelled) setMethodsError(true) })
+      .finally(() => { if (!cancelled) setMethodsLoading(false) })
+    return () => { cancelled = true }
+  }, [showWalletModal, walletAction, methodsRetry])
+
 
   async function load() {
+    const generation = ++loadGeneration.current
     try {
       const [w, p] = await Promise.all([
         api.get<Wallet>('/savings/wallet'),
         api.get<{ items: SavingsPlan[] }>('/savings/plans'),
       ])
+      if (generation !== loadGeneration.current) return
+      if (!w || !Number.isFinite(w.balance) || !Array.isArray(w.transactions) || !Array.isArray(p?.items)) throw new Error('Wallet response is incomplete')
       setWallet(w)
       setPlans(p.items)
-    } catch { /* no-op */ } finally { setLoading(false) }
+      setLoadError(false)
+    } catch { if (generation === loadGeneration.current) setLoadError(true) } finally { if (generation === loadGeneration.current) setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); return () => { loadGeneration.current++ } }, [])
 
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
@@ -107,16 +142,19 @@ export default function SavingsScreen() {
   }
 
   function openWalletModal(action: 'deposit' | 'withdraw') {
+    setPayoutAvailability(null)
     setWalletAction(action)
+    setWalletMethod('')
     setWalletAmount('')
     setShowWalletModal(true)
   }
 
   async function handleWalletAction() {
-    if (!walletAmount || isNaN(Number(walletAmount)) || Number(walletAmount) <= 0) {
+    if (!walletAmount || !Number.isFinite(Number(walletAmount)) || Number(walletAmount) <= 0) {
       Alert.alert('Error', 'Please enter a valid amount'); return
     }
-    if (!walletMethod) {
+    if (submittingWallet || (walletAction === 'withdraw' && !canWithdraw)) return
+    if (walletAction === 'deposit' && (!walletMethod || methodsError || methodsLoading || !depositMethods.some(method => method.value === walletMethod))) {
       Alert.alert('Error', 'Please select a payment method'); return
     }
     if (walletAction === 'deposit' && walletMethod !== 'bank_transfer' && walletPhone.trim().length < 9) {
@@ -131,6 +169,7 @@ export default function SavingsScreen() {
         const res = await api.post<{ instructions?: string }>('/savings/wallet/deposit', {
           amount: Number(walletAmount), method: walletMethod, phone: walletPhone.trim(),
         })
+        setDepositInstructions(res.instructions ?? 'Your deposit is pending confirmation. Check your wallet for its status.')
         setShowWalletModal(false)
         setWalletMethod('')
         setWalletPhone('')
@@ -189,6 +228,14 @@ export default function SavingsScreen() {
     )
   }
 
+  if (loadError) {
+    return <View style={{ flex: 1, padding: spacing.lg, backgroundColor: c.surface }} accessibilityRole="alert">
+      <Text style={{ color: c.text }}>Could not load wallet and savings data.</Text>
+      <Text style={{ color: c.muted }}>Your balance and transactions are unavailable. Please retry.</Text>
+      <TouchableOpacity accessibilityRole="button" onPress={() => { setLoading(true); void load() }}><Text style={{ color: c.primary, paddingVertical: spacing.md }}>Retry wallet and savings</Text></TouchableOpacity>
+    </View>
+  }
+
   function handleTabPress(tab: Tab) {
     setActiveTab(tab)
     if (tab === 'Investments') {
@@ -202,6 +249,7 @@ export default function SavingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.surface }}>
+      {depositInstructions && <View style={{ padding: spacing.md }} accessibilityRole="alert"><Text style={{ color: c.text }}>{depositInstructions}</Text><TouchableOpacity accessibilityRole="button" onPress={() => setDepositInstructions(null)}><Text style={{ color: c.primary }}>Dismiss deposit instructions</Text></TouchableOpacity></View>}
       {/* Tab Navigation */}
       <View style={[s.tabBar, { backgroundColor: c.white, borderBottomColor: c.border }]}>
         {tabs.map((tab) => (
@@ -443,9 +491,23 @@ export default function SavingsScreen() {
               onChangeText={setWalletAmount}
             />
 
-            <Text style={[s.fieldLabel, { color: c.text }]}>Payment Method</Text>
+            {walletAction === 'withdraw' && <View style={{ gap: spacing.sm }}>
+              {payoutLoading && <Text style={{ color: c.muted }}>Checking payout availability…</Text>}
+              {payoutError && <View accessibilityRole="alert"><Text style={{ color: c.danger }}>Could not check payout availability.</Text><TouchableOpacity accessibilityRole="button" onPress={() => setPayoutRetry(value => value + 1)}><Text style={{ color: c.primary }}>Retry payout availability</Text></TouchableOpacity></View>}
+              {!payoutLoading && !payoutError && payoutAvailability && <>
+                {!payoutAvailability.hasVerifiedAccount ? <View><Text style={{ color: c.danger }}>Add and verify a payout account before withdrawing.</Text><TouchableOpacity accessibilityRole="button" onPress={() => { setShowWalletModal(false); router.push('/payout-account') }}><Text style={{ color: c.primary }}>Set up payout account</Text></TouchableOpacity></View> : payoutAvailability.payoutInProgress ? <Text style={{ color: c.muted }}>A payout is already in progress. Wait for it to finish before requesting another.</Text> : <>
+                  <Text style={{ color: c.text }}>Available to withdraw: GHS {payoutAvailability.balance.toFixed(2)}. Minimum: GHS {payoutAvailability.minimum.toFixed(2)}.</Text>
+                  <Text style={{ color: c.muted }}>The amount leaves your wallet now and is sent to your saved payout account once approved. If it cannot be delivered, it is refunded.</Text>
+                </>}
+              </>}
+            </View>}
+            {walletAction === 'deposit' && <Text style={[s.fieldLabel, { color: c.text }]}>Payment Method</Text>}
+            {walletAction === 'deposit' && methodsLoading && <Text style={{ color: c.muted }}>Loading payment methods…</Text>}
+            {walletAction === 'deposit' && methodsError && <View accessibilityRole="alert"><Text style={{ color: c.danger }}>Could not load payment methods.</Text><TouchableOpacity accessibilityRole="button" onPress={() => setMethodsRetry(value => value + 1)}><Text style={{ color: c.primary }}>Retry payment methods</Text></TouchableOpacity></View>}
+            {walletAction === 'deposit' && !methodsLoading && !methodsError && depositMethods.length === 0 && <Text style={{ color: c.muted }}>No deposit methods are available right now.</Text>}
+
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {paymentMethods.map((m) => (
+              {(walletAction === 'deposit' ? depositMethods : []).map((m) => (
                 <TouchableOpacity
                   key={m.value}
                   style={[s.optionBtn, neuInset(c), { flex: 0, paddingHorizontal: 14, paddingVertical: 10 }, walletMethod === m.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
@@ -473,7 +535,7 @@ export default function SavingsScreen() {
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: walletAction === 'withdraw' ? c.danger : c.primary }, submittingWallet && s.submitBtnDisabled]}
               onPress={handleWalletAction}
-              disabled={submittingWallet}
+              disabled={submittingWallet || (walletAction === 'withdraw' && !canWithdraw) || (walletAction === 'deposit' && (methodsLoading || methodsError || !depositMethods.some(method => method.value === walletMethod)))}
               activeOpacity={0.85}
             >
               {submittingWallet ? (

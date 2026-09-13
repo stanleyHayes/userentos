@@ -1,5 +1,7 @@
+import { disableBiometricCredentials } from './disableBiometric'
 import * as LocalAuthentication from 'expo-local-authentication'
-import * as SecureStore from 'expo-secure-store'
+import { credentialStorage as SecureStore, biometricCredentialVersion, beginBiometricChange, saveBiometricCredential, clearBiometricCredential } from './credentialStorage'
+import { useAuthStore } from '../stores/authStore'
 import * as Application from 'expo-application'
 import { Platform } from 'react-native'
 import { api } from './api'
@@ -115,29 +117,25 @@ export function getDeviceLabel(): string {
  * (attached by `api`) and stores the returned refresh token in SecureStore.
  */
 export async function enableBiometricLogin(password: string): Promise<void> {
+  const version = beginBiometricChange()
+  const session = useAuthStore.getState().sessionVersion
   const deviceId = await getDeviceId()
   const deviceLabel = getDeviceLabel()
+  if (useAuthStore.getState().sessionVersion !== session) throw new Error('Account session changed')
   const data = await api.post<{ refreshToken: string; expiresAt: string }>('/auth/biometric/enroll', {
     deviceId,
     deviceLabel,
     password,
   })
-  await SecureStore.setItemAsync(BIOMETRIC_REFRESH_KEY, data.refreshToken)
-  await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, '1')
+  await saveBiometricCredential(data.refreshToken, version, () => useAuthStore.getState().sessionVersion === session, true)
 }
 
 /**
  * Disable biometric login on this device — best-effort revoke server-side too.
  */
-export async function disableBiometricLogin(): Promise<void> {
-  // Server-side revocation requires the JWT, which we have if user is signed in.
-  // If the user is signed out, the local delete still happens; the server token
-  // will simply expire on its own.
-  try {
-    await api.post('/auth/biometric/revoke-all', {})
-  } catch { /* ignore — local cleanup still proceeds */ }
-  await SecureStore.deleteItemAsync(BIOMETRIC_REFRESH_KEY).catch(() => {})
-  await SecureStore.deleteItemAsync(BIOMETRIC_ENABLED_KEY).catch(() => {})
+export async function disableBiometricLogin(): Promise<{ serverRevoked: boolean }> {
+  // Invalidate older enrollment/rotation work immediately, before the network.
+  return disableBiometricCredentials(clearBiometricCredential, () => api.post('/auth/biometric/revoke-all', {}))
 }
 
 /**
@@ -163,13 +161,16 @@ export interface BiometricExchangeResult {
 }
 
 export async function exchangeRefreshToken(refreshToken: string): Promise<BiometricExchangeResult> {
+  const version = biometricCredentialVersion()
+  const session = useAuthStore.getState().sessionVersion
   const deviceId = await getDeviceId()
+  if (useAuthStore.getState().sessionVersion !== session) throw new Error('Account session changed')
   const data = await api.post<BiometricExchangeResult>('/auth/biometric/exchange', {
     refreshToken,
     deviceId,
   })
   // Persist the rotated refresh token immediately
-  await SecureStore.setItemAsync(BIOMETRIC_REFRESH_KEY, data.refreshToken)
+  await saveBiometricCredential(data.refreshToken, version, () => useAuthStore.getState().sessionVersion === session)
   return data
 }
 

@@ -1,5 +1,10 @@
+import { checkoutRequest } from './checkoutRequests'
+import { isProviderCheckout } from '../../../packages/shared/checkoutRequests'
+import { AiConsentDeclined, AI_SHARING_VERSION, confirmAiSharing, needsAiConsent } from './aiConsent'
+import { requestRefreshCredentials } from './refreshCredentials'
+import { createSessionRequests } from './sessionRequests'
 import Constants from 'expo-constants'
-import * as SecureStore from 'expo-secure-store'
+import { biometricCredentialVersion, saveBiometricCredential } from './credentialStorage'
 import { useAuthStore } from '../stores/authStore'
 
 // Resolve the API base URL:
@@ -21,156 +26,88 @@ function resolveBaseUrl(): string {
 
 const BASE_URL = resolveBaseUrl()
 
-const BIOMETRIC_REFRESH_KEY = 'rentos_biometric_refresh_v2'
-
-let refreshingPromise: Promise<boolean> | null = null
-
 /** Biometric sessions rotate through /auth/biometric/exchange (device-bound). */
-async function attemptBiometricRefresh(refreshToken: string): Promise<boolean> {
-  try {
-    // Lazy import to avoid a static module cycle (biometric.ts imports api.ts)
-    const { getDeviceId } = await import('./biometric')
-    const deviceId = await getDeviceId()
-    const res = await fetch(`${BASE_URL}/auth/biometric/exchange`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken, deviceId }),
-    })
-    if (!res.ok) return false
-    const data = await res.json()
-    const { token, refreshToken: newRefreshToken } = data.data ?? {}
-    if (!token || !newRefreshToken) return false
-    await SecureStore.setItemAsync(BIOMETRIC_REFRESH_KEY, newRefreshToken).catch(() => {})
-    useAuthStore.getState().updateTokens(token, newRefreshToken)
-    return true
-  } catch {
-    return false
-  }
+async function attemptBiometricRefresh(refreshToken: string, version: number): Promise<boolean> {
+  const credentialVersion = biometricCredentialVersion()
+  // Lazy import to avoid a static module cycle (biometric.ts imports api.ts)
+  const { getDeviceId } = await import('./biometric')
+  const deviceId = await getDeviceId()
+  if (useAuthStore.getState().sessionVersion !== version) return false
+  const credentials = await requestRefreshCredentials(signal => fetch(`${BASE_URL}/auth/biometric/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken, deviceId }),
+    signal,
+  }))
+  if (!credentials || useAuthStore.getState().sessionVersion !== version) return false
+  await saveBiometricCredential(credentials.refreshToken, credentialVersion, () => useAuthStore.getState().sessionVersion === version)
+  if (useAuthStore.getState().sessionVersion !== version) return false
+  useAuthStore.getState().updateTokens(credentials.token, credentials.refreshToken)
+  return true
 }
 
-async function attemptRefresh(): Promise<boolean> {
+async function attemptRefresh(version: number): Promise<boolean> {
   const { refreshToken, biometricSession } = useAuthStore.getState()
-  if (!refreshToken) return false
+  if (!refreshToken || useAuthStore.getState().sessionVersion !== version) return false
 
   if (biometricSession) {
-    return attemptBiometricRefresh(refreshToken)
+    return attemptBiometricRefresh(refreshToken, version)
   }
 
-  try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-
-    if (!res.ok) return false
-
-    const data = await res.json()
-    const { token, refreshToken: newRefreshToken } = data.data ?? {}
-    if (token) {
-      // updateTokens persists to SecureStore — the server revoked the OLD
-      // refresh token on rotation, so a bare setState here guarantees a
-      // forced logout on next cold start.
-      useAuthStore.getState().updateTokens(token, newRefreshToken ?? refreshToken)
-      return true
-    }
-    return false
-  } catch {
-    return false
-  }
+  const credentials = await requestRefreshCredentials(signal => fetch(`${BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+    signal,
+  }))
+  if (!credentials || useAuthStore.getState().sessionVersion !== version) return false
+  // updateTokens persists the rotated pair to SecureStore.
+  useAuthStore.getState().updateTokens(credentials.token, credentials.refreshToken)
+  return true
 }
 
+const sessionRequest = createSessionRequests({
+  session: () => ({ version: useAuthStore.getState().sessionVersion, token: useAuthStore.getState().token }),
+  refresh: attemptRefresh,
+  logout: () => useAuthStore.getState().logout(),
+})
+
 class ApiClient {
-  private getToken(): string | null {
-    return useAuthStore.getState().token
-  }
-
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken()
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {}),
-    }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const doRequest = (): Promise<Response> =>
-      fetch(`${BASE_URL}${path}`, { ...options, headers })
-
-    let res = await doRequest()
-
-    if (res.status === 401 && !path.startsWith('/auth/')) {
-      if (!refreshingPromise) {
-        refreshingPromise = attemptRefresh().finally(() => {
-          refreshingPromise = null
-        })
-      }
-      const refreshed = await refreshingPromise
-
-      if (refreshed) {
-        const newToken = this.getToken()
-        if (newToken) {
-          headers['Authorization'] = `Bearer ${newToken}`
-        }
-        res = await doRequest()
-      } else {
-        useAuthStore.getState().logout()
-        throw new Error('Session expired')
-      }
-    }
-
-    const text = await res.text()
-    let data: { error?: string; data?: unknown } = {}
-    try { data = text ? JSON.parse(text) : {} } catch { data = {} }
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
-    return data.data as T
+    return await sessionRequest(token => fetch(`${BASE_URL}${path}`, { ...options, headers: {
+      'Content-Type': 'application/json', ...((options.headers as Record<string, string>) || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    } }), !path.startsWith('/auth/')) as T
   }
-
   get<T>(path: string) { return this.request<T>(path) }
-  post<T>(path: string, body: unknown) { return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) }) }
+  async post<T>(path: string, body: unknown, options: Pick<RequestInit, 'signal'> = {}): Promise<T> {
+    let payload = JSON.stringify(body)
+    if (needsAiConsent(path)) {
+      const session = useAuthStore.getState().sessionVersion
+      if (!await confirmAiSharing(path)) throw new AiConsentDeclined()
+      if (useAuthStore.getState().sessionVersion !== session) throw new Error('Account session changed. Please try again.')
+      payload = JSON.stringify({ ...JSON.parse(payload), aiSharingConsent: AI_SHARING_VERSION })
+    }
+    if (isProviderCheckout(path, body)) {
+      const origin = useAuthStore.getState()
+      const owner = origin.user?.id
+      if (!owner) throw new Error('Sign in before starting a payment.')
+      return checkoutRequest(owner, path, payload, async (key, signal) => {
+        if (useAuthStore.getState().sessionVersion !== origin.sessionVersion) throw new Error('Account session changed. Please try again.')
+        const result = await this.request<T>(path, { ...options, method: 'POST', body: payload, signal, headers: { 'Idempotency-Key': key } })
+        if (useAuthStore.getState().user?.id !== owner) throw new Error('Account session changed. Please try again.')
+        return result
+      }, options.signal ?? undefined)
+    }
+    return this.request<T>(path, { ...options, method: 'POST', body: payload })
+  }
   patch<T>(path: string, body: unknown) { return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }) }
   put<T>(path: string, body: unknown) { return this.request<T>(path, { method: 'PUT', body: JSON.stringify(body) }) }
   delete<T>(path: string) { return this.request<T>(path, { method: 'DELETE' }) }
-
-  /** Multipart upload with the same 401-refresh behavior as request(). */
   async upload<T>(path: string, formData: FormData): Promise<T> {
-    const authHeader = (): Record<string, string> => {
-      const t = this.getToken()
-      return t ? { Authorization: `Bearer ${t}` } : {}
-    }
-
-    let res = await fetch(`${BASE_URL}${path}`, {
-      method: 'POST',
-      headers: authHeader(),
-      body: formData,
-    })
-
-    if (res.status === 401 && !path.startsWith('/auth/')) {
-      if (!refreshingPromise) {
-        refreshingPromise = attemptRefresh().finally(() => {
-          refreshingPromise = null
-        })
-      }
-      const refreshed = await refreshingPromise
-      if (refreshed) {
-        res = await fetch(`${BASE_URL}${path}`, {
-          method: 'POST',
-          headers: authHeader(),
-          body: formData,
-        })
-      } else {
-        useAuthStore.getState().logout()
-        throw new Error('Session expired')
-      }
-    }
-
-    const text = await res.text()
-    let data: { error?: string; data?: unknown } = {}
-    try { data = text ? JSON.parse(text) : {} } catch { data = {} }
-    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`)
-    return data.data as T
+    return await sessionRequest(token => fetch(`${BASE_URL}${path}`, {
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData,
+    }), !path.startsWith('/auth/')) as T
   }
 }
-
 export const api = new ApiClient()

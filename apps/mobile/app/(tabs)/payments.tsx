@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
@@ -7,29 +7,36 @@ import { formatCurrency, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { ListSkeleton } from '../../components/Skeleton'
+import { RentReceiptModal } from '../../components/RentReceiptModal'
 
 interface Payment {
   id: string; amount: number; method: string; status: string
   reference: string; paidAt?: string; createdAt: string
+  tenantId?: string; landlordId?: string
 }
 
 interface Agreement {
   id: string; property?: { title: string }; rentAmount: number; status: string
 }
 
-const paymentMethods = [
-  { value: 'mtn_momo', label: 'MTN MoMo', icon: 'phone-portrait-outline' as const },
-  { value: 'telecel_cash', label: 'Telecel Cash', icon: 'phone-portrait-outline' as const },
-  { value: 'airteltigo_money', label: 'AirtelTigo Money', icon: 'phone-portrait-outline' as const },
-  { value: 'bank_transfer', label: 'Bank Transfer', icon: 'business-outline' as const },
-]
+interface PaymentMethod { id: string; label: string }
 
 export default function PaymentsScreen() {
   const c = useThemeColors()
   const { user } = useAuthStore()
+  const [paymentInstructions, setPaymentInstructions] = useState('')
   const [payments, setPayments] = useState<Payment[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState<number | null>(null)
+  const [totalPaid, setTotalPaid] = useState<number | null>(null)
+  const [pageLoading, setPageLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [retryPage, setRetryPage] = useState(1)
+  const loadVersion = useRef(0)
 
   const statusColors: Record<string, string> = {
     completed: c.accent,
@@ -43,16 +50,30 @@ export default function PaymentsScreen() {
   const [agreements, setAgreements] = useState<Agreement[]>([])
   const [selectedAgreement, setSelectedAgreement] = useState('')
   const [amount, setAmount] = useState('')
+  const [periodStart, setPeriodStart] = useState('')
+  const [periodEnd, setPeriodEnd] = useState('')
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [methodsError, setMethodsError] = useState('')
   const [selectedMethod, setSelectedMethod] = useState('')
   const [phone, setPhone] = useState(user?.phone ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [loadingAgreements, setLoadingAgreements] = useState(false)
 
-  async function load() {
+  async function load(requestedPage = 1) {
+    const version = ++loadVersion.current
+    setPageLoading(true)
+    setLoadError('')
     try {
-      const data = await api.get<{ items: Payment[] }>('/payments')
+      const data = await api.get<{ items: Payment[]; total?: number; totalPages?: number; summary?: { totalPaid: number } }>(`/payments?page=${requestedPage}&pageSize=20`)
+      if (version !== loadVersion.current) return
       setPayments(data.items)
-    } catch { /* no-op */ } finally { setLoading(false) }
+      setPage(requestedPage)
+      setTotalPages(data.totalPages ?? 1)
+      setTotal(data.total ?? null)
+      setTotalPaid(data.summary?.totalPaid ?? null)
+    } catch {
+      if (version === loadVersion.current) { setRetryPage(requestedPage); setLoadError('Could not load payment history. Please try again.') }
+    } finally { if (version === loadVersion.current) { setLoading(false); setPageLoading(false) } }
   }
 
   useEffect(() => { load() }, [])
@@ -62,11 +83,19 @@ export default function PaymentsScreen() {
   async function openModal() {
     setShowModal(true)
     setLoadingAgreements(true)
+    setPaymentMethods([])
+    setSelectedMethod('')
+    setMethodsError('')
     try {
-      const data = await api.get<{ items: Agreement[] }>('/agreements')
+      const [data, available] = await Promise.all([
+        api.get<{ items: Agreement[] }>('/agreements'),
+        api.get<{ methods: PaymentMethod[] }>('/payments/methods'),
+      ])
+      setPaymentMethods(available.methods)
+      if (!available.methods.length) setMethodsError('No payment methods are available right now. Please try again later.')
       setAgreements(data.items.filter((a) => a.status === 'active'))
     } catch {
-      Alert.alert('Error', 'Failed to load agreements')
+      setMethodsError('Could not load payment options. Close this form and try again.')
     } finally { setLoadingAgreements(false) }
   }
 
@@ -74,27 +103,32 @@ export default function PaymentsScreen() {
     setShowModal(false)
     setSelectedAgreement('')
     setAmount('')
+    setPeriodStart('')
+    setPeriodEnd('')
     setSelectedMethod('')
   }
 
   async function handleSubmitPayment() {
     if (!selectedAgreement) { Alert.alert('Error', 'Please select an agreement'); return }
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { Alert.alert('Error', 'Please enter a valid amount'); return }
-    if (!selectedMethod) { Alert.alert('Error', 'Please select a payment method'); return }
+    if (!paymentMethods.some(method => method.id === selectedMethod)) { Alert.alert('Error', 'Please select a payment method'); return }
     if (selectedMethod !== 'bank_transfer' && phone.trim().length < 9) {
       Alert.alert('Error', 'Please enter the mobile money number to charge'); return
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodEnd < periodStart) { Alert.alert('Error', 'Enter the rent period as YYYY-MM-DD, with the end on or after the start.'); return }
     setSubmitting(true)
     try {
-      await api.post<{ instructions?: string }>('/payments', {
+      const result = await api.post<{ instructions?: string }>('/payments', {
         agreementId: selectedAgreement,
+        rentPeriod: { startDate: periodStart, endDate: periodEnd },
         amount: Number(amount),
         method: selectedMethod,
         phone: phone.trim() || undefined,
       })
+      setPaymentInstructions(result.instructions || 'Your payment is pending confirmation. Check your payment history for its status.')
       resetModal()
-      Alert.alert('Payment initiated', 'Approve the payment on your phone — it completes once confirmed.')
+      Alert.alert('Payment initiated', result.instructions || 'Your payment is pending confirmation. Check your payment history for its status.')
       await load()
     } catch (e) {
       const _err = e as { message?: string }
@@ -102,7 +136,6 @@ export default function PaymentsScreen() {
     } finally { setSubmitting(false) }
   }
 
-  const totalPaid = payments.filter((p) => p.status === 'completed').reduce((s, p) => s + p.amount, 0)
   const isTenant = user?.activeRole === 'tenant'
 
   function renderPayment({ item }: { item: Payment }) {
@@ -123,6 +156,7 @@ export default function PaymentsScreen() {
           <View style={[s.badge, { backgroundColor: statusColor + '20' }]}>
             <Text style={[s.badgeText, { color: statusColor }]}>{item.status}</Text>
           </View>
+          {!!user?.id && ['completed', 'refunded'].includes(item.status) && (user.id === item.tenantId || user.id === item.landlordId) && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View receipt ${item.reference}`} onPress={() => setReceiptPaymentId(item.id)} style={{ paddingVertical: spacing.sm }}><Text style={{ color: c.primary }}>View receipt</Text></TouchableOpacity>}
         </View>
       </View>
     )
@@ -141,37 +175,49 @@ export default function PaymentsScreen() {
       <View style={[s.summaryCard, neuCard(c)]}>
         <View style={s.summaryItem}>
           <Text style={[s.summaryLabel, { color: c.muted }]}>Total Paid</Text>
-          <Text style={[s.summaryValue, { color: c.primaryDark }]}>{formatCurrency(totalPaid)}</Text>
+          <Text style={[s.summaryValue, { color: c.primaryDark }]}>{totalPaid === null ? '—' : formatCurrency(totalPaid)}</Text>
         </View>
         <View style={[s.divider, { backgroundColor: c.border }]} />
         <View style={s.summaryItem}>
           <Text style={[s.summaryLabel, { color: c.muted }]}>Transactions</Text>
-          <Text style={[s.summaryValue, { color: c.primaryDark }]}>{payments.length}</Text>
+          <Text style={[s.summaryValue, { color: c.primaryDark }]}>{total ?? '—'}</Text>
         </View>
       </View>
 
+      {!!loadError && <View style={{ padding: spacing.md }}><Text accessibilityRole="alert" style={{ color: c.danger }}>{loadError}</Text><TouchableOpacity accessibilityRole="button" onPress={() => void load(retryPage)}><Text style={{ color: c.primary, paddingVertical: spacing.sm }}>Retry payment history</Text></TouchableOpacity></View>}
       <FlatList
         data={payments}
         keyExtractor={(item) => item.id}
         renderItem={renderPayment}
         contentContainerStyle={s.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
-        ListEmptyComponent={
+        ListEmptyComponent={loadError ? null :
           <View style={s.empty}>
             <Ionicons name="card-outline" size={48} color={c.muted} />
             <Text style={[s.emptyText, { color: c.muted }]}>No payments yet</Text>
           </View>
         }
       />
+      {totalPages > 1 && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', padding: spacing.md }}>
+        <TouchableOpacity accessibilityRole="button" disabled={pageLoading || page === 1} onPress={() => void load(page - 1)}><Text style={{ color: page === 1 ? c.muted : c.primary }}>Previous payments</Text></TouchableOpacity>
+        <Text style={{ color: c.text }}>{pageLoading ? 'Loading…' : `${page} / ${totalPages}`}</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={pageLoading || page >= totalPages} onPress={() => void load(page + 1)}><Text style={{ color: page >= totalPages ? c.muted : c.primary }}>Next payments</Text></TouchableOpacity>
+      </View>}
+
+      {!!paymentInstructions && <View style={{ padding: spacing.md, backgroundColor: c.card }}>
+        <Text style={{ color: c.text, fontFamily: 'Outfit_600SemiBold' }}>Payment instructions</Text>
+        <Text selectable style={{ color: c.text, marginTop: 6 }}>{paymentInstructions}</Text>
+      </View>}
 
       {/* FAB - Make Payment (tenants only) */}
       {isTenant && (
-        <TouchableOpacity style={[s.fab, { backgroundColor: c.primary }]} activeOpacity={0.85} onPress={openModal}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Make payment" style={[s.fab, { backgroundColor: c.primary, bottom: totalPages > 1 ? 80 : 24 }]} activeOpacity={0.85} onPress={openModal}>
           <Ionicons name="add" size={28} color="#ffffff" />
         </TouchableOpacity>
       )}
 
       {/* Make Payment Modal */}
+      {receiptPaymentId && <RentReceiptModal key={receiptPaymentId} paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />}
       <Modal visible={showModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
           <View style={[s.modalContent, { backgroundColor: c.white }]}>
@@ -213,6 +259,12 @@ export default function PaymentsScreen() {
                 </View>
               )}
 
+              <Text style={[s.fieldLabel, { color: c.text }]}>Rent period from</Text>
+              <TextInput accessibilityLabel="Rent period from" placeholder="YYYY-MM-DD" value={periodStart} onChangeText={setPeriodStart} style={[s.input, neuInset(c), { color: c.text }]} />
+              <Text style={[s.fieldLabel, { color: c.text }]}>Rent period through</Text>
+              <TextInput accessibilityLabel="Rent period through" placeholder="YYYY-MM-DD" value={periodEnd} onChangeText={setPeriodEnd} style={[s.input, neuInset(c), { color: c.text }]} />
+              <Text style={{ color: c.muted }}>Select the dates this payment is towards. This does not mark the whole period as fully paid.</Text>
+
               {/* Amount Input */}
               <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
               <TextInput
@@ -227,19 +279,20 @@ export default function PaymentsScreen() {
               {/* Payment Method Picker */}
               <Text style={[s.fieldLabel, { color: c.text }]}>Payment Method</Text>
               <View style={s.optionsGroup}>
+                {!!methodsError && <Text accessibilityRole="alert" style={{ color: c.danger }}>{methodsError}</Text>}
                 {paymentMethods.map((method) => (
                   <TouchableOpacity
-                    key={method.value}
-                    style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, selectedMethod === method.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
-                    onPress={() => setSelectedMethod(method.value)}
+                    key={method.id}
+                    style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, selectedMethod === method.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
+                    onPress={() => setSelectedMethod(method.id)}
                   >
                     <View style={s.methodRow}>
                       <Ionicons
-                        name={method.icon}
+                        name={method.id === 'bank_transfer' ? 'business-outline' : 'phone-portrait-outline'}
                         size={18}
-                        color={selectedMethod === method.value ? c.primary : c.muted}
+                        color={selectedMethod === method.id ? c.primary : c.muted}
                       />
-                      <Text style={[s.optionText, { color: c.text }, selectedMethod === method.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
+                      <Text style={[s.optionText, { color: c.text }, selectedMethod === method.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
                         {method.label}
                       </Text>
                     </View>
@@ -266,7 +319,7 @@ export default function PaymentsScreen() {
               <TouchableOpacity
                 style={[s.submitBtn, { backgroundColor: c.primary }, submitting && s.submitBtnDisabled]}
                 onPress={handleSubmitPayment}
-                disabled={submitting}
+                disabled={submitting || loadingAgreements || !paymentMethods.some(method => method.id === selectedMethod)}
                 activeOpacity={0.85}
               >
                 {submitting ? (

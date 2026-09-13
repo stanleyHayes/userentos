@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
+import { tenantProfilePatch } from '../types/shared'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
 
@@ -23,7 +24,6 @@ const petOptions = ['no_pets', 'has_pets', 'open_to_pets']
 const noiseOptions = ['quiet', 'moderate', 'social']
 const nationalityOptions = ['Ghanaian', 'Nigerian', 'Togolese', 'Ivorian', 'British', 'American', 'Other']
 const languageOptions = ['English', 'Twi', 'Ga', 'Ewe', 'Hausa', 'Fante', 'Dagbani', 'Nzema', 'Other']
-const ethnicGroupOptions = ['Akan', 'Ewe', 'Ga-Dangme', 'Mole-Dagbon', 'Guan', 'Gurma', 'Grusi', 'Mande', 'Other']
 const educationOptions = ['none', 'basic', 'shs', 'diploma', 'bachelors', 'masters', 'phd']
 const currencyOptions = ['GHS', 'USD', 'EUR', 'GBP', 'NGN']
 const currencySymbols: Record<string, string> = { GHS: '\u20B5', USD: '$', EUR: '\u20AC', GBP: '\u00A3', NGN: '\u20A6' }
@@ -55,7 +55,7 @@ export default function TenantProfileScreen() {
         maritalStatus: data.maritalStatus ?? '', nationality: data.nationality ?? '',
         employmentStatus: data.employmentStatus ?? '', occupation: data.occupation ?? '',
         employer: data.employer ?? '', monthlyIncome: data.monthlyIncome ? String(data.monthlyIncome) : '',
-        smokingStatus: data.smokingStatus ?? '', petStatus: data.petStatus ?? '', noiseLevel: data.noiseLevel ?? '',
+        smokingStatus: (data as unknown as { smoker?: boolean }).smoker ? 'smoker' : 'non_smoker', petStatus: (data as unknown as { pets?: boolean }).pets ? 'has_pets' : 'no_pets', noiseLevel: data.noiseLevel ?? '',
         languagesSpoken: (data as unknown as Record<string, unknown>).languagesSpoken as string[] ?? [], ethnicGroup: (data as unknown as Record<string, unknown>).ethnicGroup as string ?? '',
         highestEducation: (data as unknown as Record<string, unknown>).highestEducation as string ?? '', institution: (data as unknown as Record<string, unknown>).institution as string ?? '',
         fieldOfStudy: (data as unknown as Record<string, unknown>).fieldOfStudy as string ?? '',
@@ -72,13 +72,15 @@ export default function TenantProfileScreen() {
   async function handleSave() {
     setSaving(true)
     try {
-      const payload = {
+      const payload = tenantProfilePatch({
         ...form,
+        smoker: form.smokingStatus !== '' ? form.smokingStatus !== 'non_smoker' : undefined,
+        pets: form.petStatus !== '' ? form.petStatus === 'has_pets' : undefined,
         monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
         graduationYear: form.graduationYear ? Number(form.graduationYear) : undefined,
         primaryCurrency: form.primaryCurrency,
         incomeSources: form.incomeSources,
-      }
+      })
       const data = await api.patch<TenantProfile>('/tenant-profile/me', payload)
       setProfile(data)
       Alert.alert('Success', 'Your profile has been updated.')
@@ -128,7 +130,6 @@ export default function TenantProfileScreen() {
         <OptionPicker label="Gender" value={form.gender} options={genderOptions} onChange={(v) => updateForm('gender', v)} c={c} />
         <OptionPicker label="Marital Status" value={form.maritalStatus} options={maritalOptions} onChange={(v) => updateForm('maritalStatus', v)} c={c} />
         <OptionPicker label="Nationality" value={form.nationality} options={nationalityOptions} onChange={(v) => updateForm('nationality', v)} c={c} />
-        <OptionPicker label="Ethnic Group" value={form.ethnicGroup} options={ethnicGroupOptions} onChange={(v) => updateForm('ethnicGroup', v)} c={c} />
         <ChipMultiSelect label="Languages Spoken" options={languageOptions} selected={form.languagesSpoken} onChange={(v) => setForm((prev) => ({ ...prev, languagesSpoken: v }))} c={c} />
       </View>
 
@@ -325,7 +326,7 @@ export default function TenantProfileScreen() {
         {/* Total Monthly Income */}
         {(() => {
           const primaryIncome = form.monthlyIncome ? Number(form.monthlyIncome) : 0
-          const additionalTotal = form.incomeSources.reduce((sum, src) => sum + (src.amount || 0), 0)
+          const additionalTotal = form.incomeSources.filter(src => src.currency === form.primaryCurrency).reduce((sum, src) => sum + (src.amount || 0), 0)
           const totalIncome = primaryIncome + additionalTotal
           const symbol = currencySymbols[form.primaryCurrency] || form.primaryCurrency
 
@@ -333,14 +334,14 @@ export default function TenantProfileScreen() {
             <View style={[s2.totalIncomeCard, { backgroundColor: c.primary + '10', borderColor: c.primary + '30' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Ionicons name="cash-outline" size={20} color={c.primary} />
-                <Text style={[s2.totalIncomeLabel, { color: c.primaryDark }]}>Total Monthly Income</Text>
+                <Text style={[s2.totalIncomeLabel, { color: c.primaryDark }]}>Monthly total in {form.primaryCurrency}</Text>
               </View>
               <Text style={[s2.totalIncomeValue, { color: c.primary }]}>
                 {symbol} {totalIncome.toLocaleString()}
               </Text>
               {form.incomeSources.length > 0 && (
                 <Text style={[s2.totalIncomeBreakdown, { color: c.muted }]}>
-                  Primary: {symbol}{primaryIncome.toLocaleString()} + {form.incomeSources.length} additional source{form.incomeSources.length > 1 ? 's' : ''}
+                  Primary: {symbol}{primaryIncome.toLocaleString()} + same-currency sources. Other currencies are listed above; no conversion is applied.
                 </Text>
               )}
             </View>

@@ -1,3 +1,4 @@
+import { AiConsentDeclined } from '../lib/aiConsent'
 import { useState, useRef } from 'react'
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -26,7 +27,8 @@ export default function LegalAssistantScreen() {
     try {
       const data = await api.post<{ reply: string }>('/ai/chat', { messages: updated })
       setMessages([...updated, { role: 'assistant', content: data.reply }])
-    } catch {
+    } catch (error) {
+      if (error instanceof AiConsentDeclined) { setMessages(messages); setInput(userMsg.content); return }
       setMessages([...updated, { role: 'assistant', content: 'Sorry, I could not process your request. Please try again.' }])
     } finally {
       setLoading(false)
@@ -88,7 +90,7 @@ export default function LegalAssistantScreen() {
           multiline
           maxLength={500}
         />
-        <TouchableOpacity style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? c.primary : c.border }]} onPress={send} disabled={!input.trim() || loading}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Send question" style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? c.primary : c.border }]} onPress={send} disabled={!input.trim() || loading}>
           <Ionicons name="send" size={18} color="#fff" />
         </TouchableOpacity>
       </View>

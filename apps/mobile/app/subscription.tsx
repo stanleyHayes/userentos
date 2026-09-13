@@ -1,5 +1,8 @@
+import { useAppleBillingStore } from '../stores/appleBillingStore'
+import StoreSubscriptions from '../components/StoreSubscriptions'
+import { useGoogleBillingStore } from '../stores/googleBillingStore'
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Modal, TextInput, type ViewStyle } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Modal, TextInput, type ViewStyle, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
@@ -7,10 +10,11 @@ import { api } from '../lib/api'
 
 interface Package {
   id: string; name: string; price: number; maxProperties: number
-  features: string[]; isPopular?: boolean
+  benefits?: string[]; isPopular?: boolean; billingCycle: 'monthly' | 'yearly'
 }
 
 interface Subscription {
+  billingSource?: string
   package: Package | null
   subscriptionStartDate: string | null
   subscriptionEndDate: string | null
@@ -25,6 +29,8 @@ function formatCurrency(n: number) {
 
 export default function SubscriptionScreen() {
   const c = useThemeColors()
+  const appleBillingRevision = useAppleBillingStore(state => state.revision)
+  const billingRevision = useGoogleBillingStore(state => state.revision)
   const [packages, setPackages] = useState<Package[]>([])
   const [sub, setSub] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,7 +38,10 @@ export default function SubscriptionScreen() {
 
   // Payment modal for paid packages
   const [payPkg, setPayPkg] = useState<Package | null>(null)
-  const [payMethod, setPayMethod] = useState('mtn_momo')
+  const [payMethod, setPayMethod] = useState('')
+  const [paymentMethods, setPaymentMethods] = useState<{ id: string; label: string }[]>([])
+  const [methodsLoading, setMethodsLoading] = useState(false)
+  const [methodsError, setMethodsError] = useState('')
   const [payPhone, setPayPhone] = useState('')
   const [paying, setPaying] = useState(false)
 
@@ -47,12 +56,23 @@ export default function SubscriptionScreen() {
     } catch { /* no-op */ } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [billingRevision, appleBillingRevision])
 
   async function handleSubscribe(pkg: Package) {
+    if (pkg.price > 0 && Platform.OS !== 'web') return
     if (pkg.price > 0) {
       // Paid plan — collect mobile-money details first
       setPayPkg(pkg)
+      setPayMethod('')
+      setPaymentMethods([])
+      setMethodsError('')
+      setMethodsLoading(true)
+      try {
+        const available = await api.get<{ methods: { id: string; label: string }[] }>('/payments/methods')
+        setPaymentMethods(available.methods)
+        if (!available.methods.length) setMethodsError('No payment methods are available right now. Please try again later.')
+      } catch { setMethodsError('Could not load payment options. Close this form and try again.') }
+      finally { setMethodsLoading(false) }
       return
     }
     setSubscribing(pkg.id)
@@ -67,6 +87,9 @@ export default function SubscriptionScreen() {
 
   async function handlePayAndSubscribe() {
     if (!payPkg) return
+    if (!paymentMethods.some(method => method.id === payMethod)) {
+      Alert.alert('Error', 'Please select an available payment method'); return
+    }
     if (payMethod !== 'bank_transfer' && payPhone.trim().length < 9) {
       Alert.alert('Error', 'Please enter the mobile money number to charge'); return
     }
@@ -111,7 +134,7 @@ export default function SubscriptionScreen() {
               <Text style={[s.currentPlanName, { color: c.primaryDark }]}>Current: {sub.package.name}</Text>
               <Text style={[s.currentPlanMeta, { color: c.muted }]}>
                 {sub.propertyCount} of {sub.maxProperties === -1 ? 'unlimited' : sub.maxProperties} properties
-                {sub.subscriptionEndDate ? ` · Renews ${new Date(sub.subscriptionEndDate).toLocaleDateString()}` : ''}
+                {sub.subscriptionEndDate ? ` · Ends ${new Date(sub.subscriptionEndDate).toLocaleDateString()}` : ''}
               </Text>
             </View>
           </View>
@@ -125,8 +148,9 @@ export default function SubscriptionScreen() {
         </View>
       )}
 
+      {Platform.OS !== 'web' && <StoreSubscriptions />}
       {/* Package Cards */}
-      {packages.map((pkg) => {
+      {packages.filter(pkg => Platform.OS === 'web' || (pkg.price === 0 && !['google_play', 'app_store'].includes(sub?.billingSource ?? ''))).map((pkg) => {
         const isCurrent = pkg.id === sub?.package?.id
         return (
           <View key={pkg.id} style={[s.card, neuCard(c), isCurrent && { borderColor: c.primary }]}>
@@ -138,14 +162,14 @@ export default function SubscriptionScreen() {
             <Text style={[s.pkgName, { color: c.primaryDark }]}>{pkg.name}</Text>
             <Text style={[s.pkgPrice, { color: c.primary }]}>
               {pkg.price === 0 ? 'Free' : formatCurrency(pkg.price)}
-              {pkg.price > 0 && <Text style={[s.pkgPeriod, { color: c.muted }]}>/month</Text>}
+              {pkg.price > 0 && <Text style={[s.pkgPeriod, { color: c.muted }]}>{pkg.billingCycle === 'yearly' ? '/year' : '/month'}</Text>}
             </Text>
             <Text style={[s.pkgLimit, { color: c.muted }]}>
               {pkg.maxProperties === -1 ? 'Unlimited properties' : `Up to ${pkg.maxProperties} properties`}
             </Text>
 
             <View style={s.features}>
-              {pkg.features.map((f, i) => (
+              {(pkg.benefits ?? []).map((f, i) => (
                 <View key={i} style={s.featureRow}>
                   <Ionicons name="checkmark-circle" size={16} color={c.accent} />
                   <Text style={[s.featureText, { color: c.text }]}>{f}</Text>
@@ -192,23 +216,20 @@ export default function SubscriptionScreen() {
 
             <Text style={[s.fieldLabel, { color: c.text }]}>Payment Method</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
-              {[
-                { value: 'mtn_momo', label: 'MTN MoMo' },
-                { value: 'telecel_cash', label: 'Telecel Cash' },
-                { value: 'airteltigo_money', label: 'AirtelTigo' },
-                { value: 'bank_transfer', label: 'Bank Transfer' },
-              ].map((m) => (
+              {methodsLoading && <ActivityIndicator color={c.primary} />}
+              {!!methodsError && <Text accessibilityRole="alert" style={{ color: c.danger }}>{methodsError}</Text>}
+              {paymentMethods.map((m) => (
                 <TouchableOpacity
-                  key={m.value}
-                  style={[s.methodBtn, { backgroundColor: c.surface, borderColor: payMethod === m.value ? c.primary : c.border }]}
-                  onPress={() => setPayMethod(m.value)}
+                  key={m.id}
+                  style={[s.methodBtn, { backgroundColor: c.surface, borderColor: payMethod === m.id ? c.primary : c.border }]}
+                  onPress={() => setPayMethod(m.id)}
                 >
-                  <Text style={{ fontSize: 12, color: payMethod === m.value ? c.primary : c.text, fontFamily: 'Outfit_600SemiBold' }}>{m.label}</Text>
+                  <Text style={{ fontSize: 12, color: payMethod === m.id ? c.primary : c.text, fontFamily: 'Outfit_600SemiBold' }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {payMethod !== 'bank_transfer' && (
+            {payMethod && payMethod !== 'bank_transfer' && (
               <>
                 <Text style={[s.fieldLabel, { color: c.text }]}>Mobile Money Number</Text>
                 <TextInput
@@ -225,7 +246,7 @@ export default function SubscriptionScreen() {
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: c.primary }, paying && s.submitBtnDisabled]}
               onPress={handlePayAndSubscribe}
-              disabled={paying}
+              disabled={paying || methodsLoading || !paymentMethods.some(method => method.id === payMethod)}
               activeOpacity={0.85}
             >
               {paying ? (

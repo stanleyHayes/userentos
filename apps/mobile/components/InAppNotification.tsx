@@ -39,6 +39,8 @@ function Toast({ toast }: { toast: InAppToast }) {
       Animated.timing(opacity, { toValue: 1, duration: SLIDE_DURATION, useNativeDriver: true }),
     ]).start()
 
+    if (toast.persistent) return
+
     // Auto-dismiss
     const timer = setTimeout(() => {
       Animated.parallel([

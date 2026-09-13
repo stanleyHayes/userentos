@@ -39,6 +39,7 @@ interface Application {
   status: string
   creditScoreAtApply?: number
   monthlyIncomeAtApply?: number
+  monthlyIncomeCurrency?: string
   willUsePayrollDeduction: boolean
 }
 
@@ -495,7 +496,7 @@ export default function FinancierScreen() {
                   <View style={s.rows}>
                     <Row label="Amount requested" value={formatCurrency(a.amountRequested)} c={c} />
                     {a.creditScoreAtApply != null && <Row label="Credit score" value={String(a.creditScoreAtApply)} c={c} />}
-                    {a.monthlyIncomeAtApply != null && <Row label="Monthly income" value={formatCurrency(a.monthlyIncomeAtApply)} c={c} />}
+                    {a.monthlyIncomeAtApply != null && <Row label="Monthly income" value={`${a.monthlyIncomeCurrency ?? 'GHS'} ${a.monthlyIncomeAtApply.toLocaleString()}`} c={c} />}
                   </View>
 
                   <Text style={[s.desc, { color: c.muted }]} numberOfLines={2}>{a.purpose}</Text>

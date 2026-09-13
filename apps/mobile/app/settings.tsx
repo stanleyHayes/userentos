@@ -52,6 +52,7 @@ const tabs: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] =
 ]
 
 export default function SettingsScreen() {
+  const router = useRouter()
   const c = useThemeColors()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
 
@@ -79,6 +80,9 @@ export default function SettingsScreen() {
         {activeTab === 'security' && <SecurityTab c={c} />}
         {activeTab === 'appearance' && <AppearanceTab c={c} />}
         {activeTab === 'notifications' && <NotificationsTab c={c} />}
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/privacy')} style={[neuCard(c), { padding: spacing.md, marginTop: spacing.md }]}>
+          <Text style={{ color: c.primary, fontWeight: '600' }}>Privacy, data export and account deletion</Text>
+        </TouchableOpacity>
         <View style={{ height: spacing.xl }} />
       </ScrollView>
     </View>
@@ -138,6 +142,8 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   const [bioEnabled, setBioEnabled] = useState(false)
   const [bioBusy, setBioBusy] = useState(false)
   const [bioPassword, setBioPassword] = useState('')
+  const [bioMessage, setBioMessage] = useState('')
+  const [revocationPending, setRevocationPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -165,6 +171,21 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
     } finally { setChanging(false) }
   }
 
+  async function confirmBiometricDisable() {
+    const result = await disableBiometricLogin()
+    setBioEnabled(false)
+    setRevocationPending(!result.serverRevoked)
+    setBioMessage(result.serverRevoked
+      ? 'Biometric login is off on this device and your biometric sessions have been revoked.'
+      : 'Biometric login is off on this device. Server revocation could not be confirmed. Reconnect and retry to revoke your other biometric sessions.')
+  }
+  async function retryBiometricRevocation() {
+    setBioBusy(true)
+    try { await confirmBiometricDisable() }
+    catch (error) { setBioMessage(error instanceof Error ? error.message : 'Could not finish disabling biometric login. Please retry.') }
+    finally { setBioBusy(false) }
+  }
+
   async function handleToggleBiometric(next: boolean) {
     if (!capability?.available) {
       Alert.alert(
@@ -181,12 +202,9 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       try {
         const ok = await authenticateWithBiometric('Disable biometric login')
         if (!ok) return
-        await disableBiometricLogin()
-        setBioEnabled(false)
-        Alert.alert('Disabled', 'Biometric login has been turned off and all biometric sessions revoked.')
+        await confirmBiometricDisable()
       } catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Could not disable biometric login')
+        setBioMessage((e as { message?: string }).message || 'Could not disable biometric login. Please retry.')
     } finally { setBioBusy(false) }
       return
     }
@@ -196,8 +214,6 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
     if (!bioPassword) { Alert.alert('Password required', 'Enter your account password to enable biometric login.'); return }
     setBioBusy(true)
     try {
-      // Re-authenticate to confirm the user really knows their password
-      await api.post('/auth/login', { email: user.email, password: bioPassword })
       const ok = await authenticateWithBiometric(`Enable ${biometricLabel(capability.primary)} login`)
       if (!ok) return
       // Enroll: server issues a long-lived refresh token (requires password re-auth);
@@ -205,10 +221,10 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       await enableBiometricLogin(bioPassword)
       setBioEnabled(true)
       setBioPassword('')
-      Alert.alert('Enabled', `${biometricLabel(capability.primary)} login is now active. A device-bound refresh token has been issued — your password is not stored on this device.`)
+      setRevocationPending(false)
+      setBioMessage(`${biometricLabel(capability.primary)} login is now active. Your password is not stored on this device.`)
     } catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Could not verify password')
+      setBioMessage((e as { message?: string }).message || 'Could not enable biometric login. Please retry.')
     } finally { setBioBusy(false) }
   }
 
@@ -245,6 +261,8 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
             />
           )}
         </View>
+        {!!bioMessage && <Text accessibilityRole="alert" style={{ color: c.text, marginTop: spacing.sm }}>{bioMessage}</Text>}
+        {revocationPending && <TouchableOpacity accessibilityRole="button" disabled={bioBusy} onPress={() => void retryBiometricRevocation()}><Text style={{ color: c.primary, paddingVertical: spacing.md }}>Retry server revocation</Text></TouchableOpacity>}
         {capability?.available && !bioEnabled ? (
           <Field
             label="Account password"
@@ -255,7 +273,6 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
             placeholder="Enter password to enable biometric login"
           />
         ) : null}
-        {bioEnabled ? (
           <TouchableOpacity
             style={[s.manageDevicesBtn, { borderColor: c.border }]}
             onPress={() => router.push('/biometric-devices')}
@@ -264,7 +281,6 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
             <Text style={[s.manageDevicesText, { color: c.primaryDark }]}>Manage biometric devices</Text>
             <Ionicons name="chevron-forward" size={18} color={c.muted} />
           </TouchableOpacity>
-        ) : null}
       </View>
 
       {/* Change Password */}

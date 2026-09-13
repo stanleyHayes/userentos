@@ -53,6 +53,7 @@ export default function ProfileScreen() {
       title: 'Account',
       items: [
         { icon: 'person-outline', label: 'Edit Profile', onPress: () => router.push('/settings') },
+        { icon: 'wallet-outline', label: 'Payout account', onPress: () => router.push('/payout-account') },
         { icon: 'card-outline', label: 'Payments', onPress: () => router.push('/payments') },
         { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
         ...(isTenant ? [

@@ -8,6 +8,7 @@ export interface InAppToast {
   /** Route to navigate to when tapped */
   route?: string
   timestamp: number
+  persistent?: boolean
 }
 
 interface NotificationState {
@@ -17,6 +18,7 @@ interface NotificationState {
   setUnreadMessages: (count: number) => void
   incrementUnread: () => void
   clearUnread: () => void
+  reset: () => void
   pushToast: (toast: Omit<InAppToast, 'id' | 'timestamp'>) => void
   dismissToast: (id: string) => void
 }
@@ -28,6 +30,7 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
   setUnreadMessages: (count) => set({ unreadMessages: count }),
   incrementUnread: () => set((s) => ({ unreadMessages: s.unreadMessages + 1 })),
   clearUnread: () => set({ unreadMessages: 0 }),
+  reset: () => set({ unreadMessages: 0, toasts: [] }),
 
   pushToast: (toast) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`

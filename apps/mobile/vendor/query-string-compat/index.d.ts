@@ -1,0 +1,10 @@
+import queryString from 'query-string-modern';
+export type { ParseOptions, ParsedQuery, ParsedUrl, StringifyOptions, Stringifiable, StringifiableRecord, UrlObject } from 'query-string-modern';
+export const extract: typeof queryString.extract;
+export const parse: typeof queryString.parse;
+export const stringify: typeof queryString.stringify;
+export const parseUrl: typeof queryString.parseUrl;
+export const stringifyUrl: typeof queryString.stringifyUrl;
+export const pick: typeof queryString.pick;
+export const exclude: typeof queryString.exclude;
+export default queryString;

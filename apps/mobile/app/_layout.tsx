@@ -1,10 +1,13 @@
+import AppleBillingSession from '../components/AppleBillingSession'
+import GoogleBillingSession from '../components/GoogleBillingSession'
 import { useEffect, useState, useCallback } from 'react'
-import { TouchableOpacity } from 'react-native'
+import { TouchableOpacity, View, Text, Linking } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
+import { createSessionQueryClient, querySessionKey } from '../lib/sessionQueryClient'
 import { useFonts } from 'expo-font'
 import {
   Outfit_400Regular,
@@ -22,12 +25,10 @@ import { InAppNotificationProvider } from '../components/InAppNotification'
 
 ExpoSplashScreen.preventAutoHideAsync()
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 5 * 60 * 1000 } },
-})
+const { queryClient } = createSessionQueryClient(useAuthStore.subscribe)
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, hydrated, hydrate } = useAuthStore()
+  const { isAuthenticated, hydrated, hydrate, user } = useAuthStore()
   const segments = useSegments()
   const router = useRouter()
 
@@ -54,13 +55,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <GoogleBillingSession />
+      <AppleBillingSession />
       {children}
+      {user?.suspendedAt && <View style={{ padding: 12, backgroundColor: '#fff2c6' }}>
+        <Text style={{ color: '#332600' }}>Account suspended. Contact info@userentos.com to appeal or get help with existing obligations.</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/agreements')}><Text style={{ color: '#18345a', paddingVertical: 8 }}>View your agreements</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/payments')}><Text style={{ color: '#18345a', paddingVertical: 8 }}>View payments or pay active rent</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/privacy')}><Text style={{ color: '#18345a', paddingVertical: 8 }}>Export data or delete account</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="link" onPress={() => { void Linking.openURL('mailto:info@userentos.com?subject=Account%20suspension%20appeal') }}><Text style={{ color: '#18345a' }}>Contact support</Text></TouchableOpacity>
+      </View>}
       <InAppNotificationProvider />
     </>
   )
 }
 
 export default function RootLayout() {
+  const querySession = useAuthStore(querySessionKey)
   const [showSplash, setShowSplash] = useState(true)
   const c = useThemeColors()
   const router = useRouter()
@@ -88,7 +99,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGuard>
-        <Stack screenOptions={{
+        <Stack key={querySession} screenOptions={{
           headerShown: true,
           headerTintColor: c.text,
           headerStyle: { backgroundColor: c.card },
@@ -114,7 +125,9 @@ export default function RootLayout() {
           <Stack.Screen name="credit-score" options={{ title: 'Credit Score' }} />
           <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
           <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="payout-account" options={{ title: 'Payout account' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+          <Stack.Screen name="privacy" options={{ title: 'Privacy and personal data' }} />
           <Stack.Screen name="biometric-devices" options={{ title: 'Biometric Devices' }} />
           <Stack.Screen name="blog" options={{ title: 'Blog' }} />
           <Stack.Screen name="blog-detail" options={{ title: 'Article' }} />
