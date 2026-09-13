@@ -1,3 +1,5 @@
+import { Investment } from '../models/Investment.js'
+import { InsurancePolicy } from '../models/InsurancePolicy.js'
 import { FinancingApplication } from '../models/FinancingApplication.js'
 import { FinancingContract } from '../models/FinancingContract.js'
 import { Loan } from '../models/Loan.js'
@@ -69,6 +71,8 @@ router.get('/me/export', authenticate, async (req, res) => {
     financingContracts,
     loans,
     creditScore,
+    investments,
+    insurancePolicies,
   ] = await Promise.all([
     // Never export credential material — mfaSecret also carries schema-level
     // select:false, this is defense-in-depth.
@@ -94,6 +98,8 @@ router.get('/me/export', authenticate, async (req, res) => {
     FinancingContract.find({ applicantId: userId }).select('-__v').lean(),
     Loan.find({ userId }).select('-__v').lean(),
     CreditScore.findOne({ userId }).select('-__v').lean(),
+    Investment.find({ userId }).select('-__v').lean(),
+    InsurancePolicy.find({ userId }).select('-__v').lean(),
   ])
 
   success(res, {
@@ -103,6 +109,8 @@ router.get('/me/export', authenticate, async (req, res) => {
     financingContracts,
     loans,
     creditScore,
+    investments,
+    insurancePolicies,
     storePurchases,
     applePurchases,
     user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,
