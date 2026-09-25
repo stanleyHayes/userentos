@@ -19,7 +19,10 @@ import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { Employer } from '../models/Employer.js'
 import { PayrollRun } from '../models/PayrollRun.js'
 import { TenantProfile } from '../models/TenantProfile.js'
-import { canCreateWorkflow, rowsToCsv } from '../services/capabilityLogic.js'
+import {
+  canCreateWorkflow, rowsToCsv, initialWorkflowStatus, ownerMaySetStatus,
+  BUSINESS_FEATURED_PRICE_GHS, BUSINESS_FEATURED_DAYS, PUBLIC_OFFPLAN_STATUSES,
+} from '../services/capabilityLogic.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 
@@ -74,6 +77,7 @@ router.post('/workflows', authenticate, async (req, res) => {
     return
   }
   const requestedAmount = Number(parsed.data.data.amount ?? 0)
+  parsed.data.status = initialWorkflowStatus(parsed.data.kind, parsed.data.status)
   let refund: { amount: number; reference: string; description: string } | undefined
   let previousBusiness: { subscriptionTier?: string; featuredUntil?: Date | null } | null = null
   if (parsed.data.kind === 'provider_payout') {
@@ -85,7 +89,10 @@ router.post('/workflows', authenticate, async (req, res) => {
     parsed.data.status = 'queued'
   }
   if (parsed.data.kind === 'business_subscription') {
-    const price = requestedAmount || 50
+    // The server's price, whatever the request says; the record shows what
+    // was actually charged.
+    const price = BUSINESS_FEATURED_PRICE_GHS
+    parsed.data.data = { ...parsed.data.data, amount: price, days: BUSINESS_FEATURED_DAYS }
     const business = await Business.findOne({ ownerId: req.user!.userId }).lean()
     if (!business) { error(res, 'Create your business profile first', 400); return }
     previousBusiness = { subscriptionTier: business.subscriptionTier, featuredUntil: business.featuredUntil }
@@ -96,7 +103,7 @@ router.post('/workflows', authenticate, async (req, res) => {
     try {
       const updated = await Business.findOneAndUpdate({ ownerId: req.user!.userId }, {
         subscriptionTier: 'featured',
-        featuredUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        featuredUntil: new Date(Date.now() + BUSINESS_FEATURED_DAYS * 24 * 60 * 60 * 1000),
       })
       if (!updated) throw new Error('Business profile disappeared while enabling subscription')
     } catch (subscriptionError) {
@@ -142,16 +149,53 @@ router.get('/workflows', authenticate, async (req, res) => {
 router.patch('/workflows/:id', authenticate, async (req, res) => {
   const parsed = z.object({ status: z.string().min(1).max(40), data: z.record(z.string(), z.unknown()).optional() }).safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const scope = { _id: param(req.params.id), $or: [{ ownerId: req.user!.userId }, { participantId: req.user!.userId }] }
+  const existing = await CapabilityRecord.findOne(scope).select('kind status').lean()
+  if (!existing) { error(res, 'Workflow not found', 404); return }
+  if (!ownerMaySetStatus(existing.kind, parsed.data.status)) {
+    error(res, 'An off-plan listing is published by moderation, not by its author', 403)
+    return
+  }
+  // Editing a listing that is already public sends it back for review, so an
+  // approved listing cannot be rewritten into something that was never checked.
+  const status = existing.kind === 'offplan_listing' && parsed.data.data && !ownerMaySetStatus(existing.kind, existing.status)
+    ? 'pending_review'
+    : parsed.data.status
   const item = await CapabilityRecord.findOneAndUpdate(
-    { _id: param(req.params.id), $or: [{ ownerId: req.user!.userId }, { participantId: req.user!.userId }] },
+    // Conditional on the status just read: a concurrent approval is not
+    // overwritten by a stale edit.
+    { ...scope, status: existing.status },
     { $set: {
-      status: parsed.data.status,
+      status,
       ...(parsed.data.data ? Object.fromEntries(Object.entries(parsed.data.data).map(([key, value]) => [`data.${key}`, value])) : {}),
     } },
     { returnDocument: 'after' },
   ).lean()
-  if (!item) { error(res, 'Workflow not found', 404); return }
+  if (!item) { error(res, 'This workflow changed while you were editing it. Refresh and try again.', 409); return }
   success(res, idOf(item as unknown as Record<string, unknown>), 'Workflow updated')
+})
+
+router.get('/workflows/review-queue', authenticate, requireRole('admin', 'super_admin'), async (_req, res) => {
+  const items = await CapabilityRecord.find({ kind: 'offplan_listing', status: 'pending_review' }).sort({ updatedAt: 1 }).limit(200).lean()
+  success(res, { items: items.map((item) => idOf(item as unknown as Record<string, unknown>)) })
+})
+
+/** Moderation of an off-plan listing: the only way one becomes public. */
+router.post('/workflows/:id/review', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const parsed = z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().trim().max(500).optional() }).safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const item = await CapabilityRecord.findOneAndUpdate(
+    { _id: param(req.params.id), kind: 'offplan_listing' },
+    { $set: {
+      status: parsed.data.decision === 'approve' ? 'active' : 'rejected',
+      'data.reviewedBy': req.user!.userId,
+      'data.reviewedAt': new Date().toISOString(),
+      ...(parsed.data.reason ? { 'data.reviewReason': parsed.data.reason } : {}),
+    } },
+    { returnDocument: 'after' },
+  ).lean()
+  if (!item) { error(res, 'Listing not found', 404); return }
+  success(res, idOf(item as unknown as Record<string, unknown>), parsed.data.decision === 'approve' ? 'Listing published' : 'Listing rejected')
 })
 
 router.get('/financier/decision/:applicationId', authenticate, requireRole('financier'), async (req, res) => {
@@ -216,9 +260,15 @@ router.get('/government/fraud-watch', authenticate, requireRole('government', 'a
       { $group: { _id: { title: '$title', city: '$address.city', rent: '$rentAmount' }, ids: { $push: '$_id' }, count: { $sum: 1 } } },
       { $match: { count: { $gt: 1 } } },
     ]),
-    Payment.find({ status: 'failed' }).sort({ createdAt: -1 }).limit(100).lean(),
+    // Only what a fraud signal needs. This returned whole payment documents —
+    // payer and payee ids, references, provider responses — to every
+    // government account, for a card that only shows a count.
+    Payment.find({ status: 'failed' }).sort({ createdAt: -1 }).limit(100).select('amount method purpose createdAt').lean(),
   ])
-  success(res, { duplicateListings: duplicates, suspiciousPayments })
+  success(res, {
+    duplicateListings: duplicates,
+    suspiciousPayments: suspiciousPayments.map((p) => ({ id: String(p._id), amount: p.amount, method: p.method, purpose: p.purpose, createdAt: (p as { createdAt?: Date }).createdAt })),
+  })
 })
 
 router.get('/government/national-rental-export.csv', authenticate, requireRole('government', 'admin'), async (_req, res) => {
@@ -244,7 +294,7 @@ router.get('/developer/market', authenticate, requireRole('developer', 'landlord
 })
 
 router.get('/developer/offplan', async (_req, res) => {
-  const items = await CapabilityRecord.find({ kind: 'offplan_listing', status: { $in: ['active', 'published'] } }).sort({ createdAt: -1 }).limit(100).lean()
+  const items = await CapabilityRecord.find({ kind: 'offplan_listing', status: { $in: PUBLIC_OFFPLAN_STATUSES } }).sort({ createdAt: -1 }).limit(100).lean()
   success(res, { items: items.map((item) => idOf(item as unknown as Record<string, unknown>)) })
 })
 
