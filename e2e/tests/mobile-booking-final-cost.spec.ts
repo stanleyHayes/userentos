@@ -10,9 +10,9 @@ const proposed = {
   quoteAmount: 200, quoteAccepted: true, proposedFinalCost: 260, notes: [], requesterId: customer.id, createdAt: '2026-09-01T10:00:00.000Z',
 }
 
-async function openBookings(page: Page, asWorker: boolean, patch: (body: Record<string, unknown>) => { status: number; body: unknown }) {
+async function openBookings(page: Page, asWorker: boolean, patch: (body: Record<string, unknown>) => { status: number; body: unknown }, overrides: Record<string, unknown> = {}) {
   const patches: Record<string, unknown>[] = []
-  let booking: Record<string, unknown> = { ...proposed }
+  let booking: Record<string, unknown> = { ...proposed, ...overrides }
   await page.route('**/api/**', async route => {
     const request = route.request()
     const url = new URL(request.url())
@@ -78,5 +78,11 @@ test('a customer keeps the accepted quote, and a failed answer is shown inline',
 test('the worker sees the proposal waiting, without approval buttons', async ({ page }) => {
   await openBookings(page, true, ok)
   await expect(page.getByText('Waiting for the customer to approve', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Approve new price of GH₵260' })).toHaveCount(0)
+})
+
+test('a paid booking offers no price to answer: its price is locked', async ({ page }) => {
+  await openBookings(page, false, ok, { status: 'completed', paymentStatus: 'paid' })
+  await expect(page.getByText('The worker has asked for a higher final cost', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Approve new price of GH₵260' })).toHaveCount(0)
 })

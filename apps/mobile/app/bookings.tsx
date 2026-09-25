@@ -183,7 +183,8 @@ export default function BookingsScreen() {
                 </View>
               )}
 
-              {b.proposedFinalCost !== undefined && (
+              {/* A paid booking's price is locked and a cancelled one has nothing to price. */}
+              {b.proposedFinalCost !== undefined && b.status !== 'cancelled' && b.paymentStatus !== 'paid' && (
                 <FinalCostProposal
                   booking={b}
                   asWorker={canActAsWorker}
