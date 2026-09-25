@@ -50,6 +50,15 @@ let enabled = resolveRegulatedFeatures()
 
 export const isRegulatedFeatureEnabled = (feature: RegulatedFeature) => enabled.has(feature)
 
+// Self-registered account types that exist only to use a regulated feature.
+const ROLE_FEATURES: Partial<Record<string, RegulatedFeature>> = { financier: 'financing', employer: 'payroll' }
+
+/** Whether someone may sign up as this account type right now. */
+export function isRoleOffered(role: string): boolean {
+  const feature = ROLE_FEATURES[role]
+  return !feature || enabled.has(feature)
+}
+
 export function regulatedFeatureStatus(): Record<RegulatedFeature, boolean> {
   return Object.fromEntries(REGULATED_FEATURES.map(feature => [feature, enabled.has(feature)])) as Record<RegulatedFeature, boolean>
 }

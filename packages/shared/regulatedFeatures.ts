@@ -41,6 +41,16 @@ export function regulatedFeaturesForPath(path: string): RegulatedFeatureKey[] | 
   return match ? match[1] : null
 }
 
+// Self-registered account types that exist only to use a regulated feature
+// (mirrors isRoleOffered in apps/api/src/config/regulatedFeatures.ts).
+const roleFeatures: Partial<Record<string, RegulatedFeatureKey>> = { financier: 'financing', employer: 'payroll' }
+
+/** Whether sign-up should offer this account type; unknown status hides regulated ones. */
+export function isRoleOffered(role: string, status: RegulatedFeatureStatus | null): boolean {
+  const feature = roleFeatures[role]
+  return !feature || (status !== null && status[feature])
+}
+
 /** Unknown status (still loading or failed) is not permission. */
 export function isPathAvailable(path: string, status: RegulatedFeatureStatus | null): boolean {
   const anyOf = regulatedFeaturesForPath(path)

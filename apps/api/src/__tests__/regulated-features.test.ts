@@ -1,7 +1,7 @@
 import http from 'node:http'
 import express from 'express'
 import { afterEach, describe, expect, it } from 'vitest'
-import { REGULATED_FEATURES, reloadRegulatedFeatures, regulatedFeatureStatus, resolveRegulatedFeatures } from '../config/regulatedFeatures.js'
+import { REGULATED_FEATURES, isRoleOffered, reloadRegulatedFeatures, regulatedFeatureStatus, resolveRegulatedFeatures } from '../config/regulatedFeatures.js'
 import { requireRegulatedFeature } from '../middleware/regulatedFeature.js'
 import platformRoutes from '../routes/platform.js'
 
@@ -80,5 +80,20 @@ describe('regulated feature enforcement', () => {
     expect(res.status).toBe(200)
     expect(res.body.data).toEqual({ regulated: regulatedFeatureStatus() })
     expect((res.body.data as { regulated: Record<string, boolean> }).regulated).toMatchObject({ insurance: true, lending: false, wallet: false })
+  })
+})
+
+describe('sign-up account types tied to regulated features', () => {
+  afterEach(() => reloadRegulatedFeatures(process.env))
+
+  it('withholds financier and employer sign-up until their feature is enabled', () => {
+    reloadRegulatedFeatures({ NODE_ENV: 'production' })
+    expect(isRoleOffered('financier')).toBe(false)
+    expect(isRoleOffered('employer')).toBe(false)
+    expect(isRoleOffered('tenant')).toBe(true)
+    expect(isRoleOffered('landlord')).toBe(true)
+    reloadRegulatedFeatures({ NODE_ENV: 'production', REGULATED_FEATURES: 'financing', REGULATED_BASIS_FINANCING: 'licence' })
+    expect(isRoleOffered('financier')).toBe(true)
+    expect(isRoleOffered('employer')).toBe(false)
   })
 })

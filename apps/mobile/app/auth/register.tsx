@@ -11,6 +11,8 @@ import { MotionReveal, PressScale } from '../../components/Motion'
 import type { UserRole } from '../../types/shared'
 import { ConsentCheckbox } from '../../components/ConsentCheckbox'
 import { buildAcceptance } from '../../../../packages/shared/legalVersions'
+import { isRoleOffered } from '../../../../packages/shared/regulatedFeatures'
+import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -299,6 +301,7 @@ export default function RegisterScreen() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [consented, setConsented] = useState(false)
+  const { data: regulatedFeatures } = useRegulatedFeatures()
 
   const hasPlanStep = PLAN_ROLES.includes(role)
   const steps = hasPlanStep ? STEPS : STEPS.slice(0, 3)
@@ -486,7 +489,7 @@ export default function RegisterScreen() {
           <View>
             <Text style={[s.label, { color: c.text }]}>I am a...</Text>
             <View style={s.roleGrid}>
-              {roles.map((r) => {
+              {roles.filter((r) => isRoleOffered(r.value, regulatedFeatures ?? null)).map((r) => {
                 const active = role === r.value
                 return (
                   <PressScale

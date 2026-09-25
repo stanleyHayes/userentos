@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authService } from '../container.js'
 import { success, error } from '../utils/response.js'
 import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
+import { isRoleOffered } from '../config/regulatedFeatures.js'
 
 /** Password policy — same rules the client checklist enforces (8+, upper,
  * lower, digit, special). Applied to register/change/reset. */
@@ -41,6 +42,9 @@ export const authController = {
     const parsed = registerSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
+    // An account type whose only purpose is a disabled regulated service would
+    // land on screens that refuse every request.
+    if (!isRoleOffered(parsed.data.role)) { error(res, 'This account type is not available yet', 403); return }
     const meta = getClientMeta(req)
     const { acceptance, ...data } = parsed.data
     const result = await authService.register(data, meta.deviceLabel, meta.ipAddress, buildConsentRecord(acceptance, req))

@@ -1,5 +1,7 @@
 import type { UserRole } from '@/types'
 import { Home, Building2, Briefcase, Banknote, Users as UsersIcon, Wrench, Store } from 'lucide-react'
+import { useRegulatedFeatures } from '@/hooks/useApi'
+import { isRoleOffered } from '../../../../../../packages/shared/regulatedFeatures'
 
 const roles: { value: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'tenant', label: 'Tenant', icon: <Home size={20} />, desc: 'Find & rent properties' },
@@ -13,11 +15,13 @@ const roles: { value: UserRole; label: string; icon: React.ReactNode; desc: stri
 ]
 
 export function RoleStep({ value, onChange }: { value: UserRole; onChange: (role: UserRole) => void }) {
+  const { data: features } = useRegulatedFeatures()
+  const offered = roles.filter((r) => isRoleOffered(r.value, features ?? null))
   return (
     <div className="animate-fade-up" style={{ animationDelay: '0.05s' }}>
       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">I am a...</label>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {roles.map((r) => (
+        {offered.map((r) => (
           <button
             key={r.value}
             type="button"
