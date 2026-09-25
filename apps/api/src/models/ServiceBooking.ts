@@ -19,6 +19,8 @@ export interface IServiceBooking extends Document {
   scheduledTime?: string
   estimatedCost?: number
   finalCost?: number
+  /** A final cost above the accepted quote, waiting for the customer to approve it. */
+  proposedFinalCost?: number
   quoteProvided: boolean
   quoteAmount?: number
   quoteAccepted: boolean
@@ -60,6 +62,7 @@ const serviceBookingSchema = new Schema<IServiceBooking>({
   scheduledTime: String,
   estimatedCost: Number,
   finalCost: Number,
+  proposedFinalCost: Number,
   quoteProvided: { type: Boolean, default: false },
   quoteAmount: Number,
   quoteAccepted: { type: Boolean, default: false },
