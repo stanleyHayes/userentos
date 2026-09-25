@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { signatureEvidenceSchema, type ISignatureEvidence } from './Agreement.js'
 
 export type RenewalOfferStatus = 'pending' | 'accepted' | 'declined'
 
@@ -11,6 +12,16 @@ export interface IRenewalOffer extends Document {
   message?: string
   status: RenewalOfferStatus
   respondedAt?: Date
+  /**
+   * Agreement version the offer was made against, and the SHA-256 of the
+   * renewed terms (that version + 1). A renewal is a new version of the
+   * lease: both parties sign exactly these terms (Act 772) before they apply.
+   * Absent on offers made before signed renewals.
+   */
+  agreementVersion?: number
+  termsHash?: string
+  landlordEvidence?: ISignatureEvidence
+  tenantEvidence?: ISignatureEvidence
   createdAt: Date
   updatedAt: Date
 }
@@ -25,6 +36,10 @@ const renewalOfferSchema = new Schema<IRenewalOffer>(
     message: String,
     status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending', index: true },
     respondedAt: Date,
+    agreementVersion: Number,
+    termsHash: String,
+    landlordEvidence: signatureEvidenceSchema,
+    tenantEvidence: signatureEvidenceSchema,
   },
   { timestamps: true },
 )
