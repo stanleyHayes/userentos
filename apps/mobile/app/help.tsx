@@ -3,20 +3,21 @@ import { useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { spacing, useThemeColors } from '../lib/theme'
 import { neuCard } from '../lib/neu'
+import { LEGAL_ENTITY } from '../../../packages/shared/legalVersions'
 
 const faqs = [
   { q: 'How do I pay my rent?', a: 'Go to the Payments tab and tap "Make Payment". Select your agreement, enter the amount, choose a payment method (MTN MoMo, Telecel Cash, AirtelTigo Money, or Bank Transfer), and confirm.' },
-  { q: 'How does RentGuard savings work?', a: 'RentGuard lets you save towards rent. Create a savings plan with a target amount and contribution frequency. You can also invest in Treasury Bills and Government Bonds, or apply for micro-loans for rent shortfalls.' },
-  { q: 'How do I file a dispute?', a: 'Navigate to Disputes from your profile menu and tap "File a Dispute". Provide details about the issue, select a category, and submit. A mediator will review your case.' },
+  { q: 'How does RentGuard savings work?', a: 'RentGuard lets you save towards rent. Create a savings plan with a target amount and contribution frequency. Investment and micro-loan products appear only where a licensed partner provides them.' },
+  { q: 'How do I file a dispute?', a: 'Navigate to Disputes from your profile menu and tap "File a Dispute". Provide details about the issue, select a category, and submit. The other party is notified, and the case can move to mediation if you cannot agree.' },
   { q: 'What is my credit score?', a: 'Your Rent Credit Score (0-100) reflects your reliability as a tenant. It\'s based on payment history (40%), savings consistency (20%), agreement compliance (20%), dispute record (10%), and account age (10%).' },
   { q: 'How do I sign a rental agreement?', a: 'Go to Agreements from your profile. Find the agreement with "pending signatures" status and tap "Sign". Both landlord and tenant must sign for the agreement to become active.' },
-  { q: 'Can I invest my savings?', a: 'Yes! In the RentGuard section, tap the Investments tab. You can invest in Treasury Bills (91-364 days) or Government Bonds (2-5 years) through our partner institutions.' },
+  { q: 'Can I invest my savings?', a: 'Investments are only offered where a partner licensed for them provides the product, under that partner\'s terms. RentOS does not give investment advice or guarantee returns. If you do not see an investment option, it is not available to you yet.' },
 ]
 
+// No phone line is published until a staffed number exists — email only.
 const contactOptions = [
-  { icon: 'mail-outline' as const, label: 'Email Support', value: 'support@userentos.com', action: () => Linking.openURL('mailto:support@userentos.com') },
-  { icon: 'call-outline' as const, label: 'Phone', value: '+233 30 XXX XXXX', action: () => Linking.openURL('tel:+23330XXXXXXX') },
-  { icon: 'location-outline' as const, label: 'Office', value: 'Accra, Ghana', action: undefined },
+  { icon: 'mail-outline' as const, label: 'Email Support', value: LEGAL_ENTITY.supportEmail, action: () => { Linking.openURL(`mailto:${LEGAL_ENTITY.supportEmail}`).catch(() => {}) } },
+  { icon: 'location-outline' as const, label: 'Location', value: LEGAL_ENTITY.location, action: undefined },
 ]
 
 export default function HelpScreen() {
@@ -57,7 +58,7 @@ export default function HelpScreen() {
         <View style={[styles.responseCard, { backgroundColor: c.primary + '10', borderColor: c.primary + '30' }]}>
           <Ionicons name="time-outline" size={20} color={c.primary} />
           <Text style={[styles.responseText, { color: c.text }]}>
-            We typically respond within 24 hours during business days.
+            Email {LEGAL_ENTITY.supportEmail} and we will reply by email. To report abusive content or a user, use Report in the chat or email us.
           </Text>
         </View>
 

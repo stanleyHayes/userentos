@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import type { Types } from 'mongoose'
 import { Router, type Request, type Response } from 'express'
 import { Property } from '../models/Property.js'
+import { User } from '../models/User.js'
 import { RegistryPageView } from '../models/RegistryPageView.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -251,7 +252,12 @@ router.get(
       return
     }
 
-    success(res, sanitize(doc))
+    // The only landlord trust signal the public page may show: whether our
+    // team approved the landlord's identity-verification request. Not
+    // isVerified — admin-created and invited accounts get that without any
+    // document review. Ownership is never checked, so it is never claimed.
+    const landlord = await User.findById(doc.landlordId).select('verificationStatus').lean()
+    success(res, { ...sanitize(doc), landlordIdentityVerified: landlord?.verificationStatus === 'verified' })
   }),
 )
 
