@@ -42,7 +42,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
 
     applySeo({
       title: storefront.tagline ? `${storefront.name} — ${storefront.tagline}` : storefront.name,
-      description: storefront.about ?? storefront.tagline ?? `Verified rental listings from ${storefront.name}.`,
+      description: storefront.about ?? storefront.tagline ?? `Rental listings from ${storefront.name}.`,
       canonical: canonicalUrl,
       image: storefront.branding?.coverUrl ?? storefront.branding?.logoUrl,
       siteName: storefront.name,

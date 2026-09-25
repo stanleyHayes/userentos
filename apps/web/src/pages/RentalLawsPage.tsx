@@ -6,7 +6,7 @@ import { IconWatermark } from '@/components/ui/Watermark'
 import {
   Scale, ChevronDown, ChevronUp, Shield, Gavel,
   AlertTriangle, Users, Building2, Handshake, Key,
-  ArrowRight, Phone, MapPin,
+  ArrowRight, FileText, MapPin,
   CheckCircle2, XCircle, HelpCircle,
 } from 'lucide-react'
 import { DoodleZigzag } from '@/components/ui/Doodles'
@@ -79,26 +79,32 @@ function LawCard({ item, index }: { item: LawItem; index: number }) {
   )
 }
 
+/*
+ * General information only. Every statement here must match the reviewed law
+ * summary the API uses (apps/api/src/services/legal/rentLaw.ts and
+ * data/referenceData.ts). No invented figures, fees, phone numbers or
+ * absolute legal guarantees.
+ */
 const laws: LawItem[] = [
   {
     icon: <Gavel size={22} />,
     title: 'Rent Advance Limits (Act 220, Section 25)',
     gradient: 'from-blue-500 to-indigo-600',
     gradientBorder: 'from-blue-500/40 to-indigo-600/40',
-    tag: 'Act 220 · Section 25',
+    tag: 'Act 220 · Section 25(5)',
     content: (
       <>
         <div className="rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 p-4">
           <p className="font-semibold text-blue-800 dark:text-blue-300 mb-1">The Law</p>
-          <p>Maximum 6 months advance rent for residential properties.</p>
+          <p>For a tenancy of more than six months, a landlord may not demand more than six months' rent in advance. For a monthly (or shorter) tenancy, the limit is one month's rent.</p>
         </div>
         <div>
           <p className="font-semibold text-[#0f1f33] dark:text-white mb-1">Interpretation</p>
-          <p>Landlords cannot demand more than 6 months rent in advance. Any agreement requiring more is illegal and unenforceable. This applies to all residential tenancies governed under Act 220.</p>
+          <p>Which limit applies depends on the length of the tenancy, not on the amount asked for. RentOS flags agreements whose advance is above these limits before anyone signs; the flag is information, not legal advice.</p>
         </div>
         <div className="rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 p-4">
-          <p className="font-semibold text-red-800 dark:text-red-300 mb-1">Penalty</p>
-          <p>Landlord can be fined or imprisoned for demanding excessive rent advance.</p>
+          <p className="font-semibold text-red-800 dark:text-red-300 mb-1">If you are asked for more</p>
+          <p>Demanding more advance than the Act allows can be an offence. You can raise it with the Rent Control Department.</p>
         </div>
       </>
     ),
@@ -108,16 +114,16 @@ const laws: LawItem[] = [
     title: 'Rent Increase Rules',
     gradient: 'from-violet-500 to-purple-600',
     gradientBorder: 'from-violet-500/40 to-purple-600/40',
-    tag: 'Rent Control',
+    tag: 'Act 220 · Section 25',
     content: (
       <>
         <div className="rounded-xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 p-4">
           <p className="font-semibold text-violet-800 dark:text-violet-300 mb-1">The Law</p>
-          <p>Landlords must give at least 6 months notice before increasing rent.</p>
+          <p>Rent should not be increased arbitrarily during a fixed-term tenancy.</p>
         </div>
         <div>
           <p className="font-semibold text-[#0f1f33] dark:text-white mb-1">Interpretation</p>
-          <p>Rent cannot be increased during an active lease. Only after the lease expires can rent be renegotiated. Any increase must be reasonable and follow the prescribed notice period.</p>
+          <p>For periodic tenancies, an increase generally needs written notice and a reasonable basis, and some increases may need the Rent Control Department's approval. Check your agreement, and ask Rent Control before agreeing to a new rent you think is unfair.</p>
         </div>
       </>
     ),
@@ -127,23 +133,23 @@ const laws: LawItem[] = [
     title: 'Eviction Process',
     gradient: 'from-red-500 to-rose-600',
     gradientBorder: 'from-red-500/40 to-rose-600/40',
-    tag: 'Tenant Protection',
+    tag: 'Act 220 · Sections 17–20',
     content: (
       <>
         <div className="rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 p-4">
           <p className="font-semibold text-red-800 dark:text-red-300 mb-1">The Law</p>
-          <p>Landlords must provide proper notice and go through the Rent Control Department.</p>
+          <p>A landlord must give proper written notice and obtain a court order before a tenant can be evicted.</p>
         </div>
         <div>
           <p className="font-semibold text-[#0f1f33] dark:text-white mb-1">Interpretation</p>
-          <p>Self-help eviction (changing locks, cutting water/electricity) is illegal. The landlord must obtain a court order before eviction can take place.</p>
+          <p>Self-help eviction — changing the locks, cutting off water or electricity, or removing a tenant's belongings — is not lawful.</p>
         </div>
         <div>
-          <p className="font-semibold text-[#0f1f33] dark:text-white mb-2">Required Process</p>
+          <p className="font-semibold text-[#0f1f33] dark:text-white mb-2">Typical Steps</p>
           <ol className="list-decimal list-inside space-y-1.5 text-gray-600 dark:text-gray-400">
             <li>Written notice served to the tenant</li>
-            <li>Rent Control Department mediation</li>
-            <li>Court order obtained if mediation fails</li>
+            <li>An attempt to resolve it — the Rent Control Department can mediate</li>
+            <li>A court order if the dispute is not resolved</li>
           </ol>
         </div>
       </>
@@ -154,16 +160,16 @@ const laws: LawItem[] = [
     title: 'Security Deposit',
     gradient: 'from-emerald-500 to-green-600',
     gradientBorder: 'from-emerald-500/40 to-green-600/40',
-    tag: 'Financial',
+    tag: 'Act 220 · Section 25',
     content: (
       <>
         <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 p-4">
           <p className="font-semibold text-emerald-800 dark:text-emerald-300 mb-1">The Law</p>
-          <p>Must be returned within reasonable time after tenancy ends.</p>
+          <p>A security deposit should be refundable at the end of the tenancy, less legitimate deductions.</p>
         </div>
         <div>
           <p className="font-semibold text-[#0f1f33] dark:text-white mb-1">Interpretation</p>
-          <p>Deductions are only permitted for actual damage beyond normal wear and tear. The landlord must provide an itemized list of any deductions made from the security deposit.</p>
+          <p>Legitimate deductions include unpaid rent and damage beyond normal wear and tear. Record the condition of the home at move-in and move-out, and ask for any deductions to be itemised in writing.</p>
         </div>
       </>
     ),
@@ -177,10 +183,10 @@ const laws: LawItem[] = [
     content: (
       <ul className="space-y-2.5">
         {[
-          'Right to quiet enjoyment of the property',
-          'Right to receive receipts for all payments made',
-          'Right to habitable premises (landlord must maintain structure)',
-          'Right to not be discriminated against',
+          'Quiet enjoyment: peaceful, undisturbed use of your home',
+          'A written receipt for rent you pay (Section 33)',
+          'Premises kept in a reasonable state of repair (Section 12)',
+          'Protection from discrimination — CHRAJ handles housing discrimination complaints',
         ].map((right) => (
           <li key={right} className="flex items-start gap-2.5">
             <CheckCircle2 size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
@@ -199,10 +205,10 @@ const laws: LawItem[] = [
     content: (
       <ul className="space-y-2.5">
         {[
-          'Maintain structural integrity of the property',
-          'Provide functional utilities as agreed in the lease',
-          'Not enter property without notice (except in emergencies)',
-          'Register with the Rent Control Department',
+          'Keep the premises in reasonable repair, including structural repairs (Section 12)',
+          'Provide the utilities and services agreed in the tenancy agreement',
+          'Give reasonable notice before entering, except in an emergency',
+          'Issue a written receipt for rent received (Section 33)',
         ].map((obligation) => (
           <li key={obligation} className="flex items-start gap-2.5">
             <CheckCircle2 size={16} className="text-cyan-500 mt-0.5 flex-shrink-0" />
@@ -221,12 +227,12 @@ const laws: LawItem[] = [
     content: (
       <>
         <div>
-          <p className="font-semibold text-[#0f1f33] dark:text-white mb-2">Resolution Steps</p>
+          <p className="font-semibold text-[#0f1f33] dark:text-white mb-2">Where to Turn</p>
           <div className="space-y-3">
             {[
-              { step: '1st', label: 'Rent Control Department', desc: 'Free mediation service for landlord-tenant disputes' },
-              { step: '2nd', label: 'Rent Magistrate Court', desc: 'Formal legal proceedings if mediation fails' },
-              { step: 'Alt', label: 'CHRAJ', desc: 'Commission on Human Rights and Administrative Justice' },
+              { step: '1st', label: 'Rent Control Department', desc: 'Investigates complaints and can arrange mediation. Check any fees with the office.' },
+              { step: '2nd', label: 'The courts', desc: 'Formal proceedings if mediation does not resolve the matter' },
+              { step: 'Alt', label: 'CHRAJ', desc: 'Commission on Human Rights and Administrative Justice — discrimination and rights complaints' },
             ].map((s) => (
               <div key={s.label} className="flex items-start gap-3">
                 <span className="text-xs font-bold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0">{s.step}</span>
@@ -243,16 +249,16 @@ const laws: LawItem[] = [
   },
   {
     icon: <Key size={22} />,
-    title: 'Subletting Rights',
+    title: 'Subletting',
     gradient: 'from-pink-500 to-rose-600',
     gradientBorder: 'from-pink-500/40 to-rose-600/40',
     tag: 'Subletting',
     content: (
       <>
-        <p>Subletting generally requires the landlord's written consent. However, such consent cannot be unreasonably withheld if the proposed sub-tenant meets the same criteria as the original tenant.</p>
+        <p>Check your tenancy agreement before subletting. Subletting without the landlord's consent is one of the grounds on which a landlord can seek to recover possession.</p>
         <div className="rounded-xl bg-pink-50 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/20 p-4">
           <p className="font-semibold text-pink-800 dark:text-pink-300 mb-1">Key Point</p>
-          <p>Always get written consent before subletting. Verbal agreements may not hold in dispute proceedings.</p>
+          <p>Get the landlord's consent in writing before subletting. A verbal agreement is much harder to prove if there is a dispute.</p>
         </div>
       </>
     ),
@@ -262,27 +268,27 @@ const laws: LawItem[] = [
 const myths = [
   {
     myth: 'A landlord can charge any amount of rent advance they want.',
-    reality: 'By law, landlords can only charge a maximum of 6 months rent advance for residential properties (Rent Act 220, Section 25).',
+    reality: "Section 25(5) of the Rent Act limits advance: no more than six months' rent for a tenancy of more than six months, and one month's rent for a monthly tenancy.",
   },
   {
     myth: 'A landlord can evict you immediately if you annoy them.',
-    reality: 'Eviction requires proper notice and a court order. Self-help eviction (changing locks, cutting utilities) is illegal.',
+    reality: 'Eviction requires proper notice and a court order. Self-help eviction (changing locks, cutting utilities) is not lawful.',
   },
   {
     myth: 'Verbal rental agreements are not valid.',
-    reality: 'Verbal agreements are legally binding, though harder to enforce. Written agreements are always recommended for clarity and evidence.',
+    reality: 'A verbal tenancy can still be a tenancy, but its terms are hard to prove in a dispute. Put your agreement in writing and keep your receipts.',
   },
   {
     myth: 'Landlords can increase rent at any time.',
-    reality: 'Rent cannot be increased during an active lease. A minimum of 6 months notice is required before any increase takes effect.',
+    reality: 'Rent should not be raised arbitrarily during a fixed-term tenancy. For other tenancies, an increase generally needs written notice and a reasonable basis.',
   },
   {
     myth: 'Tenants have no right to receipts.',
-    reality: 'Tenants have a legal right to receive receipts for every payment made. Landlords who refuse can be reported to Rent Control.',
+    reality: 'The Rent Act (Section 33) requires a written receipt when rent is paid. If a landlord will not give one, you can raise it with the Rent Control Department.',
   },
   {
-    myth: 'The Rent Control Department charges for mediation.',
-    reality: 'Rent Control Department mediation services are free of charge for both tenants and landlords.',
+    myth: 'A landlord can keep the whole deposit when you move out.',
+    reality: 'A deposit should be refundable at the end of the tenancy, less legitimate deductions such as unpaid rent or damage beyond normal wear and tear.',
   },
 ]
 
@@ -314,7 +320,7 @@ export function RentalLawsPage() {
           </Animate>
           <Animate animation="fade-up" delay={200}>
             <p className="text-lg text-white/50 mt-6 max-w-2xl mx-auto leading-relaxed">
-              Understanding the Rent Control Act (Act 220) and your rights as a tenant or landlord in Ghana
+              Understanding the Rent Act, 1963 (Act 220) and your rights as a tenant or landlord in Ghana
             </p>
           </Animate>
         </div>
@@ -337,7 +343,7 @@ export function RentalLawsPage() {
               <br />
               <span className="bg-gradient-to-r from-primary via-blue-400 to-indigo-500 bg-clip-text text-transparent">in Ghana</span>
             </h2>
-            <p className="text-muted mt-4 max-w-lg mx-auto text-base">Tap any card to expand and read the full legal details, interpretations, and penalties.</p>
+            <p className="text-muted mt-4 max-w-lg mx-auto text-base">Tap any card to read the details. This is general information, not legal advice — laws and procedures change, so check with the Rent Control Department or a lawyer before you act.</p>
           </div>
         </Animate>
 
@@ -358,11 +364,11 @@ export function RentalLawsPage() {
                 </div>
                 <div className="text-center px-4">
                   <p className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-emerald-500 to-green-600 bg-clip-text text-transparent">6mo</p>
-                  <p className="text-xs text-muted mt-1">Max Rent Advance</p>
+                  <p className="text-xs text-muted mt-1">Max advance, tenancy over 6 months</p>
                 </div>
                 <div className="text-center px-4">
-                  <p className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">Free</p>
-                  <p className="text-xs text-muted mt-1">Mediation Service</p>
+                  <p className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">1mo</p>
+                  <p className="text-xs text-muted mt-1">Max advance, monthly tenancy</p>
                 </div>
               </div>
             </div>
@@ -416,7 +422,7 @@ export function RentalLawsPage() {
             <h2 className="text-2xl md:text-4xl font-extrabold font-display text-[#0f1f33] dark:text-white mt-6 tracking-tight">
               Rent Control Department
             </h2>
-            <p className="text-muted mt-3 max-w-xl mx-auto">The Rent Control Department provides free mediation services for landlord-tenant disputes.</p>
+            <p className="text-muted mt-3 max-w-xl mx-auto">The Rent Control Department investigates rent complaints and can arrange mediation between landlords and tenants.</p>
           </div>
         </Animate>
 
@@ -427,22 +433,22 @@ export function RentalLawsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <Phone size={18} />
+                    <MapPin size={18} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold mb-1">Phone</p>
-                    <p className="text-xs text-white/50">+233 30 222 0044</p>
-                    <p className="text-xs text-white/50">+233 30 222 0045</p>
+                    <p className="text-sm font-semibold mb-1">Where to go</p>
+                    <p className="text-xs text-white/50">Your nearest Rent Control office</p>
+                    <p className="text-xs text-white/50">Check opening hours before you visit</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <MapPin size={18} />
+                    <FileText size={18} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold mb-1">Location</p>
-                    <p className="text-xs text-white/50">Rent Control Department</p>
-                    <p className="text-xs text-white/50">Accra, Greater Accra Region</p>
+                    <p className="text-sm font-semibold mb-1">What to bring</p>
+                    <p className="text-xs text-white/50">Tenancy agreement and receipts</p>
+                    <p className="text-xs text-white/50">Photos and any messages or letters</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -451,8 +457,8 @@ export function RentalLawsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold mb-1">Services</p>
-                    <p className="text-xs text-white/50">Free mediation</p>
-                    <p className="text-xs text-white/50">Tenancy registration</p>
+                    <p className="text-xs text-white/50">Complaint investigation</p>
+                    <p className="text-xs text-white/50">Mediation (ask about any fees)</p>
                   </div>
                 </div>
               </div>

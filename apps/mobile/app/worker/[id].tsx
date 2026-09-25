@@ -10,10 +10,12 @@ import { useThemeColors, spacing } from '../../lib/theme'
 import { neuCard, neuInset } from '../../lib/neu'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
+import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
 
 interface WorkerDetail {
   id: string
   _id?: string
+  userId?: string
   name: string
   photo?: string
   trades: string[]
@@ -45,6 +47,7 @@ export default function WorkerDetailScreen() {
   const [scheduledDate, setScheduledDate] = useState('')
   const [estimatedCost, setEstimatedCost] = useState('')
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none')
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
 
   const { data: worker, isLoading } = useQuery({
     queryKey: ['worker', id],
@@ -193,7 +196,21 @@ export default function WorkerDetailScreen() {
             </>
           )}
         </View>
+
+        {user && worker.userId !== user.id && (
+          <TouchableOpacity
+            style={s.reportLink}
+            onPress={() => setReportTarget({ type: 'worker', id: worker.id ?? worker._id ?? String(id), noun: 'worker' })}
+            accessibilityRole="button"
+            accessibilityLabel="Report worker"
+          >
+            <Ionicons name="flag-outline" size={12} color={c.muted} />
+            <Text style={[s.reportLinkText, { color: c.muted }]}>Report worker</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       {/* CTA Bar */}
       <View style={[s.ctaBar, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -285,7 +302,7 @@ export default function WorkerDetailScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { paddingBottom: 100 },
+  scroll: { paddingBottom: 120 },
   header: { paddingTop: 56, paddingBottom: spacing.lg, alignItems: 'center', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   backBtn: { position: 'absolute', top: 56, left: spacing.lg, width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   photo: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
@@ -301,6 +318,8 @@ const s = StyleSheet.create({
   section: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.md },
   sectionTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
   bio: { fontSize: 13, fontFamily: 'Outfit_400Regular', marginTop: spacing.sm, lineHeight: 20 },
+  reportLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: spacing.md, paddingVertical: spacing.sm },
+  reportLinkText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   chipText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },

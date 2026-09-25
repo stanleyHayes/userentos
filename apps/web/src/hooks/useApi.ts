@@ -52,13 +52,6 @@ export function useLogin() {
   })
 }
 
-export function useRegister() {
-  return useMutation({
-    mutationFn: (body: { email: string; phone: string; password: string; firstName: string; lastName: string; role: string }) =>
-      api.post<AuthResponse>('/auth/register', body),
-  })
-}
-
 // Users
 export function useCurrentUser() {
   return useQuery({ queryKey: ['me'], queryFn: () => api.get<User>('/users/me') })

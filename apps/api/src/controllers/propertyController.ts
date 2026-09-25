@@ -282,12 +282,16 @@ export const propertyController = {
       return
     }
 
-    const landlord = await User.findById(property.landlordId).select('firstName lastName isVerified verificationStatus').lean()
+    const landlord = await User.findById(property.landlordId).select('firstName lastName verificationStatus').lean()
     success(res, {
       ...property,
       id: (property._id as Types.ObjectId).toString(),
       landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
-      landlordVerified: landlord?.isVerified || landlord?.verificationStatus === 'verified',
+      // Only an approved identity review (a person checked the Ghana Card), as
+      // on the public registry. isVerified alone is also set on admin-created
+      // and invited accounts that were never reviewed, so it cannot back an
+      // "ID reviewed" label.
+      landlordVerified: landlord?.verificationStatus === 'verified',
     })
   },
 

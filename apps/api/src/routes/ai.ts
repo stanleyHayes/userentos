@@ -101,8 +101,8 @@ interface AbuseCheckResponse {
   violations: Violation[]
   nextSteps: string[]
   contacts: {
-    rentControl: { name: string; phone: string; location: string }
-    chraj: { name: string; phone: string }
+    rentControl: { name: string; phone?: string; location: string }
+    chraj: { name: string; phone?: string; location?: string }
   }
   signUpCta: string
   /**
@@ -217,9 +217,15 @@ const violationRules: Array<{
   },
 ]
 
+/**
+ * Where to get help. No phone numbers or street addresses: the ones shipped
+ * here could not be verified, and a wrong number on a legal-help screen
+ * strands the person who needs it most. `phone` stays optional in the shape
+ * for when a reviewed number is added.
+ */
 const defaultContacts = {
-  rentControl: { name: 'Rent Control Department', phone: '+233 30 266 2288', location: 'Accra Metropolitan Area, Behind the General Post Office, Accra' },
-  chraj: { name: 'Commission on Human Rights and Administrative Justice (CHRAJ)', phone: '+233 30 266 2150' },
+  rentControl: { name: 'Rent Control Department', location: 'Visit your nearest Rent Control office. Bring your tenancy agreement, receipts and any messages.' },
+  chraj: { name: 'Commission on Human Rights and Administrative Justice (CHRAJ)', location: 'For discrimination and rights complaints, visit your nearest CHRAJ office.' },
 }
 
 /** Word-boundary phrase match, so "off" does not match "office". */
@@ -266,8 +272,7 @@ function analyzeQuery(
       nextSteps: [
         'Try to describe your situation in more detail',
         'Include specifics like: rent advance demands, eviction threats, utility disconnections, repair refusals, or receipt issues',
-        'You can also visit the Rent Control Department in person for free advice',
-        'Call the Rent Control Department at +233 30 266 2288',
+        'You can also visit your nearest Rent Control office for advice',
       ],
       contacts: defaultContacts,
       signUpCta: 'Sign up for RentOS to access our AI legal assistant and file digital disputes.',
@@ -283,7 +288,7 @@ function analyzeQuery(
 
   const nextSteps = [
     'Document everything: save receipts, photos, messages, and any written communication with your landlord.',
-    'File a complaint with the Rent Control Department — it is free and they will mediate.',
+    'Raise a complaint with the Rent Control Department — it investigates complaints and can arrange mediation.',
   ]
 
   if (highestSeverity === 'high') {

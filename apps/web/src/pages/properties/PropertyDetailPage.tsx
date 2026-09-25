@@ -16,7 +16,7 @@ import { useState } from 'react'
 import {
   ArrowLeft, MapPin, Trash2, Bed, Bath, Car, Sofa, Ruler, Building2, Eye,
   Heart, MessageSquare, Shield, Check, X as XIcon, AlertTriangle, Star,
-  User, Phone, Clock, Lock, Share2, Flag,
+  User, Phone, Clock, Lock, Share2,
   Wifi, Zap, Droplets, ShieldCheck, TreePine, Dumbbell, Wind, Tv, WashingMachine,
   Cctv, DoorOpen, Waves, ParkingCircle, Fuel, CreditCard, CheckCircle2,
   Accessibility, Ear, CalendarDays, Loader2,
@@ -33,6 +33,7 @@ import { GovReviewActions } from './components/GovReviewActions'
 import { QualificationCard } from './components/QualificationCard'
 import type { PropertyQualification } from './components/QualificationCard'
 import { TenantReviewSection } from './components/TenantReviewSection'
+import { ReportContentButton } from '@/components/ReportContentDialog'
 import type { Property, Application, RentalAgreement, Conversation, PropertyStatus } from '@/types'
 import type { PaginatedResponse } from '@/types'
 
@@ -177,6 +178,8 @@ export function PropertyDetailPage() {
   // The agent endpoints reject inquiries from the property's manager too.
   const isManager = (p as Property & { managerId?: string }).managerId === user?.id
   const canInquire = !!user && !isOwner && !isManager
+  // Reports need an account, and your own listing is not yours to report.
+  const canReport = canInquire
   const isTenant = user?.activeRole === 'tenant'
   const isGovOrAdmin = user?.activeRole === 'government' || user?.activeRole === 'admin'
   const images = p.images?.length > 0 ? p.images : []
@@ -225,7 +228,7 @@ export function PropertyDetailPage() {
                   <MapPin size={13} className="mt-0.5 flex-shrink-0" />
                   <span>{p.address?.street}, {p.address?.city}, {p.address?.region}</span>
                 </div>
-                {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · Verified landlord' : ''}</p>}
+                {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · ID reviewed by RentOS' : ''}</p>}
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">Listed rent</p>
                   <div className="mt-1 flex items-baseline gap-1">
@@ -358,7 +361,11 @@ export function PropertyDetailPage() {
                 <p className="text-[10px] text-muted dark:text-gray-400">{p.address?.city}, {p.address?.region}</p>
               </div>
             </div>
-            <button className="flex w-full items-center justify-center gap-1 text-[10px] text-muted transition-colors hover:text-danger"><Flag size={10} /> Report listing</button>
+            {canReport && (
+              <div className="flex justify-center">
+                <ReportContentButton target={{ type: 'property', id: id!, noun: 'listing' }} />
+              </div>
+            )}
           </Card>
         </aside>
       </div>

@@ -177,7 +177,7 @@ export function PropertiesPage() {
       <PageHeader
         eyebrow="Rentals"
         title="Properties"
-        description={isLandlord ? 'Manage your rental portfolio.' : 'Browse verified listings across Ghana.'}
+        description={isLandlord ? 'Manage your rental portfolio.' : 'Browse moderated listings across Ghana.'}
         meta={isLandlord ? undefined : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} found`}
         icon={<Building2 size={22} />}
       >

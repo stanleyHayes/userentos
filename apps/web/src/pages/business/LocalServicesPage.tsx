@@ -25,6 +25,7 @@ import {
 import { useAuthStore } from '@/stores/authStore'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
+import { ReportContentButton } from '@/components/ReportContentDialog'
 import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent, MessageSquare, Star, Loader2 } from 'lucide-react'
 
 const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
@@ -112,6 +113,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
   const [reviewForm, setReviewForm] = useState<{ rating: number; review: string } | null>(null)
   const reviews = reviewsData?.items ?? []
   const canContact = user?.activeRole !== 'business'
+  const isOwner = !!user && business.ownerId === user.id
 
   async function sendInquiry() {
     if (!inquiryForm) return
@@ -158,10 +160,12 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="default" className="text-[10px]">{businessCategoryLabel(business.category)}</Badge>
+          {/* isVerified is set when an admin approves the business profile —
+              it is a moderation review, not a licence or quality check. */}
           {business.isVerified ? (
-            <Badge variant="success" className="text-[10px]"><ShieldCheck size={10} /> Verified</Badge>
+            <Badge variant="success" className="text-[10px]"><ShieldCheck size={10} /> Profile reviewed by RentOS</Badge>
           ) : (
-            <Badge variant="muted" className="text-[10px]">Not yet verified</Badge>
+            <Badge variant="muted" className="text-[10px]">Not yet reviewed</Badge>
           )}
         </div>
 
@@ -209,7 +213,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
             {reviewsData?.canReview && <button type="button" onClick={() => setReviewForm({ rating: 5, review: '' })} className="text-xs font-semibold text-primary hover:underline">Write a review</button>}
           </div>
           {reviews.length === 0 ? (
-            <p className="text-xs italic text-muted">No verified-customer reviews yet.</p>
+            <p className="text-xs italic text-muted">No customer reviews yet.</p>
           ) : (
             <div className="space-y-3">
               {reviews.map((review) => (
@@ -219,6 +223,9 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
                     <span className="flex text-amber-500">{Array.from({ length: 5 }, (_, i) => <Star key={i} size={11} fill={i < review.rating ? 'currentColor' : 'none'} />)}</span>
                   </div>
                   {review.review && <p className="mt-1 text-xs leading-relaxed text-muted dark:text-gray-400">{review.review}</p>}
+                  {user && review.authorId !== user.id && (
+                    <ReportContentButton className="mt-1.5" target={{ type: 'business_review', id: review.id, noun: 'review' }} label="Report" />
+                  )}
                 </div>
               ))}
             </div>
@@ -239,7 +246,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
 
         {reviewForm && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-            <p className="text-sm font-bold text-primary-dark dark:text-white">Your verified-customer review</p>
+            <p className="text-sm font-bold text-primary-dark dark:text-white">Your review</p>
             <div className="my-3 flex gap-1">
               {Array.from({ length: 5 }, (_, i) => (
                 <button key={i} type="button" aria-label={`${i + 1} stars`} onClick={() => setReviewForm((current) => current ? { ...current, rating: i + 1 } : null)} className="text-amber-500">
@@ -252,6 +259,12 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
               <Button variant="outline" size="sm" onClick={() => setReviewForm(null)}>Cancel</Button>
               <Button size="sm" disabled={submitReview.isPending} onClick={() => void saveReview()}>Save review</Button>
             </div>
+          </div>
+        )}
+
+        {user && !isOwner && (
+          <div className="flex justify-center">
+            <ReportContentButton target={{ type: 'business', id: business.id, noun: 'business' }} />
           </div>
         )}
       </div>

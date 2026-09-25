@@ -94,7 +94,7 @@ function CreateStorefrontCard() {
         <TextField
           label="Tagline (optional)" size="small" fullWidth value={form.tagline}
           onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
-          placeholder="Verified rentals across Greater Accra"
+          placeholder="Family homes across Greater Accra"
           slotProps={{ inputLabel: { shrink: true } }}
         />
 

@@ -41,8 +41,8 @@ interface AbuseCheckResult {
   advance?: { verdict: 'violation' | 'lawful' | 'unclear'; months?: number; message: string }
   nextSteps: string[]
   contacts: {
-    rentControl: { name: string; phone: string; location: string }
-    chraj: { name: string; phone: string }
+    rentControl: { name: string; phone?: string; location: string }
+    chraj: { name: string; phone?: string; location?: string }
   }
 }
 
@@ -200,33 +200,32 @@ export default function RightsCheckScreen() {
             </View>
 
             <View style={[s.card, neuCard(c)]}>
-              <Text style={[s.sectionTitle, { color: c.text }]}>Free help</Text>
-              <TouchableOpacity
-                style={s.contactRow}
-                onPress={() => void Linking.openURL(`tel:${result.contacts.rentControl.phone}`)}
-              >
-                <Ionicons name="call" size={18} color={c.primary} />
-                <View style={s.contactBody}>
-                  <Text style={[s.contactName, { color: c.text }]}>{result.contacts.rentControl.name}</Text>
-                  <Text style={[s.contactDetail, { color: c.textLight }]}>{result.contacts.rentControl.phone}</Text>
-                  <Text style={[s.contactDetail, { color: c.muted }]}>{result.contacts.rentControl.location}</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.contactRow}
-                onPress={() => void Linking.openURL(`tel:${result.contacts.chraj.phone}`)}
-              >
-                <Ionicons name="call" size={18} color={c.primary} />
-                <View style={s.contactBody}>
-                  <Text style={[s.contactName, { color: c.text }]}>{result.contacts.chraj.name}</Text>
-                  <Text style={[s.contactDetail, { color: c.textLight }]}>{result.contacts.chraj.phone}</Text>
-                </View>
-              </TouchableOpacity>
+              <Text style={[s.sectionTitle, { color: c.text }]}>Where to get help</Text>
+              {/* Phone numbers appear only when the API supplies a reviewed one. */}
+              {[result.contacts.rentControl, result.contacts.chraj].map((contact) => {
+                const body = (
+                  <>
+                    <Ionicons name={contact.phone ? 'call' : 'location-outline'} size={18} color={c.primary} />
+                    <View style={s.contactBody}>
+                      <Text style={[s.contactName, { color: c.text }]}>{contact.name}</Text>
+                      {contact.phone ? <Text style={[s.contactDetail, { color: c.textLight }]}>{contact.phone}</Text> : null}
+                      {contact.location ? <Text style={[s.contactDetail, { color: c.muted }]}>{contact.location}</Text> : null}
+                    </View>
+                  </>
+                )
+                return contact.phone ? (
+                  <TouchableOpacity key={contact.name} style={s.contactRow} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
+                    {body}
+                  </TouchableOpacity>
+                ) : (
+                  <View key={contact.name} style={s.contactRow}>{body}</View>
+                )
+              })}
             </View>
 
             <Text style={[s.disclaimer, { color: c.muted }]}>
               This is general information about Ghanaian rental law, not legal advice on your
-              specific case. Rent Control and CHRAJ both advise tenants free of charge.
+              specific case. Rent Control and CHRAJ can advise you on your situation.
             </Text>
 
             <TouchableOpacity

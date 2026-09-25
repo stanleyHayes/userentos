@@ -595,7 +595,7 @@ function Dashboard({
             <View style={s.empty}>
               <Ionicons name="star-outline" size={48} color={c.muted} />
               <Text style={[s.emptyTitle, { color: c.text }]}>No reviews yet</Text>
-              <Text style={[s.emptySub, { color: c.muted }]}>Reviews from verified customers will appear here.</Text>
+              <Text style={[s.emptySub, { color: c.muted }]}>Customers can review you once you mark their request as won.</Text>
             </View>
           ) : (
             reviews.map((r) => (
@@ -612,17 +612,11 @@ function Dashboard({
                 {r.review ? (
                   <Text style={[s.listingDesc, { color: c.muted }]}>{r.review}</Text>
                 ) : null}
-                {r.authorId ? (
+                {/* Reviews here are about the owner's business, written by customers. */}
+                {r.authorId !== business.ownerId ? (
                   <TouchableOpacity
                     style={s.reportLink}
-                    // No business-review report type exists yet: report the
-                    // author, with the review attached for the moderator.
-                    onPress={() => setReportTarget({
-                      type: 'user',
-                      id: r.authorId!,
-                      noun: 'review',
-                      context: `Reported review ${r.id} on business "${business.name}" (${r.rating}/5): ${r.review?.trim() || '(rating only)'}`,
-                    })}
+                    onPress={() => setReportTarget({ type: 'business_review', id: r.id, noun: 'review' })}
                     accessibilityRole="button"
                     accessibilityLabel="Report review"
                     hitSlop={6}

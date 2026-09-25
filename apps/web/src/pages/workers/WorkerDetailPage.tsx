@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { useMyWorker } from '@/hooks/useProvider'
+import { useAuthStore } from '@/stores/authStore'
+import { ReportContentButton } from '@/components/ReportContentDialog'
 import {
   Wrench, Star, MapPin, Phone, ShieldCheck, CheckCircle,
   Clock, User, ArrowLeft, AlertCircle, Quote,
@@ -15,6 +17,7 @@ import { BookingModal } from './BookingModal'
 
 interface Worker {
   _id: string
+  userId?: string
   name: string
   phone: string
   email?: string
@@ -45,7 +48,10 @@ interface Worker {
 }
 
 interface Review {
+  /** The service booking that carries the rating — what a worker_review report targets. */
   id: string
+  /** True when the viewer wrote this review. */
+  mine?: boolean
   rating: number
   review?: string
   createdAt: string
@@ -71,8 +77,9 @@ export function WorkerDetailPage() {
     enabled: !!id,
   })
 
+  const user = useAuthStore((s) => s.user)
   const { data: myWorker } = useMyWorker()
-  const isOwner = !!myWorker && myWorker._id === worker?._id
+  const isOwner = (!!myWorker && myWorker._id === worker?._id) || (!!user && !!worker?.userId && worker.userId === user.id)
 
   const reviews = reviewsData?.reviews ?? []
 
@@ -240,6 +247,11 @@ export function WorkerDetailPage() {
           Send a request and {worker.name.split(' ')[0]} will review it and provide a quote — you only confirm the job once you accept the quote.
         </p>
       )}
+      {user && !isOwner && (
+        <div className="flex justify-center">
+          <ReportContentButton target={{ type: 'worker', id: worker._id, noun: 'worker' }} />
+        </div>
+      )}
 
       {/* Reviews */}
       {reviews.length > 0 && (
@@ -264,6 +276,9 @@ export function WorkerDetailPage() {
                 </div>
                 {review.review && (
                   <p className="text-sm text-muted">{review.review}</p>
+                )}
+                {user && !review.mine && (
+                  <ReportContentButton className="mt-1.5" target={{ type: 'worker_review', id: review.id, noun: 'review' }} label="Report" />
                 )}
               </div>
             ))}

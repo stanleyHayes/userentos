@@ -59,7 +59,7 @@ export default function TenantPassportScreen() {
         </View>
         <Text style={s.eyebrow}>RENTAL IDENTITY</Text>
         <Text style={s.title}>Your record, ready to move.</Text>
-        <Text style={s.sub}>Share a verified summary without exposing your full account or private documents.</Text>
+        <Text style={s.sub}>Share a summary of your RentOS record without exposing your full account or private documents.</Text>
       </View>
 
       {loading ? (
