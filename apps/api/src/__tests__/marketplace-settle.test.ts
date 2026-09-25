@@ -9,6 +9,9 @@ vi.mock('../models/ServiceBooking.js', () => ({ ServiceBooking: { findOneAndUpda
 const txnUpdate = vi.fn()
 vi.mock('../models/MarketplaceTransaction.js', () => ({ MarketplaceTransaction: { findOneAndUpdate: txnUpdate } }))
 
+const redeem = vi.fn()
+vi.mock('../services/marketplace/coupons.js', () => ({ redeemForTransaction: redeem }))
+
 const { applySuccessfulCharge, BINDING_KEY } = await import('../services/marketplace/settle.js')
 
 type Txn = {
@@ -191,6 +194,29 @@ describe('applying a successful charge (one path for webhook and verify)', () =>
     ;(t as unknown as { bookingId: string }).bookingId = 'bk1'
     await expect(settle(t, charge(t))).resolves.toEqual({ applied: true })
     expect(bookingUpdate.mock.calls[0][0]).toMatchObject({ paymentStatus: { $ne: 'paid' } })
+  })
+
+  it('records the coupon use when the discounted payment settles, and only then', async () => {
+    redeem.mockResolvedValue({ redeemed: true })
+    const t = { ...txn({ discountAmount: 100 }), couponCode: 'SAVE10' }
+
+    await settle(t, charge(t, { amount: 1 }))
+    expect(redeem).not.toHaveBeenCalled()
+
+    await settle(t, charge(t))
+    expect(redeem).toHaveBeenCalledTimes(1)
+    expect(redeem).toHaveBeenCalledWith(expect.objectContaining({ reference: 'MKT-1', couponCode: 'SAVE10' }))
+
+    // A settlement that lost the paid transition never counts a second use.
+    txnUpdate.mockResolvedValue(null)
+    await settle({ ...t, status: 'pending' }, charge(t))
+    expect(redeem).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the payment settled when counting the coupon fails', async () => {
+    redeem.mockRejectedValue(new Error('db blip'))
+    const t = { ...txn({ discountAmount: 100 }), couponCode: 'SAVE10' }
+    await expect(settle(t, charge(t))).resolves.toEqual({ applied: true })
   })
 
   it('does not touch sponsorships when the charge is refused', async () => {

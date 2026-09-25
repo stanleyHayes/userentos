@@ -22,7 +22,7 @@ import {
   initializePlatformTransaction,
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
-import { applySuccessfulCharge, BINDING_KEY } from '../services/marketplace/settle.js'
+import { applySuccessfulCharge, BINDING_KEY, SETTLEABLE_STATUSES } from '../services/marketplace/settle.js'
 import { resolveQuote } from '../services/marketplace/pricing.js'
 
 const router = Router()
@@ -190,6 +190,9 @@ async function replayed(buyerId: string, idempotencyKey: string) {
 
 const isDuplicateKey = (err: unknown) => (err as { code?: number }).code === 11000
 
+/** How long an unfinished checkout holds one of its coupon's uses. */
+const COUPON_HOLD_MS = 30 * 60_000
+
 /**
  * Start a split payment.
  *
@@ -336,11 +339,23 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   let discountSource: 'platform' | 'seller' | undefined
 
   if (input.couponCode) {
+    // A use is only counted when a payment settles, so checkouts already
+    // under way with this code count against its limits here.
+    const unsettled = {
+      couponCode: input.couponCode.trim().toUpperCase(),
+      status: { $in: SETTLEABLE_STATUSES },
+      createdAt: { $gt: new Date(Date.now() - COUPON_HOLD_MS) },
+    }
+    const [mine, total] = await Promise.all([
+      MarketplaceTransaction.countDocuments({ ...unsettled, buyerId }),
+      MarketplaceTransaction.countDocuments(unsettled),
+    ])
     const coupon = await validateCoupon({
       code: input.couponCode,
-      userId: req.user!.userId,
+      userId: buyerId,
       amount: quote.amount,
       sellerId: quote.sellerId,
+      inFlight: { mine, total },
     })
     if (!coupon.valid) { error(res, coupon.reason ?? 'That coupon cannot be used.', 422); return }
     discountAmount = coupon.discountAmount

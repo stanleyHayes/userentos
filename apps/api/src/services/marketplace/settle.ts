@@ -24,6 +24,7 @@
 import { Sponsorship } from '../../models/Sponsorship.js'
 import { ServiceBooking } from '../../models/ServiceBooking.js'
 import { MarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
+import { redeemForTransaction } from './coupons.js'
 import { logger } from '../../utils/logger.js'
 import type { IMarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
 
@@ -141,6 +142,18 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (settledBooking) logger.info(`[${source}] booking ${transaction.bookingId} marked paid by ${transaction.reference}`)
+  }
+
+  // The coupon's use is recorded here and nowhere else — once, because only
+  // the caller that won the paid transition above reaches this line. The
+  // payment is already final, so a failure here is logged, never thrown.
+  if (transaction.couponCode && transaction.discountAmount > 0) {
+    try {
+      const coupon = await redeemForTransaction(transaction)
+      if (!coupon.redeemed) logger.error(`[${source}] coupon ${transaction.couponCode} on ${transaction.reference} not counted: ${coupon.reason}`)
+    } catch (err) {
+      logger.error(`[${source}] coupon redemption failed for ${transaction.reference}: ${(err as Error).message}`)
+    }
   }
 
   logger.info(`[${source}] ${transaction.reference} paid — platform fee ${transaction.platformFeeAmount}`)
