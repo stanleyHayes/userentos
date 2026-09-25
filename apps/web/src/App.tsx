@@ -63,6 +63,7 @@ const TenantsPage = lazy(() => import('@/pages/TenantsPage').then((m) => ({ defa
 const TenantProfileViewPage = lazy(() => import('@/pages/tenant/TenantProfileViewPage').then((m) => ({ default: m.TenantProfileViewPage })))
 const DeleteAccountPage = lazy(() => import('@/pages/legal/DeleteAccountPage').then((m) => ({ default: m.DeleteAccountPage })))
 const PrivacyPage = lazy(() => import('@/pages/legal/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+const SupportPage = lazy(() => import('@/pages/legal/SupportPage').then((m) => ({ default: m.SupportPage })))
 const TermsPage = lazy(() => import('@/pages/legal/TermsPage').then((m) => ({ default: m.TermsPage })))
 const DataProtectionPage = lazy(() => import('@/pages/legal/DataProtectionPage').then((m) => ({ default: m.DataProtectionPage })))
 const RentalLawsPage = lazy(() => import('@/pages/RentalLawsPage').then((m) => ({ default: m.RentalLawsPage })))
@@ -192,6 +193,7 @@ export default function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/data-protection" element={<DataProtectionPage />} />
+            <Route path="/support" element={<SupportPage />} />
             <Route path="/rental-laws" element={<RentalLawsPage />} />
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/article/:slug" element={<PublicBlogDetailPage />} />

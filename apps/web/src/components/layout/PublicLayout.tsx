@@ -7,6 +7,7 @@ import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   Menu, X, Scale, Shield, FileText, Lock, ArrowRight,
   Home, ChevronRight,
+  LifeBuoy,
 } from 'lucide-react'
 
 const NAV_LINKS = [
@@ -15,6 +16,7 @@ const NAV_LINKS = [
   { to: '/privacy', label: 'Privacy', icon: Shield },
   { to: '/terms', label: 'Terms', icon: FileText },
   { to: '/data-protection', label: 'Data Protection', icon: Lock },
+  { to: '/support', label: 'Support', icon: LifeBuoy },
 ]
 
 export function PublicLayout() {
