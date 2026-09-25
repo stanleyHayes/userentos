@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
@@ -85,30 +86,105 @@ export default function SettingsScreen() {
 }
 
 /* ─── Profile Tab ─── */
+
+/** National ID (Ghana Card) PIN, as the API validates it: GHA-<9 digits>-<check digit>. */
+const GHANA_CARD_RE = /^GHA-\d{9}-\d$/
+
+interface ProfileIdentity {
+  ghanaCardId?: string | null
+  isVerified?: boolean
+  verificationStatus?: 'none' | 'pending' | 'verified'
+}
+
+/** Whether an ID review exists (done or requested) that an identity change would reset. */
+function hasIdReview(identity: ProfileIdentity | undefined): boolean {
+  return !!identity && (!!identity.isVerified || (identity.verificationStatus ?? 'none') !== 'none')
+}
+
+function lastFourDigits(value: string): string {
+  return value.replace(/\D/g, '').slice(-4)
+}
+
+/** Never shown in full: the last four digits are enough to recognise your own card. */
+function maskGhanaCard(value: string): string {
+  return `GHA-•••••${lastFourDigits(value)}`
+}
+
+/** The card is personal data; the persisted session keeps only the account basics. */
+function withoutCard(user: Record<string, unknown>): Partial<User> {
+  const { ghanaCardId: _card, ...rest } = user
+  return rest as Partial<User>
+}
+
 function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   const { user } = useAuthStore()
+  const qc = useQueryClient()
   const [firstName, setFirstName] = useState(user?.firstName ?? '')
   const [lastName, setLastName] = useState(user?.lastName ?? '')
   const [phone, setPhone] = useState(user?.phone ?? '')
   const [ghanaCardId, setGhanaCardId] = useState('')
+  const [cardMode, setCardMode] = useState<'view' | 'replace' | 'confirmRemove'>('view')
   const [saving, setSaving] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
+
+  // The login payload may not carry the card, so read it from the account itself.
+  const identityKey = ['profile-identity', user?.id]
+  const identity = useQuery({
+    queryKey: identityKey,
+    queryFn: () => api.get<ProfileIdentity>('/users/me'),
+    enabled: !!user,
+  })
+  const savedCard = identity.data?.ghanaCardId || null
+  const reviewed = hasIdReview(identity.data)
+  const editingCard = !savedCard || cardMode === 'replace'
+
+  function applyUpdate(updated: Record<string, unknown>) {
+    useAuthStore.getState().updateUser(withoutCard(updated))
+    qc.setQueryData(identityKey, updated as ProfileIdentity)
+  }
+
+  function resetNotice(updated: Record<string, unknown>): string {
+    return reviewed && !hasIdReview(updated as ProfileIdentity)
+      ? ' Your ID review was reset, so request a new one when you are ready.'
+      : ''
+  }
 
   async function handleSave() {
-    if (!firstName.trim()) { Alert.alert('Error', 'First name is required'); return }
-    if (!lastName.trim()) { Alert.alert('Error', 'Last name is required'); return }
+    setMessage(null)
+    if (!firstName.trim()) { setMessage({ tone: 'error', text: 'First name is required.' }); return }
+    if (!lastName.trim()) { setMessage({ tone: 'error', text: 'Last name is required.' }); return }
+    const card = ghanaCardId.trim().toUpperCase()
+    if (editingCard && card && !GHANA_CARD_RE.test(card)) {
+      setMessage({ tone: 'error', text: 'Enter your Ghana Card ID as GHA-123456789-0.' })
+      return
+    }
     setSaving(true)
     try {
       const body: Record<string, string> = { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() }
-      if (ghanaCardId.trim()) body.ghanaCardId = ghanaCardId.trim()
+      if (editingCard && card) body.ghanaCardId = card
       const updated = await api.patch<Record<string, unknown>>('/users/me', body)
-      // Update auth store so UI reflects changes (updateUser preserves the
-      // session tokens — login() without refreshToken would wipe them)
-      useAuthStore.getState().updateUser(updated as Partial<User>)
-      Alert.alert('Success', 'Profile updated successfully')
+      applyUpdate(updated)
+      setGhanaCardId('')
+      setCardMode('view')
+      setMessage({ tone: 'success', text: `Profile updated.${resetNotice(updated)}` })
     } catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Failed to update profile')
+      setMessage({ tone: 'error', text: (e as { message?: string }).message || 'Failed to update profile' })
     } finally { setSaving(false) }
+  }
+
+  async function removeCard() {
+    setMessage(null)
+    setRemoving(true)
+    try {
+      // null is the API's explicit "clear the card on file".
+      const updated = await api.patch<Record<string, unknown>>('/users/me', { ghanaCardId: null })
+      applyUpdate(updated)
+      setCardMode('view')
+      setMessage({ tone: 'success', text: `Your Ghana Card was removed from your profile.${resetNotice(updated)}` })
+    } catch (e) {
+      setMessage({ tone: 'error', text: (e as { message?: string }).message || 'Could not remove your Ghana Card' })
+    } finally { setRemoving(false) }
   }
 
   return (
@@ -120,7 +196,82 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
       <Field label="First Name" value={firstName} onChangeText={setFirstName} c={c} />
       <Field label="Last Name" value={lastName} onChangeText={setLastName} c={c} />
       <Field label="Phone Number" value={phone} onChangeText={setPhone} c={c} keyboardType="phone-pad" placeholder="e.g. 0241234567" />
-      <Field label="Ghana Card ID" value={ghanaCardId} onChangeText={setGhanaCardId} c={c} placeholder="GHA-XXXXXXXXX-X" autoCapitalize="characters" />
+
+      <Text style={[s.fieldLabel, { color: c.text }]}>Ghana Card ID</Text>
+      {identity.isLoading ? (
+        <View style={s.cardRow}>
+          <ActivityIndicator color={c.primary} />
+          <Text style={[s.cardHint, { color: c.muted }]}>Checking your saved Ghana Card…</Text>
+        </View>
+      ) : identity.isError ? (
+        <View style={s.cardRow}>
+          <Text style={[s.cardHint, { color: c.danger, flex: 1 }]}>Could not load your saved Ghana Card.</Text>
+          <TouchableOpacity onPress={() => { void identity.refetch() }} accessibilityRole="button">
+            <Text style={[s.retryText, { color: c.primary }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : savedCard && cardMode === 'view' ? (
+        <View style={[s.cardSaved, neuInset(c)]}>
+          <Ionicons name="card-outline" size={18} color={c.primary} />
+          <Text style={[s.cardValue, { color: c.text }]} accessibilityLabel={`Saved Ghana Card ending ${lastFourDigits(savedCard)}`}>
+            {maskGhanaCard(savedCard)}
+          </Text>
+          <TouchableOpacity onPress={() => { setMessage(null); setCardMode('replace') }} accessibilityRole="button" accessibilityLabel="Replace Ghana Card">
+            <Text style={[s.cardAction, { color: c.primary }]}>Replace</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setMessage(null); setCardMode('confirmRemove') }} accessibilityRole="button" accessibilityLabel="Remove Ghana Card">
+            <Text style={[s.cardAction, { color: c.danger }]}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      ) : savedCard && cardMode === 'confirmRemove' ? (
+        <View style={[s.cardConfirm, { borderColor: c.danger + '55', backgroundColor: c.danger + '0d' }]}>
+          <Text style={[s.cardHint, { color: c.text }]}>
+            Remove {maskGhanaCard(savedCard)} from your profile?{reviewed ? ' This resets your ID review.' : ''}
+          </Text>
+          <View style={s.cardRow}>
+            <TouchableOpacity
+              style={[s.cardButton, { backgroundColor: c.danger }, removing && s.saveBtnDisabled]}
+              onPress={removeCard}
+              disabled={removing}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm remove Ghana Card"
+            >
+              {removing ? <ActivityIndicator color="#ffffff" /> : <Text style={s.cardButtonText}>Remove card</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setCardMode('view')} disabled={removing} accessibilityRole="button">
+              <Text style={[s.cardAction, { color: c.text }]}>Keep it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <>
+          <TextInput
+            style={[s.input, neuInset(c), { color: c.text }]}
+            placeholderTextColor={c.muted}
+            value={ghanaCardId}
+            onChangeText={setGhanaCardId}
+            placeholder="GHA-XXXXXXXXX-X"
+            autoCapitalize="characters"
+            accessibilityLabel={savedCard ? 'New Ghana Card ID' : 'Ghana Card ID'}
+          />
+          {savedCard ? (
+            <TouchableOpacity onPress={() => { setGhanaCardId(''); setCardMode('view') }} accessibilityRole="button">
+              <Text style={[s.cardAction, s.cardCancel, { color: c.muted }]}>Keep my saved card</Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
+      )}
+      {reviewed ? (
+        <Text style={[s.cardHint, s.cardNote, { color: c.muted }]}>
+          Changing your name or Ghana Card resets your ID review until RentOS reviews it again.
+        </Text>
+      ) : null}
+
+      {message ? (
+        <Text accessibilityLiveRegion="polite" style={[s.profileMessage, { color: message.tone === 'error' ? c.danger : c.accent }]}>
+          {message.text}
+        </Text>
+      ) : null}
       <ActionButton label="Save Profile" icon="checkmark-circle" loading={saving} onPress={handleSave} bg={c.primary} />
     </View>
   )
@@ -497,6 +648,18 @@ const s = StyleSheet.create({
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 16, marginTop: spacing.lg },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
+  // Ghana Card
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardSaved: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: spacing.md, paddingVertical: 14 },
+  cardValue: { flex: 1, fontSize: 14, fontFamily: 'Outfit_600SemiBold', letterSpacing: 0.5 },
+  cardAction: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', paddingVertical: 4 },
+  cardCancel: { marginTop: 6 },
+  cardConfirm: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: 10 },
+  cardButton: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, minWidth: 120, alignItems: 'center' },
+  cardButtonText: { fontSize: 13, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
+  cardHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },
+  cardNote: { marginTop: 8 },
+  profileMessage: { fontSize: 13, fontFamily: 'Outfit_500Medium', marginTop: spacing.md, lineHeight: 18 },
   // Theme
   optionGrid: { flexDirection: 'row', gap: 10 },
   themeCard: { flex: 1, alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 2, paddingVertical: 16, paddingHorizontal: 8, position: 'relative' },
