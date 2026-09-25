@@ -558,7 +558,7 @@ export function LandingPage() {
               <span className="text-secondary"><SplitText text="sync." immediate charDelay={60} startDelay={620} /></span>
             </h1>
             <p className="mt-8 max-w-xl text-lg leading-relaxed text-white/62 md:text-xl">
-              Find a home, sign, pay, save, insure, maintain, and resolve issues without losing the thread.
+              Find a home, apply, sign, keep records, maintain it and resolve issues without losing the thread.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Magnetic><Link to="/register"><Button size="lg" className="dark-surface-control w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>

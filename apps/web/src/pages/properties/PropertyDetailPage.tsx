@@ -36,6 +36,7 @@ import { TenantReviewSection } from './components/TenantReviewSection'
 import { ReportContentButton } from '@/components/ReportContentDialog'
 import type { Property, Application, RentalAgreement, Conversation, PropertyStatus } from '@/types'
 import type { PaginatedResponse } from '@/types'
+import { useRegulatedFeatureEnabled } from '@/hooks/useApi'
 
 type PropertyDetail = Property & { landlordName?: string; landlordVerified?: boolean }
 
@@ -54,6 +55,8 @@ const amenityIcons: Record<string, React.ReactNode> = {
 
 export function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>()
+  // A minimum credit score can't be met while credit scoring is off.
+  const creditScoresOffered = useRegulatedFeatureEnabled('credit_reporting') === true
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const qc = useQueryClient()
@@ -426,7 +429,7 @@ export function PropertyDetailPage() {
             <Card>
               <p className="text-[10px] font-bold text-muted dark:text-gray-500 uppercase tracking-wider mb-2">Tenant Requirements</p>
               <div className="flex flex-wrap gap-1.5">
-                {prefs.minCreditScore > 0 && <PrefTag label={`Credit ${prefs.minCreditScore}+`} icon={<Star size={10} />} />}
+                {creditScoresOffered && prefs.minCreditScore > 0 && <PrefTag label={`Credit ${prefs.minCreditScore}+`} icon={<Star size={10} />} />}
                 {prefs.minIncomeMultiple > 0 && <PrefTag label={`Income ${prefs.minIncomeMultiple}x`} icon={<Shield size={10} />} />}
                 {prefs.maxOccupants < 10 && <PrefTag label={`Max ${prefs.maxOccupants} people`} icon={<User size={10} />} />}
                 {!prefs.allowSmokers && <PrefTag label="No smokers" icon={<XIcon size={10} />} negative />}

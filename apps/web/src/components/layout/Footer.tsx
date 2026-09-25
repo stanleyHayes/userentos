@@ -84,7 +84,7 @@ export function Footer() {
                 One record for discovery, rent, service, claims, and compliance.
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/54 md:text-base">
-                RentOS gives tenants, landlords, employers, essential workers, financiers, and administrators a shared operating layer for the rental journey.
+                RentOS gives tenants, landlords, property managers, service providers and administrators a shared operating layer for the rental journey.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
@@ -108,7 +108,7 @@ export function Footer() {
           <div>
             <Logo size={30} theme="light" />
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/48">
-              Rental housing software for Ghana, connecting public discovery, tenant passports, payments, savings, financing, insurance, maintenance, worker bookings, AI writing, and platform administration.
+              Rental housing software for Ghana, connecting public discovery, tenant passports, agreements, payment records, maintenance, worker bookings, AI writing, and platform administration.
             </p>
             <div className="mt-6 grid max-w-sm grid-cols-2 gap-3">
               {[

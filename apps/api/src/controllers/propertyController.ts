@@ -11,7 +11,24 @@ import { uploadToCloudinary } from '../utils/cloudinary.js'
 import { notify } from '../services/notify.js'
 import { embed } from '../services/embeddings.js'
 import { cache } from '../services/cache.js'
-import { canTransition, type ReviewStatus } from '../services/propertyReview.js'
+import { canTransition, PUBLICLY_VISIBLE_STATUSES, type ReviewStatus } from '../services/propertyReview.js'
+import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
+
+// With credit reporting off no tenant has a score to meet a landlord's minimum,
+// so that criterion would silently hide every listing from everyone.
+const creditCriteriaApply = () => isRegulatedFeatureEnabled('credit_reporting')
+
+const isPubliclyVisible = (status?: string) => (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(status ?? '')
+
+/**
+ * What anyone other than the owner or an admin may see of a listing: no search
+ * embedding, reviewer identity, quota bookkeeping or moderation notes. Tenant
+ * requirements (preferences) stay, since applicants are shown them.
+ */
+function publicPropertyView<T extends object>(property: T) {
+  const { embedding: _e, reviewedBy: _r, quotaSlot: _q, reviewVersion: _v, reviewIssues: _i, rejectionReason: _j, ...rest } = property as T & Record<string, unknown>
+  return rest
+}
 
 interface LeanProperty {
   _id: Types.ObjectId
@@ -169,7 +186,7 @@ export const propertyController = {
       filters.landlordId = user!.userId
     } else if (!isLandlordRole && !isAdmin) {
       // Tenants, other roles, and unauthenticated: hide draft/pending/rejected
-      filters.listingStatus = 'approved'
+      filters.listingStatus = PUBLICLY_VISIBLE_STATUSES
     }
 
     const result = await propertyService.listProperties(filters)
@@ -178,7 +195,7 @@ export const propertyController = {
     // Browsing landlord/manager: hide other landlords' draft/pending/rejected
     // listings, but keep their own of any status.
     if (!ownOnly && isLandlordRole && !isAdmin) {
-      items = items.filter((p) => (p as LeanProperty).listingStatus === 'approved' || (p as LeanProperty).landlordId === user!.userId)
+      items = items.filter((p) => isPubliclyVisible((p as LeanProperty).listingStatus) || (p as LeanProperty).landlordId === user!.userId)
     }
 
     // For government users, show occupied properties that are ending soon or not renewing
@@ -229,7 +246,7 @@ export const propertyController = {
         items = items.filter((p) => {
           const prefs = (p as LeanProperty).preferences
           if (!prefs) return true
-          if ((prefs.minCreditScore ?? 0) > 0 && (credit?.score ?? 0) < (prefs.minCreditScore ?? 0)) return false
+          if (creditCriteriaApply() && (prefs.minCreditScore ?? 0) > 0 && (credit?.score ?? 0) < (prefs.minCreditScore ?? 0)) return false
           if (!prefs.allowSmokers && (profile as LeanTenantProfile).smoker) return false
           if (!prefs.allowPets && (profile as LeanTenantProfile).pets) return false
           if (!prefs.allowChildren && (profile as LeanTenantProfile).hasChildren) return false
@@ -261,7 +278,8 @@ export const propertyController = {
       }
     }
 
-    success(res, { items: served, total: served.length, page: 1, pageSize: 50, totalPages: 1 })
+    const visibleTo = (p: LeanProperty) => isAdmin || (!!user && p.landlordId === user.userId)
+    success(res, { items: served.map((p) => (visibleTo(p as LeanProperty) ? p : publicPropertyView(p))), total: served.length, page: 1, pageSize: 50, totalPages: 1 })
   },
 
   getById: async (req: Request, res: Response) => {
@@ -275,7 +293,7 @@ export const propertyController = {
     // their landlord, admins, or super_admins
     const isOwner = user && property.landlordId === user.userId
     const isAdmin = user && (user.roles.includes('admin') || user.roles.includes('super_admin'))
-    const isPublic = property.listingStatus === 'approved'
+    const isPublic = isPubliclyVisible(property.listingStatus)
 
     if (!isPublic && !isOwner && !isAdmin) {
       error(res, 'Property not found', 404)
@@ -284,7 +302,7 @@ export const propertyController = {
 
     const landlord = await User.findById(property.landlordId).select('firstName lastName verificationStatus').lean()
     success(res, {
-      ...property,
+      ...(isOwner || isAdmin ? property : publicPropertyView(property)),
       id: (property._id as Types.ObjectId).toString(),
       landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
       // Only an approved identity review (a person checked the Ghana Card), as
@@ -466,10 +484,10 @@ export const propertyController = {
     const favorites = await Favorite.find({ userId: req.user!.userId }).lean()
     const propertyIds = favorites.map((f) => f.propertyId)
     // Only published listings — a draft/pending property must not be readable via favorites.
-    const properties = await Property.find({ _id: { $in: propertyIds }, listingStatus: 'approved' }).lean()
+    const properties = await Property.find({ _id: { $in: propertyIds }, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
 
     success(res, {
-      items: properties.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() })),
+      items: properties.map((p) => ({ ...(p.landlordId === req.user!.userId ? p : publicPropertyView(p)), id: (p._id as Types.ObjectId).toString() })),
       total: properties.length,
     })
   },
@@ -493,7 +511,7 @@ export const propertyController = {
     const prefs = (property as LeanProperty).preferences
     const issues: string[] = []
 
-    if (prefs?.minCreditScore && (credit?.score ?? 0) < prefs.minCreditScore) {
+    if (creditCriteriaApply() && prefs?.minCreditScore && (credit?.score ?? 0) < prefs.minCreditScore) {
       issues.push(`Credit score too low (needs ${prefs.minCreditScore}, you have ${credit?.score ?? 0})`)
     }
     if (!prefs?.allowSmokers && (profile as LeanTenantProfile)?.smoker) {
@@ -519,7 +537,7 @@ export const propertyController = {
     const profile = await TenantProfile.findOne({ userId: req.user!.userId }).lean()
     const credit = await CreditScore.findOne({ userId: req.user!.userId }).lean()
 
-    const filter: Record<string, unknown> = { status: 'available', listingStatus: 'approved' }
+    const filter: Record<string, unknown> = { status: 'available', listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }
     const prefs = (profile as LeanTenantProfile)?.searchPreferences
 
     if (prefs) {
@@ -539,7 +557,7 @@ export const propertyController = {
       properties = properties.filter((prop) => {
         const lp = (prop as LeanProperty).preferences
         if (!lp) return true
-        if (lp.minCreditScore && (credit?.score ?? 0) < lp.minCreditScore) return false
+        if (creditCriteriaApply() && lp.minCreditScore && (credit?.score ?? 0) < lp.minCreditScore) return false
         if (!lp.allowSmokers && (profile as LeanTenantProfile).smoker) return false
         if (!lp.allowPets && (profile as LeanTenantProfile).pets) return false
         if (!lp.allowChildren && (profile as LeanTenantProfile).hasChildren) return false

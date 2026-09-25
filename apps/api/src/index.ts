@@ -3,6 +3,8 @@ import './instrument.js'
 import * as Sentry from '@sentry/node'
 import express from 'express'
 import cors from 'cors'
+import { createCorsOrigin } from './middleware/corsPolicy.js'
+import { StorefrontDomain } from './models/StorefrontDomain.js'
 import mongoose from 'mongoose'
 import path from 'path'
 import http from 'http'
@@ -112,6 +114,8 @@ import { onSimulatedPayout } from './services/payouts/index.js'
 import { finalizePayout } from './services/payouts/finalize.js'
 
 const app = express()
+// Don't advertise the framework to scanners.
+app.disable('x-powered-by')
 // Deployed behind Render's proxy: trust the first hop only, so express-rate-limit
 // accepts X-Forwarded-For instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
 app.set('trust proxy', 1)
@@ -142,11 +146,12 @@ if (envOrigins.length === 0 && isProduction) {
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true)
-      if (corsPermissive || allowedOrigins.has(origin)) return callback(null, true)
-      callback(new Error(`CORS: origin ${origin} is not allowed`))
-    },
+    origin: createCorsOrigin({
+      allowed: [...allowedOrigins],
+      permissive: corsPermissive,
+      // Storefronts on their own verified domains call the API from that origin.
+      isStorefrontDomain: async (hostname) => !!(await StorefrontDomain.exists({ domain: hostname, status: { $in: ['verified', 'active'] } })),
+    }),
     credentials: true,
   }),
 )

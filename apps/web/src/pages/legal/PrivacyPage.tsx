@@ -106,8 +106,8 @@ export function PrivacyPage() {
             <>
               <p>Some decisions are made automatically, without a person reviewing them first:</p>
               {list([
-                'Micro-loan and rent-financing decisions use your Rent Credit Score: applications below a minimum score are refused and, for micro-loans, the score decides approval.',
-                'Landlords can set screening criteria (for example, a minimum credit score, or whether they accept smokers, pets or children) that automatically hide their listings from tenants who do not meet them.',
+                'Micro-loans, rent financing and credit scoring are not currently offered. If they are introduced (only with a licensed provider), a score may pre-qualify an application, but a person makes the final decision and you can ask for any decline to be reviewed.',
+                'Landlords can set screening criteria (for example, whether they accept smokers, pets or children) that automatically hide their listings from tenants who do not meet them. A minimum credit score applies only where credit scoring is offered.',
                 'Our systems flag agreements that may breach rental law (for example, rent advance above the legal limit). These flags are information, not a legal finding.',
               ])}
               <p className="mt-3">You can ask for a person to review any automated decision about you, explain the main factors behind it, and hear your point of view: email {mail(LEGAL_ENTITY.privacyEmail)} with the subject "Human review".</p>

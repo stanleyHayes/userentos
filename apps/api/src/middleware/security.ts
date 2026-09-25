@@ -22,7 +22,8 @@ export function requestId(req: Request, res: Response, next: NextFunction) {
 export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
-  res.setHeader('X-XSS-Protection', '1; mode=block')
+  // The legacy XSS auditor is removed from browsers and could be abused; '0' disables it.
+  res.setHeader('X-XSS-Protection', '0')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   // HSTS only makes sense over TLS, which production terminates at the proxy.
   if (process.env.NODE_ENV === 'production') {

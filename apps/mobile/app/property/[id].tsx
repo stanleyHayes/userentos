@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { DetailSkeleton } from '../../components/Skeleton'
 import { AITextInput } from '../../components/AITextInput'
 import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
+import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -79,6 +80,8 @@ const DURATION_OPTIONS = [
 export default function PropertyDetailScreen() {
   const c = useThemeColors()
   const { id } = useLocalSearchParams<{ id: string }>()
+  // A minimum credit score can't be met while credit scoring is off.
+  const creditScoresOffered = useRegulatedFeatureEnabled('credit_reporting') === true
   const router = useRouter()
   const { user } = useAuthStore()
   const [property, setProperty] = useState<Property | null>(null)
@@ -598,7 +601,7 @@ export default function PropertyDetailScreen() {
         <View style={[s.section, neuCard(c)]}>
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Tenant Requirements</Text>
           <View style={s.tagList}>
-            {(prefs.minCreditScore ?? 0) > 0 && (
+            {creditScoresOffered && (prefs.minCreditScore ?? 0) > 0 && (
               <PrefTag label={`Credit ${prefs.minCreditScore}+`} icon="star" c={c} />
             )}
             {(prefs.minIncomeMultiple ?? 0) > 0 && (

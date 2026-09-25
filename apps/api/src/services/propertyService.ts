@@ -4,6 +4,7 @@ import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { hasDelegatedScope } from './delegation.js'
+import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
 
 interface CreatePropertyData {
   title: string
@@ -29,7 +30,7 @@ interface UpdatePropertyData {
 
 interface ListFilters {
   status?: string
-  listingStatus?: string
+  listingStatus?: string | readonly string[]
   type?: string
   city?: string
   region?: string
@@ -72,7 +73,7 @@ export class PropertyService {
 
     if (filters.landlordId) filter.landlordId = filters.landlordId
     if (filters.status) filter.status = filters.status
-    if (filters.listingStatus) filter.listingStatus = filters.listingStatus
+    if (filters.listingStatus) filter.listingStatus = typeof filters.listingStatus === 'string' ? filters.listingStatus : { $in: [...filters.listingStatus] }
     if (filters.type) filter.type = filters.type
     if (filters.city) filter['address.city'] = { $regex: escapeRegex(filters.city), $options: 'i' }
     if (filters.region) filter['address.region'] = { $regex: escapeRegex(filters.region), $options: 'i' }
@@ -221,7 +222,7 @@ export class PropertyService {
       }
       property.coordinates = { lat, lng }
     }
-    if (contentChanged && property.listingStatus === 'approved') {
+    if (contentChanged && (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(property.listingStatus)) {
       property.listingStatus = 'pending_review'
       this.logger.info(`Property ${id} content changed — returned to pending_review`)
     }

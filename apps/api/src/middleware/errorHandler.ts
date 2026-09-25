@@ -61,7 +61,12 @@ export function errorHandler(
   const status = err.status ?? err.statusCode
   if (typeof status === 'number' && status >= 400 && status < 500) {
     logger.warn(`Request error ${status}: ${err.message}`)
-    res.status(status).json({ success: false, error: err.message })
+    // Parser internals (positions, byte counts) are not the client's concern.
+    const type = (err as { type?: string }).type
+    const message = type === 'entity.parse.failed' ? 'Malformed JSON body'
+      : type === 'entity.too.large' ? 'Request body is too large'
+        : err.message
+    res.status(status).json({ success: false, error: message })
     return
   }
 
