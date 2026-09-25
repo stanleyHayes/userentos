@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { MongoClient, ObjectId } from 'mongodb'
 import { io, type Socket } from 'socket.io-client'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('assigned moderator removes a reported message through the queue', async ({ page, request, baseURL }) => {
   // Privileged fixtures are permitted only in this explicitly isolated local DB.
@@ -16,7 +17,7 @@ test('assigned moderator removes a reported message through the queue', async ({
   try {
     for (const name of ['Moderator', 'OtherModerator', 'Reporter', 'Sender', 'SuperModerator']) {
       const email = `${name}-${suffix}@rentos.test`
-      const registered = await request.post('/api/auth/register', { data: { email, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: 'tenant' } })
+      const registered = await request.post('/api/auth/register', { data: { email, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: 'tenant', acceptance } })
       expect(registered.status()).toBe(201)
       let data = (await registered.json()).data
       if (name.includes('Moderator')) {

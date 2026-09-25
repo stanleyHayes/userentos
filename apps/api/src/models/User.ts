@@ -1,5 +1,21 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 import { USER_ROLES } from '../utils/accessControl.js'
+import { isConsentRequired } from '../types/index.js'
+
+/**
+ * Evidence of Terms/Privacy acceptance (Act 843 s.20 consent; store terms).
+ * Written only by the server from a validated acceptance — never from a
+ * profile update body. Each acceptance is also audit-logged (consent.accept),
+ * which keeps the history; this holds the latest.
+ */
+export interface IUserConsents {
+  termsVersion: string
+  privacyVersion: string
+  acceptedAt: Date
+  ageConfirmed: boolean
+  ip?: string
+  userAgent?: string
+}
 
 export interface IUser extends Document {
   email: string
@@ -44,6 +60,7 @@ export interface IUser extends Document {
   biometricVersion?: number
   sessionVersion?: number
   credentialsChangedAt?: Date
+  consents?: IUserConsents
   settings?: {
     theme: string
     language: string
@@ -93,6 +110,14 @@ const userSchema = new Schema<IUser>({
   credentialsChangedAt: { type: Date },
   biometricVersion: { type: Number, default: 0 },
   sessionVersion: { type: Number, default: 0 },
+  consents: {
+    termsVersion: String,
+    privacyVersion: String,
+    acceptedAt: Date,
+    ageConfirmed: Boolean,
+    ip: String,
+    userAgent: String,
+  },
   settings: {
     theme: { type: String, default: 'system' },
     language: { type: String, default: 'en' },
@@ -120,6 +145,9 @@ userSchema.methods.toSafe = function () {
   delete obj.passwordHash
   delete obj.mfaSecret
   delete obj.__v
+  // Clients re-prompt for acceptance when this is true (new Terms/Privacy
+  // version, or an account that predates consent capture).
+  obj.consentRequired = isConsentRequired(obj.consents)
   return obj
 }
 

@@ -36,12 +36,15 @@ vi.mock('../services/notify.js', () => ({
 vi.mock('../services/achievements.js', () => ({
   checkAndAward: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('../utils/audit.js', () => ({ recordAuditEntry: vi.fn().mockResolvedValue(undefined) }))
 
 // email.ts reads these at module load, so they must be set before the import below.
 process.env.RESEND_API_KEY = 'test-key'
 process.env.PUBLIC_BASE_URL = 'https://app.rentos.test'
 
 const { default: invitationsRouter } = await import('../routes/invitations.js')
+const { TERMS_VERSION, PRIVACY_VERSION } = await import('../types/index.js')
+const acceptance = { termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, ageConfirmed: true }
 
 function signToken(roles: string[], permissions: string[] = [], userId = 'inviter-1'): string {
   return jwt.sign(
@@ -200,7 +203,7 @@ describe('invitations — email delivery and acceptance', () => {
     const invite = pendingInvite()
     vi.mocked(Invitation.findOne).mockResolvedValue(invite as never)
     vi.mocked(User.findOne).mockResolvedValue(null as never)
-    let created: { roles: string[]; permissions: string[]; isVerified: boolean } | null = null
+    let created: { roles: string[]; permissions: string[]; isVerified: boolean; consents: Record<string, unknown> } | null = null
     vi.mocked(User.create).mockImplementation((async (doc: Record<string, unknown>) => {
       created = doc as unknown as typeof created
       return { ...doc, _id: { toString: () => 'user-1' }, toSafe: () => ({ id: 'user-1' }) }
@@ -215,6 +218,7 @@ describe('invitations — email delivery and acceptance', () => {
         lastName: 'Mensah',
         phone: '0301234567',
         password: 'Str0ng!Pass',
+        acceptance,
       }),
     })
 
@@ -222,7 +226,23 @@ describe('invitations — email delivery and acceptance', () => {
     expect(created!.roles).toEqual(['government'])
     expect(created!.permissions).toEqual(['disputes:manage'])
     expect(created!.isVerified).toBe(true)
+    expect(created!.consents).toMatchObject({ termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, ageConfirmed: true })
+    expect(created!.consents.acceptedAt).toBeInstanceOf(Date)
     expect(invite.status).toBe('accepted')
+  })
+
+  it('accept refuses to create an account without Terms/Privacy acceptance and 18+ confirmation', async () => {
+    const body = { token: 'raw-token', firstName: 'Akosua', lastName: 'Mensah', phone: '0301234567', password: 'Str0ng!Pass' }
+    for (const extra of [{}, { acceptance: { ...acceptance, ageConfirmed: false } }, { acceptance: { ...acceptance, termsVersion: '2000-01-01' } }]) {
+      const res = await fetch(`${baseUrl}/accept`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...body, ...extra }),
+      })
+      expect(res.status).toBe(400)
+    }
+    expect(Invitation.findOne).not.toHaveBeenCalled()
+    expect(User.create).not.toHaveBeenCalled()
   })
 
   it('accept refuses a weak password before touching the invitation', async () => {

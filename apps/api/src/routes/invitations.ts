@@ -14,6 +14,8 @@ import { notifyWelcome } from '../services/notify.js'
 import { buildInviteUrl, sendInvitationEmail } from '../services/email.js'
 import { checkAndAward } from '../services/achievements.js'
 import { USER_ROLES, PERMISSIONS, SUPER_ADMIN_ONLY_ROLES } from '../utils/accessControl.js'
+import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
+import { recordAuditEntry } from '../utils/audit.js'
 
 const router = Router()
 
@@ -198,6 +200,15 @@ router.post('/accept', async (req, res) => {
     return
   }
 
+  // Invited accounts accept the same Terms/Privacy + 18+ statement as
+  // self-registration — an invitation is not consent.
+  const acceptance = acceptanceSchema.safeParse(req.body.acceptance)
+  if (!acceptance.success) {
+    error(res, acceptance.error.issues[0].message)
+    return
+  }
+  const consent = buildConsentRecord(acceptance.data, req)
+
   const invitation = await Invitation.findOne({ token: hashInviteToken(token), status: 'pending' })
   if (!invitation) {
     error(res, 'Invalid or expired invitation', 404)
@@ -232,6 +243,15 @@ router.post('/accept', async (req, res) => {
     permissions: invitation.permissions,
     isVerified: true,
     invitedBy: invitation.invitedBy,
+    consents: consent,
+  })
+  void recordAuditEntry({
+    userId: user._id.toString(),
+    action: 'consent.accept',
+    entityType: 'User',
+    entityId: user._id.toString(),
+    details: { context: 'invitation', termsVersion: consent.termsVersion, privacyVersion: consent.privacyVersion, ageConfirmed: consent.ageConfirmed, userAgent: consent.userAgent },
+    ipAddress: consent.ip,
   })
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })

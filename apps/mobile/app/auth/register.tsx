@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, Alert, Platform } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
@@ -9,6 +9,8 @@ import { useAuthStore, type User } from '../../stores/authStore'
 import { AuthShell, authInset } from '../../components/AuthShell'
 import { MotionReveal, PressScale } from '../../components/Motion'
 import type { UserRole } from '../../types/shared'
+import { ConsentCheckbox } from '../../components/ConsentCheckbox'
+import { buildAcceptance } from '../../../../packages/shared/legalVersions'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -59,6 +61,20 @@ const BUSINESS_CATEGORIES = [
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Only landlords and property managers can hold a listing plan
+ * (POST /subscriptions/subscribe is gated to those roles). */
+const PLAN_ROLES: UserRole[] = ['landlord', 'property_manager']
+
+/**
+ * App Store 3.1.1 / Play billing: digital subscriptions bought inside the
+ * native app must go through the store, so paid plans and their web (MoMo)
+ * prices are never offered here on iOS/Android — the Subscription screen
+ * handles store purchases. Same rule as app/subscription.tsx.
+ */
+function offerablePackages<T extends { price: number }>(all: T[]): T[] {
+  return Platform.OS === 'web' ? all : all.filter((p) => p.price === 0)
+}
 
 const passwordRequirements = [
   { key: 'length', label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
@@ -282,11 +298,16 @@ export default function RegisterScreen() {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [consented, setConsented] = useState(false)
+
+  const hasPlanStep = PLAN_ROLES.includes(role)
+  const steps = hasPlanStep ? STEPS : STEPS.slice(0, 3)
+  const lastStep = steps.length - 1
 
   // Public endpoint — safe to fetch before the account exists.
   useEffect(() => {
     api.get<{ items: Package[] }>('/subscriptions/packages')
-      .then((res) => setPackages(res.items ?? []))
+      .then((res) => setPackages(offerablePackages(res.items ?? [])))
       .catch(() => {})
       .finally(() => setPkgLoading(false))
   }, [])
@@ -330,6 +351,10 @@ export default function RegisterScreen() {
 
   /** Register, then run the best-effort chain: role profile → subscription. */
   async function finish(skipPlan: boolean) {
+    if (!consented) {
+      setError('Please confirm you are 18 or older and accept the Terms of Service and Privacy Policy')
+      return
+    }
     setError('')
     setLoading(true)
     let auth: { user: User; token: string; refreshToken?: string }
@@ -339,6 +364,7 @@ export default function RegisterScreen() {
         email: account.email.trim(),
         phone: phoneDigits(account.phone),
         role,
+        acceptance: buildAcceptance(),
       })
     } catch (e) {
       setError((e as { message?: string }).message || 'Registration failed')
@@ -358,7 +384,13 @@ export default function RegisterScreen() {
     }
 
     // 2) Subscription — free plans activate instantly; paid plans are paid on
-    //    the Subscription screen (MoMo), never inside the wizard.
+    //    the Subscription screen, never inside the wizard. Roles that cannot
+    //    hold a plan skip this entirely.
+    if (!hasPlanStep) {
+      setLoading(false)
+      router.replace('/(tabs)')
+      return
+    }
     const chosen = skipPlan
       ? pickFreePackage(packages)
       : (packages.find((p) => p.id === effectivePackageId) ?? pickFreePackage(packages))
@@ -426,14 +458,14 @@ export default function RegisterScreen() {
       eyebrow="A home for every housing workflow"
       title="Build your housing workspace."
       subtitle="Choose your role, verify your identity, and connect to Ghana's rental economy in minutes."
-      formEyebrow={`Create account · Step ${step + 1} of ${STEPS.length}`}
+      formEyebrow={`Create account · Step ${step + 1} of ${steps.length}`}
       formTitle={step === 0 ? 'Choose your role' : step === 1 ? 'Your secure account' : step === 2 ? (heading?.title ?? 'Tell us more') : 'Choose your plan'}
       formSubtitle={step === 0 ? 'We will shape your workspace around how you use RentOS.' : step === 1 ? 'Use details you can access securely on this device.' : step === 2 ? (heading?.hint ?? 'Add the details that make your workspace useful.') : 'Start free and upgrade whenever your portfolio grows.'}
       icon={STEPS[step].icon}
     >
         {/* Step indicator */}
         <View style={s.stepRow}>
-          {STEPS.map((st, i) => (
+          {steps.map((st, i) => (
             <TouchableOpacity
               key={st.label}
               style={[s.stepPill, { backgroundColor: i === step ? c.primary : i < step ? c.primary + '12' : 'transparent' }]}
@@ -590,7 +622,7 @@ export default function RegisterScreen() {
         )}
 
         {/* Step 4 — Plan */}
-        {step === 3 && (
+        {step === 3 && hasPlanStep && (
           <View>
             <Text style={[s.detailsTitle, { color: c.text }]}>Choose a plan</Text>
             <Text style={[s.detailsHint, { color: c.muted }]}>Start free — upgrade anytime from the Subscription screen.</Text>
@@ -645,6 +677,12 @@ export default function RegisterScreen() {
         )}
         </MotionReveal>
 
+        {step === lastStep && (
+          <View style={{ marginTop: spacing.lg }}>
+            <ConsentCheckbox checked={consented} onChange={setConsented} disabled={loading} />
+          </View>
+        )}
+
         {/* Navigation */}
         <View style={s.navRow}>
           <PressScale
@@ -656,13 +694,13 @@ export default function RegisterScreen() {
             <Text style={[s.backBtnText, { color: c.text }]}>Back</Text>
           </PressScale>
 
-          {step === 2 && role !== 'service_provider' && role !== 'business' && (
+          {step === 2 && hasPlanStep && (
             <TouchableOpacity style={s.skipBtn} onPress={() => setStep(3)} disabled={loading}>
               <Text style={[s.skipBtnText, { color: c.muted }]}>Skip for now</Text>
             </TouchableOpacity>
           )}
 
-          {step < STEPS.length - 1 ? (
+          {step < lastStep ? (
             <PressScale
               style={[s.continueBtn, { backgroundColor: c.primary }, !canProceed() && { opacity: 0.45 }]}
               onPress={() => canProceed() && setStep(step + 1)}
@@ -673,10 +711,12 @@ export default function RegisterScreen() {
             </PressScale>
           ) : (
             <View style={s.finishCol}>
-              <TouchableOpacity style={s.skipBtn} onPress={() => void finish(true)} disabled={loading}>
-                <Text style={[s.skipBtnText, { color: c.muted }]}>Skip — Starter (free)</Text>
-              </TouchableOpacity>
-              <PressScale style={[s.continueBtn, { backgroundColor: c.primary }]} onPress={() => void finish(false)} disabled={loading || pkgLoading}>
+              {hasPlanStep && (
+                <TouchableOpacity style={s.skipBtn} onPress={() => void finish(true)} disabled={loading || !consented}>
+                  <Text style={[s.skipBtnText, { color: c.muted }]}>Skip — Starter (free)</Text>
+                </TouchableOpacity>
+              )}
+              <PressScale style={[s.continueBtn, { backgroundColor: c.primary }, !consented && { opacity: 0.45 }]} onPress={() => void finish(false)} disabled={loading || !consented || (hasPlanStep && pkgLoading)}>
                 {loading ? <ActivityIndicator color="#ffffff" /> : (
                   <>
                     <Text style={s.continueBtnText}>Create account</Text>

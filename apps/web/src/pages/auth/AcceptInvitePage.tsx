@@ -9,6 +9,8 @@ import { describeRoles } from '@/lib/roles'
 import { phoneDigits } from '@/lib/ghana'
 import { passwordRequirements } from '@/pages/settings/passwordStrength'
 import type { UserRole } from '@/types'
+import { ConsentCheckbox } from '@/components/legal/ConsentCheckbox'
+import { buildAcceptance } from '../../../../../packages/shared/legalVersions'
 
 interface InviteDetails {
   email: string
@@ -28,6 +30,7 @@ export function AcceptInvitePage() {
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', password: '', confirm: '' })
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done'>('idle')
   const [error, setError] = useState('')
+  const [consented, setConsented] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -43,7 +46,7 @@ export function AcceptInvitePage() {
   const passwordValid = passwordChecks.every((c) => c.ok)
   const phoneValid = phoneDigits(form.phone).length >= 10
   const canSubmit = Boolean(
-    form.firstName.trim() && form.lastName.trim() && phoneValid && passwordValid && form.password === form.confirm,
+    form.firstName.trim() && form.lastName.trim() && phoneValid && passwordValid && form.password === form.confirm && consented,
   )
 
   async function handleSubmit(e: FormEvent) {
@@ -58,6 +61,7 @@ export function AcceptInvitePage() {
         lastName: form.lastName.trim(),
         phone: phoneDigits(form.phone),
         password: form.password,
+        acceptance: buildAcceptance(),
       })
       setStatus('done')
     } catch (err) {
@@ -197,6 +201,10 @@ export function AcceptInvitePage() {
           {form.confirm && form.password !== form.confirm && (
             <p className="mt-2 text-xs text-danger">Passwords do not match</p>
           )}
+        </div>
+
+        <div className="animate-fade-up" style={{ animationDelay: '0.28s' }}>
+          <ConsentCheckbox checked={consented} onChange={setConsented} disabled={status === 'submitting'} />
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: '0.3s' }}>

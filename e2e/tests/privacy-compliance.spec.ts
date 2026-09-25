@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { io } from 'socket.io-client'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('account closure disconnects browser and device sockets and rejects the old session', async ({ page, request, baseURL }) => {
   const registered = await request.post('/api/auth/register', { data: {
-    email: `socket-${Date.now()}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Socket', lastName: 'Test', role: 'tenant',
+    email: `socket-${Date.now()}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Socket', lastName: 'Test', role: 'tenant', acceptance,
   } })
   expect(registered.status()).toBe(201)
   const { data } = await registered.json()
@@ -51,7 +52,7 @@ test('account closure disconnects browser and device sockets and rejects the old
 test('tenant profile editor saves fetched data without sensitive demographics or read-only fields', async ({ page, request }) => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const registered = await request.post('/api/auth/register', { data: {
-    email: `profile-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Profile', lastName: 'Test', role: 'tenant',
+    email: `profile-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Profile', lastName: 'Test', role: 'tenant', acceptance,
   } })
   expect(registered.status()).toBe(201)
   const { data } = await registered.json()
@@ -96,7 +97,7 @@ test('public deletion page provides sign-in and a usable ownership-verification 
 for (const entry of ['/delete-account', '/settings?tab=privacy']) test(`export then account deletion from ${entry} invalidates an existing token and refresh token`, async ({ page, request }) => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const response = await request.post('/api/auth/register', { data: {
-    email: `privacy-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Privacy', lastName: 'Test', role: 'tenant',
+    email: `privacy-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: 'Privacy', lastName: 'Test', role: 'tenant', acceptance,
   } })
   expect(response.status()).toBe(201)
   const { data } = await response.json()

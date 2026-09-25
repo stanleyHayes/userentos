@@ -14,6 +14,8 @@ router.post('/logout-all', authenticate, asyncHandler(authController.logoutAll))
 router.post('/change-password', loginLimiter, authenticate, asyncHandler(authController.changePassword))
 router.post('/forgot-password', loginLimiter, asyncHandler(authController.forgotPassword))
 router.post('/reset-password', loginLimiter, asyncHandler(authController.resetPassword))
+// Renewed Terms/Privacy acceptance after a version bump (see consentRequired).
+router.post('/consents', authenticate, asyncHandler(authController.acceptConsents))
 
 // MFA (TOTP two-factor authentication)
 router.post('/login/mfa', loginLimiter, asyncHandler(authController.verifyMfaLogin))

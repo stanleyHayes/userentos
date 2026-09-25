@@ -1,5 +1,6 @@
 import { test, expect, type WebSocketRoute } from '@playwright/test'
 import { io, type Socket } from 'socket.io-client'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('open web chat rejoins after transport loss and receives typing and new messages', async ({ page, request }) => {
   const accounts: { user: { id: string }; token: string; refreshToken: string }[] = []
@@ -21,7 +22,7 @@ test('open web chat rejoins after transport loss and receives typing and new mes
   }
   try {
     for (const firstName of ['ReconnectOwner', 'ReconnectPeer']) {
-      const response = await request.post('/api/auth/register', { data: { email: `${firstName}-${Date.now()}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName, lastName: 'Fixture', role: 'tenant' } })
+      const response = await request.post('/api/auth/register', { data: { email: `${firstName}-${Date.now()}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName, lastName: 'Fixture', role: 'tenant', acceptance } })
       expect(response.status()).toBe(201)
       accounts.push((await response.json()).data)
     }

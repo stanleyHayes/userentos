@@ -171,6 +171,24 @@ Development databases only.
 2. Whitelist `0.0.0.0/0` for Render access (or use Render's static IPs)
 3. Copy the connection string to `MONGO_URI`, ending it with `/rentos_production`
 
+## Legal identity and document versions (operator checklist)
+
+The Terms, Privacy Policy and Data Protection pages name the data controller
+from `LEGAL_ENTITY` in `packages/shared/types/index.ts` (re-exported by
+`packages/shared/legalVersions.ts`). Before launch:
+
+- set `registeredName` to the company name on the Registrar-General's
+  certificate, and `registrationNumber` / `dpcRegistrationNumber` once issued —
+  until then the notices show only the trading name "RentOS";
+- confirm `privacyEmail` / `supportEmail` are monitored mailboxes;
+- no support phone number is published anywhere — add one to the notices only
+  once a staffed line exists.
+
+When the Terms or Privacy Policy text changes materially, bump
+`TERMS_VERSION` / `PRIVACY_VERSION` to the date of the change. Registration
+refuses any other version, and every signed-in user whose stored acceptance is
+older sees a banner asking them to accept again (`consentRequired`).
+
 ## Graceful Shutdown
 
 The server handles `SIGTERM` and `SIGINT` signals for graceful shutdown:

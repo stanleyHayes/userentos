@@ -12,6 +12,7 @@ import { getBestRoleForPortal } from '@/lib/subdomain'
 import { api } from '@/lib/api'
 import { Building2, FileText, KeyRound, ShieldAlert, Sparkles } from 'lucide-react'
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour'
+import { ConsentBanner } from '@/components/legal/ConsentBanner'
 import { SplashScreen } from '@/components/ui/SplashScreen'
 import { WatermarkConstellation } from '@/components/ui/Watermark'
 
@@ -124,6 +125,7 @@ export function DashboardLayout() {
           <p>You can still <a className="underline" href="/agreements">view your agreements</a> and <a className="underline" href="/payments">view payments or pay rent on active agreements</a>.</p>
           <p><a className="underline" href="/delete-account">Export your data or delete your account</a>. For an appeal or help with existing obligations, contact <a className="underline" href="mailto:info@userentos.com?subject=Account%20suspension%20appeal">info@userentos.com</a>.</p>
         </div>}
+        <ConsentBanner />
         <main className="p-3 sm:p-4 md:p-6">
           <div className="max-w-[1480px] mx-auto pb-10">
             <div key={location.pathname} className="page-enter">

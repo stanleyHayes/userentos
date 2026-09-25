@@ -9,11 +9,12 @@ import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
 import { BiometricToken } from '../models/BiometricToken.js'
 import { DeviceToken } from '../models/DeviceToken.js'
-import { User } from '../models/User.js'
+import { User, type IUserConsents } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
 import QRCode from 'qrcode'
 import { disconnectUser } from './socket.js'
+import { recordAuditEntry } from '../utils/audit.js'
 
 interface RegisterData {
   email: string
@@ -65,7 +66,25 @@ export class AuthService {
     return jwt.sign({ ...payload, purpose: 'session' }, config.jwtSecret, { expiresIn: config.jwtAccessExpiresIn })
   }
 
-  async register(data: RegisterData, deviceLabel?: string, ipAddress?: string) {
+  /** Evidence trail for each acceptance; User.consents keeps only the latest. */
+  private auditConsent(userId: string, consent: IUserConsents, context: 'register' | 'invitation' | 'renewal') {
+    void recordAuditEntry({
+      userId,
+      action: 'consent.accept',
+      entityType: 'User',
+      entityId: userId,
+      details: {
+        context,
+        termsVersion: consent.termsVersion,
+        privacyVersion: consent.privacyVersion,
+        ageConfirmed: consent.ageConfirmed,
+        userAgent: consent.userAgent,
+      },
+      ipAddress: consent.ip,
+    })
+  }
+
+  async register(data: RegisterData, deviceLabel: string | undefined, ipAddress: string | undefined, consent: IUserConsents) {
     const { email, phone, password, firstName, lastName, role } = data
 
     const existing = await this.userRepo.findByEmail(email)
@@ -83,7 +102,9 @@ export class AuthService {
       passwordHash,
       roles: [role],
       activeRole: role,
+      consents: consent,
     })
+    this.auditConsent(user._id.toString(), consent, 'register')
 
     await this.walletRepo.create({ userId: user._id.toString(), balance: 0, transactions: [] })
 
@@ -191,6 +212,24 @@ export class AuthService {
     this.logger.info(`User logged in with MFA: ${user.email}`)
 
     return { data: { user: safeUser, token, refreshToken } }
+  }
+
+  /** Record acceptance of the current Terms/Privacy versions for a signed-in user. */
+  async acceptConsents(userId: string, consent: IUserConsents) {
+    const result = await User.updateOne({ _id: userId }, { $set: { consents: consent } })
+    if (!result.matchedCount) return { error: 'User not found', status: 404 }
+    this.auditConsent(userId, consent, 'renewal')
+    return {
+      data: {
+        consents: {
+          termsVersion: consent.termsVersion,
+          privacyVersion: consent.privacyVersion,
+          acceptedAt: consent.acceptedAt,
+          ageConfirmed: consent.ageConfirmed,
+        },
+        consentRequired: false,
+      },
+    }
   }
 
   /** Start MFA enrollment: generate a pending secret + QR code (not yet enabled). */

@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/auth'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 // API base URL — defaults to the CI/dev port; override with E2E_API_URL when
 // the local API runs on a different port.
@@ -31,6 +32,7 @@ test.describe('property application', () => {
         firstName: 'E2E',
         lastName: 'ApplyLandlord',
         role: 'landlord',
+        acceptance,
       },
     })
     const registerData = await registerRes.json()
