@@ -42,7 +42,7 @@ const EXPECTED_FALLBACKS = new Set(['/reviews', '/admin/move-outs', '/admin/paym
 test('every API notification link opens an existing mobile screen', () => {
   const urls = apiNotificationUrls()
   // Guard against the scan silently matching nothing.
-  for (const known of ['/dashboard', '/payments', '/subscriptions', '/financing/mandates']) expect(urls).toContain(known)
+  for (const known of ['/dashboard', '/payments', '/subscription', '/financing/mandates']) expect(urls).toContain(known)
   expect(urls.some((u) => u.startsWith('/agreements/') && u.endsWith('/move-out'))).toBe(true)
   expect(urls.some((u) => u.startsWith('/financing/contracts/'))).toBe(true)
 
