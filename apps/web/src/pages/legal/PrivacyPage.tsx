@@ -156,9 +156,9 @@ export function PrivacyPage() {
                 'Your account data is kept while your account is open.',
                 'When you close your account, your name, email, phone, Ghana Card number, photo and two-factor secret are erased or scrambled immediately, and your other personal records are deleted 30 days later. Payment, agreement and other financial or contract records, and reviews (with your name removed), are kept where we need them for legal obligations or claims.',
                 'Audit logs (including sign-in and acceptance records): 2 years.',
-                'Rent price estimate logs: 2 years. Redacted complaint records: 180 days. Payment-provider webhook records: 90 days. App-store notifications: 30 days after processing.',
+                'Rent price estimate logs: 2 years. Redacted complaint records: 180 days. Payment-provider webhook records: 90 days. App-store notifications: 30 days after processing. Public registry page views (hashed IP address, browser and referring page): 13 months. Storefront visit statistics: 400 days. Reports we dismiss: 1 year after review (reports we act on are kept with the moderation record).',
                 'Sign-in sessions expire after 7 days of inactivity; biometric sign-in on a device after 90 days; password-reset links after 1 hour.',
-                'Notifications and messages are kept until your account is deleted.',
+                'Notifications: 1 year once read, 2 years if never read. Messages are kept until your account is deleted.',
                 'AI requests are not stored by RentOS; the AI provider handles them under its own retention terms.',
               ])}
             </>
