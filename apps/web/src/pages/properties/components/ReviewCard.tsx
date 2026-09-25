@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { formatDate } from '@/lib/utils'
 import { useDeleteReview } from '@/hooks/useReviews'
 import type { Review } from '@/hooks/useReviews'
+import { ReportContentButton } from '@/components/ReportContentDialog'
 import { StarRating } from './StarRating'
 import { EyeOff, UserCircle, Trash2, ThumbsUp, ThumbsDown, Check, X as XIcon } from 'lucide-react'
 
@@ -79,6 +80,8 @@ export function ReviewCard({ review, propertyId }: ReviewCardProps) {
           )}
         </div>
       )}
+
+      {user && !isOwn && <ReportContentButton target={{ type: 'review', id: review.id, noun: 'review' }} label="Report" />}
     </div>
   )
 }

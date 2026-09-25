@@ -25,6 +25,7 @@ import {
 import { useAuthStore } from '@/stores/authStore'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
+import { ReportContentButton } from '@/components/ReportContentDialog'
 import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent, MessageSquare, Star, Loader2 } from 'lucide-react'
 
 const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
@@ -112,6 +113,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
   const [reviewForm, setReviewForm] = useState<{ rating: number; review: string } | null>(null)
   const reviews = reviewsData?.items ?? []
   const canContact = user?.activeRole !== 'business'
+  const isOwner = !!user && business.ownerId === user.id
 
   async function sendInquiry() {
     if (!inquiryForm) return
@@ -219,6 +221,9 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
                     <span className="flex text-amber-500">{Array.from({ length: 5 }, (_, i) => <Star key={i} size={11} fill={i < review.rating ? 'currentColor' : 'none'} />)}</span>
                   </div>
                   {review.review && <p className="mt-1 text-xs leading-relaxed text-muted dark:text-gray-400">{review.review}</p>}
+                  {user && review.authorId !== user.id && (
+                    <ReportContentButton className="mt-1.5" target={{ type: 'business_review', id: review.id, noun: 'review' }} label="Report" />
+                  )}
                 </div>
               ))}
             </div>
@@ -252,6 +257,12 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
               <Button variant="outline" size="sm" onClick={() => setReviewForm(null)}>Cancel</Button>
               <Button size="sm" disabled={submitReview.isPending} onClick={() => void saveReview()}>Save review</Button>
             </div>
+          </div>
+        )}
+
+        {user && !isOwner && (
+          <div className="flex justify-center">
+            <ReportContentButton target={{ type: 'business', id: business.id, noun: 'business' }} />
           </div>
         )}
       </div>
