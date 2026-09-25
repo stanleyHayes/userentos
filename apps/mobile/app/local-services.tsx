@@ -76,20 +76,6 @@ function formatPrice(n: number): string {
   return `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/**
- * The reports API has no target type for business reviews yet, so the review
- * is reported through its author (`user`) with the review itself attached for
- * the moderator.
- */
-function businessReviewReport(businessName: string, review: Review): ReportTarget {
-  return {
-    type: 'user',
-    id: review.authorId!,
-    noun: 'review',
-    context: `Reported review ${review.id} on business "${businessName}" (${review.rating}/5): ${review.review?.trim() || '(rating only)'}`,
-  }
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -478,10 +464,10 @@ function BusinessDetail({
             {r.review ? (
               <Text style={[s.reviewBody, { color: c.text }]}>{r.review}</Text>
             ) : null}
-            {r.authorId && r.authorId !== userId ? (
+            {r.authorId !== userId ? (
               <TouchableOpacity
                 style={s.reportLink}
-                onPress={() => setReportTarget(businessReviewReport(business.name, r))}
+                onPress={() => setReportTarget({ type: 'business_review', id: r.id, noun: 'review' })}
                 accessibilityRole="button"
                 accessibilityLabel="Report review"
                 hitSlop={6}
@@ -547,12 +533,7 @@ function BusinessDetail({
       {!isOwner && (
         <TouchableOpacity
           style={[s.reportLink, s.reportBusiness]}
-          onPress={() => setReportTarget({
-            type: 'user',
-            id: business.ownerId,
-            noun: 'business',
-            context: `Reported business listing "${business.name}" (business ${business.id}).`,
-          })}
+          onPress={() => setReportTarget({ type: 'business', id: business.id, noun: 'business' })}
           accessibilityRole="button"
           accessibilityLabel="Report business"
         >

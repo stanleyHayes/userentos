@@ -175,17 +175,11 @@ export default function BookingsScreen() {
                   <Ionicons name="star" size={14} color="#f59e0b" />
                   <Text style={[s.ratingText, { color: c.text }]}>{b.rating}</Text>
                   {b.review && <Text style={[s.reviewText, { color: c.textLight }]}>"{b.review}"</Text>}
-                  {/* A provider can report an abusive review left by the customer.
-                      There is no booking-review report type yet, so the author is
-                      reported with the review attached. */}
-                  {canActAsWorker && b.review && b.requesterId ? (
+                  {/* A provider can report an abusive review left by the customer;
+                      a worker review is identified by the booking that carries it. */}
+                  {canActAsWorker && b.review ? (
                     <TouchableOpacity
-                      onPress={() => setReportTarget({
-                        type: 'user',
-                        id: b.requesterId!,
-                        noun: 'review',
-                        context: `Reported review on service booking ${b.id ?? b._id} (${b.rating}/5): ${b.review}`,
-                      })}
+                      onPress={() => setReportTarget({ type: 'worker_review', id: b.id ?? b._id!, noun: 'review' })}
                       accessibilityRole="button"
                       accessibilityLabel="Report review"
                       hitSlop={6}

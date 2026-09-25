@@ -5,19 +5,18 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 
-/** Target types the API's POST /reports accepts that mobile currently reports. */
-export type ReportTargetType = 'property' | 'review' | 'user'
+/**
+ * Target types the API's POST /reports accepts that mobile reports. `review`
+ * is a property review; a `worker_review` is identified by the service booking
+ * that carries the rating and text.
+ */
+export type ReportTargetType = 'property' | 'review' | 'user' | 'business' | 'business_review' | 'worker' | 'worker_review'
 
 export interface ReportTarget {
   type: ReportTargetType
   id: string
   /** What is being reported, in the user's words: "listing", "review", ... */
   noun: string
-  /**
-   * Context sent along with the report, e.g. the text of a review that is
-   * reported through its author because the API has no target type for it.
-   */
-  context?: string
 }
 
 type Reason = 'scam_or_fraud' | 'misleading_listing' | 'not_available' | 'offensive_content' | 'spam' | 'duplicate' | 'illegal' | 'other'
@@ -44,7 +43,7 @@ const CONTENT_REASONS: { value: Reason; label: string }[] = [
 const DETAILS_LIMIT = 2000
 
 /**
- * Report a listing, review or user to the moderation queue (POST /reports):
+ * Report a listing, profile, review or user to the moderation queue (POST /reports):
  * pick a reason, optionally explain, then see an explicit confirmation.
  * A modal rather than Alert buttons, because Android alerts cap at three
  * buttons and the reason list is longer than that.
@@ -75,7 +74,7 @@ function ReportForm({ target, onClose }: { target: ReportTarget; onClose: () => 
     setSubmitting(true)
     setError('')
     try {
-      const text = [target.context, details.trim()].filter(Boolean).join('\n\n').slice(0, DETAILS_LIMIT)
+      const text = details.trim().slice(0, DETAILS_LIMIT)
       await api.post('/reports', { targetType: target.type, targetId: target.id, reason, ...(text ? { details: text } : {}) })
       setSent(true)
     } catch (err) {

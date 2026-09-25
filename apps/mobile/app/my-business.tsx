@@ -612,17 +612,11 @@ function Dashboard({
                 {r.review ? (
                   <Text style={[s.listingDesc, { color: c.muted }]}>{r.review}</Text>
                 ) : null}
-                {r.authorId ? (
+                {/* Reviews here are about the owner's business, written by customers. */}
+                {r.authorId !== business.ownerId ? (
                   <TouchableOpacity
                     style={s.reportLink}
-                    // No business-review report type exists yet: report the
-                    // author, with the review attached for the moderator.
-                    onPress={() => setReportTarget({
-                      type: 'user',
-                      id: r.authorId!,
-                      noun: 'review',
-                      context: `Reported review ${r.id} on business "${business.name}" (${r.rating}/5): ${r.review?.trim() || '(rating only)'}`,
-                    })}
+                    onPress={() => setReportTarget({ type: 'business_review', id: r.id, noun: 'review' })}
                     accessibilityRole="button"
                     accessibilityLabel="Report review"
                     hitSlop={6}
