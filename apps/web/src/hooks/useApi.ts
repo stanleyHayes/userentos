@@ -15,9 +15,6 @@ import type {
   AuthResponse,
   Conversation,
   ChatMessage,
-  Investment,
-  InvestmentOption,
-  Loan,
   CreditScore,
   TenantProfile,
   ProfileAccess,
@@ -790,84 +787,6 @@ export function useContributeToSavings() {
       api.post(`/savings/plans/${planId}/contribute`, { amount }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['savings-plans'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-// Investments
-export function useInvestmentOptions() {
-  return useQuery({
-    queryKey: ['investment-options'],
-    queryFn: () => api.get<InvestmentOption[]>('/investments/options'),
-  })
-}
-
-export function useInvestments() {
-  return useQuery({
-    queryKey: ['investments'],
-    queryFn: () => api.get<Investment[]>('/investments'),
-  })
-}
-
-export function useCreateInvestment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { type: string; amount: number; tenure: number; partnerId: string; riskDisclosureAccepted: boolean }) =>
-      api.post<Investment>('/investments', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['investments'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-export function useWithdrawInvestment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.post<Investment>(`/investments/${id}/withdraw`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['investments'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-// Loans
-export function useLoans() {
-  return useQuery({
-    queryKey: ['loans'],
-    queryFn: () => api.get<Loan[]>('/loans'),
-  })
-}
-
-export function useApplyForLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { agreementId: string; amount: number; tenure: number; reason: string }) =>
-      api.post<Loan>('/loans/apply', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loans'] }),
-  })
-}
-
-export function useDisburseLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.post<Loan>(`/loans/${id}/disburse`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-export function useRepayLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, amount }: { id: string; amount: number }) =>
-      api.post<Loan>(`/loans/${id}/repay`, { amount }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans'] })
       qc.invalidateQueries({ queryKey: ['wallet'] })
     },
   })

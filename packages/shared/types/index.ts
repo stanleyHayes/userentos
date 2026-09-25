@@ -533,34 +533,48 @@ export interface TenantProfile {
 // --- Investment ---
 
 export type InvestmentType = 'treasury_bill' | 'government_bond'
-export type InvestmentStatus = 'active' | 'matured' | 'withdrawn' | 'pending'
+export type InvestmentStatus = 'pending' | 'active' | 'redemption_requested' | 'matured' | 'withdrawn' | 'rejected'
 
 export interface Investment {
   id: string
   userId: string
   type: InvestmentType
   amount: number
+  /** Partner's indicative annual rate — not guaranteed. */
   interestRate: number
   tenure: number
   startDate: string
   maturityDate: string
   status: InvestmentStatus
+  /** Indicative only; the actual payout is whatever the partner settles. */
   expectedReturn: number
   actualReturn?: number
   partnerId: string
+  productId?: string
+  partnerName?: string
+  partnerReference?: string
+  rejectionReason?: string
+  redemptionRequestedAt?: string
+  settledAmount?: number
+  settledAt?: string
   createdAt: string
   updatedAt: string
 }
 
+/** An admin-configured product of a verified partner (GET /investments/options). */
 export interface InvestmentOption {
   id: string
+  partnerId: string
+  partnerName: string
+  regulator: 'SEC' | 'BoG'
+  partnerLicenseNumber: string
   name: string
   type: InvestmentType
+  tenureDays: number
+  indicativeAnnualRate?: number
   minAmount: number
-  interestRate: number
-  tenure: number
-  partner: string
   description: string
+  riskWarning: string
 }
 
 // --- Loan ---

@@ -5,22 +5,17 @@ import { useThemeColors, useIsDark, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact, formatDate } from '../lib/format'
 import { api } from '../lib/api'
-
-interface Investment {
-  id: string; type: string; amount: number; interestRate: number; tenure: number
-  startDate: string; maturityDate: string; status: string; expectedReturn: number; actualReturn?: number; partnerId: string
-}
+import type { Investment, InvestmentOption } from '../types/shared'
 
 interface InvestmentOptions {
-  partners: { id: string; name: string; types: string[] }[]
-  rates: Record<string, Record<string, number>>
+  products: InvestmentOption[]
   disclaimer: string
 }
 
-const investmentTypes = [
-  { value: 'treasury_bill', label: 'Treasury Bill' },
-  { value: 'government_bond', label: 'Gov. Bond' },
-]
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Awaiting partner', active: 'Active', redemption_requested: 'Redemption requested',
+  matured: 'Paid out', withdrawn: 'Redeemed early', rejected: 'Declined — refunded',
+}
 
 export default function InvestmentsScreen() {
   const c = useThemeColors()
@@ -35,12 +30,12 @@ export default function InvestmentsScreen() {
     matured: { bg: c.secondary + '20', text: c.secondary },
     withdrawn: { bg: c.muted + '20', text: c.muted },
     pending: { bg: c.warning + '20', text: c.warning },
+    redemption_requested: { bg: c.warning + '20', text: c.warning },
+    rejected: { bg: c.danger + '20', text: c.danger },
   }
 
   const [showCreate, setShowCreate] = useState(false)
-  const [type, setType] = useState('treasury_bill')
-  const [tenure, setTenure] = useState('')
-  const [partnerId, setPartnerId] = useState('')
+  const [productId, setProductId] = useState('')
   const [amount, setAmount] = useState('')
   const [accepted, setAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -54,61 +49,44 @@ export default function InvestmentsScreen() {
       ])
       setInvestments(inv.items)
       setOptions(opts)
-      if (opts.partners.length > 0 && !partnerId) setPartnerId(opts.partners[0].id)
-      const tenureKeys = Object.keys(opts.rates['treasury_bill'] || {})
-      if (tenureKeys.length > 0 && !tenure) setTenure(tenureKeys[0])
+      if (opts.products.length > 0 && !productId) setProductId(opts.products[0].id)
     } catch { /* no-op */ } finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
-  const active = investments.filter((i) => i.status === 'active')
-  const totalInvested = active.reduce((s, i) => s + i.amount, 0)
-  const totalExpected = active.reduce((s, i) => s + i.expectedReturn, 0)
-
-  const rate = options?.rates[type]?.[tenure]
-  const amountNum = Number(amount) || 0
-  const expectedReturn = rate && amountNum > 0 ? amountNum * (rate / 100) * (Number(tenure) / 365) : 0
-
-  const tenureOptions = Object.keys(options?.rates[type] || {}).map((d) => ({
-    value: d, label: `${d} days (${options!.rates[type][d]}%)`,
-  }))
-  const filteredPartners = (options?.partners ?? []).filter((p) => p.types.includes(type))
+  const held = investments.filter((i) => i.status === 'active' || i.status === 'pending' || i.status === 'redemption_requested')
+  const totalInvested = held.reduce((s, i) => s + i.amount, 0)
+  const awaiting = investments.filter((i) => i.status === 'pending' || i.status === 'redemption_requested').length
+  const products = options?.products ?? []
+  const product = products.find((p) => p.id === productId)
 
   function resetCreateModal() {
-    setShowCreate(false); setType('treasury_bill'); setAmount(''); setAccepted(false)
-    if (options) {
-      const tenureKeys = Object.keys(options.rates['treasury_bill'] || {})
-      setTenure(tenureKeys[0] || ''); setPartnerId(options.partners[0]?.id ?? '')
-    }
+    setShowCreate(false); setAmount(''); setAccepted(false); setProductId(products[0]?.id ?? '')
   }
 
   async function handleCreate() {
-    if (!amount || isNaN(Number(amount)) || Number(amount) < 100) { Alert.alert('Error', 'Please enter an amount of at least GHS 100'); return }
-    if (!tenure) { Alert.alert('Error', 'Please select a tenure'); return }
-    if (!partnerId) { Alert.alert('Error', 'Please select a partner'); return }
+    if (!product) { Alert.alert('Error', 'Please select a product'); return }
+    if (!amount || isNaN(Number(amount)) || Number(amount) < product.minAmount) { Alert.alert('Error', `Please enter at least ${formatCurrency(product.minAmount)}`); return }
     if (!accepted) { Alert.alert('Error', 'Please accept the risk disclosure'); return }
     setSubmitting(true)
     try {
-      await api.post('/investments', { type, amount: Number(amount), tenure: Number(tenure), partnerId, riskDisclosureAccepted: accepted })
-      resetCreateModal(); Alert.alert('Success', 'Investment created successfully'); await load()
+      await api.post('/investments', { productId: product.id, amount: Number(amount), riskDisclosureAccepted: accepted })
+      resetCreateModal(); Alert.alert('Order placed', `Your order was sent to ${product.partnerName}. It stays pending until they confirm it; if they decline, you are refunded.`); await load()
     } catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Failed to create investment')
+      Alert.alert('Error', (e as { message?: string }).message || 'Failed to place the order')
     } finally { setSubmitting(false) }
   }
 
   async function handleWithdraw(id: string) {
-    Alert.alert('Withdraw', 'Are you sure you want to withdraw this investment?', [
+    Alert.alert('Request redemption', 'The partner will redeem this investment on its terms. Early redemption may return less than you invested. You are paid when the partner settles.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Withdraw', onPress: async () => {
+      { text: 'Request', onPress: async () => {
         setWithdrawingId(id)
-        try { await api.post(`/investments/${id}/withdraw`, {}); Alert.alert('Success', 'Withdrawal successful'); await load() }
-        catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Withdrawal failed')
-    } finally { setWithdrawingId(null) }
+        try { await api.post(`/investments/${id}/withdraw`, {}); Alert.alert('Requested', 'You will be paid when the partner settles.'); await load() }
+        catch (e) { Alert.alert('Error', (e as { message?: string }).message || 'Request failed') }
+        finally { setWithdrawingId(null) }
       }},
     ])
   }
@@ -118,9 +96,9 @@ export default function InvestmentsScreen() {
   }
 
   const summaryStats = [
-    { icon: 'trending-up-outline' as const, label: 'Total Invested', value: formatCompact(totalInvested), color: dark ? '#60a5fa' : '#1e3a5f' },
-    { icon: 'sparkles-outline' as const, label: 'Expected Returns', value: formatCompact(totalExpected), color: dark ? '#34d399' : '#059669' },
-    { icon: 'layers-outline' as const, label: 'Active', value: `${active.length}`, color: dark ? '#f59e0b' : '#d97706' },
+    { icon: 'trending-up-outline' as const, label: 'Held with partners', value: formatCompact(totalInvested), color: dark ? '#60a5fa' : '#1e3a5f' },
+    { icon: 'time-outline' as const, label: 'Awaiting partner', value: `${awaiting}`, color: dark ? '#f59e0b' : '#d97706' },
+    { icon: 'layers-outline' as const, label: 'Active', value: `${investments.filter((i) => i.status === 'active').length}`, color: dark ? '#34d399' : '#059669' },
   ]
 
   return (
@@ -158,10 +136,19 @@ export default function InvestmentsScreen() {
           ))}
         </ScrollView>
 
-        <TouchableOpacity style={[s.newBtn, { backgroundColor: c.accent }]} activeOpacity={0.85} onPress={() => setShowCreate(true)}>
-          <Ionicons name="trending-up-outline" size={20} color="#ffffff" />
-          <Text style={s.newBtnText}>New Investment</Text>
-        </TouchableOpacity>
+        {options?.disclaimer && (
+          <View style={[s.disclaimerCard, { backgroundColor: c.warning + '08', borderColor: c.warning + '30', marginHorizontal: spacing.md }]}>
+            <Ionicons name="warning-outline" size={16} color={c.warning} style={{ marginTop: 2 }} />
+            <Text style={[s.disclaimerText, { color: c.text }]}>{options.disclaimer}</Text>
+          </View>
+        )}
+
+        {products.length > 0 && (
+          <TouchableOpacity style={[s.newBtn, { backgroundColor: c.accent }]} activeOpacity={0.85} onPress={() => setShowCreate(true)}>
+            <Ionicons name="trending-up-outline" size={20} color="#ffffff" />
+            <Text style={s.newBtnText}>New Investment</Text>
+          </TouchableOpacity>
+        )}
 
         {investments.length > 0 ? (
           <View style={s.section}>
@@ -172,11 +159,11 @@ export default function InvestmentsScreen() {
                 <View key={inv.id} style={[s.card, neuCard(c)]}>
                   <View style={s.cardHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.cardTitle, { color: c.primaryDark }]}>{inv.type.replace('_', ' ')}</Text>
-                      <Text style={[s.cardMeta, { color: c.muted }]}>{inv.tenure} days at {inv.interestRate}% - Matures {formatDate(inv.maturityDate)}</Text>
+                      <Text style={[s.cardTitle, { color: c.primaryDark }]}>{inv.type.replace('_', ' ')}{inv.partnerName ? ` · ${inv.partnerName}` : ''}</Text>
+                      <Text style={[s.cardMeta, { color: c.muted }]}>{inv.tenure} days · indicative {inv.interestRate}% a year, not guaranteed{inv.status === 'active' ? ` · matures ${formatDate(inv.maturityDate)}` : ''}</Text>
                     </View>
                     <View style={[s.badge, { backgroundColor: sc.bg }]}>
-                      <Text style={[s.badgeText, { color: sc.text }]}>{inv.status}</Text>
+                      <Text style={[s.badgeText, { color: sc.text }]}>{STATUS_LABEL[inv.status] ?? inv.status}</Text>
                     </View>
                   </View>
                   <View style={s.cardAmountRow}>
@@ -184,15 +171,18 @@ export default function InvestmentsScreen() {
                       <Text style={[s.cardAmountLabel, { color: c.muted }]}>Invested</Text>
                       <Text style={[s.cardAmount, { color: c.primary }]} numberOfLines={1} adjustsFontSizeToFit>{formatCompact(inv.amount)}</Text>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[s.cardAmountLabel, { color: c.muted }]}>Return</Text>
-                      <Text style={[s.cardReturn, { color: c.accent }]} numberOfLines={1} adjustsFontSizeToFit>+{formatCompact(inv.actualReturn ?? inv.expectedReturn)}</Text>
-                    </View>
+                    {inv.settledAmount != null && (
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[s.cardAmountLabel, { color: c.muted }]}>Paid out</Text>
+                        <Text style={[s.cardReturn, { color: c.accent }]} numberOfLines={1} adjustsFontSizeToFit>{formatCompact(inv.settledAmount)}</Text>
+                      </View>
+                    )}
                   </View>
-                  {inv.status === 'matured' && (
+                  {inv.rejectionReason && <Text style={[s.cardMeta, { color: c.muted }]}>Reason: {inv.rejectionReason}</Text>}
+                  {inv.status === 'active' && (
                     <TouchableOpacity style={[s.withdrawBtn, { backgroundColor: c.primary }]} onPress={() => handleWithdraw(inv.id)} disabled={withdrawingId === inv.id} activeOpacity={0.85}>
                       {withdrawingId === inv.id ? <ActivityIndicator color="#ffffff" size="small" /> : (
-                        <><Ionicons name="wallet-outline" size={16} color="#ffffff" /><Text style={s.withdrawBtnText}>Withdraw to Wallet</Text></>
+                        <><Ionicons name="wallet-outline" size={16} color="#ffffff" /><Text style={s.withdrawBtnText}>Request redemption</Text></>
                       )}
                     </TouchableOpacity>
                   )}
@@ -204,7 +194,7 @@ export default function InvestmentsScreen() {
           <View style={s.emptySection}>
             <Ionicons name="trending-up-outline" size={48} color={c.muted} />
             <Text style={[s.emptyText, { color: c.muted }]}>No investments yet</Text>
-            <Text style={[s.emptySubtext, { color: c.muted }]}>Grow your savings with treasury bills and government bonds.</Text>
+            <Text style={[s.emptySubtext, { color: c.muted }]}>{products.length ? 'Investments are placed with regulated partners. Returns are not guaranteed.' : 'No partner investment products are available right now.'}</Text>
           </View>
         )}
         <View style={{ height: spacing.xl }} />
@@ -220,57 +210,34 @@ export default function InvestmentsScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Type</Text>
+              <Text style={[s.fieldLabel, { color: c.text }]}>Product</Text>
               <View style={s.optionsGroup}>
-                {investmentTypes.map((t) => (
-                  <TouchableOpacity key={t.value} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, type === t.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
-                    onPress={() => { setType(t.value); const keys = Object.keys(options?.rates[t.value] || {}); setTenure(keys[0] || ''); const fp = (options?.partners ?? []).filter((p) => p.types.includes(t.value)); setPartnerId(fp[0]?.id ?? '') }}>
-                    <Text style={[s.optionText, { color: c.text }, type === t.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{t.label}</Text>
+                {products.map((p) => (
+                  <TouchableOpacity key={p.id} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, productId === p.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => { setProductId(p.id); setAccepted(false) }}>
+                    <Text style={[s.optionText, { color: c.text }, productId === p.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{p.name} — {p.partnerName}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Tenure</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.xs }}>
-                <View style={s.optionsGroupScroll}>
-                  {tenureOptions.map((t) => (
-                    <TouchableOpacity key={t.value} style={[s.optionBtn, { flex: 0, paddingHorizontal: spacing.md, backgroundColor: c.surface, borderColor: c.border }, tenure === t.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => setTenure(t.value)}>
-                      <Text style={[s.optionText, { color: c.text }, tenure === t.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{t.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Investment Partner</Text>
-              <View style={s.optionsGroup}>
-                {filteredPartners.map((p) => (
-                  <TouchableOpacity key={p.id} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, partnerId === p.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => setPartnerId(p.id)}>
-                    <Text style={[s.optionText, { color: c.text }, partnerId === p.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{p.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
-              <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="Min. 100" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
-              {amountNum > 0 && rate && (
+              {product && (
                 <View style={[s.returnCard, { backgroundColor: c.accent + '08', borderColor: c.accent + '30' }]}>
-                  <Text style={[s.returnRow, { color: c.text }]}>Rate: <Text style={s.returnBold}>{rate}%</Text></Text>
-                  <Text style={[s.returnRow, { color: c.text }]}>Expected return: <Text style={s.returnBold}>{formatCurrency(Math.round(expectedReturn * 100) / 100)}</Text></Text>
-                  <Text style={[s.returnRowSub, { color: c.muted }]}>Total at maturity: {formatCurrency(amountNum + expectedReturn)}</Text>
+                  <Text style={[s.returnRow, { color: c.text }]}>Held by: <Text style={s.returnBold}>{product.partnerName}</Text> ({product.regulator} licence {product.partnerLicenseNumber})</Text>
+                  <Text style={[s.returnRow, { color: c.text }]}>Term: <Text style={s.returnBold}>{product.tenureDays} days</Text> · minimum {formatCurrency(product.minAmount)}</Text>
+                  {product.indicativeAnnualRate != null && <Text style={[s.returnRow, { color: c.text }]}>Partner's indicative rate: <Text style={s.returnBold}>{product.indicativeAnnualRate}% a year</Text> — not guaranteed</Text>}
+                  <Text style={[s.returnRowSub, { color: c.muted }]}>{product.riskWarning}</Text>
                 </View>
               )}
-              {options?.disclaimer && (
-                <View style={[s.disclaimerCard, { backgroundColor: c.warning + '08', borderColor: c.warning + '30' }]}>
-                  <Ionicons name="warning-outline" size={16} color={c.warning} style={{ marginTop: 2 }} />
-                  <Text style={[s.disclaimerText, { color: c.text }]}>{options.disclaimer}</Text>
-                </View>
-              )}
+              <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
+              <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder={product ? `Min. ${product.minAmount}` : ''} placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <Text style={[s.returnRowSub, { color: c.muted, marginTop: spacing.sm }]}>Your money leaves your wallet for the partner. The order stays pending until the partner confirms it; if they decline, you are refunded.</Text>
               <TouchableOpacity style={s.checkboxRow} onPress={() => setAccepted(!accepted)} activeOpacity={0.7}>
                 <View style={[s.checkbox, { borderColor: c.border }, accepted && { backgroundColor: c.primary, borderColor: c.primary }]}>
                   {accepted && <Ionicons name="checkmark" size={14} color="#ffffff" />}
                 </View>
-                <Text style={[s.checkboxLabel, { color: c.text }]}>I understand and accept the investment risks</Text>
+                <Text style={[s.checkboxLabel, { color: c.text }]}>I understand returns are not guaranteed and I could get back less than I invest</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.submitBtn, { backgroundColor: c.primary }, (submitting || !accepted) && s.submitBtnDisabled]} onPress={handleCreate} disabled={submitting || !accepted} activeOpacity={0.85}>
                 {submitting ? <ActivityIndicator color="#ffffff" /> : (
-                  <><Ionicons name="checkmark-circle" size={18} color="#ffffff" /><Text style={s.submitBtnText}>Invest</Text></>
+                  <><Ionicons name="checkmark-circle" size={18} color="#ffffff" /><Text style={s.submitBtnText}>Place order</Text></>
                 )}
               </TouchableOpacity>
             </ScrollView>
