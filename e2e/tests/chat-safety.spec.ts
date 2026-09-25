@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('web block prevents contact in both directions and only its owner can remove it', async ({ page, request }) => {
   const suffix = `${Date.now()}`
   const accounts = []
   for (const firstName of ['BlockOwner', 'BlockTarget', 'ReportOutsider']) {
-    const response = await request.post('/api/auth/register', { data: { email: `${firstName}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName, lastName: suffix, role: 'tenant' } })
+    const response = await request.post('/api/auth/register', { data: { email: `${firstName}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName, lastName: suffix, role: 'tenant', acceptance } })
     expect(response.status()).toBe(201)
     accounts.push((await response.json()).data)
   }

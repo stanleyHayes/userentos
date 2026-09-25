@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { MongoClient, ObjectId } from 'mongodb'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('suspended accounts retain only their own existing tenancy obligations', async ({ page, request }) => {
   test.skip(process.env.MONGO_URI !== 'mongodb://localhost:28018/rentos_compliance_e2e', 'Requires isolated compliance database')
@@ -12,7 +13,7 @@ test('suspended accounts retain only their own existing tenancy obligations', as
   const suffix = Date.now()
   try {
     for (const name of ['RestrictedTenant', 'Landlord', 'OtherTenant']) {
-      const registered = await request.post('/api/auth/register', { data: { email: `${name}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: 'tenant' } })
+      const registered = await request.post('/api/auth/register', { data: { email: `${name}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: 'tenant', acceptance } })
       expect(registered.status()).toBe(201)
       accounts.push((await registered.json()).data)
     }

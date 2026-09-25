@@ -91,7 +91,7 @@ const platformModules = [
   },
   {
     title: 'Tenant passport and credit',
-    description: 'Build a verified tenant profile with documents, references, rent history, achievements, and credit scoring.',
+    description: 'Build a tenant profile with documents, references, rent history, achievements, and a RentOS credit score.',
     icon: <ShieldCheck size={22} />,
     href: '/register',
   },
@@ -154,27 +154,27 @@ const platformModules = [
 const roleRoutes = [
   {
     title: 'Tenants',
-    description: 'Find verified homes and landlords with transparent pricing, apply and sign digitally, pay online with receipts, and build a portable rental history.',
+    description: 'Find reviewed listings with rent shown up front, apply and sign digitally, pay online with receipts, and build a portable rental history.',
     icon: <Users size={22} />,
-    checks: ['Verified homes', 'AI matches', 'Digital receipts', 'Rental history'],
+    checks: ['Reviewed listings', 'AI matches', 'Digital receipts', 'Rental history'],
   },
   {
     title: 'Landlords and managers',
-    description: 'Screen verified tenants with scoring, collect rent digitally with automated reminders, manage vacancies and expenses, and price with AI.',
+    description: 'Review applicants\' RentOS profiles and scores, collect rent digitally with automated reminders, manage vacancies and expenses, and price with AI.',
     icon: <Building2 size={22} />,
     checks: ['Tenant scoring', 'Rent collection', 'AI pricing', 'Analytics'],
   },
   {
     title: 'Agents',
-    description: 'Manage leads and a digital portfolio, take online bookings, verify clients, and track commissions — less time searching, more time closing deals.',
+    description: 'Manage leads and a digital portfolio, take online bookings, manage clients, and track commissions — less time searching, more time closing deals.',
     icon: <Handshake size={22} />,
     checks: ['Lead management', 'Digital portfolio', 'Commissions', 'CRM & analytics'],
   },
   {
     title: 'Service providers',
-    description: 'Electricians, plumbers, cleaners, movers, and more win jobs through a marketplace with verified customers, ratings, scheduling, and secure payments.',
+    description: 'Electricians, plumbers, cleaners, movers, and more win jobs through a marketplace with customer ratings, scheduling, and online payments.',
     icon: <Hammer size={22} />,
-    checks: ['Job marketplace', 'Verified customers', 'Ratings & reviews', 'Secure payments'],
+    checks: ['Job marketplace', 'Bookings', 'Ratings & reviews', 'Online payments'],
   },
   {
     title: 'Local businesses',
@@ -184,9 +184,9 @@ const roleRoutes = [
   },
   {
     title: 'Banks and financiers',
-    description: 'Assess credit from real rental history, open mortgage and rental-financing channels, and collect through secure digital payment rails.',
+    description: 'Review rent-financing applications that tenants choose to send you — including the RentOS payment history and score they share with that application — and collect repayments digitally.',
     icon: <Landmark size={22} />,
-    checks: ['Credit assessment', 'Rental financing', 'Digital collections', 'Risk view'],
+    checks: ['Applications', 'Rental financing', 'Digital collections', 'Portfolio view'],
   },
   {
     title: 'Insurers',
@@ -215,7 +215,7 @@ const roleRoutes = [
 ]
 
 const workflow = [
-  { title: 'Verify', description: 'Registry, profile, document, property, employer, and insurance checks keep records dependable.', icon: <Shield size={20} /> },
+  { title: 'Review', description: 'Listing moderation, identity-document review, and employer and insurance confirmations keep records dependable.', icon: <Shield size={20} /> },
   { title: 'Transact', description: 'Payments, agreements, financing contracts, payroll deductions, and savings plans move through auditable rails.', icon: <CreditCard size={20} /> },
   { title: 'Operate', description: 'Maintenance, worker bookings, messages, disputes, applications, and claims stay visible to the right role.', icon: <CalendarCheck size={20} /> },
   { title: 'Govern', description: 'Analytics, simulations, public records, admin queues, and compliance reviews keep the platform accountable.', icon: <BarChart3 size={20} /> },
@@ -336,7 +336,7 @@ export function LandingPage() {
     { href: '#roles', label: 'Roles', desc: 'A workspace for everyone', icon: Users },
     { href: '#operations', label: 'Operations', desc: 'Payments, savings & disputes', icon: BarChart3 },
     { href: '#rights', label: 'Rights', desc: 'Know where you stand', icon: ShieldCheck },
-    { href: '/registry', label: 'Registry', desc: 'Verified rentals near you', icon: Search },
+    { href: '/registry', label: 'Registry', desc: 'Reviewed rental listings', icon: Search },
     { href: '/rental-laws', label: 'Rental Laws', desc: 'Tenancy law in plain language', icon: Scale },
   ]
 
@@ -544,11 +544,11 @@ export function LandingPage() {
               <span className="text-secondary"><SplitText text="sync." immediate charDelay={60} startDelay={620} /></span>
             </h1>
             <p className="mt-8 max-w-xl text-lg leading-relaxed text-white/62 md:text-xl">
-              Find a verified home, sign, pay, save, insure, maintain, and resolve issues without losing the thread.
+              Find a home, sign, pay, save, insure, maintain, and resolve issues without losing the thread.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Magnetic><Link to="/register"><Button size="lg" className="dark-surface-control w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>
-              <Link to="/registry"><Button variant="outline" size="lg" className="dark-surface-control dark-surface-outline w-full sm:w-auto">Explore verified homes <Search size={18} /></Button></Link>
+              <Link to="/registry"><Button variant="outline" size="lg" className="dark-surface-control dark-surface-outline w-full sm:w-auto">Explore listings <Search size={18} /></Button></Link>
             </div>
             <div className="mt-12 grid max-w-2xl grid-cols-2 gap-5 border-t border-white/10 pt-7 sm:grid-cols-4">
               <Metric value="9+" numeric={9} suffix="+" label="Connected tools" />
@@ -570,9 +570,9 @@ export function LandingPage() {
                 </div>
                 <div className="mt-7 space-y-3">
                   {[
-                    { label: 'Home verified', detail: 'Registry match complete', icon: ShieldCheck, color: 'text-emerald-300' },
+                    { label: 'Listing reviewed', detail: 'Checked before publishing', icon: ShieldCheck, color: 'text-emerald-300' },
                     { label: 'Agreement ready', detail: 'Digital signing secured', icon: FileSignature, color: 'text-blue-300' },
-                    { label: 'Rent protected', detail: 'Payment + savings active', icon: PiggyBank, color: 'text-amber-300' },
+                    { label: 'Rent on track', detail: 'Payment + savings active', icon: PiggyBank, color: 'text-amber-300' },
                   ].map(({ label, detail, icon: Icon, color }, index) => (
                     <div key={label} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
                       <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.07]', color)}><Icon size={19} /></span>
@@ -592,7 +592,7 @@ export function LandingPage() {
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-3/4 rounded-full bg-gradient-to-r from-secondary to-emerald-400" /></div>
               </div>
               <div className="absolute -right-3 bottom-2 w-60 rotate-3 rounded-3xl border border-white/10 bg-[#13221f]/94 p-5 shadow-2xl backdrop-blur-xl">
-                <div className="flex items-center gap-3"><ShieldCheck className="text-emerald-300" size={20} /><span className="text-xs font-bold uppercase tracking-wider text-emerald-200">RentOS verified</span></div>
+                <div className="flex items-center gap-3"><ShieldCheck className="text-emerald-300" size={20} /><span className="text-xs font-bold uppercase tracking-wider text-emerald-200">Your rental record</span></div>
                 <p className="mt-4 font-display text-lg font-extrabold">Move with confidence.</p>
                 <p className="mt-2 text-xs leading-relaxed text-white/45">Identity, property, agreement, and payment signals travel together.</p>
               </div>
@@ -683,11 +683,11 @@ export function LandingPage() {
           <div>
             <h2 className="font-display text-3xl font-extrabold leading-tight text-[#0f1f33] dark:text-white md:text-5xl">A shared rental record from search to service.</h2>
             <p className="mt-5 text-base leading-relaxed text-muted dark:text-gray-400 md:text-lg">
-              The strongest redesign opportunity was presenting RentOS as one workflow, not many isolated features. The app already supports the record, transaction, service, and compliance layers needed for a modern rental platform.
+              RentOS connects the record, payment, service and compliance steps of renting in one workflow instead of many isolated tools.
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {[
-                ['Public trust', 'Registry, laws, passports, and verified records.'],
+                ['Public trust', 'Registry, laws, tenant passports, and shared records.'],
                 ['Money movement', 'Payments, savings, financing, deductions, and insurance.'],
                 ['Daily operations', 'Maintenance, bookings, messages, documents, and claims.'],
                 ['Governance', 'Analytics, policy simulation, reviews, and admin ledgers.'],

@@ -159,6 +159,7 @@ export function startScheduler() {
               title: 'Savings Goal Reached!',
               message: `Your savings plan has reached its target of GHS ${plan.targetAmount.toFixed(2)}!`,
               actionUrl: '/savings',
+              category: 'savings',
             }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           }
         } catch (err) {
@@ -434,7 +435,7 @@ export function startScheduler() {
             message = `Your payment of GHS ${payment.amount.toFixed(2)} is 3 days overdue. Please settle to avoid penalties.`
           }
 
-          notify({ userId: payment.tenantId, title, message, actionUrl: '/payments' })
+          notify({ userId: payment.tenantId, title, message, actionUrl: '/payments', category: 'payment' })
             .catch((err) => logger.warn('[Scheduler] notify failed:', err))
           if (days === -3 && payment.landlordId) {
             notify({

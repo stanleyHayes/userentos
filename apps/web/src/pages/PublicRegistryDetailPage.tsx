@@ -23,9 +23,11 @@ interface RegistryListing {
   rentAmount: number
   bedrooms: number
   bathrooms: number
-  listingStatus: 'approved'
+  listingStatus: 'approved' | 'published'
   publishedAt: string | null
   image: string | null
+  /** True only when our team approved the landlord's identity-verification request. */
+  landlordIdentityVerified?: boolean
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -67,8 +69,8 @@ export function PublicRegistryDetailPage() {
   useEffect(() => {
     if (!item) return
     const location = [item.neighborhood, item.city, item.region].filter(Boolean).join(', ')
-    const title = `${item.title} — Verified Rental in ${item.city || 'Ghana'} | RentOS`
-    const description = `${TYPE_LABELS[item.propertyType] ?? item.propertyType} for ${formatCurrency(item.rentAmount)}/month in ${location}. Verified on Ghana's official rental property registry.`
+    const title = `${item.title} — Rental in ${item.city || 'Ghana'} | RentOS`
+    const description = `${TYPE_LABELS[item.propertyType] ?? item.propertyType} for ${formatCurrency(item.rentAmount)}/month in ${location}. Listed on the RentOS rental registry.`
     document.title = title
     setMeta('description', description)
     setOgMeta('og:title', title)
@@ -128,7 +130,11 @@ export function PublicRegistryDetailPage() {
 
   const location = [item.neighborhood, item.city, item.region].filter(Boolean).join(', ')
   const typeLabel = TYPE_LABELS[item.propertyType] ?? item.propertyType
-  const isVerified = !!item.publishedAt
+  // Every listing this endpoint returns passed RentOS moderation; that is the
+  // only listing-level claim we can make. Landlord identity is shown only when
+  // the API says it was actually reviewed. Ownership and legal compliance are
+  // never checked, so they are never claimed.
+  const landlordVerified = item.landlordIdentityVerified === true
 
   return (
     <div className="animate-fade-up">
@@ -153,13 +159,10 @@ export function PublicRegistryDetailPage() {
               <ArrowLeft size={16} /> Back to Registry
             </Link>
 
-            {/* Verified Trust Mark — prominent */}
-            {isVerified && (
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-500/30 mb-4">
-                <ShieldCheck size={14} />
-                Listed on RentOS — Verified by Government
-              </div>
-            )}
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-500/30 mb-4">
+              <ShieldCheck size={14} />
+              Reviewed listing on RentOS
+            </div>
 
             <h1 className={`text-3xl md:text-5xl font-extrabold font-display tracking-tight ${
               item.image ? 'text-white' : 'text-primary-dark dark:text-white'
@@ -189,16 +192,16 @@ export function PublicRegistryDetailPage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-300">
-                    Verified Listing
+                    Reviewed Listing
                   </h3>
                   <p className="text-xs text-emerald-800/80 dark:text-emerald-300/70 mt-1 leading-relaxed">
-                    This property has been reviewed and approved on Ghana's national rental
-                    property registry. The landlord's identity, ownership, and listing details
-                    have been verified.
+                    This listing passed RentOS listing review before it was published.
+                    RentOS does not inspect properties or confirm who owns them — view the
+                    property and check the landlord's documents before you pay anything.
                   </p>
-                  {isVerified && item.publishedAt && (
+                  {item.publishedAt && (
                     <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/60 mt-2 inline-flex items-center gap-1.5">
-                      <Calendar size={11} /> Verified {formatDate(item.publishedAt)}
+                      <Calendar size={11} /> Published {formatDate(item.publishedAt)}
                     </p>
                   )}
                 </div>
@@ -248,7 +251,7 @@ export function PublicRegistryDetailPage() {
 
               <div className="mt-5 space-y-2">
                 <Badge variant="success" className="inline-flex items-center gap-1 w-full justify-center py-1">
-                  <ShieldCheck size={12} /> Verified Listing
+                  <ShieldCheck size={12} /> Reviewed listing
                 </Badge>
               </div>
             </Card>
@@ -260,8 +263,8 @@ export function PublicRegistryDetailPage() {
                 <div>
                   <h3 className="text-sm font-bold">Want to apply?</h3>
                   <p className="text-xs text-white/80 mt-1 leading-relaxed">
-                    Create a free RentOS account to contact the landlord, apply with verified
-                    profile, and sign your tenancy agreement digitally.
+                    Create a free RentOS account to contact the landlord, apply with your
+                    RentOS profile, and sign your tenancy agreement digitally.
                   </p>
                 </div>
               </div>
@@ -283,13 +286,11 @@ export function PublicRegistryDetailPage() {
                 <BadgeCheck size={18} className="text-emerald-500 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-primary-dark dark:text-white">
-                    Why this listing is trusted
+                    What RentOS has checked
                   </p>
                   <ul className="text-[11px] text-muted dark:text-white/60 mt-2 space-y-1 leading-relaxed">
-                    <li>• Landlord identity verified</li>
-                    <li>• Property ownership confirmed</li>
-                    <li>• Listing reviewed by RentOS team</li>
-                    <li>• Compliant with Ghana Rent Control Act</li>
+                    <li>• Listing reviewed by RentOS moderators</li>
+                    {landlordVerified && <li>• Landlord's identity document reviewed by RentOS</li>}
                   </ul>
                 </div>
               </div>

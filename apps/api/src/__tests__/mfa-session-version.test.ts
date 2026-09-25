@@ -6,6 +6,7 @@ import { RefreshToken } from '../models/RefreshToken.js'
 import { verifyTotp } from '../utils/totp.js'
 
 vi.mock('../services/notify.js', () => ({ notifyWelcome: vi.fn() }))
+vi.mock('../utils/audit.js', () => ({ recordAuditEntry: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('bcryptjs', () => ({ default: { compare: vi.fn().mockResolvedValue(true) } }))
 vi.mock('../utils/totp.js', () => ({ verifyTotp: vi.fn().mockReturnValue(true) }))
 vi.mock('../models/RefreshToken.js', async importActual => ({

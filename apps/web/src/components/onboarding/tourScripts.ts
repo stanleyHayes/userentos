@@ -95,7 +95,7 @@ const tenant: TourScript = [
   {
     title: 'Find a place that fits',
     body:
-      'Browse verified homes across Ghana, filter by location and budget, and view the full details before you visit. Every property is checked, so you can search with confidence.',
+      'Browse listings across Ghana, filter by location and budget, and view the full details before you visit. Listings are reviewed before they go live — still, always view a place before you pay.',
     target: '[data-tour="tenant-search"]',
     expression: 'pointing',
   },
@@ -109,14 +109,14 @@ const tenant: TourScript = [
   {
     title: 'Apply with one profile',
     body:
-      'When you find a place you love, apply directly. Your verified profile and Ghana Card are shared securely with the landlord — no more endless paperwork.',
+      'When you find a place you love, apply directly. Your RentOS profile goes to the landlord with your application — no more endless paperwork.',
     target: '[data-tour="tenant-applications"]',
     expression: 'pointing',
   },
   {
     title: 'Sign your agreement online',
     body:
-      "Approved? Your tenancy agreement is generated and signed inside RentOS. You'll get a copy by email and a permanent record here.",
+      "Approved? Your tenancy agreement is generated and signed inside RentOS, and your copy is kept here.",
     target: '[data-tour="tenant-agreements"]',
     expression: 'pointing',
   },
@@ -138,28 +138,28 @@ const landlord: TourScript = [
   {
     title: 'Add your first property',
     body:
-      'List a property in a few minutes. Photos, location, rent, and lease terms are all you need to start receiving applications from verified tenants.',
+      'List a property in a few minutes. Photos, location, rent, and lease terms are all you need to start receiving applications from tenants.',
     target: '[data-tour="add-property"]',
     expression: 'pointing',
   },
   {
     title: 'Review tenants the smart way',
     body:
-      'Every applicant comes with a verified Ghana Card and a rental history. Approve, decline, or request more details — all in one view.',
+      'See each applicant\'s RentOS profile, payment history and whether their identity has been verified. Approve, decline, or request more details — all in one view.',
     target: '[data-tour="tenants-list"]',
     expression: 'pointing',
   },
   {
     title: 'Agreements, signed digitally',
     body:
-      'When you accept a tenant, RentOS generates the lease and routes it for signing. You get a binding copy in your dashboard — no printing, no chasing.',
+      'When you accept a tenant, RentOS generates the lease and routes it for electronic signing. You get the signed copy in your dashboard — no printing, no chasing.',
     target: '[data-tour="agreements-list"]',
     expression: 'pointing',
   },
   {
     title: 'Track payments and disputes',
     body:
-      "See who's paid, who's late, and resolve issues with a clear paper trail. If a dispute escalates, our legal partners are right inside the app.",
+      "See who's paid, who's late, and resolve issues with a clear paper trail. If a dispute escalates, you can take it to mediation from inside the app.",
     target: '[data-tour="payments-overview"]',
     expression: 'pointing',
   },
@@ -210,7 +210,7 @@ const government: TourScript = [
   {
     title: 'Review properties for compliance',
     body:
-      'Review submitted listings against rent control and registration rules. Approve, query, or escalate — every decision is logged.',
+      'Review submitted listings, with automated flags such as rent advance above the legal limit. Approve, query, or escalate — every decision is logged.',
     target: '[data-tour="gov-properties-review"]',
     expression: 'pointing',
   },
@@ -239,7 +239,7 @@ const legal_officer: TourScript = [
   {
     title: 'Rental law, always at hand',
     body:
-      "Every relevant Ghanaian rental statute and precedent is searchable here. You'll cite chapter and verse without leaving the app.",
+      "Plain-language summaries of key Ghanaian rental laws are searchable here. Check the statute itself before relying on a summary.",
     target: '[data-tour="legal-laws"]',
     expression: 'pointing',
   },
@@ -261,7 +261,7 @@ const financier: TourScript = [
   {
     title: 'Review applications',
     body:
-      'Each applicant comes with verified identity, employer verification, and a RentScore. Approve, counter, or decline with full context.',
+      'Each application shows the applicant\'s RentOS credit score and, where completed, identity and employment verification. Approve, counter, or decline with full context.',
     target: '[data-tour="fin-applications"]',
     expression: 'pointing',
   },

@@ -1,0 +1,73 @@
+import { createHash } from 'crypto'
+import { LegalArticle } from '../models/LegalArticle.js'
+import { BlogPost } from '../models/BlogPost.js'
+import { LEGAL_ARTICLES, BLOG_POSTS, SUPERSEDED_SEED_CONTENT, reviewedOnly } from './referenceData.js'
+
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
+
+export interface ContentSeedResult {
+  inserted: number
+  corrected: number
+  withdrawn: number
+}
+
+/**
+ * Production seeding of legal articles and blog posts.
+ *
+ * - Only `reviewed` items are planted (see ReviewMeta in referenceData.ts).
+ * - A stored copy that is byte-for-byte an earlier seed version (its content
+ *   hash is in SUPERSEDED_SEED_CONTENT) is replaced with the corrected text —
+ *   earlier seeds planted wrong law (30-day deposit return, 24-hour notice
+ *   under "S.15", a flat 6-month advance cap) and financial promotions.
+ * - A stored copy of an item that is no longer seeded (retracted, or not yet
+ *   reviewed) is withdrawn — deleted for articles, unpublished for posts —
+ *   but again only while untouched. Anything an editor changed is left alone.
+ */
+export async function seedReviewedReferenceContent(): Promise<{ articles: ContentSeedResult; posts: ContentSeedResult }> {
+  const articles: ContentSeedResult = { inserted: 0, corrected: 0, withdrawn: 0 }
+  const posts: ContentSeedResult = { inserted: 0, corrected: 0, withdrawn: 0 }
+
+  const reviewedArticles = reviewedOnly(LEGAL_ARTICLES)
+  for (const article of reviewedArticles) {
+    const existing = await LegalArticle.findOne({ title: article.title }).select('content').lean()
+    if (!existing) {
+      await LegalArticle.updateOne({ title: article.title }, { $setOnInsert: article }, { upsert: true })
+      articles.inserted++
+    } else if (existing.content !== article.content && SUPERSEDED_SEED_CONTENT.legalArticles[article.title] === sha256(existing.content)) {
+      await LegalArticle.updateOne({ _id: existing._id }, { $set: article })
+      articles.corrected++
+    }
+  }
+  const seededTitles = new Set(reviewedArticles.map((a) => a.title))
+  for (const [title, hash] of Object.entries(SUPERSEDED_SEED_CONTENT.legalArticles)) {
+    if (seededTitles.has(title)) continue
+    const existing = await LegalArticle.findOne({ title }).select('content').lean()
+    if (existing && sha256(existing.content) === hash) {
+      await LegalArticle.deleteOne({ _id: existing._id })
+      articles.withdrawn++
+    }
+  }
+
+  const reviewedPosts = reviewedOnly(BLOG_POSTS)
+  for (const post of reviewedPosts) {
+    const existing = await BlogPost.findOne({ slug: post.slug }).select('content').lean()
+    if (!existing) {
+      await BlogPost.updateOne({ slug: post.slug }, { $setOnInsert: post }, { upsert: true })
+      posts.inserted++
+    } else if (existing.content !== post.content && SUPERSEDED_SEED_CONTENT.blogPosts[post.slug] === sha256(existing.content)) {
+      await BlogPost.updateOne({ _id: existing._id }, { $set: post })
+      posts.corrected++
+    }
+  }
+  const seededSlugs = new Set(reviewedPosts.map((p) => p.slug))
+  for (const [slug, hash] of Object.entries(SUPERSEDED_SEED_CONTENT.blogPosts)) {
+    if (seededSlugs.has(slug)) continue
+    const existing = await BlogPost.findOne({ slug }).select('content').lean()
+    if (existing && sha256(existing.content) === hash) {
+      await BlogPost.updateOne({ _id: existing._id }, { $set: { published: false, status: 'archived' } })
+      posts.withdrawn++
+    }
+  }
+
+  return { articles, posts }
+}

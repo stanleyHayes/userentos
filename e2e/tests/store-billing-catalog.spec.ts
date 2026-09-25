@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { MongoClient, ObjectId } from 'mongodb'
+import { acceptance } from '../fixtures/legalAcceptance'
 
 test('store product mappings preserve ownership and purchase-account identity', async ({ page, request }) => {
   test.skip(process.env.MONGO_URI !== 'mongodb://localhost:28018/rentos_compliance_e2e', 'Requires isolated compliance database')
@@ -11,7 +12,7 @@ test('store product mappings preserve ownership and purchase-account identity', 
   const suffix = Date.now()
   try {
     for (const name of ['StoreAdmin', 'Buyer', 'OtherBuyer', 'Tenant']) {
-      const result = await request.post('/api/auth/register', { data: { email: `${name}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: name === 'Tenant' ? 'tenant' : 'landlord' } })
+      const result = await request.post('/api/auth/register', { data: { email: `${name}-${suffix}@rentos.test`, phone: '0241234567', password: 'E2e!Password123', firstName: name, lastName: String(suffix), role: name === 'Tenant' ? 'tenant' : 'landlord', acceptance } })
       expect(result.status()).toBe(201)
       let account = (await result.json()).data
       if (name === 'StoreAdmin') {

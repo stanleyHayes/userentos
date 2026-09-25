@@ -1,18 +1,18 @@
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
-import { neuCard, neuInset } from '../lib/neu'
+import { neuCard } from '../lib/neu'
 import { Logo } from '../components/Logo'
+import { LEGAL_URLS, legalEntityName } from '../../../packages/shared/legalVersions'
 
 const features = [
-  { icon: 'document-text-outline' as const, title: 'Digital Agreements', desc: 'Legally compliant rental contracts with e-signatures' },
+  { icon: 'document-text-outline' as const, title: 'Digital Agreements', desc: 'Tenancy agreements signed electronically' },
   { icon: 'card-outline' as const, title: 'Mobile Payments', desc: 'Pay rent via MTN MoMo, Telecel, AirtelTigo, or bank transfer' },
-  { icon: 'wallet-outline' as const, title: 'RentGuard Savings', desc: 'Save towards rent with automated plans and investments' },
-  { icon: 'shield-checkmark-outline' as const, title: 'Legal Compliance', desc: 'Built-in compliance with Ghana Rent Control Act (Act 220)' },
+  { icon: 'wallet-outline' as const, title: 'RentGuard Savings', desc: 'Save towards rent with automated savings plans' },
+  { icon: 'shield-checkmark-outline' as const, title: 'Rent-Law Checks', desc: 'Flags agreement terms that may breach the Rent Act, 1963 (Act 220) — information, not legal advice' },
   { icon: 'chatbubbles-outline' as const, title: 'Dispute Resolution', desc: 'File and track rental disputes with mediation support' },
   { icon: 'analytics-outline' as const, title: 'Credit Scoring', desc: 'Build your rental credit score with every on-time payment' },
-  { icon: 'scale-outline' as const, title: 'Know Your Rights', desc: 'Full legal repository in English, Twi, Ga, and Ewe' },
-  { icon: 'trending-up-outline' as const, title: 'Investments', desc: 'Invest in Treasury Bills and Government Bonds' },
+  { icon: 'scale-outline' as const, title: 'Know Your Rights', desc: 'Plain-language guides to Ghanaian rental law' },
 ]
 
 export default function AboutScreen() {
@@ -37,10 +37,10 @@ export default function AboutScreen() {
         <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Our Mission</Text>
           <Text style={[s.bodyText, { color: c.muted }]}>
-            RentOS is Ghana's national digital infrastructure for rental housing. We're building a transparent, fair, and efficient ecosystem that protects both tenants and landlords while ensuring compliance with Ghanaian rental laws.
+            RentOS is a digital platform for renting in Ghana. We're building a transparent, fair and efficient way to rent that helps tenants and landlords understand and follow Ghanaian rental law.
           </Text>
           <Text style={[s.bodyText, { color: c.muted, marginTop: 8 }]}>
-            From digital agreements to mobile payments, savings automation to dispute resolution — RentOS covers the entire rental lifecycle across all 16 regions.
+            From digital agreements to mobile payments, savings automation to dispute resolution — RentOS covers the rental journey from search to move-out.
           </Text>
         </View>
 
@@ -60,37 +60,18 @@ export default function AboutScreen() {
           ))}
         </View>
 
-        {/* Stats */}
-        <View style={[s.card, neuCard(c)]}>
-          <Text style={[s.cardTitle, { color: c.text }]}>Platform Coverage</Text>
-          <View style={s.statsRow}>
-            <View style={[s.statItem, neuInset(c)]}>
-              <Text style={[s.statValue, { color: c.primary }]}>16</Text>
-              <Text style={[s.statLabel, { color: c.muted }]}>Regions</Text>
-            </View>
-            <View style={[s.statItem, neuInset(c)]}>
-              <Text style={[s.statValue, { color: c.accent }]}>34K+</Text>
-              <Text style={[s.statLabel, { color: c.muted }]}>Users</Text>
-            </View>
-            <View style={[s.statItem, neuInset(c)]}>
-              <Text style={[s.statValue, { color: c.secondary }]}>12K+</Text>
-              <Text style={[s.statLabel, { color: c.muted }]}>Properties</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Links */}
         <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Legal</Text>
           {[
-            { label: 'Terms of Service', url: 'https://userentos.com/terms' },
-            { label: 'Privacy Policy', url: 'https://userentos.com/privacy' },
-            { label: 'Data Protection', url: 'https://userentos.com/data-protection' },
+            { label: 'Terms of Service', url: LEGAL_URLS.terms },
+            { label: 'Privacy Policy', url: LEGAL_URLS.privacy },
+            { label: 'Data Protection', url: LEGAL_URLS.dataProtection },
           ].map((link, i, arr) => (
             <TouchableOpacity
               key={link.label}
               style={[s.linkRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}
-              onPress={() => Linking.openURL(link.url)}
+              onPress={() => { Linking.openURL(link.url).catch(() => {}) }}
             >
               <Text style={[s.linkText, { color: c.text }]}>{link.label}</Text>
               <Ionicons name="chevron-forward" size={16} color={c.muted} />
@@ -100,7 +81,7 @@ export default function AboutScreen() {
 
         {/* Footer */}
         <View style={s.footer}>
-          <Text style={[s.footerText, { color: c.muted }]}>© 2026 RentOS Ghana</Text>
+          <Text style={[s.footerText, { color: c.muted }]}>© {new Date().getFullYear()} {legalEntityName()}</Text>
           <Text style={[s.footerText, { color: c.muted }]}>All rights reserved</Text>
           <Text style={[s.footerTagline, { color: c.border }]}>Made with care for Ghana</Text>
         </View>
@@ -132,12 +113,6 @@ const s = StyleSheet.create({
   featureIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   featureTitle: { fontSize: 13, fontFamily: 'Outfit_600SemiBold' },
   featureDesc: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
-
-  // Stats
-  statsRow: { flexDirection: 'row', gap: 8 },
-  statItem: { flex: 1, padding: 12, alignItems: 'center' },
-  statValue: { fontSize: 20, fontFamily: 'Outfit_800ExtraBold' },
-  statLabel: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 2 },
 
   // Links
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },

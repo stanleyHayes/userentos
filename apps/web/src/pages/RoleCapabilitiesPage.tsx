@@ -25,12 +25,12 @@ const modules: Record<string, { title: string; kind?: WorkflowKind; exportPath?:
     { title: 'New-mover campaign', kind: 'business_campaign' },
     { title: 'Featured subscription', kind: 'business_subscription' },
   ],
-  financier: [{ title: 'BoG securitized export', exportPath: '/capabilities/financier/securitized-report.csv' }],
-  employer: [{ title: 'Employee housing benefit', kind: 'housing_benefit' }, { title: 'SSNIT/tax export', exportPath: '/capabilities/employer/compliance.csv' }],
+  financier: [{ title: 'Contract portfolio export (CSV)', exportPath: '/capabilities/financier/securitized-report.csv' }],
+  employer: [{ title: 'Employee housing benefit', kind: 'housing_benefit' }, { title: 'Payroll deduction report (CSV)', exportPath: '/capabilities/employer/compliance.csv' }],
   government: [
-    { title: 'National rental export', exportPath: '/capabilities/government/national-rental-export.csv' },
+    { title: 'Rental market export (anonymised CSV)', exportPath: '/capabilities/government/national-rental-export.csv' },
   ],
-  admin: [{ title: 'National rental export', exportPath: '/capabilities/government/national-rental-export.csv' }],
+  admin: [{ title: 'Rental market export (anonymised CSV)', exportPath: '/capabilities/government/national-rental-export.csv' }],
   developer: [{ title: 'Developer profile', kind: 'developer_profile' }, { title: 'Off-plan listing', kind: 'offplan_listing' }],
 }
 

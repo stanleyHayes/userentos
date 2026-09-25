@@ -26,6 +26,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications'
 import { InAppNotificationProvider } from '../components/InAppNotification'
 import { RegulatedScreenGate } from '../components/RegulatedScreenGate'
 import { authRedirect } from '../lib/publicRoutes'
+import { ConsentBanner } from '../components/ConsentBanner'
 
 ExpoSplashScreen.preventAutoHideAsync()
 
@@ -67,6 +68,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/privacy')}><Text style={{ color: '#18345a', paddingVertical: 8 }}>Export data or delete account</Text></TouchableOpacity>
         <TouchableOpacity accessibilityRole="link" onPress={() => { void Linking.openURL('mailto:info@userentos.com?subject=Account%20suspension%20appeal') }}><Text style={{ color: '#18345a' }}>Contact support</Text></TouchableOpacity>
       </View>}
+      {isAuthenticated && <ConsentBanner />}
       <InAppNotificationProvider />
     </>
   )

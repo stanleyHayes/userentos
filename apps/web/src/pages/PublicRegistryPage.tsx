@@ -87,8 +87,8 @@ export function PublicRegistryPage() {
 
   // SEO meta
   useEffect(() => {
-    const title = 'Property Registry — Verified Rentals in Ghana | RentOS'
-    const description = 'Search Ghana\'s official property registry. Browse government-verified rental listings with transparent pricing across all 16 regions.'
+    const title = 'Rental Registry — Reviewed Listings in Ghana | RentOS'
+    const description = 'Search rental listings on RentOS. Every listing is reviewed by RentOS before it is published, with rent shown up front.'
     document.title = title
     setMeta('description', description)
     setOgMeta('og:title', title)
@@ -183,13 +183,13 @@ export function PublicRegistryPage() {
         <div className="relative max-w-5xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-400/10 backdrop-blur px-4 py-2 text-xs font-semibold text-emerald-300 border border-emerald-400/20 mb-5">
             <ShieldCheck size={14} />
-            Government-Verified Registry
+            Public rental registry
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold font-display text-white leading-tight tracking-tight">
-            Search Ghana's <span className="bg-gradient-to-r from-secondary via-amber-300 to-secondary bg-clip-text text-transparent">Property Registry</span>
+            Search the RentOS <span className="bg-gradient-to-r from-secondary via-amber-300 to-secondary bg-clip-text text-transparent">Rental Registry</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base text-white/78">
-            Every listing is verified and approved. Transparent pricing, real properties, real landlords — across all 16 regions.
+            Every listing here passed RentOS listing review before it was published, and shows its rent up front. Always view a property and check the landlord's documents before you pay.
           </p>
 
           {/* Search bar */}
@@ -266,7 +266,7 @@ export function PublicRegistryPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-extrabold font-display text-primary-dark dark:text-white">
-              {isLoading ? 'Searching…' : `${total.toLocaleString()} verified ${total === 1 ? 'property' : 'properties'}`}
+              {isLoading ? 'Searching…' : `${total.toLocaleString()} reviewed ${total === 1 ? 'listing' : 'listings'}`}
             </h2>
             {hasFilters && (
               <button
@@ -278,7 +278,7 @@ export function PublicRegistryPage() {
             )}
           </div>
           <Badge variant="success" className="hidden sm:inline-flex items-center gap-1">
-            <BadgeCheck size={12} /> All Verified
+            <BadgeCheck size={12} /> All reviewed
           </Badge>
         </div>
 
@@ -384,10 +384,10 @@ function RegistryCard({ item }: { item: RegistryListing }) {
               <Building2 size={36} className="text-muted/40 dark:text-white/20" />
             </div>
           )}
-          {/* Verified badge overlay */}
+          {/* Listing-review badge: every registry listing passed moderation */}
           <div className="absolute top-3 left-3">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/95 text-white backdrop-blur shadow">
-              <ShieldCheck size={11} /> Verified
+              <ShieldCheck size={11} /> Reviewed
             </span>
           </div>
         </div>

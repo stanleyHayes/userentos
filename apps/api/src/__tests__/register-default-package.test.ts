@@ -13,6 +13,7 @@ vi.mock('../models/RefreshToken.js', async (importActual) => {
   const actual = await importActual<typeof import('../models/RefreshToken.js')>()
   return { ...actual, RefreshToken: { create: vi.fn().mockResolvedValue({}) } }
 })
+vi.mock('../utils/audit.js', () => ({ recordAuditEntry: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/notify.js', () => ({
   notifyWelcome: vi.fn().mockResolvedValue(undefined),
   notify: vi.fn().mockResolvedValue(undefined),
@@ -35,6 +36,8 @@ function makeService() {
   return { svc, userRepo, walletRepo, logger }
 }
 
+const consent = { termsVersion: '2026-09-25', privacyVersion: '2026-09-25', ageConfirmed: true, acceptedAt: new Date() }
+
 const registerData = {
   email: 'kwame@example.com',
   phone: '0240000000',
@@ -53,7 +56,7 @@ describe('AuthService.register — default subscription package', () => {
 
   it('assigns the isDefault package to a new landlord', async () => {
     const { svc } = makeService()
-    const result = await svc.register({ ...registerData, role: 'landlord' })
+    const result = await svc.register({ ...registerData, role: 'landlord' }, undefined, undefined, consent)
 
     expect(result.status).toBe(201)
     expect(vi.mocked(SubscriptionPackage.findOne)).toHaveBeenCalledWith({ isDefault: true, isActive: true })
@@ -65,13 +68,13 @@ describe('AuthService.register — default subscription package', () => {
 
   it('assigns the isDefault package to a new property_manager', async () => {
     const { svc } = makeService()
-    await svc.register({ ...registerData, role: 'property_manager' })
+    await svc.register({ ...registerData, role: 'property_manager' }, undefined, undefined, consent)
     expect(vi.mocked(User.updateOne)).toHaveBeenCalledOnce()
   })
 
   it('does not assign a package to a tenant', async () => {
     const { svc } = makeService()
-    const result = await svc.register({ ...registerData, role: 'tenant' })
+    const result = await svc.register({ ...registerData, role: 'tenant' }, undefined, undefined, consent)
 
     expect(result.status).toBe(201)
     expect(vi.mocked(SubscriptionPackage.findOne)).not.toHaveBeenCalled()
@@ -83,7 +86,7 @@ describe('AuthService.register — default subscription package', () => {
       lean: vi.fn().mockResolvedValue(null),
     } as never)
     const { svc } = makeService()
-    const result = await svc.register({ ...registerData, role: 'landlord' })
+    const result = await svc.register({ ...registerData, role: 'landlord' }, undefined, undefined, consent)
 
     expect(result.status).toBe(201)
     expect(vi.mocked(User.updateOne)).not.toHaveBeenCalled()

@@ -25,7 +25,8 @@ import { LegalArticle } from './models/LegalArticle.js'
 import { BlogPost } from './models/BlogPost.js'
 import { claimBootstrap } from './models/BootstrapState.js'
 import { bootstrapFeatureFlags } from './bootstrapFeatureFlags.js'
-import { SUBSCRIPTION_PACKAGES, LEGAL_ARTICLES, BLOG_POSTS } from './data/referenceData.js'
+import { SUBSCRIPTION_PACKAGES } from './data/referenceData.js'
+import { seedReviewedReferenceContent } from './data/seedReferenceContent.js'
 
 function requireEnv(name: string): string {
   const value = process.env[name]
@@ -93,15 +94,11 @@ async function seedReferenceData() {
   }
   console.log(`  Subscription packages: ${await SubscriptionPackage.countDocuments()}`)
 
-  for (const article of LEGAL_ARTICLES) {
-    await LegalArticle.updateOne({ title: article.title }, { $setOnInsert: article }, { upsert: true })
-  }
-  console.log(`  Legal articles:        ${await LegalArticle.countDocuments()}`)
-
-  for (const post of BLOG_POSTS) {
-    await BlogPost.updateOne({ slug: post.slug }, { $setOnInsert: post }, { upsert: true })
-  }
-  console.log(`  Blog posts:            ${await BlogPost.countDocuments()}`)
+  // Reviewed legal articles and posts only; untouched copies of earlier,
+  // inaccurate seed versions are corrected or withdrawn (see the module).
+  const content = await seedReviewedReferenceContent()
+  console.log(`  Legal articles:        ${await LegalArticle.countDocuments()} (inserted ${content.articles.inserted}, corrected ${content.articles.corrected}, withdrawn ${content.articles.withdrawn})`)
+  console.log(`  Blog posts:            ${await BlogPost.countDocuments()} (inserted ${content.posts.inserted}, corrected ${content.posts.corrected}, withdrawn ${content.posts.withdrawn})`)
 
   await bootstrapFeatureFlags()
 }

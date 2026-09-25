@@ -15,6 +15,8 @@ import { AccountStep } from './steps/AccountStep'
 import { RoleDetailsStep } from './steps/RoleDetailsStep'
 import { PlanStep } from './steps/PlanStep'
 import { emptyRoleDetails, type AccountForm, type RoleDetails } from './steps/types'
+import { ConsentCheckbox } from '@/components/legal/ConsentCheckbox'
+import { buildAcceptance } from '../../../../../packages/shared/legalVersions'
 
 const STEPS = [
   { label: 'Role', icon: <Users size={16} /> },
@@ -24,6 +26,11 @@ const STEPS = [
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Only landlords and property managers can hold a listing plan
+ * (POST /subscriptions/subscribe is gated to those roles), so nobody else is
+ * shown plans they could not buy. */
+const PLAN_ROLES: UserRole[] = ['landlord', 'property_manager']
 
 /**
  * Best-effort persistence of the step-3 role details, run after registration
@@ -140,6 +147,11 @@ export function RegisterPage() {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [consented, setConsented] = useState(false)
+
+  const hasPlanStep = PLAN_ROLES.includes(role)
+  const steps = hasPlanStep ? STEPS : STEPS.slice(0, 3)
+  const lastStep = steps.length - 1
 
   // Free Starter plan is preselected — derived (not synced state) so the user
   // can still override it before packages finish loading.
@@ -190,6 +202,10 @@ export function RegisterPage() {
 
   /** Register, then run the best-effort chain: role profile → subscription. */
   async function finish(skipPlan: boolean) {
+    if (!consented) {
+      setError('Please confirm you are 18 or older and accept the Terms of Service and Privacy Policy')
+      return
+    }
     setError('')
     setLoading(true)
     let auth: { user: UserType; token: string; refreshToken: string }
@@ -199,6 +215,7 @@ export function RegisterPage() {
         email: account.email.trim(),
         phone: phoneDigits(account.phone),
         role,
+        acceptance: buildAcceptance(),
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
@@ -215,7 +232,12 @@ export function RegisterPage() {
     }
 
     // 2) Subscription — free plans activate instantly; paid plans are paid on
-    //    the Subscription page (MoMo), never inside the wizard.
+    //    the Subscription page (MoMo), never inside the wizard. Roles that
+    //    cannot hold a plan skip this entirely.
+    if (!hasPlanStep) {
+      navigate('/dashboard')
+      return
+    }
     const chosen = skipPlan
       ? pickFreePackage(packages)
       : (packages.find((p) => p.id === effectivePackageId) ?? pickFreePackage(packages))
@@ -254,7 +276,7 @@ export function RegisterPage() {
 
       {/* Step Indicator */}
       <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-4 animate-fade-up" style={{ animationDelay: '0.05s' }}>
-        {STEPS.map((s, i) => (
+        {steps.map((s, i) => (
           <button
             key={s.label}
             type="button"
@@ -284,7 +306,13 @@ export function RegisterPage() {
         {step === 0 && <RoleStep value={role} onChange={setRole} />}
         {step === 1 && <AccountStep form={account} update={updateAccount} />}
         {step === 2 && <RoleDetailsStep role={role} details={details} update={updateDetails} toggleTrade={toggleTrade} />}
-        {step === 3 && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
+        {step === 3 && hasPlanStep && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
+
+        {step === lastStep && (
+          <div className="mt-5">
+            <ConsentCheckbox checked={consented} onChange={setConsented} disabled={loading} />
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="auth-nav-rail mt-5 flex items-center gap-2.5 rounded-2xl p-2 sm:gap-3">
@@ -300,21 +328,23 @@ export function RegisterPage() {
           </Button>
 
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
-            {step === 2 && role !== 'service_provider' && role !== 'business' && (
+            {step === 2 && hasPlanStep && (
               <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" onClick={() => setStep(3)}>
                 Skip for now
               </Button>
             )}
-            {step < STEPS.length - 1 ? (
+            {step < lastStep ? (
               <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-44 sm:flex-none" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
                 Continue <ArrowRight size={14} />
               </Button>
             ) : (
               <>
-                <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" disabled={loading} onClick={() => void finish(true)}>
-                  Skip — Starter (free)
-                </Button>
-                <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-48 sm:flex-none" disabled={loading || pkgLoading} onClick={() => void finish(false)}>
+                {hasPlanStep && (
+                  <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" disabled={loading || !consented} onClick={() => void finish(true)}>
+                    Skip — Starter (free)
+                  </Button>
+                )}
+                <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-48 sm:flex-none" disabled={loading || !consented || (hasPlanStep && pkgLoading)} onClick={() => void finish(false)}>
                   {loading ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
@@ -325,13 +355,13 @@ export function RegisterPage() {
             )}
           </div>
         </div>
-        {step === 2 && role !== 'service_provider' && role !== 'business' && (
+        {step === 2 && hasPlanStep && (
           <button type="button" className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary sm:hidden" onClick={() => setStep(3)}>
             Skip details for now
           </button>
         )}
-        {step === STEPS.length - 1 && (
-          <button type="button" disabled={loading} className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary disabled:opacity-50 sm:hidden" onClick={() => void finish(true)}>
+        {step === lastStep && hasPlanStep && (
+          <button type="button" disabled={loading || !consented} className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary disabled:opacity-50 sm:hidden" onClick={() => void finish(true)}>
             Continue with Starter (free)
           </button>
         )}

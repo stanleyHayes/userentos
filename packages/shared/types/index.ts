@@ -162,6 +162,63 @@ export type NotificationChannel = 'sms' | 'email' | 'push' | 'in_app'
 
 export type TransactionType = 'deposit' | 'withdrawal' | 'rent_payment' | 'investment_return' | 'refund'
 
+// --- Legal document versions & consent ---
+// Canonical home of these values: the API only receives this synced file, so
+// they live here and packages/shared/legalVersions.ts re-exports them for the
+// web and mobile apps. Bump a version (ISO date of the change) whenever the
+// published Terms or Privacy Policy text changes materially — every user whose
+// stored acceptance is older is then asked to accept again.
+
+export const TERMS_VERSION = '2026-09-25'
+export const PRIVACY_VERSION = '2026-09-25'
+
+/** Evidence of a user's acceptance (Act 843 s.20; store terms). */
+export interface UserConsents {
+  termsVersion: string
+  privacyVersion: string
+  acceptedAt: string
+  ageConfirmed: boolean
+}
+
+/** True when the user has never accepted, or accepted an older version. */
+export function isConsentRequired(consents?: Partial<Pick<UserConsents, 'termsVersion' | 'privacyVersion' | 'ageConfirmed'>> | null): boolean {
+  if (!consents?.termsVersion || !consents.privacyVersion || consents.ageConfirmed !== true) return true
+  // ISO dates compare correctly as strings.
+  return consents.termsVersion < TERMS_VERSION || consents.privacyVersion < PRIVACY_VERSION
+}
+
+export interface LegalEntity {
+  /** Name the service trades under — always shown. */
+  tradingName: string
+  /**
+   * TODO(operator): the company name exactly as on the Registrar-General's
+   * certificate. While null, notices name the trading name only and say the
+   * registered details are available on request. Must be set before launch.
+   */
+  registeredName: string | null
+  /** TODO(operator): Registrar-General company number, once confirmed. */
+  registrationNumber: string | null
+  /** TODO(operator): Data Protection Commission registration number, once issued. */
+  dpcRegistrationNumber: string | null
+  location: string
+  /** Monitored mailbox for legal, privacy and data-protection requests. */
+  privacyEmail: string
+  supportEmail: string
+  website: string
+}
+
+/** The data controller named in the Privacy Policy and the party to the Terms. */
+export const LEGAL_ENTITY: LegalEntity = {
+  tradingName: 'RentOS',
+  registeredName: null,
+  registrationNumber: null,
+  dpcRegistrationNumber: null,
+  location: 'Accra, Ghana',
+  privacyEmail: 'info@userentos.com',
+  supportEmail: 'support@userentos.com',
+  website: 'https://userentos.com',
+}
+
 // --- Core Models ---
 
 export interface User {
@@ -180,6 +237,10 @@ export interface User {
   mfaEnabled?: boolean
   profileImage?: string
   invitedBy?: string
+  /** Latest Terms/Privacy acceptance on record (server-set only). */
+  consents?: UserConsents
+  /** Server-computed: the user must accept the current Terms/Privacy versions. */
+  consentRequired?: boolean
   createdAt: string
   updatedAt: string
 }
