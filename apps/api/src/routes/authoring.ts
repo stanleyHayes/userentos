@@ -19,6 +19,8 @@ import { requireQuota, EntitlementError } from '../services/entitlements.js'
 
 const router = Router()
 
+const REMOVED_MESSAGE = 'This post was removed by moderation and can no longer be edited or published.'
+
 const slugify = (title: string) =>
   title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 
@@ -71,6 +73,9 @@ router.post('/posts', authenticate, asyncHandler(async (req, res) => {
     author: byline || 'RentOS author',
     authorId: req.user!.userId,
     storefrontId: storefront ? String(storefront._id) : undefined,
+    // Never RentOS editorial, attached to a storefront or not. Only staff
+    // routes in blog.ts set this true.
+    platform: false,
     status: 'draft',
     published: false,
   })
@@ -85,6 +90,7 @@ router.patch('/posts/:id', authenticate, asyncHandler(async (req, res) => {
   const post = await BlogPost.findById(param(req.params.id))
   if (!post) { error(res, 'Post not found', 404); return }
   if (post.authorId !== req.user!.userId) { error(res, 'You can only edit your own posts', 403); return }
+  if (post.status === 'removed') { error(res, REMOVED_MESSAGE, 403); return }
 
   Object.assign(post, parsed.data)
   await post.save()
@@ -95,6 +101,8 @@ router.post('/posts/:id/publish', authenticate, asyncHandler(async (req, res) =>
   const post = await BlogPost.findById(param(req.params.id))
   if (!post) { error(res, 'Post not found', 404); return }
   if (post.authorId !== req.user!.userId) { error(res, 'You can only publish your own posts', 403); return }
+  // A takedown used to last until the author clicked Publish again.
+  if (post.status === 'removed') { error(res, REMOVED_MESSAGE, 403); return }
   if (post.status === 'published') { error(res, 'This post is already published', 409); return }
 
   // Plan-gated publishing quota (§7.1 blog.limit), counted over posts that are
@@ -110,6 +118,10 @@ router.post('/posts/:id/publish', authenticate, asyncHandler(async (req, res) =>
     if (err instanceof EntitlementError) { error(res, err.message, 402); return }
     throw err
   }
+
+  // A draft saved before the platform flag existed has none; say so explicitly
+  // rather than leave it to the legacy rule in blog.ts.
+  post.platform = false
 
   // A future scheduledFor means "queue it", not "publish it now". Without this
   // the field was accepted, stored and then silently ignored.
@@ -140,6 +152,8 @@ router.post('/posts/:id/archive', authenticate, asyncHandler(async (req, res) =>
   const post = await BlogPost.findById(param(req.params.id))
   if (!post) { error(res, 'Post not found', 404); return }
   if (post.authorId !== req.user!.userId) { error(res, 'You can only archive your own posts', 403); return }
+  // Archiving would launder 'removed' into a status that Publish accepts.
+  if (post.status === 'removed') { error(res, REMOVED_MESSAGE, 403); return }
 
   post.status = 'archived'
   post.published = false
