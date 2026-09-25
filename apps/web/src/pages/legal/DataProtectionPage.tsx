@@ -1,30 +1,45 @@
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
-import { CONTACT_EMAIL } from '@/lib/contact'
 import { DoodleCircle } from '@/components/ui/Doodles'
+import { LEGAL_ENTITY, PRIVACY_VERSION, DPC, legalEntityName, versionLabel } from './legalMeta'
 
+/**
+ * Plain-language data-protection summary. It states only what the code and
+ * the operator can stand behind — no registration, officer appointment,
+ * storage location, encryption scheme or notification deadline is claimed
+ * unless it is true. Details live in the Privacy Policy; keep the two in step
+ * and version-stamped with PRIVACY_VERSION.
+ */
 export function DataProtectionPage() {
+  const controller = legalEntityName()
   return (
     <LegalPageShell
       title="Data Protection"
-      subtitle="Our commitment to safeguarding your personal data"
+      subtitle="How RentOS applies Ghana's Data Protection Act"
       icon="lock"
-      lastUpdated="March 20, 2026"
+      lastUpdated={versionLabel(PRIVACY_VERSION)}
       headerExtra={<DoodleCircle className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />}
       sections={[
         {
           id: 'commitment',
           title: 'Our Commitment',
-          content: <p>RentOS Ghana is committed to the protection of personal data in compliance with the Data Protection Act, 2012 (Act 843) of the Republic of Ghana. We have appointed a Data Protection Officer and registered with the Data Protection Commission as required by law.</p>,
+          content: (
+            <>
+              <p>{controller} processes personal data in line with the Data Protection Act, 2012 (Act 843) of the Republic of Ghana. This page summarises how; the <a className="underline" href="/privacy">Privacy Policy</a> has the full detail, including every service provider we use.</p>
+              {LEGAL_ENTITY.dpcRegistrationNumber && (
+                <p className="mt-2">We are registered with the Data Protection Commission (registration number {LEGAL_ENTITY.dpcRegistrationNumber}).</p>
+              )}
+            </>
+          ),
         },
         {
           id: 'legal-basis',
           title: 'Legal Basis for Processing',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li><strong>Consent:</strong> You provide explicit consent when creating an account and using our services.</li>
-              <li><strong>Contractual Necessity:</strong> Processing required to fulfill rental agreements and financial services.</li>
-              <li><strong>Legal Obligation:</strong> Compliance with Ghanaian financial regulations, the Rent Act, and court orders.</li>
-              <li><strong>Legitimate Interest:</strong> Improving platform services, fraud prevention, and market analytics.</li>
+              <li><strong>Contract:</strong> to provide the account and services you signed up for — listings, applications, agreements, payments, savings, messaging and disputes.</li>
+              <li><strong>Consent:</strong> for optional processing — AI features (asked each time), optional profile details, optional notifications and tax-reporting sharing. You can withdraw it at any time.</li>
+              <li><strong>Legal obligation:</strong> keeping financial and tenancy records and answering lawful requests.</li>
+              <li><strong>Legitimate interests:</strong> security, fraud and abuse prevention, content moderation, error fixing and aggregated market statistics.</li>
             </ul>
           ),
         },
@@ -33,73 +48,67 @@ export function DataProtectionPage() {
           title: 'Technical Measures',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li>TLS/SSL encryption for all data in transit.</li>
-              <li>AES-256 encryption for sensitive data at rest.</li>
-              <li>Password hashing using bcrypt with appropriate salt rounds.</li>
-              <li>JWT-based authentication with expiring tokens.</li>
-              <li>Role-based access control (RBAC) across all API endpoints.</li>
-              <li>Input validation and sanitization using Zod schema validation.</li>
-              <li>Audit logging for all sensitive operations.</li>
+              <li>HTTPS encryption for connections in production.</li>
+              <li>Passwords hashed with bcrypt; optional two-factor authentication.</li>
+              <li>Short-lived sign-in tokens with refresh-token rotation, revoked when you change your password.</li>
+              <li>Role-based access control on staff and official functions, and audit logs of sensitive actions.</li>
+              <li>Input validation on API requests.</li>
+              <li>Error monitoring that masks all text and form fields in session replays.</li>
             </ul>
           ),
         },
         {
           id: 'organizational-measures',
-          title: 'Organizational Measures',
+          title: 'Organisational Measures',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li>Staff training on data protection and privacy.</li>
-              <li>Access to personal data restricted on a need-to-know basis.</li>
-              <li>Regular security audits and penetration testing.</li>
-              <li>Incident response procedures for data breaches.</li>
-              <li>Data processing agreements with all third-party service providers.</li>
+              <li>Staff and official accounts only see what their role needs, and their actions are logged.</li>
+              <li>Identity documents are reviewed by our own team, not sent to an outside verification company.</li>
+              <li>Reported content and accounts are reviewed by people, not decided automatically.</li>
             </ul>
           ),
         },
         {
           id: 'cross-border',
-          title: 'Cross-Border Data Transfers',
-          content: (
-            <>
-              <p>Your data is primarily stored and processed within Ghana. Where data is transferred outside Ghana, we ensure adequate protection through:</p>
-              <ul className="list-disc pl-5 space-y-2 mt-2">
-                <li>Data processing agreements with standard contractual clauses.</li>
-                <li>Verification that the receiving country has adequate data protection laws.</li>
-                <li>Authorization from the Data Protection Commission where required.</li>
-              </ul>
-            </>
-          ),
+          title: 'Transfers Outside Ghana',
+          content: <p>Our hosting, database, email, file-storage, payment, AI and error-monitoring providers are based or store data outside Ghana, so using RentOS involves transferring personal data abroad. We use providers that commit by contract to protect it and to use it only to serve us, and we take the further steps the Data Protection Act requires. See the <a className="underline" href="/privacy#processors">provider list</a>.</p>,
         },
         {
           id: 'breach-notification',
-          title: 'Data Breach Notification',
+          title: 'Data Breaches',
+          content: <p>If a security breach affects your personal data, we will notify the Data Protection Commission and the people affected as the Data Protection Act requires, and keep a record of the breach and what we did about it.</p>,
+        },
+        {
+          id: 'rights',
+          title: 'Your Rights',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li>We will notify the Data Protection Commission within 72 hours of becoming aware of a breach.</li>
-              <li>We will notify affected users without undue delay if the breach poses a high risk.</li>
-              <li>We will document all breaches and remedial actions taken.</li>
+              <li>See and export your data (Settings → Privacy), and correct it.</li>
+              <li>Delete your account (Settings → Privacy or <a className="underline" href="/delete-account">/delete-account</a>), subject to records the law requires us to keep.</li>
+              <li>Withdraw consent and turn off optional notifications (Settings → Notifications).</li>
+              <li>Object to direct marketing and to processing based on our legitimate interests.</li>
+              <li>Ask for a person to review a decision made about you automatically, such as a loan decision based on your Rent Credit Score.</li>
             </ul>
           ),
         },
         {
           id: 'children',
           title: "Children's Data",
-          content: <p>RentOS is not intended for use by individuals under 18 years of age. We do not knowingly collect personal data from children.</p>,
+          content: <p>RentOS is only for people aged 18 or over. Everyone confirms their age when they create an account or accept our terms, and we delete accounts we learn belong to a child.</p>,
         },
         {
           id: 'cookies',
           title: 'Cookies and Tracking',
-          content: <p>We use essential cookies for authentication and session management. We use localStorage for persisting user preferences. We do not use third-party advertising trackers.</p>,
+          content: <p>We keep your sign-in session and preferences in your browser's local storage. We do not use advertising or analytics trackers.</p>,
         },
         {
-          id: 'dpo',
-          title: 'Data Protection Officer',
+          id: 'contact',
+          title: 'Privacy Contact',
           content: (
             <div className="rounded-xl bg-surface dark:bg-[#161927] border border-border dark:border-[#252a3a] p-4">
-              <p className="font-medium text-primary-dark dark:text-white">Data Protection Officer</p>
-              <p className="mt-2">Email: {CONTACT_EMAIL.info}</p>
-              <p>Phone: +233 30 XXX XXXX</p>
-              <p>Address: Data Protection Office, RentOS Ghana, Accra</p>
+              <p className="font-medium text-primary-dark dark:text-white">{controller} — privacy enquiries</p>
+              <p className="mt-2">Email: <a className="underline" href={`mailto:${LEGAL_ENTITY.privacyEmail}`}>{LEGAL_ENTITY.privacyEmail}</a></p>
+              <p>Location: {LEGAL_ENTITY.location}</p>
             </div>
           ),
         },
@@ -108,9 +117,9 @@ export function DataProtectionPage() {
           title: 'Regulatory Authority',
           content: (
             <div className="rounded-xl bg-surface dark:bg-[#161927] border border-border dark:border-[#252a3a] p-4">
-              <p className="font-medium text-primary-dark dark:text-white">Data Protection Commission of Ghana</p>
-              <p className="mt-2">Accra, Ghana</p>
-              <p>Website: dataprotection.org.gh</p>
+              <p className="font-medium text-primary-dark dark:text-white">{DPC.name}</p>
+              <p className="mt-2">If you are unhappy with how we handled your data or a request, you can complain to the Commission.</p>
+              <p className="mt-1">Website: <a className="underline" href={DPC.website} target="_blank" rel="noopener noreferrer">{DPC.websiteLabel}</a></p>
             </div>
           ),
         },
