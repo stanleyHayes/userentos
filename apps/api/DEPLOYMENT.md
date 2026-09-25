@@ -148,6 +148,12 @@ Runs `src/seedProduction.ts`, which plants:
   (plus its wallet)
 - reference data only — subscription packages, Ghana rental-law articles,
   educational blog posts, feature flags, partner insurance products
+- only articles and posts marked `reviewed` in `src/data/referenceData.ts`
+  (every claim traceable to `services/legal/rentLaw.ts` /
+  `bootstrapLegalDocs.ts` or to the code); untouched copies of earlier,
+  inaccurate seed versions are corrected, and retracted items (the investment
+  and micro-loan promotions) are withdrawn. Have a Ghanaian lawyer review the
+  legal articles before launch.
 
 No fake users, properties, agreements, payments, or disputes. It also claims the
 `seedDatabase` bootstrap marker, so the demo seed can never fire against this
