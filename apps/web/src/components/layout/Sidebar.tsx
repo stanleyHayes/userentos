@@ -162,6 +162,7 @@ const navGroups: NavGroup[] = [
       { label: 'Approvals', labelKey: 'nav.approvals', path: '/admin/approvals', icon: <ShieldCheck size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Payouts', path: '/admin/payouts', icon: <Banknote size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Agency Licences', path: '/admin/agency-licences', icon: <BadgeCheck size={20} />, roles: ['admin', 'super_admin'] },
+      { label: 'Off-plan Reviews', path: '/admin/offplan-reviews', icon: <Building2 size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Plans & Entitlements', path: '/admin/plans/entitlements', icon: <SlidersHorizontal size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Feature Flags', labelKey: 'nav.featureFlags', path: '/admin/feature-flags', icon: <FlaskConical size={20} />, roles: ['super_admin'] },
     ],
