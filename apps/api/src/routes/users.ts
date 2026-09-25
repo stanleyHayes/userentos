@@ -43,7 +43,7 @@ import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
 import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
 import { decryptPii, piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
-import { ADMIN_ROLES, isAdminStaff } from '../utils/accessControl.js'
+import { ADMIN_ROLES, PERMISSIONS, isAdminStaff } from '../utils/accessControl.js'
 import { ownProfileView } from '../services/tenantProfileViews.js'
 import { evidenceForViewer } from '../services/agreementEvidence.js'
 import { revokeAccountSessions } from '../services/sessionRevocation.js'
@@ -496,10 +496,22 @@ router.post('/:id/reject-verification', authenticate, requireRole(...ADMIN_ROLES
 
 // Update a user's roles and permissions
 router.patch('/:id/permissions', authenticate, requirePermission('users:manage_permissions'), async (req, res) => {
-  const { permissions, roles } = req.body
+  const { roles } = req.body
+  let { permissions } = req.body
   const callerIsSuper = isSuperAdmin(req)
   const user = await User.findById(req.params.id)
   if (!user) { error(res, 'User not found', 404); return }
+
+  if (permissions !== undefined) {
+    if (!Array.isArray(permissions) || permissions.some((p: unknown) => typeof p !== 'string')) { error(res, 'permissions must be an array of strings'); return }
+    const known = (p: string) => (PERMISSIONS as readonly string[]).includes(p)
+    // A retired permission the account already held comes back from the
+    // editor unchanged; rewriting the list drops it. Anything else unknown is
+    // a mistake or an attempt to invent access.
+    const invented = (permissions as string[]).filter((p) => !known(p) && !user.permissions.includes(p))
+    if (invented.length) { error(res, `Unknown permission(s): ${invented.join(', ')}`); return }
+    permissions = (permissions as string[]).filter(known)
+  }
 
   // Prevent self-escalation: a non-super_admin cannot edit their own roles/permissions.
   if (user._id.toString() === req.user!.userId && !callerIsSuper) {

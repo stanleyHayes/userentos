@@ -1,6 +1,6 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 import { decryptPii, piiSetter, PII_FIELDS } from '../utils/piiCrypto.js'
-import { USER_ROLES } from '../utils/accessControl.js'
+import { USER_ROLES, PERMISSIONS } from '../utils/accessControl.js'
 import { isConsentRequired } from '../types/index.js'
 
 /**
@@ -85,7 +85,20 @@ const userSchema = new Schema<IUser>({
   // role can never be persisted, whichever route wrote it.
   roles: { type: [{ type: String, enum: USER_ROLES }], required: true },
   activeRole: { type: String, enum: USER_ROLES, required: true },
-  permissions: { type: [String], default: [] },
+  permissions: {
+    type: [String],
+    default: [],
+    validate: {
+      // Checked whenever the list is written, not on every save: an account
+      // still holding a permission string that was later retired must be able
+      // to save unrelated changes. Update queries (no document) always check.
+      validator(this: unknown, values: string[]) {
+        if (this instanceof mongoose.Document && !this.isNew && !this.isModified('permissions')) return true
+        return values.every((p) => (PERMISSIONS as readonly string[]).includes(p))
+      },
+      message: (props: { value: string[] }) => `Unknown permission(s): ${props.value.filter((p) => !(PERMISSIONS as readonly string[]).includes(p)).join(', ')}`,
+    },
+  },
   // National ID is special personal data (Act 843): encrypted at rest on
   // every write path; read it through decryptPii / toSafe().
   ghanaCardId: { type: String, set: piiSetter(PII_FIELDS.userGhanaCard) },
