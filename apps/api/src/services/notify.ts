@@ -1,7 +1,8 @@
 import { logger } from '../utils/logger.js'
 /**
  * Unified notification service.
- * Sends in_app notification (always) + email (when available) + push (when available).
+ * Writes the in-app notification, then email and push — each outbound channel
+ * only where the recipient's notification preferences allow it.
  */
 
 import { Notification } from '../models/Notification.js'
@@ -10,11 +11,78 @@ import { sendEmail, absoluteUrl } from './email.js'
 import { sendPushNotification } from './push.js'
 import { getIO } from './socket.js'
 
+/**
+ * What a notification is about, which decides which of the user's toggles
+ * (Settings → Notifications: email, sms, push, payment, savings) apply.
+ *
+ * Optional — the user's toggles are honoured:
+ *   'account'  (default) activity on the user's own account: applications,
+ *              agreements, messages, maintenance, disputes, listings, etc.
+ *              Channel toggles (email / sms / push) apply.
+ *   'payment'  payment reminders (rent due soon / overdue reminders). The
+ *              `payment` toggle AND the channel toggles apply; with `payment`
+ *              off nothing is sent, including the in-app item.
+ *   'savings'  savings alerts (goal progress and milestones). As 'payment',
+ *              with the `savings` toggle.
+ *
+ * Exempt — strictly necessary, sent on every channel whatever the toggles:
+ *   'security' account-security notices (credential or two-factor changes,
+ *              suspicious activity, suspension). Password-reset emails are sent
+ *              directly by authService and are exempt for the same reason.
+ *   'receipt'  confirmation of money the user paid — the payment receipt
+ *              record a tenant is entitled to for rent they paid.
+ *
+ * The in-app notification centre has no toggle: it is the account's own record
+ * and is written for every category unless a category toggle suppresses it.
+ * SMS: no notification is sent by SMS today (services/sms.ts has no callers);
+ * `sms` is still resolved here so a future SMS sender honours the toggle.
+ */
+export type NotificationCategory = 'account' | 'payment' | 'savings' | 'security' | 'receipt'
+
+export const EXEMPT_CATEGORIES: readonly NotificationCategory[] = ['security', 'receipt']
+
+export interface NotificationPreferences {
+  email?: boolean
+  sms?: boolean
+  push?: boolean
+  payment?: boolean
+  savings?: boolean
+}
+
+export interface DeliveryPlan {
+  inApp: boolean
+  email: boolean
+  push: boolean
+  sms: boolean
+}
+
+/**
+ * Decide which channels a notification may use.
+ *
+ * `prefs` is the stored settings.notifications object; a missing key means the
+ * schema default (on). `null` means the preferences could not be read (user
+ * missing or lookup failed): optional outbound delivery is then skipped rather
+ * than guessed, while the in-app record is still written.
+ */
+export function deliveryPlan(category: NotificationCategory, prefs: NotificationPreferences | null): DeliveryPlan {
+  if (EXEMPT_CATEGORIES.includes(category)) return { inApp: true, email: true, push: true, sms: true }
+  if (!prefs) return { inApp: true, email: false, push: false, sms: false }
+  const categoryOn = category === 'payment' ? prefs.payment !== false
+    : category === 'savings' ? prefs.savings !== false
+      : true
+  if (!categoryOn) return { inApp: false, email: false, push: false, sms: false }
+  return { inApp: true, email: prefs.email !== false, push: prefs.push !== false, sms: prefs.sms !== false }
+}
+
+export const NOTIFICATION_SETTINGS_PATH = '/settings?tab=notifications'
+
 interface NotifyOptions {
   userId: string
   title: string
   message: string
   actionUrl?: string
+  /** Which preference toggles apply. Defaults to 'account'. */
+  category?: NotificationCategory
   /** Skip email for this notification */
   skipEmail?: boolean
   /** Skip push for this notification */
@@ -29,6 +97,24 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/**
+ * Footer for notification emails. Optional categories carry a link to the
+ * notification settings where the user can turn the email off; exempt ones say
+ * why they arrive regardless.
+ */
+export function emailFooter(category: NotificationCategory): { text: string; html: string } {
+  if (EXEMPT_CATEGORIES.includes(category)) {
+    const note = 'This is a required service message about your RentOS account or a payment. It is sent even if optional notifications are turned off.'
+    return { text: `\n\n--\n${note}`, html: `<hr><p style="color:#6b7280;font-size:12px">${note}</p>` }
+  }
+  const url = absoluteUrl(NOTIFICATION_SETTINGS_PATH)
+  const safeUrl = escapeHtml(url)
+  return {
+    text: `\n\n--\nYou received this because email notifications are on for your RentOS account. Unsubscribe or manage notification preferences: ${url}`,
+    html: `<hr><p style="color:#6b7280;font-size:12px">You received this because email notifications are on for your RentOS account. <a href="${safeUrl}">Unsubscribe or manage notification preferences</a>.</p>`,
+  }
 }
 
 /**
@@ -52,10 +138,9 @@ function escapeHtml(value: string): string {
  * push sections below were already written as best-effort with .catch on
  * each; the in-app write was the one path that could still throw.
  *
- * Returns true when the in-app notification was written, false when it could
- * not be. No caller reads it today; it exists so a future one can tell the
- * difference between "delivered" and "swallowed" without the function having
- * to throw to say so.
+ * Returns false only when the in-app notification could not be written; a
+ * notification the user's preferences suppress is handled, not failed, and
+ * returns true.
  */
 export async function notify(opts: NotifyOptions): Promise<boolean> {
   try {
@@ -67,10 +152,27 @@ export async function notify(opts: NotifyOptions): Promise<boolean> {
   }
 }
 
+/** Recipient email + stored preferences; null when unavailable. Never throws. */
+async function loadRecipient(userId: string): Promise<{ email?: string; prefs: NotificationPreferences } | null> {
+  try {
+    const user = await User.findById(userId).select('email settings.notifications').lean()
+    if (!user) return null
+    return { email: user.email, prefs: (user.settings?.notifications ?? {}) as NotificationPreferences }
+  } catch (err) {
+    logger.warn(`[Notify] preference lookup failed for user ${userId}: ${(err as Error).message}`)
+    return null
+  }
+}
+
 async function createNotification(opts: NotifyOptions) {
   const { userId, title, message, actionUrl, skipEmail, skipPush } = opts
+  const category = opts.category ?? 'account'
 
-  // 1. In-app notification (always)
+  const recipient = await loadRecipient(userId)
+  const plan = deliveryPlan(category, recipient?.prefs ?? null)
+  if (!plan.inApp) return null
+
+  // 1. In-app notification
   const notification = await Notification.create({
     userId,
     title,
@@ -96,30 +198,27 @@ async function createNotification(opts: NotifyOptions) {
   }
 
   // 2. Email (best-effort, non-blocking)
-  if (!skipEmail) {
-    User.findById(userId).select('email firstName').lean().then((user) => {
-      if (user?.email) {
-        // title/message/actionUrl can contain user-generated content (e.g. chat
-        // messages) — escape before HTML interpolation. subject/text are
-        // plain-text contexts and stay unescaped.
-        const safeTitle = escapeHtml(title)
-        const safeMessage = escapeHtml(message)
-        // Link targets must be absolute and environment-aware — this used to
-        // hardcode https://rentos.gh, so every staging/dev notification pointed
-        // at production.
-        const safeActionUrl = actionUrl ? escapeHtml(absoluteUrl(actionUrl)) : undefined
-        sendEmail({
-          to: user.email,
-          subject: title,
-          text: message,
-          html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}`,
-        }).catch((err) => console.warn('[Notify] Email failed:', err.message))
-      }
-    }).catch((err) => console.warn('[Notify] User lookup failed:', err.message))
+  if (!skipEmail && plan.email && recipient?.email) {
+    // title/message/actionUrl can contain user-generated content (e.g. chat
+    // messages) — escape before HTML interpolation. subject/text are
+    // plain-text contexts and stay unescaped.
+    const safeTitle = escapeHtml(title)
+    const safeMessage = escapeHtml(message)
+    // Link targets must be absolute and environment-aware — this used to
+    // hardcode https://rentos.gh, so every staging/dev notification pointed
+    // at production.
+    const safeActionUrl = actionUrl ? escapeHtml(absoluteUrl(actionUrl)) : undefined
+    const footer = emailFooter(category)
+    sendEmail({
+      to: recipient.email,
+      subject: title,
+      text: `${message}${footer.text}`,
+      html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}${footer.html}`,
+    }).catch((err) => console.warn('[Notify] Email failed:', err.message))
   }
 
   // 3. Push notification (best-effort, non-blocking)
-  if (!skipPush) {
+  if (!skipPush && plan.push) {
     sendPushNotification(userId, {
       title,
       body: message,
@@ -174,6 +273,8 @@ export function notifyPaymentConfirmed(tenantId: string, amount: number, referen
     title: 'Payment Confirmed',
     message: `Your payment of GHS ${amount.toFixed(2)} has been confirmed (Ref: ${reference}).`,
     actionUrl: '/payments',
+    // The payer's receipt — exempt from the optional toggles.
+    category: 'receipt',
   })
 }
 
@@ -262,6 +363,7 @@ export function notifyRentReminder(tenantId: string, amount: number, daysLeft: n
     title: 'Rent Due Soon',
     message: `Your rent of GHS ${amount.toFixed(2)} for "${propertyTitle}" is due in ${daysLeft} days.`,
     actionUrl: '/payments',
+    category: 'payment',
   })
 }
 
