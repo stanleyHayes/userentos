@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Every rent valuation the platform produces, and — once it is known — the
@@ -105,6 +106,6 @@ valuationLogSchema.index({ propertyId: 1, observedRent: 1, createdAt: -1 })
  * not an operational artifact, and discarding it discards the dataset the
  * roadmap is built on.
  */
-valuationLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 730 })
+valuationLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds('valuationLog') })
 
 export const ValuationLog = mongoose.model<IValuationLog>('ValuationLog', valuationLogSchema)

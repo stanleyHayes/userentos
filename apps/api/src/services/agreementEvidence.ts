@@ -46,6 +46,24 @@ export function agreementTermsHash(agreement: AgreementTerms): string {
   return createHash('sha256').update(canonicalAgreementTerms(agreement)).digest('hex')
 }
 
+/** One signature record: the typed name plus where, when and over which terms it was given. */
+export function signatureEvidence(
+  req: { ip?: string; get(name: string): string | undefined },
+  signer: { role: 'landlord' | 'tenant'; userId: string; signatureName: string },
+  terms: { termsHash: string; agreementVersion: number },
+  signedAt = new Date(),
+) {
+  return {
+    ...signer,
+    signedAt,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent')?.slice(0, 512),
+    ...terms,
+    consentStatement: SIGNATURE_CONSENT_STATEMENT,
+    consentVersion: SIGNATURE_CONSENT_VERSION,
+  }
+}
+
 interface EvidenceEntry { userId?: string; ipAddress?: string; userAgent?: string }
 
 /**

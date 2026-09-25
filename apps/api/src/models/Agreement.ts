@@ -46,7 +46,7 @@ export interface IAgreement extends Document {
   lastLeaseReminderAt?: string
 }
 
-const signatureEvidenceSchema = new Schema<ISignatureEvidence>({
+export const signatureEvidenceSchema = new Schema<ISignatureEvidence>({
   role: { type: String, enum: ['landlord', 'tenant'], required: true, immutable: true },
   userId: { type: String, required: true, immutable: true },
   signatureName: { type: String, required: true, immutable: true },

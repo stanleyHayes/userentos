@@ -11,10 +11,12 @@ describe('tenant profile contract and data minimisation', () => {
   it('can reach full completion without religion or ethnicity', () => {
     expect(calcScore({ dateOfBirth: '1990-01-01', gender: 'prefer_not_to_say', maritalStatus: 'single', nationality: 'Ghanaian', highestEducation: 'none', employmentStatus: 'employed', occupation: 'Teacher', monthlyIncome: 1000, employmentDuration: '1_3yrs', hasSpouse: false, hasChildren: false, numberOfOccupants: 1, numberOfDependents: 0, smoker: false, noiseLevel: 'quiet', workSchedule: 'day', pets: false, personalReferences: [{ name: 'A' }, { name: 'B' }], professionalReferences: [{ name: 'C' }], previousRentals: [{ city: 'Accra' }], emergencyContact: { name: 'D', phone: '0240000000' }, idType: 'passport', idNumber: 'test', idVerified: true, incomeVerified: true })).toBe(100)
   })
-  it('refuses new religion/ethnicity collection while allowing legacy values to be cleared', () => {
+  it('does not accept religion or ethnicity at all', () => {
     expect(profilePatchSchema.safeParse({ religion: 'private' }).success).toBe(false)
     expect(profilePatchSchema.safeParse({ ethnicGroup: 'private' }).success).toBe(false)
-    expect(profilePatchSchema.safeParse({ religion: '', ethnicGroup: '' }).success).toBe(true)
+    expect(profilePatchSchema.safeParse({ religion: '', ethnicGroup: '' }).success).toBe(false)
+    expect(TenantProfile.schema.path('religion')).toBeUndefined()
+    expect(TenantProfile.schema.path('ethnicGroup')).toBeUndefined()
   })
   it('both editors can submit a fetched profile without server metadata or verification flags', () => {
     const patch = tenantProfilePatch({ _id: 'db-id', id: 'api-id', userId: 'owner', completionScore: 100, profileComplete: true, idVerified: true, createdAt: 'date', religion: 'legacy', ethnicGroup: 'legacy', bio: 'Hello', monthlyIncome: 1200, primaryCurrency: 'USD', incomeSources: [{ source: 'Freelance', amount: 30, currency: 'GHS' }], smoker: false, smokingStatus: 'non_smoker', pets: true, petStatus: 'has_pets' })

@@ -14,6 +14,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
 import { tenantHasSigned } from '../services/tenancyRelationship.js'
+import { isAdminStaff } from '../utils/accessControl.js'
 import { agreementTermsHash, evidenceForViewer, SIGNATURE_CONSENT_STATEMENT, SIGNATURE_CONSENT_VERSION, type AgreementTerms } from '../services/agreementEvidence.js'
 
 const createAgreementSchema = z.object({
@@ -106,8 +107,10 @@ export const agreementController = {
       const tenant = userMap.get(a.tenantId)
       const landlord = userMap.get(a.landlordId)
       // A landlord can draft a lease naming anyone; the tenant's contact
-      // details are only disclosed once the tenant has signed it.
-      const showContact = isAdmin || a.tenantId === userId || tenantHasSigned(a)
+      // details are only disclosed once the tenant has signed it — and to the
+      // parties, or to administrators, not to every regulator account.
+      const isParty = a.tenantId === userId || a.landlordId === userId
+      const showContact = (isAdmin && isAdminStaff(roles)) || a.tenantId === userId || (isParty && tenantHasSigned(a))
       return agreementView(a, req, {
         tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : undefined,
         tenantEmail: showContact ? tenant?.email : undefined,

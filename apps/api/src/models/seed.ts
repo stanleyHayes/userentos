@@ -576,7 +576,7 @@ export async function seedDatabase() {
 
   await TenantProfile.insertMany([
     {
-      userId: t1, dateOfBirth: '1994-03-15', gender: 'male', maritalStatus: 'single', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Akan', hometown: 'Kumasi', languagesSpoken: ['English', 'Twi', 'Ga'], bio: 'Software developer working remotely. Quiet, responsible tenant with a strong track record of on-time payments.',
+      userId: t1, dateOfBirth: '1994-03-15', gender: 'male', maritalStatus: 'single', nationality: 'Ghanaian', hometown: 'Kumasi', languagesSpoken: ['English', 'Twi', 'Ga'], bio: 'Software developer working remotely. Quiet, responsible tenant with a strong track record of on-time payments.',
       highestEducation: 'bachelors', institution: 'University of Ghana', fieldOfStudy: 'Computer Science', graduationYear: 2016, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Senior Software Developer', employer: 'Hubtel', employerAddress: '11 Dzorwulu St, Accra', monthlyIncome: 12000, employmentDuration: '3_5yrs', workPhone: '0241234567',
       hasSpouse: false, hasChildren: false, numberOfDependents: 0, numberOfOccupants: 1,
@@ -590,7 +590,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra'], preferredType: ['apartment', 'house'], minBudget: 2000, maxBudget: 5000, minBedrooms: 2, needsFurnished: false, needsParking: true, preferredAmenities: ['WiFi', 'Security', 'Parking'] },
     },
     {
-      userId: t2, dateOfBirth: '1997-08-22', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Ga-Dangme', hometown: 'Accra', languagesSpoken: ['English', 'Ga', 'Twi'], bio: 'Marketing professional at a fintech company. Looking for safe, convenient housing close to work.',
+      userId: t2, dateOfBirth: '1997-08-22', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', hometown: 'Accra', languagesSpoken: ['English', 'Ga', 'Twi'], bio: 'Marketing professional at a fintech company. Looking for safe, convenient housing close to work.',
       highestEducation: 'bachelors', institution: 'Ashesi University', fieldOfStudy: 'Business Administration', graduationYear: 2019, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Marketing Manager', employer: 'Zeepay Ghana', monthlyIncome: 8000, employmentDuration: '1_3yrs',
       hasSpouse: false, hasChildren: false, numberOfDependents: 0, numberOfOccupants: 1,
@@ -604,7 +604,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra'], preferredType: ['apartment', 'studio'], minBudget: 1000, maxBudget: 2500, minBedrooms: 1, needsFurnished: true, needsParking: false, preferredAmenities: ['WiFi', 'AC', 'Security'] },
     },
     {
-      userId: t3, dateOfBirth: '1988-11-05', gender: 'male', maritalStatus: 'married', nationality: 'Ghanaian', religion: 'muslim', ethnicGroup: 'Mole-Dagbon', hometown: 'Tamale', languagesSpoken: ['English', 'Dagbani', 'Twi', 'Hausa'], bio: 'Business owner running an import/export company. Reliable tenant with excellent credit history. Looking for family-friendly housing.',
+      userId: t3, dateOfBirth: '1988-11-05', gender: 'male', maritalStatus: 'married', nationality: 'Ghanaian', hometown: 'Tamale', languagesSpoken: ['English', 'Dagbani', 'Twi', 'Hausa'], bio: 'Business owner running an import/export company. Reliable tenant with excellent credit history. Looking for family-friendly housing.',
       highestEducation: 'masters', institution: 'GIMPA', fieldOfStudy: 'Business Administration', graduationYear: 2014, currentlyStudying: false,
       employmentStatus: 'self_employed', occupation: 'CEO', employer: 'KM Imports Ltd', employerAddress: 'Tema Industrial Area', monthlyIncome: 25000, employmentDuration: '5_plus', workPhone: '0244567890',
       hasSpouse: true, spouseName: 'Fatima Mensah', spouseOccupation: 'Pharmacist', hasChildren: true, numberOfChildren: 2, childrenAges: '5, 3', numberOfDependents: 3, numberOfOccupants: 4,
@@ -618,7 +618,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra', 'Tema'], preferredType: ['house', 'apartment'], minBudget: 3000, maxBudget: 8000, minBedrooms: 3, needsFurnished: false, needsParking: true, preferredAmenities: ['Security', 'Garden', 'Parking', 'Generator'] },
     },
     {
-      userId: t4, dateOfBirth: '2000-05-10', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Ewe', hometown: 'Ho', languagesSpoken: ['English', 'Ewe'],
+      userId: t4, dateOfBirth: '2000-05-10', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', hometown: 'Ho', languagesSpoken: ['English', 'Ewe'],
       highestEducation: 'diploma', institution: 'Accra Technical University', fieldOfStudy: 'Accounting', graduationYear: 2023, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Junior Accountant', employer: 'PwC Ghana', monthlyIncome: 4000, employmentDuration: 'less_than_1yr',
       hasSpouse: false, hasChildren: false, numberOfDependents: 0, numberOfOccupants: 1,
@@ -631,7 +631,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra', 'Tema'], preferredType: ['room', 'apartment'], minBudget: 500, maxBudget: 1500, minBedrooms: 1, needsFurnished: false, needsParking: false, preferredAmenities: ['Water', 'Electricity'] },
     },
     {
-      userId: t5, dateOfBirth: '1985-01-28', gender: 'female', maritalStatus: 'married', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Fante', hometown: 'Cape Coast', languagesSpoken: ['English', 'Fante', 'Twi', 'French'], bio: 'Diplomat and international relations specialist. Previously posted in Geneva and Abidjan. Currently based in Accra at the Ministry of Foreign Affairs.',
+      userId: t5, dateOfBirth: '1985-01-28', gender: 'female', maritalStatus: 'married', nationality: 'Ghanaian', hometown: 'Cape Coast', languagesSpoken: ['English', 'Fante', 'Twi', 'French'], bio: 'Diplomat and international relations specialist. Previously posted in Geneva and Abidjan. Currently based in Accra at the Ministry of Foreign Affairs.',
       highestEducation: 'masters', institution: 'University of Oxford', fieldOfStudy: 'International Relations', graduationYear: 2010, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Senior Diplomat', employer: 'Ministry of Foreign Affairs', employerAddress: 'Independence Avenue, Accra', monthlyIncome: 35000, employmentDuration: '5_plus', workPhone: '0302778899',
       hasSpouse: true, spouseName: 'Dr. James Amoah', spouseOccupation: 'Surgeon', hasChildren: true, numberOfChildren: 1, childrenAges: '7', numberOfDependents: 2, numberOfOccupants: 3,
@@ -645,7 +645,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra'], preferredType: ['house', 'apartment'], minBudget: 5000, maxBudget: 12000, minBedrooms: 2, needsFurnished: true, needsParking: true, preferredAmenities: ['Swimming Pool', 'Security', 'Generator', 'AC', 'Gym'] },
     },
     {
-      userId: t6, dateOfBirth: '1991-07-12', gender: 'male', maritalStatus: 'married', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Ashanti', hometown: 'Sunyani', languagesSpoken: ['English', 'Twi'], bio: 'Finance director at a multinational. Previously worked in Lagos and Nairobi. Family man with two children, looking for premium housing in Accra.',
+      userId: t6, dateOfBirth: '1991-07-12', gender: 'male', maritalStatus: 'married', nationality: 'Ghanaian', hometown: 'Sunyani', languagesSpoken: ['English', 'Twi'], bio: 'Finance director at a multinational. Previously worked in Lagos and Nairobi. Family man with two children, looking for premium housing in Accra.',
       highestEducation: 'masters', institution: 'London Business School', fieldOfStudy: 'Finance', graduationYear: 2015, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Finance Director', employer: 'Unilever Ghana', employerAddress: 'Industrial Area, Tema', monthlyIncome: 28000, employmentDuration: '3_5yrs', workPhone: '0303445566',
       hasSpouse: true, spouseName: 'Adwoa Frimpong', spouseOccupation: 'Teacher', hasChildren: true, numberOfChildren: 2, childrenAges: '8, 5', numberOfDependents: 3, numberOfOccupants: 4,
@@ -659,7 +659,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Accra', 'Tema'], preferredType: ['house', 'apartment'], minBudget: 4000, maxBudget: 10000, minBedrooms: 3, needsFurnished: false, needsParking: true, preferredAmenities: ['Security', 'Garden', 'Parking', 'CCTV', 'Children Playground'] },
     },
     {
-      userId: t7, dateOfBirth: '1996-04-03', gender: 'male', maritalStatus: 'single', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Ga-Dangme', hometown: 'Accra', languagesSpoken: ['English', 'Ga', 'Twi'], bio: 'Port logistics officer at Tema Port. Straightforward and responsible. First time using RentOS.',
+      userId: t7, dateOfBirth: '1996-04-03', gender: 'male', maritalStatus: 'single', nationality: 'Ghanaian', hometown: 'Accra', languagesSpoken: ['English', 'Ga', 'Twi'], bio: 'Port logistics officer at Tema Port. Straightforward and responsible. First time using RentOS.',
       highestEducation: 'bachelors', institution: 'KNUST', fieldOfStudy: 'Logistics & Supply Chain', graduationYear: 2019, currentlyStudying: false,
       employmentStatus: 'employed', occupation: 'Logistics Officer', employer: 'Ghana Ports & Harbours Authority', employerAddress: 'Tema Port', monthlyIncome: 6000, employmentDuration: '3_5yrs',
       hasSpouse: false, hasChildren: false, numberOfDependents: 0, numberOfOccupants: 1,
@@ -673,7 +673,7 @@ export async function seedDatabase() {
       searchPreferences: { preferredRegions: ['Greater Accra'], preferredCities: ['Tema', 'Accra'], preferredType: ['apartment', 'room'], minBudget: 500, maxBudget: 1500, minBedrooms: 1, needsFurnished: false, needsParking: false, preferredAmenities: ['Water', 'Electricity', 'Security'] },
     },
     {
-      userId: t8, dateOfBirth: '1999-12-18', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', religion: 'christian', ethnicGroup: 'Ashanti', hometown: 'Kumasi', languagesSpoken: ['English', 'Twi'],
+      userId: t8, dateOfBirth: '1999-12-18', gender: 'female', maritalStatus: 'single', nationality: 'Ghanaian', hometown: 'Kumasi', languagesSpoken: ['English', 'Twi'],
       highestEducation: 'shs', institution: 'Wesley Girls SHS', fieldOfStudy: 'General Arts', graduationYear: 2018, currentlyStudying: false,
       employmentStatus: 'self_employed', occupation: 'Beauty Salon Owner', employer: 'Serwa\'s Beauty Palace', employerAddress: 'Kaneshie Market, Block B', monthlyIncome: 3000, employmentDuration: '1_3yrs',
       hasSpouse: false, hasChildren: false, numberOfDependents: 1, numberOfOccupants: 1,
@@ -1856,8 +1856,6 @@ export async function seedDatabase() {
       gender: female ? 'female' : 'male',
       maritalStatus: married ? 'married' : 'single',
       nationality: 'Ghanaian',
-      religion: weighted([['christian', 70], ['muslim', 25], ['traditional', 5]]),
-      ethnicGroup: rp(['Akan', 'Ga-Dangme', 'Ewe', 'Mole-Dagbon', 'Guan', 'Gurma']),
       hometown: rp(HOMETOWNS),
       languagesSpoken: rp(LANGS),
       bio: `${rp(OCCUPATIONS)} based in ${rp(HOMETOWNS)}. Looking for a comfortable and secure place to rent.`,

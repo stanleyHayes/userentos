@@ -39,7 +39,7 @@ function auditPayout(action: string, payout: { _id: unknown; userId: string; ref
  */
 export async function finalizePayout(
   event: PayoutWebhookEvent,
-  opts: { source: 'webhook' | 'simulator' | 'admin' },
+  opts: { source: 'webhook' | 'simulator' | 'admin' | 'reconciliation' },
 ): Promise<boolean> {
   const query = event.reference
     ? { reference: event.reference }

@@ -12,7 +12,6 @@ import { param } from '../utils/params.js'
 import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { buildInviteUrl, sendInvitationEmail } from '../services/email.js'
-import { checkAndAward } from '../services/achievements.js'
 import { USER_ROLES, PERMISSIONS, SUPER_ADMIN_ONLY_ROLES } from '../utils/accessControl.js'
 import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
 import { recordAuditEntry } from '../utils/audit.js'
@@ -241,7 +240,8 @@ router.post('/accept', async (req, res) => {
     roles: invitation.roles,
     activeRole: invitation.roles[0],
     permissions: invitation.permissions,
-    isVerified: true,
+    // An invitation proves control of the inbox, not identity: isVerified
+    // (and the verified badge) come only from an admin identity review.
     invitedBy: invitation.invitedBy,
     consents: consent,
   })
@@ -256,10 +256,6 @@ router.post('/accept', async (req, res) => {
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })
   void notifyWelcome(user._id.toString(), firstName)
-
-  // User is auto-verified via invitation flow — award profile_verified badge
-  checkAndAward(user._id.toString(), 'profile_verified', {})
-    .catch((err) => console.warn('[invitations/accept] achievement award failed:', err))
 
   invitation.status = 'accepted'
   invitation.acceptedAt = new Date()

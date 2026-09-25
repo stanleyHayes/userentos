@@ -8,6 +8,7 @@
  * report volume is trivially gameable by a competitor.
  */
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * What can be reported.
@@ -110,5 +111,10 @@ contentReportSchema.index(
   { reporterId: 1, targetType: 1, targetId: 1 },
   { unique: true, partialFilterExpression: { status: { $in: ['open', 'reviewing'] } } },
 )
+
+// A dismissed report is the reporter's allegation, text and IP about someone
+// who was cleared: it expires a year after handling (config/retention.ts).
+// Actioned reports stay — they back suspensions and repeat-abuse decisions.
+contentReportSchema.index({ handledAt: 1 }, { expireAfterSeconds: ttlSeconds('dismissedContentReport'), partialFilterExpression: { status: 'dismissed' } })
 
 export const ContentReport = mongoose.model<IContentReport>('ContentReport', contentReportSchema)

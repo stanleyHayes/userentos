@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Raw provider webhook payloads, kept for dispute investigation and
@@ -34,6 +35,6 @@ const webhookEventSchema = new Schema<IWebhookEvent>({
 webhookEventSchema.index({ provider: 1, eventId: 1 }, { unique: true })
 // 90-day retention — long enough to investigate a dispute, short enough to
 // avoid keeping buyer data indefinitely.
-webhookEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 })
+webhookEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds('webhookEvent') })
 
 export const WebhookEvent = mongoose.model<IWebhookEvent>('WebhookEvent', webhookEventSchema)

@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Redacted rental complaints and what the classifier made of them.
@@ -86,6 +87,6 @@ complaintLogSchema.index({ reviewedAt: 1, createdAt: -1 })
  * served its purpose once a reviewer has turned it into a training example.
  * Six months is long enough to batch review work and no longer.
  */
-complaintLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 180 })
+complaintLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds('complaintLog') })
 
 export const ComplaintLog = mongoose.model<IComplaintLog>('ComplaintLog', complaintLogSchema)

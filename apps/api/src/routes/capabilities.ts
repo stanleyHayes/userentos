@@ -25,6 +25,7 @@ import {
 } from '../services/capabilityLogic.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { signedTenancyFilter } from '../services/tenancyRelationship.js'
 
 const router = Router()
 const idOf = (doc: Record<string, unknown>) => ({ ...doc, id: String(doc._id) })
@@ -34,8 +35,9 @@ const sendCsv = (res: Parameters<typeof success>[0], name: string, rows: Record<
   res.send(rowsToCsv(rows))
 }
 
+// Rental history is tenancies the tenant signed, not drafts a landlord addressed to them.
 router.get('/tenant/rental-history.csv', authenticate, requireRole('tenant'), async (req, res) => {
-  const agreements = await Agreement.find({ tenantId: req.user!.userId }).sort({ startDate: -1 }).lean()
+  const agreements = await Agreement.find(signedTenancyFilter({ tenantId: req.user!.userId })).sort({ startDate: -1 }).lean()
   sendCsv(res, 'rentos-rental-history.csv', agreements.map((item) => ({
     agreementId: item._id, propertyId: item.propertyId, startDate: item.startDate,
     endDate: item.endDate, monthlyRent: item.rentAmount, status: item.status,
@@ -204,7 +206,8 @@ router.get('/financier/decision/:applicationId', authenticate, requireRole('fina
   const applicantId = application.applicantId
   const [score, agreements, payments] = await Promise.all([
     CreditScore.findOne({ userId: applicantId }).lean(),
-    Agreement.find({ tenantId: applicantId }).lean(),
+    // A credit decision must not count leases the applicant never signed.
+    Agreement.find(signedTenancyFilter({ tenantId: applicantId })).lean(),
     Payment.find({ tenantId: applicantId }).lean(),
   ])
   success(res, {
@@ -237,7 +240,9 @@ router.get('/financier/targeting', authenticate, requireRole('financier'), async
 
 router.get('/financier/securitized-report.csv', authenticate, requireRole('financier'), async (req, res) => {
   const contracts = await FinancingContract.find({ financierId: req.user!.userId }).sort({ createdAt: -1 }).limit(5000).lean()
-  sendCsv(res, 'bog-securitized-report.csv', contracts.map((item) => ({
+  // Neutral names: this is the financier's own data, not a Bank of Ghana or
+  // SSNIT filing, and the file name must not suggest one.
+  sendCsv(res, 'rentos-portfolio-export.csv', contracts.map((item) => ({
     contractId: item._id, productType: item.productType, principal: item.principal,
     totalRepayable: item.totalRepayable, amountRepaid: item.amountRepaid, status: item.status,
   })))
@@ -302,7 +307,7 @@ router.get('/employer/compliance.csv', authenticate, requireRole('employer'), as
   const employer = await Employer.findOne({ ownerId: req.user!.userId }).lean()
   if (!employer) { error(res, 'Employer profile not found', 404); return }
   const runs = await PayrollRun.find({ employerId: employer._id.toString(), status: 'processed' }).sort({ periodStart: -1 }).lean()
-  sendCsv(res, 'ssnit-tax-deduction-report.csv', runs.flatMap((run) => run.deductions.map((deduction) => ({
+  sendCsv(res, 'rentos-payroll-deduction-export.csv', runs.flatMap((run) => run.deductions.map((deduction) => ({
     employerTIN: employer.tin, ssnitEmployerNumber: employer.ssnitEmployerNumber,
     period: run.periodLabel, employeeId: deduction.employeeId, employeeName: deduction.employeeName,
     allocationType: deduction.allocationType, amount: deduction.amount, status: deduction.status,

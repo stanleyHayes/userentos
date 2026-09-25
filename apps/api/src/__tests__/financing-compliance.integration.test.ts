@@ -179,4 +179,12 @@ describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('rent-advance financi
     expect((await call(`/api/financing/contracts/${contractId}/repay`, auth, { amount: 200 })).status).toBe(200)
     expect(await balance(financier)).toBe(before + 200)
   })
+
+  it('a financier payment reminder honours the borrower\'s payment-reminder preference', async () => {
+    const { contractId, userId } = await signedContract()
+    const { notify } = await import('../services/notify.js')
+    vi.mocked(notify).mockClear()
+    expect((await call(`/api/financing/contracts/${contractId}/remind`, token(financier, ['financier'], ['financing:collect']), {})).status).toBe(200)
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ userId, title: 'Payment Reminder', category: 'payment' }))
+  })
 })

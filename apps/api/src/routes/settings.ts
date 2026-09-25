@@ -42,7 +42,7 @@ router.patch('/', authenticate, async (req, res) => {
   const user = await User.findOneAndUpdate(
     { _id: req.user!.userId, deletedAt: { $exists: false } },
     { $set: changes },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   ).select('settings').lean()
   if (!user) { error(res, 'User not found', 404); return }
   success(res, settingsWithDefaults(user.settings))

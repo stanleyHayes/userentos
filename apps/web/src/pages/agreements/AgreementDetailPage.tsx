@@ -80,6 +80,8 @@ export function AgreementDetailPage() {
   const [showSignModal, setShowSignModal] = useState(false)
   const [showRenewalModal, setShowRenewalModal] = useState(false)
   const [renewalForm, setRenewalForm] = useState({ proposedRent: '', proposedEndDate: '', message: '' })
+  // A renewal changes a signed lease, so each party e-signs it (typed name + consent).
+  const [renewalSignature, setRenewalSignature] = useState({ name: '', consent: false })
   const [signatureName, setSignatureName] = useState('')
   const [signConsent, setSignConsent] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
@@ -206,6 +208,7 @@ export function AgreementDetailPage() {
       proposedEndDate: base.toISOString().slice(0, 10),
       message: '',
     })
+    setRenewalSignature({ name: '', consent: false })
     setShowRenewalModal(true)
   }
 
@@ -216,6 +219,8 @@ export function AgreementDetailPage() {
         proposedRent: Number(renewalForm.proposedRent),
         proposedEndDate: renewalForm.proposedEndDate,
         message: renewalForm.message.trim() || undefined,
+        signatureName: renewalSignature.name.trim(),
+        consent: true,
       })
       setShowRenewalModal(false)
     } catch {
@@ -226,7 +231,9 @@ export function AgreementDetailPage() {
   async function handleRenewalResponse(accept: boolean) {
     if (!pendingRenewalOffer) return
     try {
-      await respondToRenewal.mutateAsync({ id: pendingRenewalOffer.id, accept })
+      await respondToRenewal.mutateAsync(accept
+        ? { id: pendingRenewalOffer.id, accept: true, termsHash: pendingRenewalOffer.termsHash ?? '', signatureName: renewalSignature.name.trim(), consent: true }
+        : { id: pendingRenewalOffer.id, accept: false })
     } catch {
       // Error is displayed via mutation.isError
     }
@@ -371,6 +378,30 @@ export function AgreementDetailPage() {
                 <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{pendingRenewalOffer.message}</p>
               </div>
             )}
+            <p className="text-xs text-muted dark:text-gray-400">
+              Accepting signs a new version of your agreement at these terms. Type your full legal name to sign.
+            </p>
+            <TextField
+              label="Your full name"
+              value={renewalSignature.name}
+              onChange={(e) => setRenewalSignature((s) => ({ ...s, name: e.target.value }))}
+              placeholder="Full legal name"
+              fullWidth
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <label className="flex items-start gap-2 text-xs text-muted dark:text-gray-400">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={renewalSignature.consent}
+                onChange={(e) => setRenewalSignature((s) => ({ ...s, consent: e.target.checked }))}
+              />
+              <span>{pendingRenewalOffer.signatureConsentStatement ?? 'I agree that my typed name is my electronic signature on this renewal.'}</span>
+            </label>
+            {pendingRenewalOffer.termsHash && (
+              <p className="text-[10px] text-muted dark:text-gray-500 break-all">Renewed terms fingerprint {pendingRenewalOffer.termsHash}</p>
+            )}
             {respondToRenewal.isError && (
               <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">
                 {(respondToRenewal.error as Error).message}
@@ -388,9 +419,9 @@ export function AgreementDetailPage() {
               <Button
                 size="sm"
                 onClick={() => handleRenewalResponse(true)}
-                disabled={respondToRenewal.isPending}
+                disabled={respondToRenewal.isPending || renewalSignature.name.trim().length < 2 || !renewalSignature.consent || !pendingRenewalOffer.termsHash}
               >
-                {respondToRenewal.isPending ? 'Responding...' : 'Accept renewal'}
+                {respondToRenewal.isPending ? 'Responding...' : 'Sign & accept renewal'}
               </Button>
             </div>
           </CardContent>
@@ -401,8 +432,8 @@ export function AgreementDetailPage() {
       <Modal open={showRenewalModal} onClose={() => setShowRenewalModal(false)} title="Offer Renewal">
         <div className="flex flex-col gap-5">
           <p className="text-xs text-muted dark:text-gray-400">
-            Propose a new term for this agreement. Your tenant can accept (the agreement is extended
-            at these terms) or decline.
+            Propose a new term for this agreement. You sign the offer now; your tenant can sign to
+            accept (the agreement moves to these terms) or decline.
           </p>
           <Input
             id="renewal-rent"
@@ -425,6 +456,23 @@ export function AgreementDetailPage() {
             onChange={(e) => setRenewalForm((f) => ({ ...f, message: e.target.value.slice(0, 300) }))}
             rows={3}
           />
+          <TextField
+            label="Your full name"
+            value={renewalSignature.name}
+            onChange={(e) => setRenewalSignature((s) => ({ ...s, name: e.target.value }))}
+            placeholder="Full legal name"
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <label className="flex items-start gap-2 text-xs text-muted dark:text-gray-400">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={renewalSignature.consent}
+              onChange={(e) => setRenewalSignature((s) => ({ ...s, consent: e.target.checked }))}
+            />
+            <span>{agreement.signatureConsentStatement ?? 'I agree that my typed name is my electronic signature on this renewal.'}</span>
+          </label>
           {createRenewalOffer.isError && (
             <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
               {(createRenewalOffer.error as Error).message}
@@ -434,9 +482,9 @@ export function AgreementDetailPage() {
             <Button type="button" variant="outline" onClick={() => setShowRenewalModal(false)}>Cancel</Button>
             <Button
               onClick={handleOfferRenewal}
-              disabled={!renewalForm.proposedRent || Number(renewalForm.proposedRent) <= 0 || !renewalForm.proposedEndDate || createRenewalOffer.isPending}
+              disabled={!renewalForm.proposedRent || Number(renewalForm.proposedRent) <= 0 || !renewalForm.proposedEndDate || renewalSignature.name.trim().length < 2 || !renewalSignature.consent || createRenewalOffer.isPending}
             >
-              {createRenewalOffer.isPending ? 'Sending...' : 'Send Offer'}
+              {createRenewalOffer.isPending ? 'Sending...' : 'Sign & send offer'}
             </Button>
           </div>
         </div>

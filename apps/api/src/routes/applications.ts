@@ -12,6 +12,7 @@ import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
+import { isAdminStaff } from '../utils/accessControl.js'
 
 const router = Router()
 
@@ -176,6 +177,8 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
   const propertyMap = new Map(properties.map((p) => [(p._id as Types.ObjectId).toString(), p]))
   const tenantMap = new Map(tenants.map((t) => [(t._id as Types.ObjectId).toString(), t]))
 
+  // Regulators see every application but not the applicants' contact details.
+  const showContact = !roles.includes('government') || isAdminStaff(roles)
   const items = applications.map((a) => {
     const prop = propertyMap.get(a.propertyId)
     const tenant = tenantMap.get(a.tenantId)
@@ -185,7 +188,7 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
       propertyTitle: prop?.title ?? 'Unknown',
       propertyRent: prop?.rentAmount ?? 0,
       tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Unknown',
-      tenantEmail: tenant?.email ?? '',
+      tenantEmail: showContact ? tenant?.email ?? '' : '',
     }
   })
 

@@ -547,8 +547,6 @@ export interface TenantProfile {
   gender?: string
   maritalStatus?: string
   nationality?: string
-  religion?: string
-  ethnicGroup?: string
   hometown?: string
   languagesSpoken: string[]
   bio?: string

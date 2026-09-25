@@ -9,8 +9,9 @@ export interface ITenantProfile extends Document {
   gender?: string
   maritalStatus?: string
   nationality?: string
-  religion?: string
-  ethnicGroup?: string
+  // Religion and ethnic group are not collected (Act 843 s.37 special personal
+  // data with no purpose here); scripts/removeSpecialCategoryProfileFields.ts
+  // removes stored values.
   hometown?: string
   languagesSpoken: string[]
   bio?: string
@@ -147,7 +148,7 @@ const tenantProfileSchema = new Schema<ITenantProfile>({
   userId: { type: String, required: true, unique: true, index: true },
 
   dateOfBirth: String, gender: String, maritalStatus: String, nationality: String,
-  religion: String, ethnicGroup: String, hometown: String, languagesSpoken: [String], bio: String,
+  hometown: String, languagesSpoken: [String], bio: String,
 
   highestEducation: String, institution: String, fieldOfStudy: String, graduationYear: Number,
   currentlyStudying: { type: Boolean, default: false },

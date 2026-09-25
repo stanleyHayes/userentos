@@ -16,6 +16,7 @@ import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { Payment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { TenantProfile } from '../models/TenantProfile.js'
+import { signedTenancyFilter } from '../services/tenancyRelationship.js'
 
 interface LeanUser {
   _id: Types.ObjectId
@@ -85,7 +86,8 @@ async function buildPassportData(userId: string, audience: PassportAudience = 'o
     User.findById(userId).lean().catch(() => null),
     creditScoreOffered ? CreditScore.findOne({ userId }).lean().catch(() => null) : null,
     Payment.find({ tenantId: userId }).lean().catch(() => [] as never[]),
-    Agreement.find({ tenantId: userId }).lean().catch(() => [] as never[]),
+    // Only leases the tenant signed: a landlord's draft naming them is not history.
+    Agreement.find(signedTenancyFilter({ tenantId: userId })).lean().catch(() => [] as never[]),
     TenantProfile.findOne({ userId }).lean().catch(() => null),
   ])
 

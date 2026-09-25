@@ -203,7 +203,7 @@ describe('invitations — email delivery and acceptance', () => {
     const invite = pendingInvite()
     vi.mocked(Invitation.findOne).mockResolvedValue(invite as never)
     vi.mocked(User.findOne).mockResolvedValue(null as never)
-    let created: { roles: string[]; permissions: string[]; isVerified: boolean; consents: Record<string, unknown> } | null = null
+    let created: { roles: string[]; permissions: string[]; isVerified?: boolean; consents: Record<string, unknown> } | null = null
     vi.mocked(User.create).mockImplementation((async (doc: Record<string, unknown>) => {
       created = doc as unknown as typeof created
       return { ...doc, _id: { toString: () => 'user-1' }, toSafe: () => ({ id: 'user-1' }) }
@@ -225,7 +225,8 @@ describe('invitations — email delivery and acceptance', () => {
     expect(res.status).toBe(201)
     expect(created!.roles).toEqual(['government'])
     expect(created!.permissions).toEqual(['disputes:manage'])
-    expect(created!.isVerified).toBe(true)
+    // Accepting proves the inbox, not identity — verification needs an admin review.
+    expect(created!.isVerified).toBeUndefined()
     expect(created!.consents).toMatchObject({ termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, ageConfirmed: true })
     expect(created!.consents.acceptedAt).toBeInstanceOf(Date)
     expect(invite.status).toBe('accepted')

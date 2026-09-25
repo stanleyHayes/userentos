@@ -6,8 +6,8 @@ import cors from 'cors'
 import mongoose from 'mongoose'
 import path from 'path'
 import http from 'http'
-import { fileURLToPath } from 'url'
 import { config } from './config/index.js'
+import { UPLOADS_DIR } from './utils/uploads.js'
 import { seedDatabase } from './models/seed.js'
 import { startScheduler } from './services/scheduler.js'
 import { initSocket } from './services/socket.js'
@@ -111,7 +111,6 @@ import { finalizePayment } from './services/payments/finalize.js'
 import { onSimulatedPayout } from './services/payouts/index.js'
 import { finalizePayout } from './services/payouts/finalize.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 // Deployed behind Render's proxy: trust the first hop only, so express-rate-limit
 // accepts X-Forwarded-For instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
@@ -298,7 +297,7 @@ app.use((req, res, next) => {
 const INLINE_SAFE_UPLOADS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf'])
 app.use(
   '/uploads',
-  express.static(path.join(__dirname, '..', 'uploads'), {
+  express.static(UPLOADS_DIR, {
     setHeaders: (res, filePath) => {
       res.setHeader('X-Content-Type-Options', 'nosniff')
       const ext = path.extname(filePath).toLowerCase()

@@ -13,6 +13,8 @@ import { Review } from '../models/Review.js'
 import { Conversation, Message } from '../models/Conversation.js'
 import { logger } from '../utils/logger.js'
 import { UserBlock } from '../models/UserBlock.js'
+import { Achievement } from '../models/Achievement.js'
+import { PaymentStreak } from '../models/PaymentStreak.js'
 
 export const ACCOUNT_ERASURE_DELAY_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -32,6 +34,9 @@ export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<bo
     () => ProfileAccess.deleteMany({ $or: [{ requesterId: uid }, { tenantId: uid }] }),
     () => Favorite.deleteMany({ userId: uid }),
     () => CreditScore.deleteMany({ userId: uid }),
+    // Badges and streaks are derived engagement data with no retention need.
+    () => Achievement.deleteMany({ userId: uid }),
+    () => PaymentStreak.deleteMany({ userId: uid }),
     () => Message.deleteMany({ senderId: uid }),
     () => Review.updateMany({ userId: uid }, { $set: { userName: 'Deleted User' } }),
     // The preview duplicates message text, so removing Message alone leaks it.

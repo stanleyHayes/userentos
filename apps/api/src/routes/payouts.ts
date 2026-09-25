@@ -26,7 +26,7 @@ import { User } from '../models/User.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { getPayoutProvider } from '../services/payouts/index.js'
 import { TransferRejectedError } from '../services/payouts/types.js'
-import { finalizePayout } from '../services/payouts/finalize.js'
+import { reconcilePayout } from '../services/payouts/reconcile.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -38,9 +38,6 @@ const router = Router()
 
 /** Below this a payout costs more in provider fees than it is worth. */
 const MIN_PAYOUT_AMOUNT = 10
-
-/** How long after sending a "no such transfer" answer is believed. */
-const NOT_FOUND_GRACE_MS = 15 * 60_000
 
 const accountSchema = z.object({
   type: z.enum(['mobile_money', 'ghipss']),
@@ -348,56 +345,23 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
 }))
 
 /**
- * Settle a payout whose transfer outcome is unknown by asking the provider.
- *
- * The only way out of needsReconciliation besides the provider's own webhook.
- * A refund happens only when the provider says the transfer failed, or has no
- * record of it at all well after it was sent.
+ * Settle a payout whose transfer outcome is unknown by asking the provider —
+ * the same code path the scheduler's reconciliation sweep runs
+ * (services/payouts/reconcile.ts).
  */
 router.post('/:id/reconcile', authenticate, requirePermission('payments:process'), asyncHandler(async (req, res) => {
   const payout = await Payout.findById(param(req.params.id))
   if (!payout) { error(res, 'Payout not found', 404); return }
-  if (payout.status !== 'processing') { error(res, `This payout is already ${payout.status}`, 409); return }
 
-  let lookup
-  try {
-    lookup = await getPayoutProvider().verifyTransfer(payout.reference)
-  } catch (err) {
-    logger.error(`[Payouts] reconciliation lookup failed for ${payout.reference}: ${(err as Error).message}`)
-    error(res, 'The provider could not be reached. Nothing was changed; try again later.', 502)
-    return
+  const outcome = await reconcilePayout(payout, { source: 'admin', actorId: req.user!.userId, ipAddress: req.ip })
+  switch (outcome.kind) {
+    case 'not_processing': error(res, `This payout is already ${outcome.status}`, 409); return
+    case 'unreachable': error(res, 'The provider could not be reached. Nothing was changed; try again later.', 502); return
+    case 'mismatch': error(res, 'The provider\'s record does not match this payout. It stays held for review.', 409); return
+    case 'too_early': error(res, 'The provider has no record of this transfer yet. Try again in a few minutes.', 409); return
   }
-
-  if (lookup.status === 'paid' || lookup.status === 'failed') {
-    const moved = await finalizePayout({
-      reference: payout.reference,
-      providerRef: lookup.providerRef ?? payout.providerRef ?? '',
-      status: lookup.status,
-      amount: lookup.amount ?? 0,
-      timestamp: new Date().toISOString(),
-      failureReason: lookup.failureReason,
-      raw: { reconciledBy: req.user!.userId },
-    }, { source: 'admin' })
-    // finalizePayout refuses an amount mismatch; that stays flagged for a human.
-    if (!moved) { error(res, 'The provider\'s record does not match this payout. It stays held for review.', 409); return }
-    await Payout.updateOne({ _id: payout._id }, { $unset: { needsReconciliation: '' } })
-  } else if (lookup.status === 'not_found') {
-    // No record right after sending can be the provider catching up; only a
-    // long silence means the transfer was never created.
-    const sentAt = payout.approvedAt?.getTime() ?? 0
-    if (Date.now() - sentAt < NOT_FOUND_GRACE_MS) {
-      error(res, 'The provider has no record of this transfer yet. Try again in a few minutes.', 409)
-      return
-    }
-    await Payout.updateOne(
-      { _id: payout._id, status: 'processing' },
-      { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '', needsReconciliation: '', failureReason: '' } },
-    )
-  }
-
-  void recordAudit(req, 'payout.reconciled', 'Payout', String(payout._id), { providerStatus: lookup.status })
   const fresh = await Payout.findById(payout._id).lean()
-  success(res, payoutView(fresh as never), lookup.status === 'pending' ? 'The provider still reports this transfer as pending' : 'Payout reconciled with the provider')
+  success(res, payoutView(fresh as never), outcome.kind === 'pending' ? 'The provider still reports this transfer as pending' : 'Payout reconciled with the provider')
 }))
 
 /** Decline a request and give the money back. */

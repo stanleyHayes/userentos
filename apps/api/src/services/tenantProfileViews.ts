@@ -1,9 +1,14 @@
 import type { Types } from 'mongoose'
 import { decryptPii, piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
 
-/** The tenant's own view: everything, with the ID number decrypted. */
+/**
+ * The tenant's own view: everything, with the ID number decrypted — except
+ * religion/ethnic group a legacy row may still hold: no longer collected, and
+ * not returned anywhere until the cleanup script removes them.
+ */
 export function ownProfileView<T extends { _id: unknown; idNumber?: string }>(profile: T) {
-  return { ...profile, idNumber: decryptPii(profile.idNumber, PII_FIELDS.tenantIdNumber), id: (profile._id as Types.ObjectId).toString() }
+  const { religion: _religion, ethnicGroup: _ethnicGroup, ...rest } = profile as T & { religion?: unknown; ethnicGroup?: unknown }
+  return { ...rest, idNumber: decryptPii(profile.idNumber, PII_FIELDS.tenantIdNumber), id: (profile._id as Types.ObjectId).toString() }
 }
 
 /*

@@ -26,6 +26,8 @@ import { logger } from '../utils/logger.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
+import { retentionCutoff } from '../config/retention.js'
+import { payoutsOffered, reconcileUncertainPayouts } from './payouts/reconcile.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
@@ -601,6 +603,22 @@ export function startScheduler() {
     }
   })
 
+  // ─── Payout reconciliation: every 5 minutes ───
+  // Transfers whose outcome the provider never confirmed stay 'processing'
+  // with needsReconciliation (routes/payouts.ts). Ask the provider, through
+  // the same path as the admin's POST /payouts/:id/reconcile, with per-payout
+  // backoff. Only while payouts can be offered at all.
+  cron.schedule('*/5 * * * *', async () => {
+    if (!payoutsOffered()) return
+    if (!(await acquireCronLock('payout-reconcile', LOCK_TTL_RECONCILE))) return
+    try {
+      const result = await reconcileUncertainPayouts()
+      if (result.examined) logger.info('[Scheduler] Payout reconciliation', result)
+    } catch (err) {
+      logger.error('[Scheduler] Payout reconciliation error:', err)
+    }
+  }, { timezone: GHANA_TZ })
+
   // ─── Daily 10:00 Ghana time: subscription lifecycle ───
   // (a) remind landlords 7 days before subscriptionEndDate;
   // (b) downgrade expired PAID subscriptions back to the default package.
@@ -633,6 +651,8 @@ export function startScheduler() {
           title: 'Subscription Expiring Soon',
           message: `Your subscription expires on ${new Date(u.subscriptionEndDate!).toISOString().slice(0, 10)}. Renew to keep your listing limits.`,
           actionUrl: '/subscription',
+          // A renewal nudge, not account activity: the payment-reminder toggle applies.
+          category: 'payment',
         }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
       }
       if (reminded) logger.info(`[Scheduler] Sent ${reminded} subscription renewal reminder(s)`)
@@ -751,8 +771,7 @@ export function startScheduler() {
   cron.schedule('0 3 * * *', async () => {
     if (!(await acquireCronLock('audit-purge', LOCK_TTL_DAILY))) return
     try {
-      const cutoff = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000)
-      const result = await AuditLog.deleteMany({ createdAt: { $lt: cutoff } })
+      const result = await AuditLog.deleteMany({ createdAt: { $lt: retentionCutoff('auditLog') } })
       if ((result.deletedCount ?? 0) > 0) {
         logger.info(`[Scheduler] Purged ${result.deletedCount} audit logs older than 2 years`)
       }

@@ -5,7 +5,7 @@ import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
-vi.mock('../utils/audit.js', () => ({ recordAudit: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../utils/audit.js', () => ({ recordAudit: vi.fn().mockResolvedValue(undefined), recordAuditEntry: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../models/AuditLog.js', () => ({ AuditLog: { create: vi.fn().mockResolvedValue({}) } }))
 import { config } from '../config/index.js'
 import { User } from '../models/User.js'
@@ -16,6 +16,8 @@ import { creditWallet } from '../services/payments/walletLedger.js'
 import { simulatedPayoutProvider } from '../services/payouts/simulator.js'
 import { TransferRejectedError } from '../services/payouts/types.js'
 import router from '../routes/payouts.js'
+import { reconcileUncertainPayouts, RECONCILE_MIN_AGE_MS } from '../services/payouts/reconcile.js'
+import { reloadRegulatedFeatures } from '../config/regulatedFeatures.js'
 
 process.env.PAYMENTS_PROVIDER_MODE = 'simulated'
 
@@ -100,5 +102,52 @@ describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('payouts whose transf
     expect((await Payout.findById(id).lean())?.status).toBe('requested')
     expect((await act(id, 'decline', { reason: 'Provider balance' })).status).toBe(200)
     expect(await balance()).toBe(150)
+  })
+
+  // Scoped to this payee: the database is shared with other suites.
+  const sweep = (now?: Date) => reconcileUncertainPayouts({ now, userIds: [String(payee)] })
+
+  it('the scheduled sweep reconciles held transfers through the same path, with backoff', async () => {
+    const id = await request()
+    const afterRequest = await balance()
+    vi.spyOn(simulatedPayoutProvider, 'sendTransfer').mockRejectedValueOnce(new TypeError('fetch failed'))
+    expect((await act(id, 'approve')).status).toBe(504)
+    const verify = vi.spyOn(simulatedPayoutProvider, 'verifyTransfer').mockResolvedValue({ status: 'pending' })
+
+    // Too fresh: the provider may simply not have answered yet.
+    expect((await sweep()).examined).toBe(0)
+
+    const approvedAt = (await Payout.findById(id).lean())!.approvedAt!
+    const later = new Date(approvedAt.getTime() + RECONCILE_MIN_AGE_MS + 1000)
+    expect(await sweep(later)).toMatchObject({ examined: 1, waiting: 1 })
+    const held = await Payout.findById(id).lean()
+    expect(held).toMatchObject({ status: 'processing', needsReconciliation: true, reconcileAttempts: 1 })
+    // Backed off: a sweep a minute later leaves the provider alone.
+    expect((await sweep(new Date(later.getTime() + 60_000))).examined).toBe(0)
+    expect(verify).toHaveBeenCalledTimes(1)
+
+    verify.mockResolvedValue({ status: 'paid', providerRef: 'SIM-TRF-SWEPT', amount: 50 })
+    expect(await sweep(new Date(held!.nextReconcileAt!.getTime() + 1000))).toMatchObject({ examined: 1, settled: 1 })
+    const settled = await Payout.findById(id).lean()
+    expect(settled).toMatchObject({ status: 'paid', refunded: false })
+    expect(settled?.needsReconciliation).toBeUndefined()
+    expect(await balance()).toBe(afterRequest)
+  })
+
+  it('the sweep does nothing while neither rent collection nor the wallet is enabled', async () => {
+    const id = await request()
+    vi.spyOn(simulatedPayoutProvider, 'sendTransfer').mockRejectedValueOnce(new TypeError('fetch failed'))
+    expect((await act(id, 'approve')).status).toBe(504)
+    const verify = vi.spyOn(simulatedPayoutProvider, 'verifyTransfer')
+    reloadRegulatedFeatures({ NODE_ENV: 'test', REGULATED_FEATURES: 'lending' })
+    try {
+      expect((await sweep(new Date(Date.now() + 60 * 60_000))).examined).toBe(0)
+      expect(verify).not.toHaveBeenCalled()
+    } finally {
+      reloadRegulatedFeatures()
+    }
+    // Leave nothing held behind.
+    verify.mockResolvedValueOnce({ status: 'failed', failureReason: 'fixture', amount: 50 })
+    expect((await act(id, 'reconcile')).status).toBe(200)
   })
 })

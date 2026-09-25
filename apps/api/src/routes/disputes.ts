@@ -9,6 +9,7 @@ import { disputeController } from '../controllers/disputeController.js'
 import { Dispute } from '../models/Dispute.js'
 import { error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { ensureUploadsDir, UPLOADS_DIR } from '../utils/uploads.js'
 
 // Evidence may only be images/video/PDF. Extension comes from a whitelist, never
 // from the user-supplied filename, and the stored name is crypto-random — so an
@@ -25,7 +26,7 @@ const ALLOWED_MIME_TO_EXT: Record<string, string> = {
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, 'uploads/'),
+  destination: (_req, _file, cb) => { ensureUploadsDir().then((dir) => cb(null, dir), (err: Error) => cb(err, UPLOADS_DIR)) },
   filename: (_req, file, cb) => cb(null, `evidence-${crypto.randomBytes(16).toString('hex')}${ALLOWED_MIME_TO_EXT[file.mimetype]}`),
 })
 const upload = multer({
