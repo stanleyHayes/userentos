@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { piiSetter, PII_FIELDS } from '../utils/piiCrypto.js'
 
 export interface ITenantProfile extends Document {
   userId: string
@@ -173,7 +174,8 @@ const tenantProfileSchema = new Schema<ITenantProfile>({
 
   emergencyContact: { name: String, relationship: String, phone: String, address: String },
 
-  idType: String, idNumber: String, idDocumentUrl: String, idVerified: { type: Boolean, default: false },
+  // ID number is special personal data (Act 843): encrypted at rest.
+  idType: String, idNumber: { type: String, set: piiSetter(PII_FIELDS.tenantIdNumber) }, idDocumentUrl: String, idVerified: { type: Boolean, default: false },
   proofOfIncomeUrl: String, incomeVerified: { type: Boolean, default: false },
   proofOfAddressUrl: String, addressVerified: { type: Boolean, default: false }, selfieUrl: String,
 

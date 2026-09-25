@@ -47,13 +47,23 @@ const factorConfig = [
 
 export function CreditScorePage() {
   const user = useAuthStore((s) => s.user)
-  const canLookup = user?.activeRole === 'landlord' || user?.activeRole === 'admin' || user?.activeRole === 'government' || user?.activeRole === 'legal_officer'
+  // Individual reports: landlords (own tenants/applicants) and admins (audited).
+  // Regulators and legal staff only ever see market-level aggregates.
+  const isAdmin = user?.activeRole === 'admin' || user?.activeRole === 'super_admin'
+  const canLookup = user?.activeRole === 'landlord' || isAdmin
+  const seesAggregates = isAdmin || user?.activeRole === 'government' || user?.activeRole === 'legal_officer'
   const [lookupId, setLookupId] = useState('')
   const [lookupUserId, setLookupUserId] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['credit-score'],
     queryFn: () => api.get<CreditScoreData>('/credit/me'),
+  })
+
+  const { data: aggregate } = useQuery({
+    queryKey: ['credit-score-aggregate'],
+    queryFn: () => api.get<{ count: number; averageScore: number | null; bands: { excellent: number; good: number; fair: number; needsWork: number } }>('/credit/aggregate'),
+    enabled: seesAggregates,
   })
 
   const { data: lookupData, isLoading: lookupLoading, isError: lookupError } = useQuery({
@@ -308,6 +318,27 @@ export function CreditScorePage() {
         </CardContent>
       </Card>
 
+      {seesAggregates && aggregate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gauge size={16} className="text-primary dark:text-blue-400" />
+              Market Credit Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <MiniStat label="Scored users" value={String(aggregate.count)} />
+              <MiniStat label="Average" value={aggregate.averageScore === null ? '-' : String(aggregate.averageScore)} />
+              <MiniStat label="Excellent" value={String(aggregate.bands.excellent)} />
+              <MiniStat label="Good" value={String(aggregate.bands.good)} />
+              <MiniStat label="Fair" value={String(aggregate.bands.fair)} />
+              <MiniStat label="Needs work" value={String(aggregate.bands.needsWork)} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tenant Lookup */}
       {canLookup && (
         <Card>
@@ -336,6 +367,10 @@ export function CreditScorePage() {
                 <Search size={14} /> {lookupLoading ? 'Loading...' : 'Lookup'}
               </Button>
             </form>
+
+            {isAdmin && (
+              <p className="text-xs text-muted dark:text-gray-400 mb-3">Every staff lookup of an individual score is recorded in the audit log.</p>
+            )}
 
             {lookupError && (
               <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-sm text-danger">

@@ -9,6 +9,7 @@ import { success, error } from '../utils/response.js'
 import { notifyDisputeFiled, notifyDisputeUpdate } from '../services/notify.js'
 import { dispatchWebhook } from '../services/webhooks.js'
 import { param } from '../utils/params.js'
+import { signedTenancyFilter } from '../services/tenancyRelationship.js'
 
 const createDisputeSchema = z.object({
   filedAgainst: z.string(),
@@ -82,23 +83,24 @@ export const disputeController = {
     // dispute on any listing and knock it off the market (griefing/DoS).
     const property = await Property.findById(parsed.data.propertyId).lean()
     if (!property) { error(res, 'Property not found', 404); return }
+    const propertyId = parsed.data.propertyId
 
-    const onAgreement = await Agreement.exists({
-      propertyId: parsed.data.propertyId,
-      $or: [{ tenantId: userId }, { landlordId: userId }],
-    })
-    const isParty = property.landlordId === userId || !!onAgreement
-    if (!isParty) { error(res, 'You can only file a dispute on a property you own or rent', 403); return }
-
+    // Only leases the tenant signed count. A draft is landlord-authored and
+    // names whoever the landlord typed in, so it must never let a landlord
+    // stack open disputes (each one a credit-score penalty) on a stranger.
+    const filerIsLandlordSide = property.landlordId === userId
+      || !!(await Agreement.exists(signedTenancyFilter({ propertyId, landlordId: userId })))
+    let isCounterparty: boolean
+    if (filerIsLandlordSide) {
+      isCounterparty = !!(await Agreement.exists(signedTenancyFilter({ propertyId, tenantId: parsed.data.filedAgainst })))
+    } else {
+      const tenancy = await Agreement.findOne(signedTenancyFilter({ propertyId, tenantId: userId })).select('landlordId').lean()
+      if (!tenancy) { error(res, 'You can only file a dispute on a property you own or rent', 403); return }
+      isCounterparty = parsed.data.filedAgainst === property.landlordId || parsed.data.filedAgainst === tenancy.landlordId
+    }
     // The accused must be the filer's counterparty on this property — the tenant
     // when the filer is the landlord/manager, the landlord when the filer is the
-    // tenant. Otherwise anyone could stack open disputes on an arbitrary victim
-    // and tank their credit score (each open dispute subtracts points).
-    const asLandlordOnAgreement = await Agreement.exists({ propertyId: parsed.data.propertyId, landlordId: userId })
-    const filerIsLandlordSide = property.landlordId === userId || !!asLandlordOnAgreement
-    const isCounterparty = filerIsLandlordSide
-      ? !!(await Agreement.exists({ propertyId: parsed.data.propertyId, tenantId: parsed.data.filedAgainst }))
-      : parsed.data.filedAgainst === property.landlordId
+    // tenant.
     if (!isCounterparty) {
       error(res, 'You can only file a dispute against your own landlord or tenant on this property')
       return

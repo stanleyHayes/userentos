@@ -35,7 +35,8 @@ export function ProfileTab() {
         firstName: form.firstName,
         lastName: form.lastName,
         phone: form.phone,
-        ghanaCardId: form.ghanaCardId || undefined,
+        // An emptied field clears the card on file ('' is the API's clear signal).
+        ghanaCardId: form.ghanaCardId.trim() || (user?.ghanaCardId ? '' : undefined),
       })
       updateUser(updated)
       setSaved(true)
@@ -116,6 +117,9 @@ export function ProfileTab() {
               <Input id="phone" label="Phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} required />
               <Input id="ghanaCard" label="Ghana Card ID" value={form.ghanaCardId} onChange={(e) => update('ghanaCardId', e.target.value)} placeholder="GHA-XXXXXXXXX-X" />
             </div>
+            {user?.isVerified && (
+              <p className="text-xs text-muted dark:text-gray-400">Changing your name or Ghana Card ID removes your verified badge until it is reviewed again.</p>
+            )}
 
             {updateProfile.isError && (
               <div className="rounded-xl bg-danger/10 p-3 text-sm text-danger">{(updateProfile.error as Error).message}</div>

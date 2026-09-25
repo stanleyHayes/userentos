@@ -13,6 +13,8 @@ import { signDownloadToken } from '../services/authService.js'
 import { SimplePdfBuilder } from '../utils/simplePdf.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
+import { agreementTermsHash } from '../services/agreementEvidence.js'
 
 const router = Router()
 
@@ -29,6 +31,17 @@ function formatDateLong(iso?: string | Date | null): string {
   } catch {
     return String(iso)
   }
+}
+
+/** SimplePdfBuilder does not wrap; split long prose on word boundaries. */
+function wrapText(text: string, max: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/)) {
+    if (line && line.length + word.length + 1 > max) { lines.push(line); line = word } else line = line ? `${line} ${word}` : word
+  }
+  if (line) lines.push(line)
+  return lines
 }
 
 function buildPublicAgreementUrl(req: Request, agreementId: string): string {
@@ -50,7 +63,9 @@ router.get('/tenants', authenticate, asyncHandler(async (req: Request, res: Resp
   }
 
   const isAdmin = roles.includes('admin') || roles.includes('super_admin')
-  const agreements = await Agreement.find(isAdmin ? {} : { landlordId: userId }).sort({ createdAt: -1 }).lean()
+  // Only people who signed become "tenants" here — a landlord-authored draft
+  // naming an arbitrary user must not disclose that user's email and phone.
+  const agreements = await Agreement.find({ ...(isAdmin ? {} : { landlordId: userId }), tenantSignature: { $nin: [null, ''] } }).sort({ createdAt: -1 }).lean()
   if (agreements.length === 0) { success(res, { items: [] }); return }
 
   // Collect IDs
@@ -168,7 +183,7 @@ router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: R
   const tpAny = tenantProfile as { idType?: string; idNumber?: string; idVerified?: boolean } | null
   const isGhanaCard = (tpAny?.idType ?? '').toLowerCase().includes('ghana')
   const ghanaCardStatus = tpAny?.idVerified && isGhanaCard
-    ? `Verified (${(tpAny?.idNumber ?? '').slice(-4).padStart(8, '*')})`
+    ? `Verified (${(piiLast4(tpAny?.idNumber, PII_FIELDS.tenantIdNumber) ?? '').padStart(8, '*')})`
     : tpAny?.idNumber && isGhanaCard
       ? 'On file (not verified)'
       : tpAny?.idType
@@ -242,6 +257,28 @@ router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: R
     : 'Pending'
   pdf.kv('Signed by tenant', tenantSig)
   pdf.kv('Signed by landlord', landlordSig)
+  pdf.hr()
+
+  // ─── Electronic signature evidence (Act 772) ───
+  // The fingerprint lets either party prove which exact terms were signed:
+  // recompute SHA-256 over the canonical terms and compare.
+  pdf.heading('Signature Evidence', 2)
+  const currentHash = agreementTermsHash(agreement)
+  pdf.kv('Agreement version', String(agreement.version ?? 1))
+  pdf.text('Terms fingerprint (SHA-256):', { size: 10, font: 'Helvetica-Bold' })
+  pdf.text(`    ${currentHash}`, { size: 9 })
+  const evidence = (agreement.signatureEvidence ?? []).filter((e) => e.agreementVersion === (agreement.version ?? 1))
+  if (!evidence.length) {
+    pdf.text('No electronic signatures have been recorded for this version.', { size: 10 })
+  }
+  for (const entry of evidence) {
+    const who = entry.role === 'tenant' ? 'Tenant' : 'Landlord'
+    pdf.moveDown(2)
+    pdf.text(`${who}: ${entry.signatureName} — ${new Date(entry.signedAt).toISOString()}`, { size: 10, font: 'Helvetica-Bold' })
+    pdf.text(`    Signed fingerprint: ${entry.termsHash}`, { size: 9 })
+    if (entry.termsHash !== currentHash) pdf.text('    The terms have changed since this signature was given.', { size: 9 })
+    for (const line of wrapText(`Consent: ${entry.consentStatement}`, 100)) pdf.text(`    ${line}`, { size: 9 })
+  }
   pdf.hr()
 
   // ─── Renewal status footer ───

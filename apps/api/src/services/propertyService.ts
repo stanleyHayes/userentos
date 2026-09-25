@@ -49,6 +49,14 @@ interface ListFilters {
   pageSize?: number
 }
 
+/**
+ * The only statuses a landlord picks by hand. 'occupied' and 'under_dispute'
+ * are lifecycle states owned by the lease (signing, move-out) and dispute
+ * workflows — letting the owner set them would clear an active dispute or
+ * advertise a let property as available.
+ */
+const LANDLORD_SETTABLE_STATUSES = ['available', 'maintenance_required']
+
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -175,12 +183,19 @@ export class PropertyService {
       return { error: 'Not authorized', status: 403 }
     }
 
+    if (data.status !== undefined && data.status !== property.status
+      && (!LANDLORD_SETTABLE_STATUSES.includes(data.status) || !LANDLORD_SETTABLE_STATUSES.includes(property.status))) {
+      return { error: `A property cannot be moved from "${property.status}" to "${data.status}" manually`, status: 409 }
+    }
+
     // Content changes to an already-approved listing must go back through
     // moderation — otherwise approval can be bypassed by editing after the fact.
+    // House rules are listing content too (they can carry unlawful terms).
     const contentChanged =
       (data.title !== undefined && data.title !== property.title) ||
       (data.description !== undefined && data.description !== property.description) ||
       (data.rentAmount !== undefined && data.rentAmount !== property.rentAmount) ||
+      (data.rules !== undefined && JSON.stringify(data.rules) !== JSON.stringify(property.rules ?? [])) ||
       (data.amenities !== undefined && JSON.stringify(data.amenities) !== JSON.stringify(property.amenities))
 
     if (data.title) property.title = data.title

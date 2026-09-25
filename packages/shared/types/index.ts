@@ -248,6 +248,11 @@ export interface RentalAgreement {
   tenantSignature?: string
   landlordSignatureName?: string
   tenantSignatureName?: string
+  /** SHA-256 of the current terms; a signer must send back the hash they reviewed. */
+  termsHash?: string
+  /** Statement the signer accepts (detail/create/update responses only). */
+  signatureConsentStatement?: string
+  signatureEvidence?: SignatureEvidence[]
   complianceFlags: ComplianceFlag[]
   version: number
   renewalStatus: RenewalStatus
@@ -259,6 +264,20 @@ export interface RentalAgreement {
   landlordName?: string
   createdAt: string
   updatedAt: string
+}
+
+/** Electronic signature record (Act 772). ipAddress/userAgent only reach staff and the signer. */
+export interface SignatureEvidence {
+  role: 'landlord' | 'tenant'
+  userId: string
+  signatureName: string
+  signedAt: string
+  ipAddress?: string
+  userAgent?: string
+  termsHash: string
+  agreementVersion: number
+  consentStatement: string
+  consentVersion: number
 }
 
 export interface ComplianceFlag {

@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
+import { z } from 'zod'
 import { authenticate } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
@@ -10,6 +11,12 @@ import { param } from '../utils/params.js'
 
 const router = Router()
 
+const requestSchema = z.object({
+  tenantId: z.string().min(1, 'tenantId is required'),
+  propertyId: z.string().max(64).optional(),
+  message: z.string().trim().max(500).optional(),
+})
+
 // Request access to a tenant's profile
 router.post('/request', authenticate, asyncHandler(async (req, res) => {
   const roles = req.user!.roles
@@ -17,12 +24,14 @@ router.post('/request', authenticate, asyncHandler(async (req, res) => {
     error(res, 'Only landlords, managers, and government officials can request profile access', 403); return
   }
 
-  const { tenantId, propertyId, message } = req.body
-  if (!tenantId) { error(res, 'tenantId is required'); return }
+  const parsed = requestSchema.safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const { tenantId, propertyId, message } = parsed.data
 
-  // Verify tenant exists
-  const tenant = await User.findById(tenantId)
-  if (!tenant) { error(res, 'Tenant not found', 404); return }
+  // Only tenant profiles can be requested — otherwise any landlord could
+  // probe arbitrary accounts (staff, other landlords) through this flow.
+  const tenant = Types.ObjectId.isValid(tenantId) ? await User.findById(tenantId).select('roles').lean() : null
+  if (!tenant || !(tenant.roles ?? []).includes('tenant')) { error(res, 'Tenant not found', 404); return }
 
   // Prevent requesting access to your own profile
   if (req.user!.userId === tenantId) { error(res, 'Cannot request access to your own profile'); return }
@@ -117,7 +126,8 @@ router.get('/requests', authenticate, asyncHandler(async (req, res) => {
       requesterName: isTenant && other ? `${other.firstName} ${other.lastName}` : undefined,
       requesterEmail: isTenant && other ? other.email : undefined,
       tenantName: !isTenant && other ? `${other.firstName} ${other.lastName}` : undefined,
-      tenantEmail: !isTenant && other ? other.email : undefined,
+      // The tenant's contact is theirs to share: only once they approve.
+      tenantEmail: !isTenant && other && r.status === 'approved' ? other.email : undefined,
     }
   })
 

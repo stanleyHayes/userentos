@@ -81,6 +81,7 @@ export function AgreementDetailPage() {
   const [showRenewalModal, setShowRenewalModal] = useState(false)
   const [renewalForm, setRenewalForm] = useState({ proposedRent: '', proposedEndDate: '', message: '' })
   const [signatureName, setSignatureName] = useState('')
+  const [signConsent, setSignConsent] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [editForm, setEditForm] = useState({
     rentAmount: '',
@@ -187,9 +188,10 @@ export function AgreementDetailPage() {
 
   async function handleSign() {
     try {
-      await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim() })
+      await signAgreement.mutateAsync({ id: agreement!.id, signatureName: signatureName.trim(), termsHash: agreement!.termsHash ?? '' })
       setShowSignModal(false)
       setSignatureName('')
+      setSignConsent(false)
     } catch {
       // Error is displayed via mutation.isError
     }
@@ -478,6 +480,21 @@ export function AgreementDetailPage() {
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </div>
+          <label className="flex items-start gap-2 text-xs text-muted dark:text-gray-400">
+            <input
+              type="checkbox"
+              data-testid="signature-consent"
+              className="mt-0.5"
+              checked={signConsent}
+              onChange={(e) => setSignConsent(e.target.checked)}
+            />
+            <span>{agreement.signatureConsentStatement ?? 'I agree that my typed name is my electronic signature on this agreement.'}</span>
+          </label>
+          {agreement.termsHash && (
+            <p className="text-[10px] text-muted dark:text-gray-500 break-all">
+              Version {agreement.version} · terms fingerprint {agreement.termsHash}
+            </p>
+          )}
           {signAgreement.isError && (
             <div className="rounded-md bg-danger/10 p-3 text-sm text-danger">
               {(signAgreement.error as Error).message}
@@ -488,7 +505,7 @@ export function AgreementDetailPage() {
             <Button
               data-testid="signature-confirm"
               onClick={handleSign}
-              disabled={signatureName.trim().length === 0 || signAgreement.isPending}
+              disabled={signatureName.trim().length === 0 || !signConsent || !agreement.termsHash || signAgreement.isPending}
             >
               {signAgreement.isPending ? 'Signing...' : 'Confirm & Sign'}
             </Button>

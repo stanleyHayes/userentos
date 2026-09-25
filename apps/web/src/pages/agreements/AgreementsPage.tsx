@@ -334,6 +334,9 @@ function CreateAgreementModal({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <Modal open={open} onClose={onClose} title="Create Agreement">
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <p className="text-xs text-muted dark:text-gray-400">
+          This creates a draft. It only becomes binding once the tenant reviews and signs it, and their contact details stay hidden until then.
+        </p>
         <Input id="propertyId" label="Property ID" value={form.propertyId} onChange={(e) => update('propertyId', e.target.value)} required placeholder="UUID of the property" />
         <Input id="tenantId" label="Tenant ID" value={form.tenantId} onChange={(e) => update('tenantId', e.target.value)} required placeholder="UUID of the tenant" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

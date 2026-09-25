@@ -41,6 +41,11 @@ import { DeviceToken } from '../models/DeviceToken.js'
 import { disconnectUser } from '../services/socket.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
+import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
+import { decryptPii, PII_FIELDS } from '../utils/piiCrypto.js'
+import { ownProfileView } from '../services/tenantProfileViews.js'
+import { evidenceForViewer } from '../services/agreementEvidence.js'
+import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -129,9 +134,11 @@ router.get('/me/export', authenticate, async (req, res) => {
     paymentStreak,
     storePurchases,
     applePurchases,
-    user: user ? { ...user, id: (user._id as Types.ObjectId).toString() } : null,
-    tenantProfile,
-    agreements,
+    // The subject's own export carries their national ID in the clear.
+    user: user ? { ...user, ghanaCardId: decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard), id: (user._id as Types.ObjectId).toString() } : null,
+    tenantProfile: tenantProfile ? ownProfileView(tenantProfile) : null,
+    // The counterparty's signing IP/device is their personal data, not ours to export.
+    agreements: agreements.map((a) => ({ ...a, signatureEvidence: evidenceForViewer(a.signatureEvidence, userId, false) })),
     payments,
     applications,
     disputes,
@@ -178,16 +185,39 @@ router.delete('/me', authenticate, async (req, res) => {
   success(res, null, 'Account closed and core profile erased. Related personal records are scheduled for deletion after 30 days. Records needed for legal obligations or disputes may be retained. This action cannot be undone.')
 })
 
+const profilePatchSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').max(60).optional(),
+  lastName: z.string().trim().min(1, 'Last name is required').max(60).optional(),
+  phone: z.string().trim().max(20).optional(),
+  // '' or null clears the card on file; anything else must be a Ghana Card PIN.
+  ghanaCardId: z.union([z.null(), z.string()]).optional()
+    .refine((v) => v == null || v.trim() === '' || normalizeGhanaCardId(v) !== null, 'Ghana Card ID must look like GHA-123456789-0'),
+  activeRole: z.string().max(40).optional(),
+})
+
 router.patch('/me', authenticate, async (req, res) => {
+  const parsed = profilePatchSchema.safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const user = await User.findById(req.user!.userId)
   if (!user) { error(res, 'User not found', 404); return }
 
-  const { firstName, lastName, phone, ghanaCardId, activeRole } = req.body
-  if (firstName) user.firstName = firstName
-  if (lastName) user.lastName = lastName
+  const { firstName, lastName, phone, ghanaCardId, activeRole } = parsed.data
+  const cardOnFile = () => decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard) ?? null
+  const before = { firstName: user.firstName, lastName: user.lastName, ghanaCardId: cardOnFile() }
+  if (firstName !== undefined) user.firstName = firstName
+  if (lastName !== undefined) user.lastName = lastName
   if (phone) user.phone = phone
-  if (ghanaCardId) user.ghanaCardId = ghanaCardId
+  if (ghanaCardId !== undefined) user.ghanaCardId = ghanaCardId && ghanaCardId.trim() ? normalizeGhanaCardId(ghanaCardId)! : undefined
   if (activeRole && user.roles.includes(activeRole)) user.activeRole = activeRole
+
+  // Verification attests to a specific name + Ghana Card. Changing either
+  // after approval must not keep the badge (or a pending review) attached
+  // to an identity that was never checked.
+  const identityChanged = before.firstName !== user.firstName || before.lastName !== user.lastName || before.ghanaCardId !== cardOnFile()
+  if (identityChanged && (user.isVerified || user.verificationStatus !== 'none')) {
+    user.isVerified = false
+    user.verificationStatus = 'none'
+  }
   await user.save()
 
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe())
@@ -233,7 +263,8 @@ router.get('/verification-requests', authenticate, requireRole('government', 'ad
     .sort({ createdAt: 1 })
     .limit(100)
     .lean()
-  success(res, { items: users.map((u) => ({ ...u, id: (u._id as unknown as { toString(): string }).toString() })) })
+  // Reviewers must compare the card itself, so this staff-only queue decrypts it.
+  success(res, { items: users.map((u) => ({ ...u, ghanaCardId: decryptPii(u.ghanaCardId, PII_FIELDS.userGhanaCard), id: (u._id as unknown as { toString(): string }).toString() })) })
 })
 
 router.get('/:id', authenticate, async (req, res) => {
@@ -287,7 +318,8 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
      * and 2 both contained the same two accounts. _id is unique, so appending
      * it makes the order total and the paging exact.
      */
-    User.find(filter).select('-passwordHash -__v').sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+    // National IDs stay out of the directory; the verification queue is the one place staff see them.
+    User.find(filter).select('-passwordHash -__v -ghanaCardId').sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))
   success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
@@ -450,12 +482,18 @@ router.patch('/:id/permissions', authenticate, requirePermission('users:manage_p
     }
   }
 
+  const before = JSON.stringify({ roles: [...user.roles].sort(), permissions: [...(user.permissions ?? [])].sort() })
   if (permissions !== undefined) user.permissions = permissions
   if (roles !== undefined) {
     user.roles = roles
     if (!roles.includes(user.activeRole)) user.activeRole = roles[0]
   }
   await user.save()
+  // Roles/permissions ride inside access tokens — revoke every session so a
+  // demoted account cannot keep acting on its old claims until expiry.
+  if (JSON.stringify({ roles: [...user.roles].sort(), permissions: [...(user.permissions ?? [])].sort() }) !== before) {
+    await revokeAccountSessions(user._id.toString(), 'permissions_changed')
+  }
 
   // Audit trail for this privileged action.
   await AuditLog.create({
@@ -467,7 +505,8 @@ router.patch('/:id/permissions', authenticate, requirePermission('users:manage_p
     ipAddress: req.ip,
   }).catch((err) => console.warn('[users/permissions] audit log failed:', (err as Error).message))
 
-  success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe(), 'Permissions updated')
+  const { ghanaCardId: _card, ...safe } = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
+  success(res, safe, 'Permissions updated')
 })
 
 // Delete a user

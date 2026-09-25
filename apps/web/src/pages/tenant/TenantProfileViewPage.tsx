@@ -126,7 +126,6 @@ export function TenantProfileViewPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
             <Field label="Date of Birth" value={p.dateOfBirth ? formatDate(p.dateOfBirth) : null} icon={<Calendar size={12} />} />
             <Field label="Gender" value={p.gender} />
-            <Field label="Marital Status" value={p.maritalStatus} />
             <Field label="Nationality" value={p.nationality} icon={<Globe size={12} />} />
             <Field label="Hometown" value={p.hometown} icon={<MapPin size={12} />} />
           </div>
@@ -177,19 +176,13 @@ export function TenantProfileViewPage() {
         </Card>
       )}
 
-      {/* Family */}
-      {(p.numberOfOccupants || p.hasSpouse !== undefined) && (
+      {/* Occupancy — family details are never shared with landlords (Act 843) */}
+      {!!p.numberOfOccupants && (
         <Card>
           <CardContent>
-            <SectionHeader icon={<Users size={16} />} label="Family & Occupants" />
+            <SectionHeader icon={<Users size={16} />} label="Occupancy" />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
               <Field label="Occupants" value={p.numberOfOccupants} />
-              <Field label="Dependents" value={p.numberOfDependents} />
-              <Field label="Children" value={p.numberOfChildren} />
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              <BoolChip label="Spouse" value={p.hasSpouse} />
-              <BoolChip label="Children" value={p.hasChildren} />
             </div>
           </CardContent>
         </Card>
@@ -282,7 +275,7 @@ export function TenantProfileViewPage() {
         <CardContent>
           <SectionHeader icon={<Shield size={16} />} label="Verification Status" />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-            <VerifyItem label="ID Document" verified={p.idVerified} detail={p.idType ? `${p.idType}: ${p.idNumber}` : undefined} />
+            <VerifyItem label="ID Document" verified={p.idVerified} detail={p.idType ? `${p.idType}${p.idNumberLast4 ? ` ending ${p.idNumberLast4}` : ''}` : undefined} />
             <VerifyItem label="Proof of Income" verified={p.incomeVerified} />
             <VerifyItem label="Proof of Address" verified={p.addressVerified} />
           </div>
