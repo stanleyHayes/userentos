@@ -12,6 +12,7 @@ import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { DetailSkeleton } from '../../components/Skeleton'
 import { AITextInput } from '../../components/AITextInput'
+import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -41,7 +42,9 @@ interface Review {
   id: string
   userId?: string
   rating: number
-  comment: string
+  /** The API stores the review body as `content`. */
+  content?: string
+  comment?: string
   createdAt: string
   anonymous: boolean
   userName?: string
@@ -57,6 +60,13 @@ interface AgreementInfo {
   startDate: string
   endDate?: string
   status: string
+}
+
+/** First words of a review, used as its required title. */
+function reviewTitleFrom(content: string): string {
+  const end = content.search(/[.!?](\s|$)/)
+  const firstSentence = end === -1 ? content : content.slice(0, end + 1)
+  return firstSentence.length <= 80 ? firstSentence : `${firstSentence.slice(0, 77).trimEnd()}…`
 }
 
 const DURATION_OPTIONS = [
@@ -105,6 +115,9 @@ export default function PropertyDetailScreen() {
   const [reviewPros, setReviewPros] = useState('')
   const [reviewCons, setReviewCons] = useState('')
   const [submittingReview, setSubmittingReview] = useState(false)
+
+  // Abuse reports (listing or an individual review)
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
 
   // Contact modal
   const [showContactModal, setShowContactModal] = useState(false)
@@ -250,7 +263,7 @@ export default function PropertyDetailScreen() {
     setPublishing(true)
     try {
       await api.post(`/properties/${id}/publish`, {})
-      Alert.alert('Submitted', 'Your property has been submitted for government review.')
+      Alert.alert('Submitted', 'Your property has been submitted for review.')
       await load()
     } catch (err) {      const _err = err as { message?: string }
 
@@ -298,13 +311,17 @@ export default function PropertyDetailScreen() {
     }
     setSubmittingReview(true)
     try {
+      const content = reviewComment.trim()
       await api.post('/reviews', {
         propertyId: id,
         rating: reviewRating,
+        // `title` is required by the API; the form only asks for the review
+        // itself, so its opening words become the title.
+        title: reviewTitleFrom(content),
         // The API's zod schema requires `content` (min 10 chars). Sending
         // `comment` failed validation every time, so a review could never be
         // submitted from mobile.
-        content: reviewComment.trim(),
+        content,
         pros: reviewPros.trim() ? reviewPros.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
         cons: reviewCons.trim() ? reviewCons.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
       })
@@ -696,11 +713,8 @@ export default function PropertyDetailScreen() {
       <View style={s.actionSection}>
         {isOwner ? (
           <View style={{ gap: 10 }}>
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: c.primary }]}>
-              <Ionicons name="create-outline" size={20} color="#ffffff" />
-              <Text style={s.primaryBtnText}>Edit Property</Text>
-            </TouchableOpacity>
-
+            {/* No listing editor exists on mobile yet, so no "Edit" control is
+                offered — a button that does nothing fails App Review 2.1. */}
             {property.listingStatus === 'draft' && (
               <TouchableOpacity
                 style={[s.primaryBtn, { backgroundColor: c.accent, opacity: publishing ? 0.6 : 1 }]}
@@ -997,7 +1011,7 @@ export default function PropertyDetailScreen() {
                       <Text style={[s.anonymousText, { color: c.muted }]}>Anonymous</Text>
                     </View>
                   )}
-                  <Text style={[s.reviewComment, { color: c.text }]}>{review.comment}</Text>
+                  <Text style={[s.reviewComment, { color: c.text }]}>{review.content ?? review.comment}</Text>
                   {review.pros && review.pros.length > 0 && (
                     <View style={s.prosConsRow}>
                       <Ionicons name="thumbs-up-outline" size={12} color={c.accent} />
@@ -1010,6 +1024,18 @@ export default function PropertyDetailScreen() {
                       <Text style={[s.prosConsText, { color: c.textLight }]}>{review.cons.join(', ')}</Text>
                     </View>
                   )}
+                  {user && review.userId !== user.id && (
+                    <TouchableOpacity
+                      style={s.reviewReportBtn}
+                      onPress={() => setReportTarget({ type: 'review', id: review.id, noun: 'review' })}
+                      accessibilityRole="button"
+                      accessibilityLabel="Report review"
+                      hitSlop={6}
+                    >
+                      <Ionicons name="flag-outline" size={11} color={c.muted} />
+                      <Text style={[s.reportBtnText, { color: c.muted }]}>Report</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))
             )}
@@ -1017,11 +1043,20 @@ export default function PropertyDetailScreen() {
         )}
       </View>
 
-      {/* Report listing */}
-      <TouchableOpacity style={s.reportBtn}>
-        <Ionicons name="flag-outline" size={12} color={c.muted} />
-        <Text style={[s.reportBtnText, { color: c.muted }]}>Report listing</Text>
-      </TouchableOpacity>
+      {/* Report listing — not offered on your own listing (the API refuses it). */}
+      {!isOwner && (
+        <TouchableOpacity
+          style={s.reportBtn}
+          onPress={() => setReportTarget({ type: 'property', id: property.id ?? property._id ?? String(id), noun: 'listing' })}
+          accessibilityRole="button"
+          accessibilityLabel="Report listing"
+        >
+          <Ionicons name="flag-outline" size={12} color={c.muted} />
+          <Text style={[s.reportBtnText, { color: c.muted }]}>Report listing</Text>
+        </TouchableOpacity>
+      )}
+
+      <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       <View style={{ height: spacing.xl }} />
 
@@ -1042,7 +1077,7 @@ export default function PropertyDetailScreen() {
               <Text style={[s.inputLabel, { color: c.text }]}>Rating *</Text>
               <View style={s.starSelector}>
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <TouchableOpacity key={star} onPress={() => setReviewRating(star)} activeOpacity={0.7}>
+                  <TouchableOpacity key={star} onPress={() => setReviewRating(star)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Rate ${star} star${star === 1 ? '' : 's'}`}>
                     <Ionicons
                       name={star <= reviewRating ? 'star' : 'star-outline'}
                       size={32}
@@ -1572,6 +1607,7 @@ const s = StyleSheet.create({
   // Report
   reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: spacing.md },
   reportBtnText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  reviewReportBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingTop: 6 },
 
   // Tabs
   tabBar: { flexDirection: 'row', borderBottomWidth: 1 },

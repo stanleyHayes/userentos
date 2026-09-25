@@ -10,6 +10,7 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
+import { ReportContentModal, type ReportTarget } from '../components/ReportContentModal'
 
 type Category = 'furniture' | 'appliances' | 'internet' | 'moving' | 'cleaning' | 'other'
 type ListingType = 'product' | 'service' | 'discount'
@@ -49,6 +50,7 @@ interface BusinessEntry {
 
 interface Review {
   id: string
+  authorId?: string
   authorName: string
   rating: number
   review?: string
@@ -72,6 +74,20 @@ const TYPE_ICONS: Record<ListingType, keyof typeof Ionicons.glyphMap> = {
 
 function formatPrice(n: number): string {
   return `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/**
+ * The reports API has no target type for business reviews yet, so the review
+ * is reported through its author (`user`) with the review itself attached for
+ * the moderator.
+ */
+function businessReviewReport(businessName: string, review: Review): ReportTarget {
+  return {
+    type: 'user',
+    id: review.authorId!,
+    noun: 'review',
+    context: `Reported review ${review.id} on business "${businessName}" (${review.rating}/5): ${review.review?.trim() || '(rating only)'}`,
+  }
 }
 
 function formatDate(iso: string): string {
@@ -310,6 +326,8 @@ function BusinessDetail({
 }) {
   const qc = useQueryClient()
   const { business, listings } = entry
+  const userId = useAuthStore((st) => st.user?.id)
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
 
   const [inquiryTarget, setInquiryTarget] = useState<{ listingId?: string } | null>(null)
   const [reviewFormOpen, setReviewFormOpen] = useState(false)
@@ -460,6 +478,18 @@ function BusinessDetail({
             {r.review ? (
               <Text style={[s.reviewBody, { color: c.text }]}>{r.review}</Text>
             ) : null}
+            {r.authorId && r.authorId !== userId ? (
+              <TouchableOpacity
+                style={s.reportLink}
+                onPress={() => setReportTarget(businessReviewReport(business.name, r))}
+                accessibilityRole="button"
+                accessibilityLabel="Report review"
+                hitSlop={6}
+              >
+                <Ionicons name="flag-outline" size={11} color={c.muted} />
+                <Text style={[s.reportLinkText, { color: c.muted }]}>Report</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ))
       )}
@@ -513,6 +543,25 @@ function BusinessDetail({
           </TouchableOpacity>
         )
       )}
+
+      {!isOwner && (
+        <TouchableOpacity
+          style={[s.reportLink, s.reportBusiness]}
+          onPress={() => setReportTarget({
+            type: 'user',
+            id: business.ownerId,
+            noun: 'business',
+            context: `Reported business listing "${business.name}" (business ${business.id}).`,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Report business"
+        >
+          <Ionicons name="flag-outline" size={12} color={c.muted} />
+          <Text style={[s.reportLinkText, { color: c.muted }]}>Report business</Text>
+        </TouchableOpacity>
+      )}
+
+      <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       {inquiryTarget && (
         <InquiryModal
@@ -709,6 +758,9 @@ const s = StyleSheet.create({
   interestBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, alignSelf: 'flex-start' },
   interestBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   reviewCard: { padding: 10, gap: 6, marginBottom: 6 },
+  reportLink: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingTop: 2 },
+  reportLinkText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
+  reportBusiness: { alignSelf: 'center', paddingVertical: spacing.md },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reviewAuthor: { fontSize: 12, fontFamily: 'Outfit_700Bold', flex: 1 },
   reviewDate: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
