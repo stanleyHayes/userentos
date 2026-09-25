@@ -565,7 +565,39 @@ export interface InvestmentOption {
 
 // --- Loan ---
 
-export type LoanStatus = 'pending' | 'approved' | 'active' | 'repaid' | 'defaulted' | 'rejected'
+export type LoanStatus = 'pending' | 'pre_qualified' | 'pending_review' | 'approved' | 'active' | 'repaid' | 'defaulted' | 'rejected'
+
+export interface LoanScheduleItem {
+  installmentNumber: number
+  dueDate: string
+  principal: number
+  interest: number
+  amountDue: number
+}
+
+/** Server-computed pre-contract disclosure (GET /loans/quote). */
+export interface LoanQuote {
+  principal: number
+  tenureMonths: number
+  annualInterestRate: number
+  processingFee: number
+  netDisbursed: number
+  monthlyPayment: number
+  totalRepayable: number
+  totalCostOfCredit: number
+  apr: number
+  schedule: LoanScheduleItem[]
+}
+
+export interface LoanTerms {
+  annualInterestRate: number
+  processingFeePct: number
+  minAmount: number
+  maxAmount: number
+  minTenureMonths: number
+  maxTenureMonths: number
+  minCreditScore: number
+}
 
 export interface Loan {
   id: string
@@ -574,11 +606,21 @@ export interface Loan {
   amount: number
   interestRate: number
   tenure: number
+  processingFee?: number
+  apr?: number
   monthlyPayment: number
   totalRepayment: number
   amountPaid: number
   status: LoanStatus
   creditScoreAtApproval?: number
+  automatedAssessment?: { outcome: 'pre_qualified' | 'manual_review' | 'declined'; creditScore: number; reasons: string[]; assessedAt: string }
+  termsAcceptance?: { acceptedAt: string }
+  reviewRequestedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
+  decisionReason?: string
+  lenderId?: string
+  fundingSource?: 'lender_wallet' | 'external_settlement'
   disbursedAt?: string
   reason: string
   createdAt: string

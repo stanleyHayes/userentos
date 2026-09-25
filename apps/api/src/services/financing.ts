@@ -72,6 +72,59 @@ function addMonths(d: Date, m: number) {
 }
 
 /**
+ * Nominal APR (%): the monthly rate that discounts the payments back to what the
+ * borrower actually receives, times twelve. Fees deducted up front raise it above
+ * the headline interest rate, which is the point of disclosing it.
+ */
+export function computeApr(netDisbursed: number, payments: number[]): number {
+  const total = payments.reduce((sum, p) => sum + p, 0)
+  if (netDisbursed <= 0 || total <= netDisbursed) return 0
+  const presentValue = (i: number) => payments.reduce((sum, p, k) => sum + p / Math.pow(1 + i, k + 1), 0)
+  let lo = 0
+  let hi = 1
+  while (presentValue(hi) > netDisbursed) hi *= 2
+  for (let n = 0; n < 200; n++) {
+    const mid = (lo + hi) / 2
+    if (presentValue(mid) > netDisbursed) lo = mid
+    else hi = mid
+  }
+  return round2(((lo + hi) / 2) * 12 * 100)
+}
+
+export interface CreditQuote {
+  principal: number
+  tenureMonths: number
+  annualInterestRate: number
+  processingFee: number
+  netDisbursed: number
+  monthlyPayment: number
+  totalRepayable: number
+  /** Everything paid beyond what is received: interest plus fees. */
+  totalCostOfCredit: number
+  apr: number
+  schedule: IRepaymentScheduleItem[]
+}
+
+/** The full pre-contract disclosure: what is received, what is repaid, when, and the all-in APR. */
+export function buildCreditQuote({ principal, annualInterestRate, tenureMonths, processingFeePct = 0, startDate = new Date() }: AmortizationParams & { processingFeePct?: number }): CreditQuote {
+  const { monthlyPayment, totalRepayable, schedule } = buildAmortizationSchedule({ principal, annualInterestRate, tenureMonths, startDate })
+  const processingFee = round2(principal * (processingFeePct / 100))
+  const netDisbursed = round2(principal - processingFee)
+  return {
+    principal,
+    tenureMonths,
+    annualInterestRate,
+    processingFee,
+    netDisbursed,
+    monthlyPayment,
+    totalRepayable,
+    totalCostOfCredit: round2(totalRepayable - netDisbursed),
+    apr: computeApr(netDisbursed, schedule.map((s) => s.amountDue)),
+    schedule,
+  }
+}
+
+/**
  * Approve an application — creates a contract with a full amortization schedule.
  */
 export async function approveApplication(applicationId: string, decidedBy: string, notes?: string) {
