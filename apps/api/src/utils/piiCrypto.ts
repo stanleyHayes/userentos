@@ -30,6 +30,11 @@ function key(): Buffer {
   return cachedKey
 }
 
+/** Called at boot so a production server without its key fails at start, not on the first ID it stores. */
+export function assertPiiKeyConfigured(): void {
+  key()
+}
+
 export function isEncryptedPii(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith(PREFIX)
 }

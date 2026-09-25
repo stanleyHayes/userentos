@@ -104,6 +104,7 @@ import moveOutRoutes from './routes/moveOut.js'
 import legalDocumentRoutes from './routes/legalDocuments.js'
 import webhookRoutes from './routes/webhooks.js'
 import platformRoutes from './routes/platform.js'
+import { assertPiiKeyConfigured } from './utils/piiCrypto.js'
 import { requireRegulatedFeature } from './middleware/regulatedFeature.js'
 import { onSimulatedComplete, getMode as getPaymentMode } from './services/payments/index.js'
 import { finalizePayment } from './services/payments/finalize.js'
@@ -460,8 +461,9 @@ process.on('unhandledRejection', (reason) => {
 
 async function start() {
   try {
-    // Fail at boot, not on the first payment, if the payment mode is unset or refused.
+    // Fail at boot, not on the first payment or stored ID, if these are unset or refused.
     getPaymentMode()
+    assertPiiKeyConfigured()
     await mongoose.connect(config.mongoUri)
     // Never log config.mongoUri itself — it can embed user:password credentials.
     logger.info(`Connected to MongoDB: ${mongoose.connection.host}/${mongoose.connection.name}`)
