@@ -1,11 +1,11 @@
 import { Router } from 'express'
-import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { authenticate } from '../middleware/auth.js'
 import { TenantProfile, calcScore } from '../models/TenantProfile.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { ownProfileView, sharedProfileView } from '../services/tenantProfileViews.js'
 
 const router = Router()
 
@@ -32,7 +32,7 @@ router.get('/me', authenticate, async (req, res) => {
     profile = created.toObject()
   }
   const scored = await ensureScore(profile)
-  success(res, { ...scored, id: (scored._id as Types.ObjectId).toString() })
+  success(res, ownProfileView(scored))
 })
 
 // Update my profile
@@ -119,7 +119,7 @@ export const profilePatchSchema = z.object({
     address: z.string().max(300).optional(),
   }).optional(),
   idType: z.string().max(60).optional(),
-  idNumber: z.string().max(60).optional(),
+  idNumber: z.string().max(60).refine((v) => !v.startsWith('pii:'), 'Invalid ID number').optional(),
   idDocumentUrl: z.string().max(500).optional(),
   proofOfIncomeUrl: z.string().max(500).optional(),
   proofOfAddressUrl: z.string().max(500).optional(),
@@ -149,7 +149,7 @@ router.patch('/me', authenticate, async (req, res) => {
   if (parsed.data.ethnicGroup === '') profile.ethnicGroup = undefined
   await profile.save() // pre-save hook calculates score
 
-  success(res, { ...profile.toObject(), id: profile._id.toString() })
+  success(res, ownProfileView(profile.toObject()))
 })
 
 // Landlord/Gov: view tenant profile by userId (requires approved access)
@@ -175,8 +175,7 @@ router.get('/:userId', authenticate, async (req, res) => {
   const profile = await TenantProfile.findOne({ userId: targetUserId }).lean()
   if (!profile) { error(res, 'Profile not found', 404); return }
   const scored = await ensureScore(profile)
-  const { religion: _religion, ethnicGroup: _ethnicGroup, ...shared } = scored
-  success(res, { ...shared, id: (scored._id as Types.ObjectId).toString() })
+  success(res, sharedProfileView(scored as unknown as Record<string, unknown> & { _id: unknown }))
 })
 
 export default router

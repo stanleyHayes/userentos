@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { decryptPii, piiSetter, PII_FIELDS } from '../utils/piiCrypto.js'
 
 export interface IUser extends Document {
   email: string
@@ -65,7 +66,9 @@ const userSchema = new Schema<IUser>({
   roles: { type: [String], required: true },
   activeRole: { type: String, required: true },
   permissions: { type: [String], default: [] },
-  ghanaCardId: String,
+  // National ID is special personal data (Act 843): encrypted at rest on
+  // every write path; read it through decryptPii / toSafe().
+  ghanaCardId: { type: String, set: piiSetter(PII_FIELDS.userGhanaCard) },
   isVerified: { type: Boolean, default: false },
   verificationStatus: { type: String, enum: ['none', 'pending', 'verified'], default: 'none' },
   taxReportingConsent: { type: Boolean, default: false },
@@ -117,6 +120,8 @@ userSchema.methods.toSafe = function () {
   delete obj.passwordHash
   delete obj.mfaSecret
   delete obj.__v
+  // toSafe() is the account owner's own view — decrypt their card for them.
+  if (obj.ghanaCardId !== undefined) obj.ghanaCardId = decryptPii(obj.ghanaCardId, PII_FIELDS.userGhanaCard)
   return obj
 }
 

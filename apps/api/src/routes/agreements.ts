@@ -13,6 +13,7 @@ import { signDownloadToken } from '../services/authService.js'
 import { SimplePdfBuilder } from '../utils/simplePdf.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
 
 const router = Router()
 
@@ -170,7 +171,7 @@ router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: R
   const tpAny = tenantProfile as { idType?: string; idNumber?: string; idVerified?: boolean } | null
   const isGhanaCard = (tpAny?.idType ?? '').toLowerCase().includes('ghana')
   const ghanaCardStatus = tpAny?.idVerified && isGhanaCard
-    ? `Verified (${(tpAny?.idNumber ?? '').slice(-4).padStart(8, '*')})`
+    ? `Verified (${(piiLast4(tpAny?.idNumber, PII_FIELDS.tenantIdNumber) ?? '').padStart(8, '*')})`
     : tpAny?.idNumber && isGhanaCard
       ? 'On file (not verified)'
       : tpAny?.idType
