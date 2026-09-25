@@ -168,7 +168,18 @@ router.delete('/me', authenticate, async (req, res) => {
 
   await rememberLegacyAvatar(userId, user.profileImage)
 
-  // Scramble PII
+  /*
+   * What the tombstone keeps until the 30-day purge deletes it (Act 843 s.26
+   * minimisation), and why:
+   *  - roles/activeRole: schema-required; they grant nothing once deletedAt is set.
+   *  - consents versions + acceptedAt + ageConfirmed: which terms governed the
+   *    processing that happened. The signing IP and device are dropped.
+   *  - suspension fields: the account was closed while suspended for abuse —
+   *    kept so the report trail survives the window.
+   *  - storeAccountToken + subscription fields: app-store refund/revocation
+   *    notifications and payment disputes still resolve to this account.
+   * Everything else that describes the person is scrambled or removed.
+   */
   const scramble = crypto.randomBytes(8).toString('hex')
   user.email = `deleted-${scramble}@userentos.com`
   user.phone = `000000${scramble.slice(0, 6)}`
@@ -180,6 +191,14 @@ router.delete('/me', authenticate, async (req, res) => {
   user.mfaSecret = undefined
   user.markModified('mfaSecret')
   user.mfaEnabled = false
+  user.set('consents.ip', undefined)
+  user.set('consents.userAgent', undefined)
+  user.set('settings', undefined)
+  user.invitedBy = undefined
+  user.permissions = []
+  user.isVerified = false
+  user.verificationStatus = 'none'
+  user.taxReportingConsent = false
   user.deletedAt = new Date()
   await user.save()
   disconnectUser(userId)
