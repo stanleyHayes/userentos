@@ -12,6 +12,7 @@ import { getProvider, isMethodAvailable } from '../services/payments/index.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { round2 } from '../utils/money.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
+import { isSignedTenancy } from '../services/tenancyRelationship.js'
 
 const MOBILE_MONEY_METHODS = new Set(['mtn_momo', 'telecel_cash', 'airteltigo_money'])
 
@@ -67,6 +68,8 @@ export const paymentController = {
       error(res, 'Not authorized', 403)
       return
     }
+    // Rent is owed under a lease the tenant signed, not a landlord's draft.
+    if (!isSignedTenancy(agreement)) { error(res, 'Sign the agreement before paying rent on it', 409); return }
 
     if (req.user!.suspended && agreement.status !== 'active') {
       error(res, 'During suspension, online rent payments are available only for your active agreements. Contact support for other outstanding obligations.', 403); return

@@ -161,3 +161,10 @@ describe('built-in helpers are categorised', () => {
     expect(deliveryPlan('savings', null)).toEqual({ inApp: true, email: false, push: false, sms: false })
   })
 })
+
+describe('promotional notifications', () => {
+  it('stay in-app whatever the channel preferences', () => {
+    expect(deliveryPlan('promotion', { email: true, push: true, sms: true })).toEqual({ inApp: true, email: false, push: false, sms: false })
+    expect(deliveryPlan('promotion', null)).toEqual({ inApp: true, email: false, push: false, sms: false })
+  })
+})

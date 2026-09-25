@@ -50,7 +50,7 @@ const router = Router()
  *
  * 5. ACCOUNT AGE & TENURE (0-10 pts, 10% weight)
  *    - 1 pt per month of account age, max 6 pts
- *    - +2 pts if user has been verified (emailVerified)
+ *    - +2 pts if an admin has reviewed the user's ID (verificationStatus)
  *    - +2 pts if 12+ months old
  */
 
@@ -156,7 +156,8 @@ async function calculateScore(userId: string) {
   const createdAt = (user as unknown as { createdAt?: Date })?.createdAt
   const ageMonths = createdAt ? Math.floor((Date.now() - new Date(createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000)) : 0
   let accountAge = Math.min(6, ageMonths) // 1pt per month, max 6
-  if ((user as unknown as { emailVerified?: boolean })?.emailVerified) accountAge += 2
+  // There is no email-verification field; the ID review is the account's only verification.
+  if ((user as unknown as { verificationStatus?: string })?.verificationStatus === 'verified') accountAge += 2
   if (ageMonths >= 12) accountAge += 2
   accountAge = Math.min(10, accountAge)
 

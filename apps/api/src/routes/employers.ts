@@ -14,6 +14,7 @@ import { buildPayrollRun, approvePayrollRun, processPayrollRun } from '../servic
 import { notify } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { isSignedTenancy } from '../services/tenancyRelationship.js'
 
 const router = Router()
 
@@ -363,6 +364,8 @@ router.post('/mandates', authenticate, async (req, res) => {
       if (!parsed.data.targetEntityId) { error(res, 'Choose a rental agreement'); return }
       const a = await Agreement.findById(parsed.data.targetEntityId)
       if (!a || a.tenantId !== req.user!.userId) { error(res, 'Agreement not found'); return }
+      // Deductions pay rent under a signed lease only, never a draft.
+      if (!isSignedTenancy(a)) { error(res, 'Sign the agreement before setting up rent deductions for it', 409); return }
       targetEntityType = 'agreement'
       targetLabel = `Rent — agreement ${a._id.toString().slice(-6)}`
       break

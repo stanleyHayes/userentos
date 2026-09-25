@@ -20,7 +20,8 @@ async function ensureUser(payload: Record<string, unknown>) {
   const existing = await User.findOne({ email: (payload as { email: string }).email })
   if (existing) return existing
   const hash = await bcrypt.hash(generateSecurePassword(), config.bcryptRounds)
-  return User.create({ ...payload, passwordHash: hash, isVerified: true })
+  // Demo accounts are not identity-reviewed; verification comes only from an admin review.
+  return User.create({ ...payload, passwordHash: hash })
 }
 
 async function run() {

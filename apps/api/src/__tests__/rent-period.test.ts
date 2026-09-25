@@ -28,7 +28,7 @@ it('requires an explicit period without inferring it from the amount', async () 
   expect(res.status).toHaveBeenCalledWith(400)
 })
 it('rejects dates outside the agreement before persisting a payment', async () => {
-  vi.spyOn(Agreement, 'findById').mockResolvedValue({ tenantId: 'tenant', startDate: '2026-10-01', endDate: '2027-10-01' } as never)
+  vi.spyOn(Agreement, 'findById').mockResolvedValue({ tenantId: 'tenant', status: 'active', tenantSignature: 'Tenant', startDate: '2026-10-01', endDate: '2027-10-01' } as never)
   const create = vi.spyOn(Payment, 'create')
   const res = response()
   await paymentController.create(request(), res as unknown as Response)
@@ -36,7 +36,7 @@ it('rejects dates outside the agreement before persisting a payment', async () =
   expect(create).not.toHaveBeenCalled()
 })
 it('stores the selected period before contacting the collection provider', async () => {
-  vi.spyOn(Agreement, 'findById').mockResolvedValue({ tenantId: 'tenant', landlordId: 'owner', propertyId: 'property', rentAmount: 1000, startDate: '2026-01-01', endDate: '2027-01-01' } as never)
+  vi.spyOn(Agreement, 'findById').mockResolvedValue({ tenantId: 'tenant', status: 'active', tenantSignature: 'Tenant', landlordId: 'owner', propertyId: 'property', rentAmount: 1000, startDate: '2026-01-01', endDate: '2027-01-01' } as never)
   const doc = new Payment({ ...body, tenantId: 'tenant', landlordId: 'owner', reference: 'fixture', status: 'pending' })
   const create = vi.spyOn(Payment, 'create').mockResolvedValue(doc as never)
   vi.spyOn(doc, 'save').mockResolvedValue(doc)
@@ -58,4 +58,13 @@ it('rejects idempotent replay with a different period', async () => {
   const res = response()
   await paymentController.create(req, res as unknown as Response)
   expect(res.status).toHaveBeenCalledWith(409)
+})
+
+it('refuses rent on an agreement the tenant has not signed', async () => {
+  vi.spyOn(Agreement, 'findById').mockResolvedValue({ tenantId: 'tenant', status: 'draft', landlordId: 'owner', propertyId: 'property', rentAmount: 1000, startDate: '2026-01-01', endDate: '2027-01-01' } as never)
+  const create = vi.spyOn(Payment, 'create')
+  const res = response()
+  await paymentController.create(request(), res as unknown as Response)
+  expect(res.status).toHaveBeenCalledWith(409)
+  expect(create).not.toHaveBeenCalled()
 })

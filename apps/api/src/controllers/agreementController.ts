@@ -74,6 +74,7 @@ async function notifyBusinessesOfNewMover(agreementId: string, propertyId: strin
     title: `New mover in ${city}`,
     message: 'A tenant just activated a lease nearby. Create a new-mover offer to reach them while they settle in.',
     actionUrl: '/role-capabilities',
+    category: 'promotion',
   })))
 }
 

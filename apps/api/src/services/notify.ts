@@ -37,7 +37,7 @@ import { getIO } from './socket.js'
  * SMS: no notification is sent by SMS today (services/sms.ts has no callers);
  * `sms` is still resolved here so a future SMS sender honours the toggle.
  */
-export type NotificationCategory = 'account' | 'payment' | 'savings' | 'security' | 'receipt'
+export type NotificationCategory = 'account' | 'payment' | 'savings' | 'security' | 'receipt' | 'promotion'
 
 export const EXEMPT_CATEGORIES: readonly NotificationCategory[] = ['security', 'receipt']
 
@@ -66,6 +66,9 @@ export interface DeliveryPlan {
  */
 export function deliveryPlan(category: NotificationCategory, prefs: NotificationPreferences | null): DeliveryPlan {
   if (EXEMPT_CATEGORIES.includes(category)) return { inApp: true, email: true, push: true, sms: true }
+  // Promotional nudges never go out by email, push or SMS: there is no marketing
+  // consent to rely on (Act 843 s.40), so they stay inside the recipient's account.
+  if (category === 'promotion') return { inApp: true, email: false, push: false, sms: false }
   if (!prefs) return { inApp: true, email: false, push: false, sms: false }
   const categoryOn = category === 'payment' ? prefs.payment !== false
     : category === 'savings' ? prefs.savings !== false
