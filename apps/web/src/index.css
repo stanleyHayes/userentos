@@ -1149,3 +1149,13 @@ h1.font-display, h2.font-display {
 /* Parallax + tilt */
 .parallax { will-change: transform; }
 .tilt-card { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease; transform-style: preserve-3d; will-change: transform; }
+
+/* Storefront address plate: hangs from the awning and settles once. */
+@keyframes plateSettle {
+  0% { transform: rotate(-9deg); opacity: 0; }
+  18% { opacity: 1; }
+  40% { transform: rotate(5deg); }
+  62% { transform: rotate(-2.5deg); }
+  82% { transform: rotate(1deg); }
+  100% { transform: rotate(0deg); }
+}

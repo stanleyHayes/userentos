@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 import { Building2, MapPin, Phone, Mail, BedDouble, Bath, Store } from 'lucide-react'
 import { useStorefront, useStorefrontProperties } from '@/hooks/useApi'
 import { applySeo } from '@/lib/seo'
+import { StorefrontUnavailable } from './StorefrontUnavailable'
 
 /**
  * A seller's public storefront (spec §4).
@@ -22,7 +23,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   // not the path — there is no /s/:slug segment to read.
   const { slug: slugFromPath } = useParams<{ slug: string }>()
   const slug = slugOverride ?? slugFromPath
-  const { data: storefront, isLoading, isError } = useStorefront(slug)
+  const { data: storefront, isLoading, isError, error, refetch } = useStorefront(slug)
   const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
 
   // Per-host SEO (spec §4.1). index.html carries the platform's own tags, so
@@ -55,14 +56,15 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   }
 
   if (isError || !storefront) {
+    // Only a 404 means there is no storefront; anything else was a failed load.
+    const missing = !isError || (error as { status?: number } | null)?.status === 404
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16">
-        <EmptyState
-          preset="search"
-          title="Storefront not found"
-          description="This address is not in use, or the storefront has been suspended."
-        />
-      </div>
+      <StorefrontUnavailable
+        slug={slug}
+        reason={missing ? 'missing' : 'unreachable'}
+        onStorefrontHost={Boolean(slugOverride)}
+        onRetry={() => { void refetch() }}
+      />
     )
   }
 

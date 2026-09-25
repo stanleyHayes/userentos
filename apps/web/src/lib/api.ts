@@ -71,7 +71,8 @@ class ApiClient {
     assertOwner()
 
     if (!res.ok) {
-      throw new Error(data.error || `Request failed (${res.status})`)
+      // The status lets screens tell "doesn't exist" apart from "couldn't load".
+      throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status })
     }
 
     return data.data as T

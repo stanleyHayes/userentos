@@ -189,6 +189,10 @@ export default function App() {
               {slug}.userentos.com renders the landing page — which is what it
               did while the settings screen advertised that URL as live. */}
           <Route path="/" element={<HomeRoute isPortal={isPortal} />} />
+          {/* A storefront is a full page with its own header, the same as on its
+              own host. Under AuthLayout it rendered inside the sign-in card and
+              signed-in visitors were redirected to the dashboard. */}
+          <Route path="/s/:slug" element={<PublicStorefrontPage />} />
           <Route element={<PublicLayout />}>
             <Route path="/delete-account" element={<DeleteAccountPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
@@ -212,7 +216,6 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/s/:slug" element={<PublicStorefrontPage />} />
           </Route>
 
           {/* Protected dashboard routes */}
