@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import { authenticate } from '../middleware/auth.js'
 import { Lead } from '../models/Lead.js'
 import { Viewing } from '../models/Viewing.js'
@@ -137,10 +137,11 @@ router.post('/viewings/property/:propertyId', authenticate, async (req, res) => 
     viewerPhone: requester.phone,
   })
 
-  // A viewing request moves the lead (if any) to 'viewing'
-  if (parsed.data.leadId) {
+  // A viewing request moves the requester's own lead on this listing to
+  // 'viewing' — never someone else's lead in the same agent's pipeline.
+  if (parsed.data.leadId && Types.ObjectId.isValid(parsed.data.leadId)) {
     await Lead.findOneAndUpdate(
-      { _id: parsed.data.leadId, agentId: resolved.agentId, status: { $in: ['new', 'contacted'] } },
+      { _id: parsed.data.leadId, agentId: resolved.agentId, requesterId: req.user!.userId, propertyId: param(req.params.propertyId), status: { $in: ['new', 'contacted'] } },
       { status: 'viewing' },
     )
   }
