@@ -418,15 +418,12 @@ router.post('/', authenticate, requirePermission('users:create'), async (req, re
     roles,
     activeRole: roles[0],
     permissions: permissions || [],
-    isVerified: true, // admin-created users are pre-verified
+    // Creating an account checks no identity document; verification (and the
+    // badge) come only from POST /:id/verify-identity.
   })
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })
   void notifyWelcome(user._id.toString(), firstName)
-
-  // Pre-verified by admin — award profile_verified badge
-  checkAndAward(user._id.toString(), 'profile_verified', {})
-    .catch((err) => console.warn('[users/create] achievement award failed:', err))
 
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe(), 'User created successfully', 201)
 })
@@ -461,6 +458,8 @@ router.post('/:id/verify-identity', authenticate, requireRole(...ADMIN_ROLES), a
   user.isVerified = true
   await user.save()
   await recordAudit(req, 'users.verify_identity', 'User', user._id.toString())
+  await checkAndAward(user._id.toString(), 'profile_verified', {})
+    .catch((err) => console.warn('[users/verify-identity] achievement award failed:', err))
   success(res, { verificationStatus: 'verified', isVerified: true }, 'User verified')
 })
 
