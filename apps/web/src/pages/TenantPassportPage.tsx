@@ -157,7 +157,7 @@ export function TenantPassportPage() {
                   </h2>
                   {data.user.isVerified && (
                     <Badge variant="success" className="gap-1">
-                      <ShieldCheck size={12} /> Ghana Card Verified
+                      <ShieldCheck size={12} /> ID reviewed by RentOS
                     </Badge>
                   )}
                 </div>
@@ -179,33 +179,36 @@ export function TenantPassportPage() {
       )}
 
       {/* Credit Score */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp size={16} className="text-primary dark:text-blue-400" /> Credit Score
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data?.creditScore ? (
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="text-center">
-                <div className="text-5xl font-extrabold font-display text-primary dark:text-blue-400">
-                  {data.creditScore.score}
+      {/* Omitted where credit reporting is not offered. */}
+      {data?.creditScoreOffered !== false && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-primary dark:text-blue-400" /> Credit Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data?.creditScore ? (
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="text-center">
+                  <div className="text-5xl font-extrabold font-display text-primary dark:text-blue-400">
+                    {data.creditScore.score}
+                  </div>
+                  <div className="text-[11px] text-muted">out of 100</div>
+                  <Badge variant="default" className="mt-1">
+                    {scoreLabel(data.creditScore.score)}
+                  </Badge>
                 </div>
-                <div className="text-[11px] text-muted">out of 100</div>
-                <Badge variant="default" className="mt-1">
-                  {scoreLabel(data.creditScore.score)}
-                </Badge>
+                <div className="flex-1 min-w-[260px] space-y-2">
+                  {factorRows(data.creditScore.factors)}
+                </div>
               </div>
-              <div className="flex-1 min-w-[260px] space-y-2">
-                {factorRows(data.creditScore.factors)}
-              </div>
-            </div>
-          ) : (
-            <EmptyState preset="general" title="No credit score on record yet" description="Your credit score will appear here once you build rental history." compact />
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <EmptyState preset="general" title="No credit score on record yet" description="Your credit score will appear here once you build rental history." compact />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -218,7 +221,7 @@ export function TenantPassportPage() {
           <CardContent className="space-y-1.5 text-sm">
             <Stat label="Lifetime Payments" value={String(data?.payments.total ?? 0)} />
             <Stat label="Completed" value={String(data?.payments.completed ?? 0)} />
-            <Stat label="On-Time %" value={`${data?.payments.onTimePct ?? 0}%`} />
+            <Stat label="Completed %" value={`${data?.payments.onTimePct ?? 0}%`} />
             <Stat
               label="Lifetime Total"
               value={`GHS ${(data?.payments.lifetimeTotalGhs ?? 0).toLocaleString()}`}
@@ -239,7 +242,7 @@ export function TenantPassportPage() {
               label="Eviction History"
               value={data?.agreements.noEvictionHistory ? 'None' : 'Disclosed'}
             />
-            <Stat label="On-Time Ratio" value={`${data?.agreements.onTimePaymentRatio ?? 0}%`} />
+            <Stat label="Payments Completed" value={`${data?.agreements.onTimePaymentRatio ?? 0}%`} />
           </CardContent>
         </Card>
 

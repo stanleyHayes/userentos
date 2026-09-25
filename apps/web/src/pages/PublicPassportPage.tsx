@@ -80,10 +80,10 @@ export function PublicPassportPage() {
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 {data.user?.isVerified && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
-                    <ShieldCheck size={12} /> Ghana Card Verified
+                    <ShieldCheck size={12} /> ID reviewed by RentOS
                   </span>
                 )}
-                {data.creditScore && (
+                {data.creditScoreOffered !== false && data.creditScore && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white">
                     Credit Score {data.creditScore.score}/100
                   </span>
@@ -110,33 +110,36 @@ export function PublicPassportPage() {
       </Card>
 
       {/* Score */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp size={16} className="text-primary dark:text-blue-400" /> Credit Score
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.creditScore ? (
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="text-center">
-                <div className="text-5xl font-extrabold font-display text-primary dark:text-blue-400">
-                  {data.creditScore.score}
+      {/* Omitted where credit reporting is not offered. */}
+      {data.creditScoreOffered !== false && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-primary dark:text-blue-400" /> Credit Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.creditScore ? (
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="text-center">
+                  <div className="text-5xl font-extrabold font-display text-primary dark:text-blue-400">
+                    {data.creditScore.score}
+                  </div>
+                  <div className="text-[11px] text-muted">out of 100</div>
+                  <Badge variant="default" className="mt-1">
+                    {scoreLabel(data.creditScore.score)}
+                  </Badge>
                 </div>
-                <div className="text-[11px] text-muted">out of 100</div>
-                <Badge variant="default" className="mt-1">
-                  {scoreLabel(data.creditScore.score)}
-                </Badge>
+                <div className="flex-1 min-w-[260px] space-y-2">
+                  {factorRows(data.creditScore.factors)}
+                </div>
               </div>
-              <div className="flex-1 min-w-[260px] space-y-2">
-                {factorRows(data.creditScore.factors)}
-              </div>
-            </div>
-          ) : (
-            <EmptyState preset="general" title="No credit score on record yet" description="This tenant has no credit score on record." compact />
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <EmptyState preset="general" title="No credit score on record yet" description="This tenant has no credit score on record." compact />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -149,11 +152,13 @@ export function PublicPassportPage() {
           <CardContent className="space-y-1.5 text-sm">
             <Stat label="Lifetime Payments" value={String(data.payments.total)} />
             <Stat label="Completed" value={String(data.payments.completed)} />
-            <Stat label="On-Time %" value={`${data.payments.onTimePct}%`} />
-            <Stat
-              label="Lifetime Total"
-              value={`GHS ${data.payments.lifetimeTotalGhs.toLocaleString()}`}
-            />
+            <Stat label="Completed %" value={`${data.payments.onTimePct}%`} />
+            {data.payments.lifetimeTotalGhs !== null && (
+              <Stat
+                label="Lifetime Total"
+                value={`GHS ${data.payments.lifetimeTotalGhs.toLocaleString()}`}
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -170,7 +175,7 @@ export function PublicPassportPage() {
               label="Eviction History"
               value={data.agreements.noEvictionHistory ? 'None' : 'Disclosed'}
             />
-            <Stat label="On-Time Ratio" value={`${data.agreements.onTimePaymentRatio}%`} />
+            <Stat label="Payments Completed" value={`${data.agreements.onTimePaymentRatio}%`} />
           </CardContent>
         </Card>
 

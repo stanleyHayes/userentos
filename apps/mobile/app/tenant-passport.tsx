@@ -6,11 +6,14 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { formatCompact } from '../lib/format'
 
+// Mirrors GET /tenant-passport/me/json (apps/api/src/routes/tenantPassport.ts).
 interface Passport {
-  user: { firstName: string; lastName: string; isVerified: boolean }
-  creditScore?: { score?: number }
-  rentalHistory?: unknown[]
-  paymentSummary?: { totalPaid?: number; onTimeRate?: number }
+  user: { firstName: string; lastName: string; isVerified: boolean } | null
+  creditScoreOffered?: boolean
+  creditScore: { score: number } | null
+  // onTimePct is the completed share of payments, not punctuality.
+  payments: { total: number; completed: number; lifetimeTotalGhs: number | null; onTimePct: number }
+  agreements: { total: number }
 }
 
 export default function TenantPassportScreen() {
@@ -40,7 +43,7 @@ export default function TenantPassportScreen() {
   async function sharePassport() {
     try {
       const result = await api.post<{ url: string }>('/tenant-passport/share', {})
-      await Share.share({ message: `View my verified RentOS Tenant Passport: ${result.url}` })
+      await Share.share({ message: `View my RentOS Tenant Passport: ${result.url}` })
     } catch (error) { Alert.alert('Could not share', (error as Error).message) }
   }
 
@@ -64,7 +67,7 @@ export default function TenantPassportScreen() {
           <ActivityIndicator color={c.primary} />
           <Text style={[s.stateText, { color: c.muted }]}>Preparing your passport…</Text>
         </View>
-      ) : !passport ? (
+      ) : !passport?.user ? (
         <View style={[s.stateCard, neuCard(c)]}>
           <View style={[s.stateIcon, { backgroundColor: c.primary + '12' }]}>
             <Ionicons name="document-text-outline" size={24} color={c.primary} />
@@ -88,7 +91,7 @@ export default function TenantPassportScreen() {
                 <View style={s.statusRow}>
                   <View style={[s.statusDot, { backgroundColor: passport.user.isVerified ? c.accent : c.warning }]} />
                   <Text style={[s.statusText, { color: passport.user.isVerified ? c.accent : c.warning }]}>
-                    {passport.user.isVerified ? 'Identity verified' : 'Verification pending'}
+                    {passport.user.isVerified ? 'ID reviewed by RentOS' : 'ID review pending'}
                   </Text>
                 </View>
               </View>
@@ -98,9 +101,9 @@ export default function TenantPassportScreen() {
             <View style={[s.divider, { backgroundColor: c.border }]} />
 
             <View style={s.metrics}>
-              <Metric label="Credit score" value={String(passport.creditScore?.score ?? '—')} color={c.text} muted={c.muted} />
-              <Metric label="Rental records" value={String(passport.rentalHistory?.length ?? 0)} color={c.text} muted={c.muted} />
-              <Metric label="On-time" value={`${passport.paymentSummary?.onTimeRate ?? 0}%`} color={c.text} muted={c.muted} />
+              {passport.creditScoreOffered !== false && <Metric label="Credit score" value={String(passport.creditScore?.score ?? '—')} color={c.text} muted={c.muted} />}
+              <Metric label="Rental records" value={String(passport.agreements.total)} color={c.text} muted={c.muted} />
+              <Metric label="Completed" value={`${passport.payments.onTimePct}%`} color={c.text} muted={c.muted} />
             </View>
 
             <View style={[s.paymentWell, neuInset(c)]}>
@@ -110,7 +113,7 @@ export default function TenantPassportScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[s.paymentLabel, { color: c.muted }]}>Recorded rent payments</Text>
                 <Text style={[s.paymentValue, { color: c.text }]}>
-                  {formatCompact(passport.paymentSummary?.totalPaid ?? 0)}
+                  {formatCompact(passport.payments.lifetimeTotalGhs ?? 0)}
                 </Text>
               </View>
               <Text style={[s.privateLabel, { color: c.muted }]}>PRIVATE</Text>

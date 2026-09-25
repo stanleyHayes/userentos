@@ -12,6 +12,7 @@ import { param } from '../utils/params.js'
 import { signDownloadToken } from '../services/authService.js'
 import { User } from '../models/User.js'
 import { CreditScore } from '../models/CreditScore.js'
+import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { Payment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { TenantProfile } from '../models/TenantProfile.js'
@@ -71,10 +72,17 @@ function verifyPurposeToken<T extends { purpose: string }>(
 
 // Build the structured passport data for a given user. Defensive against
 // missing related records — never throws.
-async function buildPassportData(userId: string) {
+// A shared link is a summary for a prospective landlord: it carries no contact
+// address or exact lifetime spend, which stay on the tenant's own copy.
+type PassportAudience = 'owner' | 'shared'
+
+async function buildPassportData(userId: string, audience: PassportAudience = 'owner') {
+  const shared = audience === 'shared'
+  // A credit score is only computed and shared where credit reporting is offered.
+  const creditScoreOffered = isRegulatedFeatureEnabled('credit_reporting')
   const [user, creditScoreDoc, payments, agreements, tenantProfile] = await Promise.all([
     User.findById(userId).lean().catch(() => null),
-    CreditScore.findOne({ userId }).lean().catch(() => null),
+    creditScoreOffered ? CreditScore.findOne({ userId }).lean().catch(() => null) : null,
     Payment.find({ tenantId: userId }).lean().catch(() => [] as never[]),
     Agreement.find({ tenantId: userId }).lean().catch(() => [] as never[]),
     TenantProfile.findOne({ userId }).lean().catch(() => null),
@@ -140,6 +148,9 @@ async function buildPassportData(userId: string) {
   // Payment summary
   const completed = payments.filter((p) => p.status === 'completed')
   const totalLifetime = completed.reduce((sum: number, p) => sum + (p.amount || 0), 0)
+  // Completed share of all payment attempts. Older payments carry no rent period,
+  // so punctuality can't be measured; the field keeps its name for compatibility
+  // but every label must say "completed", never "on time".
   const onTimePct = payments.length > 0 ? Math.round((completed.length / payments.length) * 100) : 0
 
   // Agreement summary
@@ -156,11 +167,12 @@ async function buildPassportData(userId: string) {
           id: String((user as unknown as LeanUser)._id),
           firstName: (user as unknown as LeanUser).firstName,
           lastName: (user as unknown as LeanUser).lastName,
-          email: (user as unknown as LeanUser).email,
+          email: shared ? undefined : (user as unknown as LeanUser).email,
           isVerified: !!(user as unknown as LeanUser).isVerified,
           memberSince: (user as unknown as LeanUser).createdAt,
         }
       : null,
+    creditScoreOffered,
     creditScore: creditScoreDoc
       ? {
           score: (creditScoreDoc as unknown as LeanCreditScore).score,
@@ -171,7 +183,7 @@ async function buildPassportData(userId: string) {
     payments: {
       total: payments.length,
       completed: completed.length,
-      lifetimeTotalGhs: totalLifetime,
+      lifetimeTotalGhs: shared ? null : totalLifetime,
       onTimePct,
     },
     streak,
@@ -247,50 +259,53 @@ async function renderPassportPdf(
   doc.moveDown(1)
   drawRule(doc)
 
-  // ─── CREDIT SCORE ───
-  sectionTitle(doc, 'Credit Score')
-  if (data.creditScore) {
-    const scoreX = 48
-    const scoreY = doc.y
-    doc.roundedRect(scoreX, scoreY, 110, 90, 8).fill(ACCENT)
-    doc.fillColor(PRIMARY).font('Helvetica-Bold').fontSize(36)
-      .text(String(data.creditScore.score), scoreX, scoreY + 14, { width: 110, align: 'center' })
-    doc.font('Helvetica').fontSize(9).fillColor(MUTED)
-      .text('out of 100', scoreX, scoreY + 58, { width: 110, align: 'center' })
-    doc.fillColor(PRIMARY).font('Helvetica-Bold').fontSize(10)
-      .text(scoreLabel(data.creditScore.score), scoreX, scoreY + 72, { width: 110, align: 'center' })
+  // ─── CREDIT SCORE ─── omitted entirely where credit reporting isn't offered,
+  // rather than implying the tenant has no score.
+  if (data.creditScoreOffered) {
+    sectionTitle(doc, 'Credit Score')
+    if (data.creditScore) {
+      const scoreX = 48
+      const scoreY = doc.y
+      doc.roundedRect(scoreX, scoreY, 110, 90, 8).fill(ACCENT)
+      doc.fillColor(PRIMARY).font('Helvetica-Bold').fontSize(36)
+        .text(String(data.creditScore.score), scoreX, scoreY + 14, { width: 110, align: 'center' })
+      doc.font('Helvetica').fontSize(9).fillColor(MUTED)
+        .text('out of 100', scoreX, scoreY + 58, { width: 110, align: 'center' })
+      doc.fillColor(PRIMARY).font('Helvetica-Bold').fontSize(10)
+        .text(scoreLabel(data.creditScore.score), scoreX, scoreY + 72, { width: 110, align: 'center' })
 
-    // Factor breakdown
-    const factorsX = scoreX + 130
-    let fy = scoreY + 4
-    doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(10).text('Factor Breakdown', factorsX, fy)
-    fy += 16
-    const factors = data.creditScore.factors ?? {}
-    const factorRows: { label: string; value: number; max: number }[] = [
-      { label: 'Payment History', value: (factors as Record<string, unknown>).paymentHistory as number ?? 0, max: 40 },
-      { label: 'Savings Discipline', value: (factors as Record<string, unknown>).savingsConsistency as number ?? 0, max: 20 },
-      { label: 'Agreement Compliance', value: (factors as Record<string, unknown>).agreementCompliance as number ?? 0, max: 20 },
-      { label: 'Dispute Record', value: (factors as Record<string, unknown>).disputeRecord as number ?? 0, max: 10 },
-      { label: 'Account Tenure', value: (factors as Record<string, unknown>).accountAge as number ?? 0, max: 10 },
-    ]
-    for (const r of factorRows) {
-      doc.font('Helvetica').fontSize(9).fillColor(TEXT).text(r.label, factorsX, fy, { width: 140 })
-      // Bar
-      const barX = factorsX + 150
-      const barW = 200
-      const filled = Math.max(0, Math.min(1, r.value / r.max)) * barW
-      doc.roundedRect(barX, fy + 2, barW, 6, 3).fill(RULE)
-      doc.roundedRect(barX, fy + 2, filled, 6, 3).fill(PRIMARY)
-      doc.fillColor(MUTED).font('Helvetica').fontSize(8)
-        .text(`${r.value}/${r.max}`, barX + barW + 6, fy, { width: 50 })
-      fy += 14
+      // Factor breakdown
+      const factorsX = scoreX + 130
+      let fy = scoreY + 4
+      doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(10).text('Factor Breakdown', factorsX, fy)
+      fy += 16
+      const factors = data.creditScore.factors ?? {}
+      const factorRows: { label: string; value: number; max: number }[] = [
+        { label: 'Payment History', value: (factors as Record<string, unknown>).paymentHistory as number ?? 0, max: 40 },
+        { label: 'Savings Discipline', value: (factors as Record<string, unknown>).savingsConsistency as number ?? 0, max: 20 },
+        { label: 'Agreement Compliance', value: (factors as Record<string, unknown>).agreementCompliance as number ?? 0, max: 20 },
+        { label: 'Dispute Record', value: (factors as Record<string, unknown>).disputeRecord as number ?? 0, max: 10 },
+        { label: 'Account Tenure', value: (factors as Record<string, unknown>).accountAge as number ?? 0, max: 10 },
+      ]
+      for (const r of factorRows) {
+        doc.font('Helvetica').fontSize(9).fillColor(TEXT).text(r.label, factorsX, fy, { width: 140 })
+        // Bar
+        const barX = factorsX + 150
+        const barW = 200
+        const filled = Math.max(0, Math.min(1, r.value / r.max)) * barW
+        doc.roundedRect(barX, fy + 2, barW, 6, 3).fill(RULE)
+        doc.roundedRect(barX, fy + 2, filled, 6, 3).fill(PRIMARY)
+        doc.fillColor(MUTED).font('Helvetica').fontSize(8)
+          .text(`${r.value}/${r.max}`, barX + barW + 6, fy, { width: 50 })
+        fy += 14
+      }
+      doc.y = Math.max(scoreY + 100, fy + 4)
+    } else {
+      noData(doc, 'No credit score on record yet.')
     }
-    doc.y = Math.max(scoreY + 100, fy + 4)
-  } else {
-    noData(doc, 'No credit score on record yet.')
-  }
 
-  drawRule(doc)
+    drawRule(doc)
+  }
 
   // ─── PAYMENT HISTORY ───
   sectionTitle(doc, 'Payment History')
@@ -298,8 +313,8 @@ async function renderPassportPdf(
     statRow(doc, [
       { label: 'Lifetime Payments', value: String(data.payments.total) },
       { label: 'Completed', value: String(data.payments.completed) },
-      { label: 'On-Time %', value: `${data.payments.onTimePct}%` },
-      { label: 'Lifetime Total', value: `GHS ${data.payments.lifetimeTotalGhs.toLocaleString()}` },
+      { label: 'Completed %', value: `${data.payments.onTimePct}%` },
+      ...(data.payments.lifetimeTotalGhs === null ? [] : [{ label: 'Lifetime Total', value: `GHS ${data.payments.lifetimeTotalGhs.toLocaleString()}` }]),
     ])
   } else {
     noData(doc, 'No payment history yet.')
@@ -326,7 +341,7 @@ async function renderPassportPdf(
   statRow(doc, [
     { label: 'Active', value: String(data.agreements.active) },
     { label: 'Past', value: String(data.agreements.past) },
-    { label: 'On-Time Ratio', value: `${data.agreements.onTimePaymentRatio}%` },
+    { label: 'Payments Completed', value: `${data.agreements.onTimePaymentRatio}%` },
     { label: 'Eviction History', value: data.agreements.noEvictionHistory ? 'None' : 'Disclosed' },
   ])
 
@@ -466,7 +481,7 @@ async function streamPassportPdfResponse(
   userId: string,
   shareUrl?: string,
 ) {
-  const data = await buildPassportData(userId)
+  const data = await buildPassportData(userId, shareUrl ? 'shared' : 'owner')
   const lastName = (data.user?.lastName ?? 'tenant').toLowerCase().replace(/[^a-z0-9-]/g, '')
   const filename = `rentos-tenant-passport-${lastName}.pdf`
   res.setHeader('Content-Type', 'application/pdf')
@@ -523,7 +538,7 @@ const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
     error(res, 'Invalid or expired share link', 404)
     return
   }
-  const data = await buildPassportData(payload.userId)
+  const data = await buildPassportData(payload.userId, 'shared')
   success(res, data)
 })
 

@@ -1793,10 +1793,12 @@ export interface TenantPassportData {
     id: string
     firstName: string
     lastName: string
-    email: string
+    email?: string
     isVerified: boolean
     memberSince?: string
   } | null
+  /** false where credit reporting isn't offered; the score is then always null. */
+  creditScoreOffered?: boolean
   creditScore: {
     score: number
     factors: {
@@ -1808,7 +1810,8 @@ export interface TenantPassportData {
     } | null
     calculatedAt: string
   } | null
-  payments: { total: number; completed: number; lifetimeTotalGhs: number; onTimePct: number }
+  // lifetimeTotalGhs is null on shared links; onTimePct is the completed share, not punctuality.
+  payments: { total: number; completed: number; lifetimeTotalGhs: number | null; onTimePct: number }
   streak: { current: number; longest: number; lastPaymentDate?: string } | null
   agreements: {
     active: number
