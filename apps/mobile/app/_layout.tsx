@@ -16,6 +16,8 @@ import {
   Outfit_700Bold,
   Outfit_800ExtraBold,
 } from '@expo-google-fonts/outfit'
+// Only the splash wordmark weight; the package index would bundle all 18 files.
+import { Fraunces_800ExtraBold } from '@expo-google-fonts/fraunces/800ExtraBold'
 import * as ExpoSplashScreen from 'expo-splash-screen'
 import { AnimatedSplashScreen } from '../components/SplashScreen'
 import { useThemeColors } from '../lib/theme'
@@ -83,6 +85,7 @@ export default function RootLayout() {
     Outfit_600SemiBold,
     Outfit_700Bold,
     Outfit_800ExtraBold,
+    Fraunces_800ExtraBold,
   })
 
   useEffect(() => {
