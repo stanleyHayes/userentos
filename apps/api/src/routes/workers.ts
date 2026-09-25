@@ -249,6 +249,9 @@ router.get('/:id/reviews', authenticate, async (req, res) => {
 
   const reviews = bookings.map((b) => ({
     id: (b._id as { toString(): string }).toString(),
+    // Lets the client hide "Report" on the viewer's own review without
+    // exposing who wrote the others.
+    mine: b.requesterId === req.user?.userId,
     rating: b.rating,
     review: b.review,
     createdAt: b.createdAt,
