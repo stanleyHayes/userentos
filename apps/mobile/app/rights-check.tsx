@@ -183,7 +183,7 @@ export default function RightsCheckScreen() {
                 <Text style={[s.lawRef, { color: c.primary }]}>{v.law}</Text>
                 <Text style={[s.verdictBody, { color: c.textLight }]}>{v.explanation}</Text>
                 <View style={[s.penalty, neuInset(c)]}>
-                  <Text style={[s.penaltyLabel, { color: c.muted }]}>Maximum penalty</Text>
+                  <Text style={[s.penaltyLabel, { color: c.muted }]}>Possible outcome</Text>
                   <Text style={[s.penaltyText, { color: c.text }]}>{v.maxPenalty}</Text>
                 </View>
               </View>

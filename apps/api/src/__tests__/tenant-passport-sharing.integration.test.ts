@@ -22,7 +22,7 @@ describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('tenant passport shar
 
   beforeAll(async () => {
     await mongoose.connect(uri)
-    await User.collection.insertOne({ _id, email, firstName: 'Ama', lastName: 'Passport', roles: ['tenant'], activeRole: 'tenant', passwordHash: 'x', isVerified: true })
+    await User.collection.insertOne({ _id, email, firstName: 'Ama', lastName: 'Passport', roles: ['tenant'], activeRole: 'tenant', passwordHash: 'x', isVerified: true, verificationStatus: 'verified' })
     await CreditScore.collection.insertOne({ userId: tenantId, score: 81, factors: { paymentHistory: 30 }, calculatedAt: new Date() })
     await Payment.collection.insertMany([
       { tenantId, amount: 1500, status: 'completed', purpose: 'rent', reference: `PP-${tenantId}-1`, createdAt: new Date() },
@@ -51,6 +51,13 @@ describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('tenant passport shar
     expect(data.user).toMatchObject({ firstName: 'Ama', lastName: 'Passport', isVerified: true })
     expect(data.payments).toMatchObject({ total: 2, completed: 1, lifetimeTotalGhs: null })
     expect(JSON.stringify(data)).not.toContain(email)
+  })
+
+  it('shows the ID badge only after an admin review, not for any isVerified account', async () => {
+    await User.updateOne({ _id }, { $set: { verificationStatus: 'none' } })
+    const own = await (await fetch(`${base()}/me/json`, { headers: auth })).json()
+    expect(own.data.user.isVerified).toBe(false)
+    await User.updateOne({ _id }, { $set: { verificationStatus: 'verified' } })
   })
 
   it('omits the credit score everywhere when credit reporting is not offered', async () => {

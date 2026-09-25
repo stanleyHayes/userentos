@@ -37,41 +37,44 @@ export interface Violation {
 export type Severity = 'high' | 'medium' | 'low'
 
 /** What the classifier can say. Mirrors app/legal/taxonomy.py. */
+// maxPenalty holds the likely outcome in plain words. Specific fines or prison
+// terms are not quoted unless verified against the Act, because a wrong one
+// accuses a landlord of a crime they may not have committed.
 export const LEGAL_LABELS: Record<string, { title: string; law: string; severity: Severity; explanation: string; maxPenalty: string }> = {
   excessive_advance: {
     title: 'Excessive Rent Advance',
     law: RENT_LAW.advanceCitation,
     severity: 'high',
     explanation: `Under Ghanaian law a landlord cannot demand more than ${RENT_LAW.maxAdvanceMonths} months rent in advance. A demand for ${RENT_LAW.maxAdvanceMonths + 1} months or more is illegal regardless of what the tenancy agreement says.`,
-    maxPenalty: 'Fine up to 500 penalty units or imprisonment up to 6 months, or both',
+    maxPenalty: 'An offence under the Rent Act; the Rent Control Department or a court decides the penalty and can order the excess refunded',
   },
   illegal_eviction: {
     title: 'Illegal Eviction',
     law: RENT_LAW.evictionCitation,
     severity: 'high',
     explanation: 'Your landlord cannot evict you without a court order. Self-help evictions — changing locks, removing your belongings, or threatening you — are illegal in Ghana.',
-    maxPenalty: 'Fine or imprisonment up to 3 months',
+    maxPenalty: 'A court can stop the eviction and order the landlord to restore you to the property',
   },
   illegal_rent_increase: {
     title: 'Illegal Rent Increase',
-    law: 'Rent Act, 1963 (Act 220), Section 25(2)',
+    law: 'Rent Act, 1963 (Act 220)',
     severity: 'medium',
     explanation: 'Rent cannot be increased during an existing lease without proper notice and agreement. Increases must follow the legal procedure and cannot be arbitrary.',
-    maxPenalty: 'Fine up to 250 penalty units',
+    maxPenalty: 'The Rent Control Department can refuse or set aside an improper increase',
   },
   deposit_withholding: {
     title: 'Security Deposit Violation',
     law: RENT_LAW.advanceCitation,
     severity: 'medium',
     explanation: 'A security deposit is refundable at the end of a tenancy, less legitimate deductions for unpaid rent or damage beyond normal wear and tear. It cannot simply be kept.',
-    maxPenalty: 'Refund ordered by Rent Control, plus possible fine',
+    maxPenalty: 'The Rent Control Department or a court can order a refund',
   },
   utility_disconnection: {
     title: 'Illegal Disconnection of Utilities',
     law: RENT_LAW.evictionCitation,
     severity: 'high',
     explanation: 'Cutting water or electricity to force a tenant out is a self-help eviction and is illegal, whatever the state of the rent account.',
-    maxPenalty: 'Fine or imprisonment up to 3 months',
+    maxPenalty: 'A court can order the supply restored and award damages',
   },
   entry_without_notice: {
     title: 'Violation of Right to Quiet Enjoyment',

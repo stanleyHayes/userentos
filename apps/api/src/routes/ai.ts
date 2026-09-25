@@ -17,7 +17,7 @@ import {
 import { success, error } from '../utils/response.js'
 import { logger } from '../utils/logger.js'
 import { aiLimiter, publicLimiter } from '../middleware/rateLimit.js'
-import { assessAdvance } from '../services/legal/rentLaw.js'
+import { assessAdvance, RENT_LAW } from '../services/legal/rentLaw.js'
 import {
   LEGAL_LABELS,
   classifyComplaint,
@@ -138,27 +138,27 @@ const violationRules: Array<{
   {
     keywords: [['evict', 'evicting', 'kick out', 'kicked out', 'throw out', 'threw out', 'throw me out', 'remove me', 'locked out', 'lock me out', 'changed the lock', 'changed lock', 'change the lock', 'padlock', 'padlocked', 'bolt the door', 'chase me out', 'must leave', 'pack out']],
     violation: {
-      law: 'Rent Control Act (Act 220), Sections 17-20',
+      law: RENT_LAW.evictionCitation,
       violation: 'Illegal Eviction',
       explanation: 'Your landlord cannot evict you without a court order. Self-help evictions — such as changing locks, removing your belongings, or threatening you — are illegal in Ghana.',
-      maxPenalty: 'Fine or imprisonment up to 3 months',
+      maxPenalty: LEGAL_LABELS.illegal_eviction.maxPenalty,
     },
     severity: 'high',
   },
   {
     keywords: [['increased', 'increase', 'raised', 'hiked', 'doubled', 'tripled', 'went up', 'going up', 'new price', 'higher rent'], ['without notice', 'no notice', 'middle of', 'arbitrar', 'immediately', 'twice this year', 'again', 'without agreement', 'without any']],
     violation: {
-      law: 'Rent Control Act (Act 220), Section 25(2)',
+      law: LEGAL_LABELS.illegal_rent_increase.law,
       violation: 'Illegal Rent Increase',
       explanation: 'Landlords cannot increase rent during an existing lease without proper notice and agreement. Rent increases must follow legal procedures and cannot be arbitrary.',
-      maxPenalty: 'Fine up to 250 penalty units',
+      maxPenalty: LEGAL_LABELS.illegal_rent_increase.maxPenalty,
     },
     severity: 'medium',
   },
   {
     keywords: [['deposit', 'security deposit', 'caution money'], ['refuses to return', 'refuse to return', 'refuses to refund', 'refuse to refund', 'will not return', 'will not refund', 'won\'t give', 'won\'t return', 'not returned', 'not refunded', 'not giving', 'never returned', 'is keeping', 'has kept', 'withheld', 'withholding']],
     violation: {
-      law: 'Rent Control Act (Act 220), Section 25(4)',
+      law: 'Your tenancy agreement and the Rent Act, 1963 (Act 220)',
       violation: 'Security Deposit Violation',
       explanation: 'Your landlord is required to return your security deposit at the end of your tenancy, minus any legitimate deductions for damages. Refusing to return the deposit without justification is illegal.',
       maxPenalty: 'Court order for refund plus damages',
@@ -168,10 +168,10 @@ const violationRules: Array<{
   {
     keywords: [['water', 'electricity', 'power', 'light', 'utility', 'utilities', 'ecg', 'gwcl'], ['cut', 'cut off', 'disconnected', 'disconnect', 'switched off', 'shut off', 'removed the meter', 'no water', 'no light', 'no power', 'no electricity']],
     violation: {
-      law: 'Rent Control Act (Act 220), Section 12',
+      law: RENT_LAW.evictionCitation,
       violation: 'Illegal Disconnection of Utilities (Self-Help Eviction)',
       explanation: 'Your landlord cannot cut off your water, electricity, or other utilities as a way to force you out or punish you. This is considered a form of illegal self-help eviction.',
-      maxPenalty: 'Fine or imprisonment up to 3 months',
+      maxPenalty: LEGAL_LABELS.utility_disconnection.maxPenalty,
     },
     severity: 'high',
   },
@@ -190,7 +190,7 @@ const violationRules: Array<{
     violation: {
       law: LEGAL_LABELS.receipt_refusal.law,
       violation: 'Refusal to Issue Rent Receipt',
-      explanation: 'Your landlord is legally required to provide a receipt for every rent payment. Refusing to issue receipts is a violation of the Rent Control Act.',
+      explanation: 'Your landlord is legally required to provide a receipt for every rent payment. Refusing to issue receipts is a breach of the Rent Act, 1963 (Act 220).',
       maxPenalty: 'Requires review of applicable enforcement provisions',
     },
     severity: 'low',
@@ -198,22 +198,12 @@ const violationRules: Array<{
   {
     keywords: [['broken', 'leaking', 'leak', 'crack', 'collapsed', 'mould', 'mold', 'falling apart', 'not fixed', 'never fixed'], ['refuses to fix', 'refuse to fix', 'will not fix', 'won\'t fix', 'refuses to repair', 'will not repair', 'has ignored', 'ignores', 'nothing is done', 'nothing has been done', 'not fixed', 'never fixed', 'still not']],
     violation: {
-      law: 'Rent Control Act (Act 220), Section 12(1)',
+      law: RENT_LAW.maintenanceCitation,
       violation: 'Failure to Maintain Premises',
       explanation: 'Your landlord has a legal duty to keep the property in a habitable condition and carry out necessary structural repairs. Refusing to fix essential repairs like plumbing, roofing, or structural damage is a violation.',
       maxPenalty: 'Court order to carry out repairs plus damages',
     },
     severity: 'medium',
-  },
-  {
-    keywords: [['sublet', 'subletting', 'sub-let', 'sub let'], ['refuse', 'won\'t allow', 'denied', 'not allowed', 'reject']],
-    violation: {
-      law: 'Rent Control Act (Act 220), Section 14',
-      violation: 'Unreasonable Refusal of Subletting',
-      explanation: 'While subletting typically requires landlord consent, a landlord cannot unreasonably refuse a request to sublet. If you have a valid reason for subletting and the proposed sub-tenant is suitable, an outright refusal may be unlawful.',
-      maxPenalty: 'Court declaration of unreasonable refusal',
-    },
-    severity: 'low',
   },
 ]
 

@@ -805,7 +805,7 @@ export function LandingPage() {
                         <p className="mt-1 text-xs font-semibold text-muted dark:text-gray-500">{violation.law}</p>
                         <p className="mt-3 text-sm leading-relaxed text-[#0f1f33] dark:text-gray-200">{violation.explanation}</p>
                         <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted dark:border-[#252a3a] dark:text-gray-500">
-                          Maximum penalty: {violation.maxPenalty}
+                          Possible outcome: {violation.maxPenalty}
                         </p>
                       </div>
                     ))}

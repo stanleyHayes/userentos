@@ -23,6 +23,7 @@ interface LeanUser {
   lastName?: string
   email?: string
   isVerified?: boolean
+  verificationStatus?: string
   createdAt?: Date
 }
 
@@ -168,7 +169,9 @@ async function buildPassportData(userId: string, audience: PassportAudience = 'o
           firstName: (user as unknown as LeanUser).firstName,
           lastName: (user as unknown as LeanUser).lastName,
           email: shared ? undefined : (user as unknown as LeanUser).email,
-          isVerified: !!(user as unknown as LeanUser).isVerified,
+          // Only an admin ID review counts; isVerified is also set on accounts
+          // that were created or invited without any document check.
+          isVerified: (user as unknown as LeanUser).verificationStatus === 'verified',
           memberSince: (user as unknown as LeanUser).createdAt,
         }
       : null,
@@ -245,9 +248,9 @@ async function renderPassportPdf(
   if (u?.isVerified) {
     const labelY = doc.y - 26
     const badgeX = 48 + doc.widthOfString(fullName) + 12
-    doc.roundedRect(badgeX, labelY + 4, 102, 20, 10).fill('#10b981')
+    doc.roundedRect(badgeX, labelY + 4, 116, 20, 10).fill('#10b981')
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9)
-      .text('Ghana Card Verified', badgeX + 8, labelY + 10)
+      .text('ID reviewed by RentOS', badgeX + 8, labelY + 10)
     doc.fillColor(TEXT)
   }
   doc.font('Helvetica').fontSize(10).fillColor(MUTED)
