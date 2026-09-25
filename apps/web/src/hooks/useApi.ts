@@ -2218,6 +2218,23 @@ export function useUpdateEmployee() {
   })
 }
 
+/** The caller's employment links, including invites awaiting their confirmation. */
+export function useMyEmployments() {
+  return useQuery({
+    queryKey: ['employments', 'mine'],
+    queryFn: () => api.get<PaginatedResponse<Employment & { employerName?: string }>>('/employers/employments/mine'),
+  })
+}
+
+export function useRespondToEmployment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, accept }: { id: string; accept: boolean }) =>
+      api.post<Employment>(`/employers/employments/${id}/${accept ? 'accept' : 'decline'}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employments', 'mine'] }),
+  })
+}
+
 export function useMyMandates() {
   return useQuery({
     queryKey: ['mandates', 'mine'],
@@ -2236,6 +2253,7 @@ export function useCreateMandate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: {
+      employmentId?: string
       allocationType: 'rent' | 'savings' | 'loan_repayment' | 'wallet_topup'
       targetEntityId?: string
       amountType: 'fixed' | 'percentage'

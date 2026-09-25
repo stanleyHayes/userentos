@@ -13,8 +13,9 @@ import { round2 } from '../utils/money.js'
 
 /**
  * Compute deduction amount per mandate for a given employee's net salary.
- * Caps total voluntary deductions to MAX_DEDUCTION_RATIO of net salary
- * (Labour Act 2003 — voluntary deductions must keep employee with adequate take-home pay).
+ * Caps total voluntary deductions at MAX_DEDUCTION_RATIO of net salary. This is a
+ * RentOS policy limit to protect take-home pay, not a figure taken from statute —
+ * an employer's own legal obligations on deductions still apply on top of it.
  */
 const MAX_DEDUCTION_RATIO = 1 / 3
 
@@ -57,7 +58,7 @@ export async function buildPayrollRun(employerId: string, periodLabel: string, p
           targetEntityType: m.targetEntityType,
           amount: 0,
           status: 'skipped',
-          failureReason: 'Statutory deduction cap reached',
+          failureReason: 'Deduction policy limit reached (one-third of net salary)',
         })
         continue
       }

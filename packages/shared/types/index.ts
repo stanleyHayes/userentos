@@ -742,7 +742,7 @@ export interface FinancingContract {
 // --- Employer / Payroll Deductions ---
 
 export type EmployerVerificationStatus = 'pending' | 'verified' | 'rejected'
-export type EmploymentStatus = 'active' | 'on_leave' | 'terminated' | 'pending'
+export type EmploymentStatus = 'active' | 'on_leave' | 'terminated' | 'pending' | 'declined'
 export type PayrollCycle = 'weekly' | 'biweekly' | 'monthly'
 export type DeductionAllocationType = 'rent' | 'savings' | 'loan_repayment' | 'wallet_topup'
 export type DeductionTargetType = 'agreement' | 'savings_plan' | 'financing_contract' | 'wallet'
@@ -777,7 +777,11 @@ export interface Employment {
   employerId: string
   employerName?: string
   userId: string
+  /** Shown only after the employee confirms the link. */
   employeeName?: string
+  /** The invited address, shown while the link awaits the employee's confirmation. */
+  inviteEmail?: string
+  employeeAcceptedAt?: string
   staffNumber?: string
   jobTitle?: string
   netMonthlySalary: number

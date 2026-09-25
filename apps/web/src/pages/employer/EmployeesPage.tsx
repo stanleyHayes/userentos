@@ -177,20 +177,24 @@ export function EmployerEmployeesPage() {
               <tbody>
                 {employees.map((e) => (
                   <tr key={e.id} className="border-b border-border/20 dark:border-[#252a3a]/20">
-                    <td className="py-3 px-4 font-bold text-primary-dark dark:text-white">{e.employeeName ?? e.userId.slice(0, 8)}</td>
+                    <td className="py-3 px-4 font-bold text-primary-dark dark:text-white">{e.employeeName ?? e.inviteEmail ?? e.userId.slice(0, 8)}</td>
                     <td className="py-3 px-4 text-muted dark:text-gray-400">{e.staffNumber ?? '—'}</td>
                     <td className="py-3 px-4 text-muted dark:text-gray-400">{e.jobTitle ?? '—'}</td>
                     <td className="py-3 px-4 text-right font-semibold text-primary-dark dark:text-white">{formatCurrency(e.netMonthlySalary)}</td>
                     <td className="py-3 px-4 text-muted dark:text-gray-400">{formatDate(e.startDate).split(',')[0]}</td>
                     <td className="py-3 px-4">
-                      <Badge variant={e.status === 'active' ? 'success' : e.status === 'terminated' ? 'danger' : 'muted'} className="text-[10px] capitalize">{e.status.replace('_', ' ')}</Badge>
+                      <Badge variant={e.status === 'active' ? 'success' : e.status === 'terminated' || e.status === 'declined' ? 'danger' : e.status === 'pending' ? 'warning' : 'muted'} className="text-[10px] capitalize">{e.status === 'pending' ? 'awaiting confirmation' : e.status.replace('_', ' ')}</Badge>
                     </td>
                     <td className="py-3 px-4">
                       {e.status === 'active' ? (
                         <Button size="sm" variant="outline" onClick={() => update.mutate({ id: e.id, status: 'terminated', endDate: new Date().toISOString().slice(0, 10) })}>
                           <UserMinus size={12} /> Terminate
                         </Button>
-                      ) : (
+                      ) : e.status === 'pending' ? (
+                        <Button size="sm" variant="outline" onClick={() => update.mutate({ id: e.id, status: 'terminated' })}>
+                          <UserMinus size={12} /> Cancel invite
+                        </Button>
+                      ) : e.status === 'declined' ? null : (
                         <Button size="sm" variant="outline" onClick={() => update.mutate({ id: e.id, status: 'active' })}>
                           <UserCheck size={12} /> Reactivate
                         </Button>
@@ -206,7 +210,7 @@ export function EmployerEmployeesPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title="Add Employee">
         <div className="space-y-4">
-          <p className="text-xs text-muted dark:text-gray-500">The employee must already have a RentOS account. Use their registered email.</p>
+          <p className="text-xs text-muted dark:text-gray-500">The employee must already have a RentOS account. Use their registered email. They are asked to confirm, and no deductions can be set up until they do.</p>
           <Input id="add-emp-email" label="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           <Input id="add-emp-staff" label="Staff number (optional)" value={form.staffNumber} onChange={(e) => setForm((f) => ({ ...f, staffNumber: e.target.value }))} />
           <Input id="add-emp-title" label="Job title (optional)" value={form.jobTitle} onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))} />
