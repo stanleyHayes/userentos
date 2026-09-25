@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { Types } from 'mongoose'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
+import { z } from 'zod'
 import { authenticate, requirePermission, isSuperAdmin } from '../middleware/auth.js'
 import { Invitation, hashInviteToken } from '../models/Invitation.js'
 import { User } from '../models/User.js'
@@ -12,6 +13,7 @@ import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { buildInviteUrl, sendInvitationEmail } from '../services/email.js'
 import { checkAndAward } from '../services/achievements.js'
+import { USER_ROLES, PERMISSIONS, SUPER_ADMIN_ONLY_ROLES } from '../utils/accessControl.js'
 
 const router = Router()
 
@@ -42,19 +44,40 @@ async function inviterName(userId: string): Promise<string | undefined> {
   return `${user.firstName} ${user.lastName}`.trim() || undefined
 }
 
-/** Delegation guard: you may only hand out access you hold yourself. */
-function canDelegate(req: Parameters<typeof isSuperAdmin>[0], roles: string[], permissions: string[]): string | null {
+/**
+ * Delegation guard: you may only hand out access you hold yourself — the same
+ * rule POST /users and PATCH /users/:id/permissions apply. A non-super-admin
+ * may never grant super_admin/admin, may grant only roles they hold, and only
+ * permissions they hold. Inputs must already be validated strings (see
+ * inviteSchema): an object element would not match any includes() check.
+ */
+function canDelegate(req: Parameters<typeof isSuperAdmin>[0], roles: readonly string[], permissions: readonly string[]): string | null {
   if (isSuperAdmin(req)) return null
-  if (roles.includes('super_admin') || roles.includes('admin')) {
-    return 'Only a super admin can delegate admin roles'
+  const heldRoles = new Set(req.user!.roles ?? [])
+  const forbiddenRoles = roles.filter((r) => (SUPER_ADMIN_ONLY_ROLES as readonly string[]).includes(r) || !heldRoles.has(r))
+  if (forbiddenRoles.length) {
+    return `You cannot grant the following role(s): ${forbiddenRoles.join(', ')}`
   }
-  const held = new Set(req.user!.permissions)
-  const escalated = permissions.filter((p) => !held.has(p))
+  const heldPermissions = new Set(req.user!.permissions ?? [])
+  const escalated = permissions.filter((p) => !heldPermissions.has(p))
   if (escalated.length) {
     return `You cannot grant permissions you do not hold: ${escalated.join(', ')}`
   }
   return null
 }
+
+const dedupe = <T>(values: T[]) => [...new Set(values)]
+
+/** Only real role/permission strings — never objects Mongoose would cast. */
+const inviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email('A valid email is required'),
+  roles: z.array(z.enum(USER_ROLES), { error: 'roles must be an array of known roles' })
+    .min(1, 'At least one role is required')
+    .transform(dedupe),
+  permissions: z.array(z.enum(PERMISSIONS), { error: 'permissions must be an array of known permissions' })
+    .default([])
+    .transform(dedupe),
+})
 
 /** Response shape — never leaks the stored token hash. */
 function inviteView(invitation: { _id: unknown; email: string; roles: string[]; permissions: string[]; status: string; expiresAt: Date; createdAt?: Date }) {
@@ -77,28 +100,28 @@ router.get('/', authenticate, requirePermission('users:invite'), async (_req, re
 
 // Send an invitation
 router.post('/', authenticate, requirePermission('users:invite'), async (req, res) => {
-  const { email, roles, permissions } = req.body
-
-  if (!email || !roles?.length) {
-    error(res, 'Email and at least one role are required')
+  const parsed = inviteSchema.safeParse(req.body)
+  if (!parsed.success) {
+    error(res, parsed.error.issues[0].message)
     return
   }
+  const { email, roles, permissions } = parsed.data
 
-  const delegationError = canDelegate(req, roles, permissions || [])
+  const delegationError = canDelegate(req, roles, permissions)
   if (delegationError) {
     error(res, delegationError, 403)
     return
   }
 
   // Check if user already exists
-  const existingUser = await User.findOne({ email: email.toLowerCase() })
+  const existingUser = await User.findOne({ email })
   if (existingUser) {
     error(res, 'A user with this email already exists', 409)
     return
   }
 
   // Check for pending invitation
-  const existingInvite = await Invitation.findOne({ email: email.toLowerCase(), status: 'pending' })
+  const existingInvite = await Invitation.findOne({ email, status: 'pending' })
   if (existingInvite) {
     error(res, 'A pending invitation already exists for this email', 409)
     return
@@ -108,9 +131,9 @@ router.post('/', authenticate, requirePermission('users:invite'), async (req, re
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS)
 
   const invitation = await Invitation.create({
-    email: email.toLowerCase(),
+    email,
     roles,
-    permissions: permissions || [],
+    permissions,
     invitedBy: req.user!.userId,
     token: hashInviteToken(rawToken),
     expiresAt,

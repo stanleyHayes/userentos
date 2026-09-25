@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { USER_ROLES } from '../utils/accessControl.js'
 
 export interface IUser extends Document {
   email: string
@@ -62,8 +63,10 @@ const userSchema = new Schema<IUser>({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   passwordHash: { type: String, required: true },
-  roles: { type: [String], required: true },
-  activeRole: { type: String, required: true },
+  // Enum-checked per element so a cast object ({ _id: 'x' }) or an invented
+  // role can never be persisted, whichever route wrote it.
+  roles: { type: [{ type: String, enum: USER_ROLES }], required: true },
+  activeRole: { type: String, enum: USER_ROLES, required: true },
   permissions: { type: [String], default: [] },
   ghanaCardId: String,
   isVerified: { type: Boolean, default: false },

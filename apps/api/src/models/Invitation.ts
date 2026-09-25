@@ -1,5 +1,6 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 import crypto from 'crypto'
+import { USER_ROLES, PERMISSIONS } from '../utils/accessControl.js'
 
 export interface IInvitation extends Document {
   email: string
@@ -16,8 +17,10 @@ export interface IInvitation extends Document {
 
 const invitationSchema = new Schema<IInvitation>({
   email: { type: String, required: true, lowercase: true },
-  roles: { type: [String], required: true },
-  permissions: { type: [String], default: [] },
+  // Enum-checked per element: the route validates too, but the schema is the
+  // last line if another writer ever skips it.
+  roles: { type: [{ type: String, enum: USER_ROLES }], required: true },
+  permissions: { type: [{ type: String, enum: PERMISSIONS }], default: [] },
   invitedBy: { type: String, required: true },
   status: { type: String, default: 'pending', enum: ['pending', 'accepted', 'expired', 'revoked'] },
   token: { type: String, required: true, unique: true },
