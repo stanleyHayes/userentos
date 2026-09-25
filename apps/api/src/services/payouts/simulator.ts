@@ -13,12 +13,15 @@ import type {
   RecipientResult,
   TransferInput,
   TransferResult,
+  TransferLookup,
   PayoutWebhookEvent,
   PayoutDestination,
 } from './types.js'
 
 type Listener = (event: PayoutWebhookEvent) => void
 const listeners = new Set<Listener>()
+/** Transfers this process simulated, so reconciliation has something to ask. */
+const simulatedTransfers = new Map<string, { providerRef: string; amount: number }>()
 
 /** Subscribe to simulated payout completions. */
 export function onSimulatedPayout(fn: Listener): () => void {
@@ -60,6 +63,7 @@ export const simulatedPayoutProvider: PayoutProvider = {
 
   async sendTransfer(input: TransferInput): Promise<TransferResult> {
     const providerRef = `SIM-TRF-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    simulatedTransfers.set(input.reference, { providerRef, amount: input.amount })
 
     setTimeout(() => {
       emit({
@@ -73,6 +77,12 @@ export const simulatedPayoutProvider: PayoutProvider = {
     }, 2000)
 
     return { providerRef, status: 'pending' }
+  },
+
+  async verifyTransfer(reference: string): Promise<TransferLookup> {
+    // A simulated transfer always succeeds, as its deferred event says.
+    const sent = simulatedTransfers.get(reference)
+    return sent ? { status: 'paid', providerRef: sent.providerRef, amount: sent.amount } : { status: 'not_found' }
   },
 
   verifyWebhook(): boolean {

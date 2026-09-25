@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import { createHmac } from 'crypto'
@@ -10,6 +10,7 @@ import { PayoutAccount } from '../models/PayoutAccount.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { paystackPayoutProvider } from '../services/payouts/paystack.js'
 import { finalizePayout } from '../services/payouts/finalize.js'
+import { TransferRejectedError } from '../services/payouts/types.js'
 
 vi.mock('../models/Payout.js', async () => {
   const actual = await vi.importActual<typeof import('../models/Payout.js')>('../models/Payout.js')
@@ -278,6 +279,42 @@ describe('paystack adapter', () => {
     }))
     expect(reversed.status).toBe('failed')
     expect(reversed.failureReason).toBeTruthy()
+  })
+
+  describe('telling a refusal from an unknown outcome', () => {
+    const transfer = { amount: 500, recipientCode: 'RCP_1', reference: 'PO-1', reason: 'RentOS payout' }
+    const reply = (status: number, body: unknown) => vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify(body), { status }))
+    afterEach(() => vi.restoreAllMocks())
+
+    it('treats an explicit 4xx refusal as "no transfer was created"', async () => {
+      reply(400, { status: false, message: 'Your balance is not enough to fulfil this request' })
+      await expect(paystackPayoutProvider.sendTransfer(transfer)).rejects.toBeInstanceOf(TransferRejectedError)
+    })
+
+    it.each([
+      ['a duplicate reference (a transfer already exists)', () => reply(400, { status: false, message: 'Duplicate Transfer Reference' })],
+      ['a provider 5xx', () => reply(502, { status: false, message: 'Bad gateway' })],
+      ['a timeout', () => vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'))],
+      ['a non-JSON answer', () => vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('<html>oops</html>', { status: 504 }))],
+    ])('leaves %s as an unknown outcome', async (_label, arrange) => {
+      arrange()
+      const failure = await paystackPayoutProvider.sendTransfer(transfer).catch((e: unknown) => e)
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure).not.toBeInstanceOf(TransferRejectedError)
+    })
+
+    it('maps a reconciliation lookup to paid, failed, pending or not found', async () => {
+      reply(200, { status: true, data: { status: 'success', transfer_code: 'TRF_1', amount: 50000 } })
+      await expect(paystackPayoutProvider.verifyTransfer('PO-1')).resolves.toMatchObject({ status: 'paid', providerRef: 'TRF_1', amount: 500 })
+      reply(200, { status: true, data: { status: 'reversed', transfer_code: 'TRF_1', amount: 50000 } })
+      await expect(paystackPayoutProvider.verifyTransfer('PO-1')).resolves.toMatchObject({ status: 'failed' })
+      reply(200, { status: true, data: { status: 'otp', transfer_code: 'TRF_1', amount: 50000 } })
+      await expect(paystackPayoutProvider.verifyTransfer('PO-1')).resolves.toMatchObject({ status: 'pending' })
+      reply(404, { status: false, message: 'Transfer not found' })
+      await expect(paystackPayoutProvider.verifyTransfer('PO-1')).resolves.toEqual({ status: 'not_found' })
+      reply(500, { status: false, message: 'Server error' })
+      await expect(paystackPayoutProvider.verifyTransfer('PO-1')).rejects.toThrow()
+    })
   })
 
   it('rejects non-transfer events so charges are never mistaken for payouts', () => {
