@@ -10,6 +10,7 @@ import { Dispute } from '../models/Dispute.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { hasSignedTenancy } from '../services/tenancyRelationship.js'
 
 const router = Router()
 
@@ -205,9 +206,11 @@ router.get('/:userId', authenticate, async (req, res) => {
 
   if (!isStaff && targetUserId !== requesterId) {
     const isLandlord = roles.includes('landlord') || roles.includes('property_manager')
+    // A draft the landlord wrote proves nothing — only a lease the tenant
+    // signed, or a live application the tenant themselves submitted.
     const related = isLandlord && (
-      (await Agreement.exists({ landlordId: requesterId, tenantId: targetUserId })) ||
-      (await Application.exists({ landlordId: requesterId, tenantId: targetUserId }))
+      (await hasSignedTenancy(requesterId, targetUserId)) ||
+      (await Application.exists({ landlordId: requesterId, tenantId: targetUserId, status: { $in: ['pending', 'approved'] } }))
     )
     if (!related) {
       error(res, 'You can only view the credit score of your own tenants or applicants', 403); return

@@ -13,6 +13,7 @@ import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
+import { tenantHasSigned } from '../services/tenancyRelationship.js'
 
 const createAgreementSchema = z.object({
   propertyId: z.string(),
@@ -81,12 +82,15 @@ export const agreementController = {
     const items = agreements.map((a) => {
       const tenant = userMap.get(a.tenantId)
       const landlord = userMap.get(a.landlordId)
+      // A landlord can draft a lease naming anyone; the tenant's contact
+      // details are only disclosed once the tenant has signed it.
+      const showContact = isAdmin || a.tenantId === userId || tenantHasSigned(a)
       return {
         ...a,
         id: (a._id as Types.ObjectId).toString(),
         tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : undefined,
-        tenantEmail: tenant?.email,
-        tenantPhone: tenant?.phone,
+        tenantEmail: showContact ? tenant?.email : undefined,
+        tenantPhone: showContact ? tenant?.phone : undefined,
         landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
       }
     })
@@ -128,8 +132,8 @@ export const agreementController = {
       error(res, 'You cannot create an agreement with yourself as tenant')
       return
     }
-    const tenant = await User.findById(parsed.data.tenantId).select('_id').lean()
-    if (!tenant) { error(res, 'Tenant not found', 404); return }
+    const tenant = await User.findById(parsed.data.tenantId).select('_id roles').lean()
+    if (!tenant || !(tenant.roles ?? []).includes('tenant')) { error(res, 'Tenant not found', 404); return }
 
     const complianceFlags = checkAgreementCompliance(parsed.data)
     const agreement = await Agreement.create({

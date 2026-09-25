@@ -50,7 +50,9 @@ router.get('/tenants', authenticate, asyncHandler(async (req: Request, res: Resp
   }
 
   const isAdmin = roles.includes('admin') || roles.includes('super_admin')
-  const agreements = await Agreement.find(isAdmin ? {} : { landlordId: userId }).sort({ createdAt: -1 }).lean()
+  // Only people who signed become "tenants" here — a landlord-authored draft
+  // naming an arbitrary user must not disclose that user's email and phone.
+  const agreements = await Agreement.find({ ...(isAdmin ? {} : { landlordId: userId }), tenantSignature: { $nin: [null, ''] } }).sort({ createdAt: -1 }).lean()
   if (agreements.length === 0) { success(res, { items: [] }); return }
 
   // Collect IDs
