@@ -76,8 +76,8 @@ interface AbuseCheckResult {
   advance?: { verdict: 'violation' | 'lawful' | 'unclear'; months?: number; message: string }
   nextSteps: string[]
   contacts: {
-    rentControl: { name: string; phone: string; location: string }
-    chraj: { name: string; phone: string }
+    rentControl: { name: string; phone?: string; location: string }
+    chraj: { name: string; phone?: string; location?: string }
   }
   signUpCta: string
 }
@@ -825,11 +825,16 @@ export function LandingPage() {
                     </ol>
                   </div>
                   <div className="surface-card rounded-2xl border p-5">
-                    <h4 className="flex items-center gap-2 font-display text-base font-extrabold text-[#0f1f33] dark:text-white"><Phone size={18} /> Get help</h4>
+                    <h4 className="flex items-center gap-2 font-display text-base font-extrabold text-[#0f1f33] dark:text-white"><MapPin size={18} /> Get help</h4>
                     <div className="mt-4 space-y-4 text-sm">
-                      <a href={`tel:${abuseResult.contacts.rentControl.phone}`} className="flex items-center gap-2 font-semibold text-primary dark:text-blue-300"><Phone size={14} /> {abuseResult.contacts.rentControl.name}: {abuseResult.contacts.rentControl.phone}</a>
-                      <p className="flex items-start gap-2 text-muted dark:text-gray-400"><MapPin size={14} className="mt-0.5 shrink-0" /> {abuseResult.contacts.rentControl.location}</p>
-                      <a href={`tel:${abuseResult.contacts.chraj.phone}`} className="flex items-center gap-2 font-semibold text-primary dark:text-blue-300"><Phone size={14} /> CHRAJ: {abuseResult.contacts.chraj.phone}</a>
+                      {[abuseResult.contacts.rentControl, abuseResult.contacts.chraj].map((contact) => (
+                        <div key={contact.name} className="space-y-1">
+                          {contact.phone
+                            ? <a href={`tel:${contact.phone}`} className="flex items-center gap-2 font-semibold text-primary dark:text-blue-300"><Phone size={14} /> {contact.name}: {contact.phone}</a>
+                            : <p className="font-semibold text-[#0f1f33] dark:text-white">{contact.name}</p>}
+                          {contact.location && <p className="flex items-start gap-2 text-muted dark:text-gray-400"><MapPin size={14} className="mt-0.5 shrink-0" /> {contact.location}</p>}
+                        </div>
+                      ))}
                     </div>
                     <Link to="/register" className="mt-5 inline-flex">
                       <Button size="sm">Use RentOS to report <ArrowRight size={14} /></Button>

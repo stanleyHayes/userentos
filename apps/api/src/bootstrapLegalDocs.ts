@@ -2,8 +2,15 @@ import { RECEIPT_LEGAL_DOCUMENT, correctLegacyReceiptDocuments } from './service
 /**
  * Idempotent bootstrap for legal document RAG corpus.
  * Seeds Ghanaian rental law documents with embeddings.
- * Safe to run multiple times — skips documents that already exist.
+ * Safe to run multiple times — skips documents that already exist, except
+ * untouched copies of superseded wording (see SUPERSEDED_CONTENT), which are
+ * corrected and re-embedded.
+ *
+ * The advance limits here must match services/legal/rentLaw.ts and
+ * maxAdvanceMonthsFor in services/legal/agreementCompliance.ts. No phone
+ * numbers, street addresses or processing timelines: none could be verified.
  */
+import { createHash } from 'crypto'
 import mongoose from 'mongoose'
 import { config } from './config/index.js'
 import { LegalDocument } from './models/LegalDocument.js'
@@ -91,7 +98,7 @@ Section 20 — Compensation:
     title: 'Rent Act Section 25 — Rent Advances and Increases',
     content: `Section 25 of the Rent Act, 1963 regulates rent advances and increases:
 
-1. Maximum Advance: A landlord cannot demand more than 6 months' rent in advance. Any demand for more than 6 months is illegal.
+1. Maximum Advance (Section 25(5)): For a tenancy of more than six months, a landlord may not demand more than six months' rent in advance. For a monthly (or shorter) tenancy, the limit is one month's rent. Which limit applies depends on the length of the tenancy, not on the amount asked for.
 
 2. Rent Increases: Rent cannot be increased arbitrarily during a fixed-term lease. For periodic tenancies, increases require:
    - Written notice
@@ -111,15 +118,13 @@ Section 20 — Compensation:
     category: 'act',
     year: 1963,
     section: '25',
-    tags: ['rent advance', 'rent increase', 'security deposit', '6 months', 'penalty'],
+    tags: ['rent advance', 'rent increase', 'security deposit', '6 months', '1 month', 'monthly tenancy', 'penalty'],
   },
   {
     title: 'Rent Control Department — Filing a Complaint',
-    content: `How to file a complaint with the Rent Control Department in Ghana:
+    content: `How to raise a complaint with the Rent Control Department in Ghana:
 
-1. Visit the nearest Rent Control Office:
-   - Accra: Behind the General Post Office
-   - Other regions: Check regional capitals
+1. Visit your nearest Rent Control office. Check opening hours, fees and procedures with the office before you go.
 
 2. Required Documents:
    - Tenancy agreement (if available)
@@ -129,18 +134,12 @@ Section 20 — Compensation:
    - Any correspondence with landlord
 
 3. Process:
-   - Submit complaint form
-   - Pay nominal filing fee (if applicable)
-   - Department investigates
-   - Mediation session scheduled
-   - If mediation fails, case referred to Rent Tribunal
+   - Submit your complaint
+   - The Department investigates
+   - It can arrange mediation between landlord and tenant
+   - If mediation does not resolve the matter, it can go to the courts
 
-4. Timeline:
-   - Initial response: 14 days
-   - Mediation: within 30 days
-   - Tribunal hearing: within 60 days
-
-5. Contact: +233 30 266 2288`,
+How long a complaint takes varies by office and case; no timeline is guaranteed.`,
     source: 'Rent Control Department Guidelines',
     category: 'procedure',
     tags: ['complaint', 'rent control', 'mediation', 'tribunal', 'dispute resolution'],
@@ -155,8 +154,8 @@ Jurisdiction:
 - Violations of economic and social rights related to housing
 
 Filing a Complaint:
-1. Visit any CHRAJ office nationwide
-2. Complete complaint form (free)
+1. Visit your nearest CHRAJ office
+2. Complete a complaint form
 3. Provide supporting evidence
 4. CHRAJ investigates and makes recommendations
 
@@ -164,10 +163,7 @@ Powers:
 - Recommend compensation
 - Refer matters to court
 - Make policy recommendations to government
-- Publish findings
-
-Contact: +233 30 266 2150
-Offices in all 16 regions of Ghana`,
+- Publish findings`,
     source: 'CHRAJ Act, 1993 (Act 456)',
     category: 'procedure',
     year: 1993,
@@ -214,7 +210,7 @@ These constitutional provisions underpin all rental housing laws in Ghana.`,
 
 7. Right to Privacy: Your landlord must give reasonable notice before entering your home.
 
-8. Right to Complain: You can file complaints with the Rent Control Department for free.
+8. Right to Complain: You can raise complaints with the Rent Control Department.
 
 What to do if rights are violated:
 - Document everything (photos, messages, receipts)
@@ -231,7 +227,7 @@ What to do if rights are violated:
 
 Landlord Rights:
 1. Right to Receive Rent: Timely payment as agreed in the tenancy agreement.
-2. Right to inspect: With reasonable notice (usually 24-48 hours).
+2. Right to inspect: With reasonable notice.
 3. Right to evict: Through legal process only, for valid reasons.
 4. Right to compensation: For damage beyond normal wear and tear.
 5. Right to terminate: With proper notice according to tenancy terms.
@@ -242,7 +238,7 @@ Landlord Responsibilities:
 3. Provide rent receipts for all payments.
 4. Respect tenant's right to quiet enjoyment.
 5. Return security deposit with deductions documented.
-6. Not demand more than 6 months rent in advance.
+6. Not demand more rent in advance than Section 25(5) allows: six months' rent for a tenancy of more than six months, one month's rent for a monthly tenancy.
 7. Not increase rent arbitrarily during fixed-term leases.
 8. Not disconnect utilities or use self-help eviction.
 
@@ -257,6 +253,24 @@ Best Practices:
   },
 ]
 
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
+
+/**
+ * SHA-256 of the content earlier bootstraps planted for documents whose
+ * wording has since been corrected: a flat six-month advance cap with no
+ * one-month rule for monthly tenancies, unverified phone numbers, an office
+ * address and complaint timelines, "free" services and a 24-48 hour inspection
+ * notice. A stored copy is replaced only while it still hashes to this value,
+ * so a reviewer's edits are never overwritten.
+ */
+const SUPERSEDED_CONTENT: Record<string, string> = {
+  'Rent Act Section 25 — Rent Advances and Increases': '81dcf78beb6e7e49aa0fcbb839ed3c97a79ad3562ef770694e1395025fa753ca',
+  'Rent Control Department — Filing a Complaint': 'f0bc84d271797dbd14f9daed14ae20c97a812829834a581d7e369aaad14f1495',
+  'CHRAJ — Housing Rights Complaints': '928fbeba1b1cedc7ecb31a155de0c993d0964959ad2f8b0a256e843ff060415f',
+  'Tenant Rights — Quick Reference': '0ca8f581d03277aa1c8c9a67fa54834c95a462a9cd3944a62622431c190ee7a8',
+  'Landlord Rights and Responsibilities': '2b40ce451d377e9b70ee5fb10ee54fa7749f06f0cad67eeefcef4f1d538613d4',
+}
+
 async function run() {
   await mongoose.connect(config.mongoUri)
   console.log('Connected to MongoDB.')
@@ -264,11 +278,20 @@ async function run() {
   console.log(`Corrected legacy receipt documents: ${corrected.modifiedCount}`)
 
   let created = 0
+  let superseded = 0
   let skipped = 0
 
   for (const seed of SEED_DOCUMENTS) {
     const existing = await LegalDocument.findOne({ title: seed.title, source: seed.source })
     if (existing) {
+      if (existing.content !== seed.content && SUPERSEDED_CONTENT[seed.title] === sha256(existing.content)) {
+        // Old vectors describe the old text; re-embed so search finds the correction.
+        const { embedding } = await embed(seed.content)
+        await LegalDocument.updateOne({ _id: existing._id }, { $set: { content: seed.content, tags: seed.tags, embedding } })
+        superseded++
+        console.log(`Corrected: ${seed.title}`)
+        continue
+      }
       skipped++
       continue
     }
@@ -279,7 +302,7 @@ async function run() {
     console.log(`Created: ${seed.title}`)
   }
 
-  console.log(`\nBootstrap complete. Created: ${created}, Skipped: ${skipped}`)
+  console.log(`\nBootstrap complete. Created: ${created}, Corrected: ${superseded}, Skipped: ${skipped}`)
   process.exit(0)
 }
 
