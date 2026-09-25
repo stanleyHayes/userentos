@@ -103,7 +103,9 @@ import payoutRoutes from './routes/payouts.js'
 import moveOutRoutes from './routes/moveOut.js'
 import legalDocumentRoutes from './routes/legalDocuments.js'
 import webhookRoutes from './routes/webhooks.js'
-import { onSimulatedComplete } from './services/payments/index.js'
+import platformRoutes from './routes/platform.js'
+import { requireRegulatedFeature } from './middleware/regulatedFeature.js'
+import { onSimulatedComplete, getMode as getPaymentMode } from './services/payments/index.js'
 import { finalizePayment } from './services/payments/finalize.js'
 import { onSimulatedPayout } from './services/payouts/index.js'
 import { finalizePayout } from './services/payouts/finalize.js'
@@ -307,6 +309,7 @@ app.use(
 )
 
 // Routes
+app.use('/api/platform', platformRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/entitlements', entitlementRoutes)
@@ -319,9 +322,16 @@ app.use('/api/reports', contentReportRoutes)
 app.use('/api/properties', propertyModerationRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agreements', agreementRoutes)
+// Only starting a provider rent collection is gated; history and receipts of
+// payments already made stay available.
+app.post('/api/payments', requireRegulatedFeature('rent_collection'))
 app.use('/api/payments', paymentRoutes)
-app.use('/api/payouts', payoutRoutes)
-app.use('/api/savings', savingsRoutes)
+// Payouts withdraw rent balances or wallet deposits, so either basis permits them.
+app.use('/api/payouts', requireRegulatedFeature('rent_collection', 'wallet'), payoutRoutes)
+// Landlords see rent balances in the wallet view even when stored value is off.
+const walletView = requireRegulatedFeature('wallet', 'rent_collection')
+const storedValue = requireRegulatedFeature('wallet')
+app.use('/api/savings', (req, res, next) => (req.method === 'GET' && req.path === '/wallet' ? walletView : storedValue)(req, res, next), savingsRoutes)
 app.use('/api/disputes', disputeRoutes)
 app.use('/api/legal', legalRoutes)
 app.use('/api/notifications', notificationRoutes)
@@ -329,13 +339,13 @@ app.use('/api/analytics', analyticsRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/documents', documentRoutes)
 app.use('/api/blog', blogRoutes)
-app.use('/api/credit', creditRoutes)
+app.use('/api/credit', requireRegulatedFeature('credit_reporting'), creditRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/pricing', pricingRoutes)
 app.use('/api/workers', workerRoutes)
 app.use('/api/service-bookings', serviceBookingRoutes)
-app.use('/api/investments', investmentRoutes)
-app.use('/api/loans', loanRoutes)
+app.use('/api/investments', requireRegulatedFeature('investments'), investmentRoutes)
+app.use('/api/loans', requireRegulatedFeature('lending'), loanRoutes)
 app.use('/api/simulation', simulationRoutes)
 app.use('/api/push', pushRoutes)
 app.use('/api/tenant-profile', tenantProfileRoutes)
@@ -350,8 +360,8 @@ app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/store-billing', storeBillingRoutes)
 app.use('/api/webhooks/google-play', googlePlayNotifications)
 app.use('/api/webhooks/apple', appleNotifications)
-app.use('/api/financing', financingRoutes)
-app.use('/api/employers', employerRoutes)
+app.use('/api/financing', requireRegulatedFeature('financing'), financingRoutes)
+app.use('/api/employers', requireRegulatedFeature('payroll'), employerRoutes)
 app.use('/api/businesses', businessRoutes)
 app.use('/api/agent', agentRoutes)
 app.use('/api/landlord', landlordRoutes)
@@ -362,9 +372,9 @@ app.use('/api/public/properties', publicRegistryRoutes)
 app.use('/api/tenant-passport', tenantPassportRoutes)
 app.use('/api/maintenance', maintenanceRoutes)
 // Mounted BEFORE /api/insurance so the provider self-service routes win.
-app.use('/api/insurance/providers', insuranceProviderRoutes)
-app.use('/api/insurance', insuranceRoutes)
-app.use('/api/financiers', financierRoutes)
+app.use('/api/insurance/providers', requireRegulatedFeature('insurance'), insuranceProviderRoutes)
+app.use('/api/insurance', requireRegulatedFeature('insurance'), insuranceRoutes)
+app.use('/api/financiers', requireRegulatedFeature('financing'), financierRoutes)
 app.use('/api/achievements', achievementRoutes)
 app.use('/api/feature-flags', featureFlagRoutes)
 // Mounted BEFORE /api/admin so the approvals router wins over admin views.
@@ -450,6 +460,8 @@ process.on('unhandledRejection', (reason) => {
 
 async function start() {
   try {
+    // Fail at boot, not on the first payment, if the payment mode is unset or refused.
+    getPaymentMode()
     await mongoose.connect(config.mongoUri)
     // Never log config.mongoUri itself — it can embed user:password credentials.
     logger.info(`Connected to MongoDB: ${mongoose.connection.host}/${mongoose.connection.name}`)

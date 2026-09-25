@@ -7,6 +7,7 @@ import { neuCard, neuInset } from '../../lib/neu'
 import { formatCompact, formatDate } from '../../lib/format'
 import { api } from '../../lib/api'
 import { ListSkeleton } from '../../components/Skeleton'
+import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
 
 interface Wallet {
   balance: number
@@ -31,7 +32,7 @@ interface PayoutAvailability {
 const tabs = ['Savings', 'Investments', 'Loans'] as const
 type Tab = typeof tabs[number]
 
-export default function SavingsScreen() {
+function WalletAndSavings({ lendingEnabled, investmentsEnabled }: { lendingEnabled: boolean; investmentsEnabled: boolean }) {
   const c = useThemeColors()
   const dark = useIsDark()
   const router = useRouter()
@@ -252,7 +253,7 @@ export default function SavingsScreen() {
       {depositInstructions && <View style={{ padding: spacing.md }} accessibilityRole="alert"><Text style={{ color: c.text }}>{depositInstructions}</Text><TouchableOpacity accessibilityRole="button" onPress={() => setDepositInstructions(null)}><Text style={{ color: c.primary }}>Dismiss deposit instructions</Text></TouchableOpacity></View>}
       {/* Tab Navigation */}
       <View style={[s.tabBar, { backgroundColor: c.white, borderBottomColor: c.border }]}>
-        {tabs.map((tab) => (
+        {tabs.filter((tab) => tab === 'Savings' || (tab === 'Loans' ? lendingEnabled : investmentsEnabled)).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[s.tab, activeTab === tab && { borderBottomColor: c.primary }]}
@@ -635,3 +636,30 @@ const s = StyleSheet.create({
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
 })
+
+/** RentGuard groups regulated services; each part appears only when the operator offers it. */
+export default function SavingsScreen() {
+  const c = useThemeColors()
+  const router = useRouter()
+  const { data: features, isPending, isError, refetch } = useRegulatedFeatures()
+  if (isPending) return <View style={[s.loadingContainer, { backgroundColor: c.surface }]}><ListSkeleton /></View>
+  if (features?.wallet) return <WalletAndSavings lendingEnabled={features.lending} investmentsEnabled={features.investments} />
+  const links = [
+    ...(features?.investments ? [{ label: 'Investments', path: '/investments' as const }] : []),
+    ...(features?.lending ? [{ label: 'Loans', path: '/loans' as const }] : []),
+  ]
+  return (
+    <View style={{ flex: 1, padding: spacing.lg, backgroundColor: c.surface }}>
+      <Text accessibilityRole="header" style={{ color: c.primaryDark, fontSize: 18, fontFamily: 'Outfit_700Bold' }}>Wallet and savings aren’t available</Text>
+      <Text style={{ color: c.text, marginTop: spacing.sm }}>
+        {isError ? 'We couldn’t confirm which services are available.' : 'RentOS offers stored balances and savings only where a licensed provider operates them.'}
+      </Text>
+      {isError && <TouchableOpacity accessibilityRole="button" onPress={() => void refetch()}><Text style={{ color: c.primary, paddingVertical: spacing.md }}>Retry</Text></TouchableOpacity>}
+      {links.map((link) => (
+        <TouchableOpacity key={link.path} accessibilityRole="button" onPress={() => router.push(link.path)}>
+          <Text style={{ color: c.primary, paddingVertical: spacing.md, fontFamily: 'Outfit_600SemiBold' }}>{link.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  )
+}

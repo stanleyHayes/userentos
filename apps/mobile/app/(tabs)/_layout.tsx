@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors } from '../../lib/theme'
 import { useAuthStore } from '../../stores/authStore'
 import { useNotificationStore } from '../../stores/notificationStore'
+import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 
 export default function TabLayout() {
   const user = useAuthStore((s) => s.user)
@@ -10,6 +11,8 @@ export default function TabLayout() {
   const isLandlord = role === 'landlord' || role === 'property_manager'
   const c = useThemeColors()
   const unreadMessages = useNotificationStore((s) => s.unreadMessages)
+  // RentGuard holds the wallet, loans and investments; hide it when none is offered.
+  const rentGuardEnabled = useRegulatedFeatureEnabled('wallet', 'lending', 'investments') === true
 
   return (
     <Tabs
@@ -65,7 +68,7 @@ export default function TabLayout() {
         options={{
           title: 'RentGuard',
           tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
-          href: isLandlord ? null : undefined,
+          href: isLandlord || !rentGuardEnabled ? null : undefined,
         }}
       />
       <Tabs.Screen

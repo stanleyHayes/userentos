@@ -61,8 +61,9 @@ import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
 import { useAuthStore } from '@/stores/authStore'
 import { useSidebarStore } from '@/stores/sidebarStore'
-import { useUnreadCount, useBadgeCounts, useMaintenanceRequests } from '@/hooks/useApi'
+import { useUnreadCount, useBadgeCounts, useMaintenanceRequests, useRegulatedFeatures } from '@/hooks/useApi'
 import { usePortal } from '@/hooks/usePortal'
+import { isPathAvailable } from '../../../../../packages/shared/regulatedFeatures'
 import type { UserRole } from '@/types'
 import Tooltip from '@mui/material/Tooltip'
 
@@ -231,6 +232,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   // On portal subdomains, additionally filter nav items to only show
   // items relevant to the portal's allowed roles
   const isSuperAdmin = user?.roles.includes('super_admin')
+  const { data: regulatedFeatures } = useRegulatedFeatures()
 
   const visibleGroups = navGroups
     .filter((g) => isSuperAdmin || g.roles.includes(activeRole))
@@ -238,6 +240,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       ...g,
       items: g.items
         .filter((i) => {
+          // Regulated financial services appear only once the operator enables them.
+          if (!isPathAvailable(i.path, regulatedFeatures ?? null)) return false
           if (!isSuperAdmin && !i.roles.includes(activeRole)) return false
           // On portals, hide items that don't overlap with portal roles
           if (isPortal && !isSuperAdmin && !i.roles.some((r) => allowedRoles.includes(r))) return false

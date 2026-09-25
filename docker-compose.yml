@@ -15,7 +15,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3002}
-      - PAYMENTS_PROVIDER_MODE=${PAYMENTS_PROVIDER_MODE:-simulated}
+      - PAYMENTS_PROVIDER_MODE=${PAYMENTS_PROVIDER_MODE:?PAYMENTS_PROVIDER_MODE is required (live, or simulated with ALLOW_SIMULATED_PAYMENTS=true)}
+      - ALLOW_SIMULATED_PAYMENTS=${ALLOW_SIMULATED_PAYMENTS:-}
+      # Regulated features stay off until licensed; see apps/api/.env.example.
+      - REGULATED_FEATURES=${REGULATED_FEATURES:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - FROM_EMAIL=${FROM_EMAIL:-onboarding@resend.dev}

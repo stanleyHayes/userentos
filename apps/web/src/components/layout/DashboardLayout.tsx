@@ -14,6 +14,7 @@ import { Building2, FileText, KeyRound, ShieldAlert, Sparkles } from 'lucide-rea
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour'
 import { SplashScreen } from '@/components/ui/SplashScreen'
 import { WatermarkConstellation } from '@/components/ui/Watermark'
+import { RegulatedFeatureGate } from './RegulatedFeatureGate'
 
 // SplashScreen expects an onFinished callback; here it unmounts as soon as auth
 // rehydration flips `ready`, so the timer never fires user-visibly.
@@ -127,7 +128,9 @@ export function DashboardLayout() {
         <main className="p-3 sm:p-4 md:p-6">
           <div className="max-w-[1480px] mx-auto pb-10">
             <div key={location.pathname} className="page-enter">
-              <Outlet />
+              <RegulatedFeatureGate>
+                <Outlet />
+              </RegulatedFeatureGate>
             </div>
           </div>
         </main>

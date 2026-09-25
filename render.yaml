@@ -40,6 +40,10 @@ services:
         sync: false
       - key: PAYMENTS_PROVIDER_MODE
         sync: false
+      # Regulated features are off in production until licensed. Set the list and
+      # one REGULATED_BASIS_<FEATURE> per enabled feature (see .env.example).
+      - key: REGULATED_FEATURES
+        sync: false
       # MTN MoMo Collections. BASE_URL defaults to the sandbox host, so it must
       # be set for live. CALLBACK_URL is this service's public webhook:
       # https://<api-host>/api/payments/webhook/mtn_momo

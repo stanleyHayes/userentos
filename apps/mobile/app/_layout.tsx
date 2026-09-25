@@ -22,6 +22,7 @@ import { useThemeColors } from '../lib/theme'
 import { useAppSocket } from '../hooks/useAppSocket'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { InAppNotificationProvider } from '../components/InAppNotification'
+import { RegulatedScreenGate } from '../components/RegulatedScreenGate'
 
 ExpoSplashScreen.preventAutoHideAsync()
 
@@ -99,7 +100,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGuard>
-        <Stack key={querySession} screenOptions={{
+        <Stack key={querySession} screenLayout={({ route, children }) => <RegulatedScreenGate routeName={route.name}>{children}</RegulatedScreenGate>} screenOptions={{
           headerShown: true,
           headerTintColor: c.text,
           headerStyle: { backgroundColor: c.card },

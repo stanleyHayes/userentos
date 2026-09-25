@@ -8,6 +8,7 @@ import { recoverGooglePurchases } from './storeBilling/recoverPurchases.js'
 import cron from 'node-cron'
 import { Types } from 'mongoose'
 import { SavingsPlan } from '../models/SavingsPlan.js'
+import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
@@ -105,6 +106,8 @@ export function startScheduler() {
   }, { timezone: GHANA_TZ })
   // Auto-debit: runs every day at 8am
   cron.schedule('0 8 * * *', async () => {
+    // Moving money between stored-value balances is itself the regulated activity.
+    if (!isRegulatedFeatureEnabled('wallet')) return
     if (!(await acquireCronLock('auto-debit', LOCK_TTL_DAILY))) return
     logger.info('[Scheduler] Running auto-debit check...')
     const plans = await SavingsPlan.find({ status: 'active', autoDebit: true })

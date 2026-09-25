@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { useAuthStore } from '@/stores/authStore'
-import { usePayments, useCreatePayment, useAgreements, usePaymentMethods } from '@/hooks/useApi'
+import { usePayments, useCreatePayment, useAgreements, usePaymentMethods, useRegulatedFeatureEnabled } from '@/hooks/useApi'
 import { useCelebrationStore } from '@/stores/celebrationStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import TextField from '@mui/material/TextField'
@@ -59,6 +59,8 @@ type SortDir = 'asc' | 'desc'
 export function PaymentsPage() {
   const user = useAuthStore((s) => s.user)
   const isTenant = user?.activeRole === 'tenant'
+  // Online rent collection is a licensed activity; history stays visible without it.
+  const rentCollectionEnabled = useRegulatedFeatureEnabled('rent_collection') === true
 
   // What the server will actually accept, rather than a hardcoded list that
   // can offer a rail the backend refuses.
@@ -134,7 +136,7 @@ export function PaymentsPage() {
         description={isTenant ? 'Track your rent payments.' : 'Track received payments.'}
         icon={<CreditCard size={22} />}
       >
-        {isTenant && (
+        {isTenant && rentCollectionEnabled && (
           <Button data-testid="make-payment-button" onClick={() => setShowPay(true)}>
             <CreditCard size={16} />
             Make Payment
@@ -226,7 +228,7 @@ export function PaymentsPage() {
                 <button onClick={clearFilters} className="text-sm text-primary dark:text-blue-400 hover:underline mt-2">Clear filters</button>
               </div>
             ) : (
-              <EmptyState preset="payments" action={{ label: 'Make payment', onClick: () => setShowPay(true) }} />
+              <EmptyState preset="payments" action={isTenant && rentCollectionEnabled ? { label: 'Make payment', onClick: () => setShowPay(true) } : undefined} />
             )
           ) : (
             <div className={`overflow-x-auto ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>

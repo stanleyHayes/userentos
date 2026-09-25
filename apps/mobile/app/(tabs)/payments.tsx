@@ -8,6 +8,7 @@ import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { ListSkeleton } from '../../components/Skeleton'
 import { RentReceiptModal } from '../../components/RentReceiptModal'
+import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 
 interface Payment {
   id: string; amount: number; method: string; status: string
@@ -137,6 +138,8 @@ export default function PaymentsScreen() {
   }
 
   const isTenant = user?.activeRole === 'tenant'
+  // Online rent collection is a licensed activity; history and receipts stay visible without it.
+  const rentCollectionEnabled = useRegulatedFeatureEnabled('rent_collection') === true
 
   function renderPayment({ item }: { item: Payment }) {
     const statusColor = statusColors[item.status] ?? c.muted
@@ -210,7 +213,7 @@ export default function PaymentsScreen() {
       </View>}
 
       {/* FAB - Make Payment (tenants only) */}
-      {isTenant && (
+      {isTenant && rentCollectionEnabled && (
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Make payment" style={[s.fab, { backgroundColor: c.primary, bottom: totalPages > 1 ? 80 : 24 }]} activeOpacity={0.85} onPress={openModal}>
           <Ionicons name="add" size={28} color="#ffffff" />
         </TouchableOpacity>

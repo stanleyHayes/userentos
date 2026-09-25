@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { allRegulatedFeatures } from '../helpers/regulatedFeatures'
 
 const mobileUrl = process.env.MOBILE_WEB_URL
 test.skip(!mobileUrl, 'Requires an Expo web server at MOBILE_WEB_URL')
@@ -10,6 +11,7 @@ async function login(page: Page, role: string, methodsFail = false) {
     let data: unknown = { items: [], total: 0 }
     if (path === '/api/auth/login') data = { user, token: 'fixture-token' }
     if (path === '/api/users/me') data = user
+    if (path === '/api/platform/features') data = allRegulatedFeatures
     if (path === '/api/savings/wallet') data = { balance: 100, transactions: [] }
     if (path === '/api/subscriptions/packages') data = { items: [{ id: 'yearly', name: 'Annual Plan', price: 120, billingCycle: 'yearly', maxProperties: 5, benefits: ['Five property listings'] }] }
     if (path === '/api/subscriptions/my-subscription') data = { package: null, propertyCount: 0, maxProperties: 0 }

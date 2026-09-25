@@ -15,7 +15,7 @@ import { PayoutTab } from './settings/PayoutTab'
 import { AppearanceTab } from './settings/AppearanceTab'
 import { NotificationsTab } from './settings/NotificationsTab'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
-import { useCurrentUser, useUpdateProfile } from '@/hooks/useApi'
+import { useCurrentUser, useUpdateProfile, useRegulatedFeatureEnabled } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { formatGhanaCard, GHANA_CARD_RE } from '@/lib/ghana'
@@ -42,6 +42,9 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams()
   const initialTab = tabs.some((t) => t.id === searchParams.get('tab')) ? (searchParams.get('tab') as TabId) : 'profile'
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+  // Payout accounts exist only to withdraw rent or stored balances.
+  const payoutsEnabled = useRegulatedFeatureEnabled('rent_collection', 'wallet') === true
+  const visibleTabs = tabs.filter((tab) => tab.id !== 'payouts' || payoutsEnabled)
   const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(activeTab)
 
   return (
@@ -60,7 +63,7 @@ export function SettingsPage() {
           className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-white shadow-sm transition-[transform,width,height] duration-300 ease-out dark:bg-[#161927]"
           style={{ ...pillStyle, opacity: pillVisible ? 1 : 0 }}
         />
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             data-tab-key={tab.id}
@@ -89,7 +92,7 @@ export function SettingsPage() {
         )}
         {activeTab === 'privacy' && <PrivacyControls />}
         {activeTab === 'security' && <SecurityTab />}
-        {activeTab === 'payouts' && <PayoutTab />}
+        {activeTab === 'payouts' && payoutsEnabled && <PayoutTab />}
         {activeTab === 'appearance' && <AppearanceTab />}
         {activeTab === 'notifications' && <NotificationsTab />}
       </div>

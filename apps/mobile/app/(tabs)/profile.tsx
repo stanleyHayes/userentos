@@ -7,10 +7,13 @@ import { neuCard } from '../../lib/neu'
 import { useAuthStore } from '../../stores/authStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { api } from '../../lib/api'
+import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
+import { isPathAvailable } from '../../../../packages/shared/regulatedFeatures'
 
 interface MenuSection {
   title: string
-  items: { icon: string; label: string; onPress: () => void; badge?: string; color?: string }[]
+  // `path` marks a regulated screen so the entry hides when the feature is off.
+  items: { icon: string; label: string; onPress: () => void; badge?: string; color?: string; path?: string }[]
 }
 
 export default function ProfileScreen() {
@@ -19,6 +22,7 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore()
   const router = useRouter()
   const { mode, setMode } = useThemeStore()
+  const { data: regulatedFeatures } = useRegulatedFeatures()
 
   function handleLogout() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -53,7 +57,7 @@ export default function ProfileScreen() {
       title: 'Account',
       items: [
         { icon: 'person-outline', label: 'Edit Profile', onPress: () => router.push('/settings') },
-        { icon: 'wallet-outline', label: 'Payout account', onPress: () => router.push('/payout-account') },
+        { icon: 'wallet-outline', label: 'Payout account', path: '/payout-account', onPress: () => router.push('/payout-account') },
         { icon: 'card-outline', label: 'Payments', onPress: () => router.push('/payments') },
         { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
         ...(isTenant ? [
@@ -95,14 +99,14 @@ export default function ProfileScreen() {
       title: 'Portals',
       items: [
         ...(isBusiness ? [{ icon: 'briefcase-outline' as const, label: 'My Business', onPress: () => router.push('/my-business' as string) }] : []),
-        ...(isFinancier ? [{ icon: 'cash-outline' as const, label: 'Financier Portal', onPress: () => router.push('/financier' as string) }] : []),
-        ...(isEmployer ? [{ icon: 'people-outline' as const, label: 'Employer Portal', onPress: () => router.push('/employer' as string) }] : []),
+        ...(isFinancier ? [{ icon: 'cash-outline' as const, label: 'Financier Portal', path: '/financier', onPress: () => router.push('/financier' as string) }] : []),
+        ...(isEmployer ? [{ icon: 'people-outline' as const, label: 'Employer Portal', path: '/employer', onPress: () => router.push('/employer' as string) }] : []),
       ],
     }] : []),
     {
       title: 'Insights',
       items: [
-        { icon: 'analytics-outline', label: 'Credit Score', onPress: () => router.push('/credit-score') },
+        { icon: 'analytics-outline', label: 'Credit Score', path: '/credit-score', onPress: () => router.push('/credit-score') },
         { icon: 'bar-chart-outline', label: 'Analytics', onPress: () => router.push('/analytics') },
         { icon: 'shield-checkmark-outline', label: 'Is this legal?', onPress: () => router.push('/rights-check') },
         { icon: 'scale-outline', label: 'Rental Laws', onPress: () => router.push('/legal') },
@@ -130,6 +134,10 @@ export default function ProfileScreen() {
       ],
     },
   ]
+
+  const visibleSections = sections
+    .map((section) => ({ ...section, items: section.items.filter((item) => !item.path || isPathAvailable(item.path, regulatedFeatures ?? null)) }))
+    .filter((section) => section.items.length > 0)
 
   const themeOptions: { value: 'light' | 'dark' | 'system'; icon: string }[] = [
     { value: 'light', icon: 'sunny' },
@@ -226,7 +234,7 @@ export default function ProfileScreen() {
       )}
 
       {/* Menu sections */}
-      {sections.map((section) => (
+      {visibleSections.map((section) => (
         <View key={section.title} style={s.section}>
           <Text style={[s.sectionTitle, { color: c.muted }]}>{section.title}</Text>
           <View style={[s.sectionCard, neuCard(c)]}>

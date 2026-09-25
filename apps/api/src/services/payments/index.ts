@@ -92,6 +92,12 @@ export function getMode(): PaymentMode {
   if (raw === 'live') return 'live'
   if (raw === 'simulated') {
     if (process.env.NODE_ENV === 'production') {
+      // Simulated collections complete without money moving and the payout
+      // simulator accepts unsigned callbacks; a production API must never slip
+      // into that mode through a copied default. Staging opts in explicitly.
+      if (process.env.ALLOW_SIMULATED_PAYMENTS !== 'true') {
+        throw new Error('PAYMENTS_PROVIDER_MODE=simulated is refused in production; set ALLOW_SIMULATED_PAYMENTS=true only for a staging or demo deployment')
+      }
       console.warn('[Payments] WARNING: PAYMENTS_PROVIDER_MODE=simulated in production — no real funds will move!')
     }
     return 'simulated'

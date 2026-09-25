@@ -1,7 +1,7 @@
 import type { Property } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
-import { useMyAnalytics, usePayments, useSavingsPlans, useAgreements, useNotifications, useDisputes, usePropertyRecommendations, useMaintenanceRequests, useMyAchievements, useMyStreak } from '@/hooks/useApi'
+import { useMyAnalytics, usePayments, useSavingsPlans, useAgreements, useNotifications, useDisputes, usePropertyRecommendations, useMaintenanceRequests, useMyAchievements, useMyStreak, useRegulatedFeatureEnabled } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
@@ -32,7 +32,8 @@ export function TenantDashboard() {
   const { data: agreementsData } = useAgreements()
   const { data: notifData } = useNotifications()
   const { data: disputesData } = useDisputes()
-  const { data: creditData } = useQuery({ queryKey: ['credit-score'], queryFn: () => api.get<{ score: number; factors: Record<string, number> }>('/credit/me') })
+  const creditEnabled = useRegulatedFeatureEnabled('credit_reporting') === true
+  const { data: creditData } = useQuery({ queryKey: ['credit-score'], queryFn: () => api.get<{ score: number; factors: Record<string, number> }>('/credit/me'), enabled: creditEnabled })
   const { data: profileData } = useQuery({ queryKey: ['tenant-profile'], queryFn: () => api.get<{ completionScore: number; profileComplete: boolean }>('/tenant-profile/me') })
   const { data: recommendations } = usePropertyRecommendations()
   const { data: maintenanceData } = useMaintenanceRequests()
@@ -71,7 +72,6 @@ export function TenantDashboard() {
 
   const a = analytics as Record<string, number> | undefined
   const credit = creditData as { score: number; factors: Record<string, number> } | undefined
-  const creditScore = credit?.score ?? 0
   const profileScore = profileData?.completionScore ?? 0
   const profileComplete = profileData?.profileComplete ?? false
 
@@ -116,7 +116,8 @@ export function TenantDashboard() {
 
         {/* Right sidebar (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <TenantCreditScoreCard creditScore={creditScore} factors={credit?.factors} />
+          {/* No card rather than an invented zero when no score is available. */}
+          {credit && Number.isFinite(credit.score) && <TenantCreditScoreCard creditScore={credit.score} factors={credit.factors} />}
 
           {activePlan && <TenantSavingsGoalCard plan={activePlan} />}
 
