@@ -1,22 +1,18 @@
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, Switch } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, useIsDark, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
+import type { Loan, LoanQuote, LoanTerms } from '../types/shared'
 
-interface Loan {
-  id: string; amount: number; interestRate: number; tenure: number
-  monthlyPayment: number; totalRepayment: number; amountPaid: number
-  status: string; reason: string; creditScoreAtApproval?: number; disbursedAt?: string
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Awaiting review', pre_qualified: 'Pre-qualified', pending_review: 'In review',
+  approved: 'Awaiting disbursement', active: 'Active', repaid: 'Repaid', defaulted: 'Defaulted', rejected: 'Declined',
 }
-
-const tenureOptions = [
-  { value: '1', label: '1 month' }, { value: '3', label: '3 months' },
-  { value: '6', label: '6 months' }, { value: '12', label: '12 months' },
-]
+const OPEN = ['pending', 'pre_qualified', 'pending_review', 'approved', 'active', 'defaulted']
 
 export default function LoansScreen() {
   const c = useThemeColors()
@@ -31,17 +27,21 @@ export default function LoansScreen() {
     active: { bg: c.primary + '15', text: c.primary, icon: 'pulse-outline' },
     repaid: { bg: c.accent + '15', text: c.accent, icon: 'checkmark-done-outline' },
     defaulted: { bg: c.danger + '15', text: c.danger, icon: 'alert-circle-outline' },
+    rejected: { bg: c.danger + '15', text: c.danger, icon: 'close-circle-outline' },
   }
 
   const [showApply, setShowApply] = useState(false)
   const [agreementId, setAgreementId] = useState('')
   const [agreements, setAgreements] = useState<{ id: string; status: string; rentAmount: number }[]>([])
   const [amount, setAmount] = useState('')
-  const [tenure, setTenure] = useState('3')
+  const [tenure, setTenure] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [disbursingId, setDisbursingId] = useState<string | null>(null)
   const [repayingId, setRepayingId] = useState<string | null>(null)
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const [terms, setTerms] = useState<LoanTerms | null>(null)
+  const [quote, setQuote] = useState<LoanQuote | null>(null)
+  const [accepted, setAccepted] = useState(false)
 
   async function load() {
     try {
@@ -52,43 +52,53 @@ export default function LoansScreen() {
     // be expected to hand-type an agreement ID.
     try {
       const ag = await api.get<{ items: { id: string; status: string; rentAmount: number }[] }>('/agreements')
-      setAgreements(ag.items ?? [])
+      setAgreements((ag.items ?? []).filter((a) => a.status === 'active'))
     } catch { /* picker stays empty */ }
+    // The rate and limits come from the server — never hardcoded here.
+    try { setTerms(await api.get<LoanTerms>('/loans/terms')) } catch { /* apply stays hidden */ }
   }
   useEffect(() => { load() }, [])
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
-  const activeLoan = loans.find((l) => l.status === 'active' || l.status === 'approved')
+  const openLoan = loans.find((l) => OPEN.includes(l.status))
   const amountNum = Number(amount) || 0
-  const tenureNum = Number(tenure) || 3
-  const annualRate = 15
-  const monthlyRate = annualRate / 100 / 12
-  const monthlyPayment = amountNum > 0 ? (amountNum * monthlyRate * Math.pow(1 + monthlyRate, tenureNum)) / (Math.pow(1 + monthlyRate, tenureNum) - 1) : 0
-  const totalRepayment = monthlyPayment * tenureNum
+  const tenureNum = Number(tenure) || terms?.minTenureMonths || 3
+  const tenureOptions = terms
+    ? Array.from({ length: terms.maxTenureMonths - terms.minTenureMonths + 1 }, (_, i) => terms.minTenureMonths + i).filter((m) => m % 3 === 0 || m === terms.minTenureMonths)
+    : []
 
-  function resetApplyModal() { setShowApply(false); setAgreementId(''); setAmount(''); setTenure('3'); setReason('') }
+  function resetApplyModal() { setShowApply(false); setAgreementId(''); setAmount(''); setTenure(''); setReason(''); setQuote(null); setAccepted(false) }
 
-  async function handleApply() {
-    if (!agreementId) { Alert.alert('Error', 'Please select an agreement'); return }
-    if (!amount || amountNum < 50 || amountNum > 10000) { Alert.alert('Error', 'Amount must be between GHS 50 and GHS 10,000'); return }
+  async function handleReviewTerms() {
+    if (!terms) return
+    if (!agreementId) { Alert.alert('Error', 'Please select a signed, active agreement'); return }
+    if (!amount || amountNum < terms.minAmount || amountNum > terms.maxAmount) { Alert.alert('Error', `Amount must be between ${formatCurrency(terms.minAmount)} and ${formatCurrency(terms.maxAmount)}`); return }
     if (!reason || reason.length < 10) { Alert.alert('Error', 'Please provide a reason (min 10 characters)'); return }
     setSubmitting(true)
+    try { setQuote(await api.get<LoanQuote>(`/loans/quote?amount=${amountNum}&tenure=${tenureNum}`)); setAccepted(false) }
+    catch (e) { Alert.alert('Error', (e as { message?: string }).message || 'Could not calculate the loan terms') }
+    finally { setSubmitting(false) }
+  }
+
+  async function handleApply() {
+    if (!quote || !accepted) return
+    setSubmitting(true)
     try {
-      await api.post('/loans/apply', { agreementId, amount: amountNum, tenure: tenureNum, reason })
-      resetApplyModal(); Alert.alert('Success', 'Loan application submitted'); await load()
+      await api.post('/loans/apply', {
+        agreementId, amount: quote.principal, tenure: quote.tenureMonths, reason,
+        acceptTerms: accepted, quotedApr: quote.apr, quotedTotalRepayment: quote.totalRepayable,
+      })
+      resetApplyModal(); Alert.alert('Application received', 'A lender will review your application. Nothing is paid until the lender approves and disburses it.'); await load()
     } catch (e) {
-      const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to apply for loan')
     } finally { setSubmitting(false) }
   }
 
-  async function handleDisburse(id: string) {
-    setDisbursingId(id)
-    try { await api.post(`/loans/${id}/disburse`, {}); Alert.alert('Success', 'Funds received to wallet'); await load() }
-    catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Disbursement failed')
-    } finally { setDisbursingId(null) }
+  async function handleRequestReview(id: string) {
+    setReviewingId(id)
+    try { await api.post(`/loans/${id}/request-review`, {}); Alert.alert('Sent for review', 'A person will review this decision.'); await load() }
+    catch (e) { Alert.alert('Error', (e as { message?: string }).message || 'Could not request a review') }
+    finally { setReviewingId(null) }
   }
 
   async function handleRepay(id: string, repayAmount: number) {
@@ -114,10 +124,14 @@ export default function LoansScreen() {
       <ScrollView style={[s.container, { backgroundColor: c.surface }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
         <View style={[s.infoBanner, { backgroundColor: c.primary + '08', borderColor: c.primary + '15' }]}>
           <Ionicons name="information-circle-outline" size={18} color={c.primary} />
-          <Text style={[s.infoBannerText, { color: c.primaryDark }]}>Rent shortfall protection: borrow up to GHS 10,000 to cover your rent. Requires a credit score of 50+.</Text>
+          <Text style={[s.infoBannerText, { color: c.primaryDark }]}>
+            {terms
+              ? `Personal loan of ${formatCurrency(terms.minAmount)}–${formatCurrency(terms.maxAmount)}, repaid monthly over ${terms.minTenureMonths}–${terms.maxTenureMonths} months at ${terms.annualInterestRate}% a year${terms.processingFeePct > 0 ? ` plus a ${terms.processingFeePct}% fee` : ''}. You see the APR, total cost and every repayment before you confirm. Borrowing costs money; missed repayments can affect your credit score. A lender reviews every application.`
+              : 'Loan terms are unavailable right now.'}
+          </Text>
         </View>
 
-        {!activeLoan && (
+        {!openLoan && terms && (
           <TouchableOpacity style={[s.newBtn, { backgroundColor: c.accent }]} activeOpacity={0.85} onPress={() => setShowApply(true)}>
             <Ionicons name="cash-outline" size={20} color="#ffffff" />
             <Text style={s.newBtnText}>Apply for Loan</Text>
@@ -142,14 +156,24 @@ export default function LoansScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[s.cardTitle, { color: c.primaryDark }]} numberOfLines={1} adjustsFontSizeToFit>{formatCompact(loan.amount)} Loan</Text>
-                        <Text style={[s.cardMeta, { color: c.muted }]}>{loan.tenure} months at {loan.interestRate}% - {loan.reason}</Text>
+                        <Text style={[s.cardMeta, { color: c.muted }]}>{loan.tenure} months at {loan.interestRate}% a year{loan.apr != null ? ` (APR ${loan.apr}%)` : ''} - {loan.reason}</Text>
                       </View>
                     </View>
                     <View style={[s.badge, { backgroundColor: sc.bg, borderWidth: 1, borderColor: sc.text + '30' }]}>
                       <View style={[s.badgeDot, { backgroundColor: sc.text }]} />
-                      <Text style={[s.badgeText, { color: sc.text }]}>{loan.status}</Text>
+                      <Text style={[s.badgeText, { color: sc.text }]}>{STATUS_LABEL[loan.status] ?? loan.status}</Text>
                     </View>
                   </View>
+                  {(loan.decisionReason || (loan.status === 'rejected' && loan.automatedAssessment)) && (
+                    <Text style={[s.cardMeta, { color: c.muted, marginBottom: spacing.sm }]}>
+                      {loan.decisionReason ? `Reviewer's reason: ${loan.decisionReason}` : `Automated assessment: ${loan.automatedAssessment!.reasons.join(' ')}`}
+                    </Text>
+                  )}
+                  {loan.status === 'rejected' && loan.automatedAssessment?.outcome === 'declined' && !loan.reviewedBy && !loan.reviewRequestedAt && (
+                    <TouchableOpacity style={[s.repayBtnOutline, { borderColor: c.primary }]} onPress={() => handleRequestReview(loan.id)} disabled={reviewingId === loan.id} activeOpacity={0.85}>
+                      {reviewingId === loan.id ? <ActivityIndicator color={c.primary} size="small" /> : <Text style={[s.repayBtnOutlineText, { color: c.primary }]}>Ask a person to review this decision</Text>}
+                    </TouchableOpacity>
+                  )}
 
                   {loan.status === 'active' && (
                     <>
@@ -183,13 +207,6 @@ export default function LoansScreen() {
                       </View>
                     </>
                   )}
-                  {loan.status === 'approved' && (
-                    <TouchableOpacity style={[s.disburseBtn, { backgroundColor: c.accent }]} onPress={() => handleDisburse(loan.id)} disabled={disbursingId === loan.id} activeOpacity={0.85}>
-                      {disbursingId === loan.id ? <ActivityIndicator color="#ffffff" size="small" /> : (
-                        <><Ionicons name="wallet-outline" size={16} color="#ffffff" /><Text style={s.disburseBtnText}>Receive Funds to Wallet</Text></>
-                      )}
-                    </TouchableOpacity>
-                  )}
                 </View>
               )
             })}
@@ -198,7 +215,7 @@ export default function LoansScreen() {
           <View style={s.emptySection}>
             <Ionicons name="cash-outline" size={48} color={c.muted} />
             <Text style={[s.emptyText, { color: c.muted }]}>No loans yet</Text>
-            <Text style={[s.emptySubtext, { color: c.muted }]}>Apply for a micro-loan when you need help covering rent.</Text>
+            <Text style={[s.emptySubtext, { color: c.muted }]}>Your loan applications and repayments will appear here.</Text>
           </View>
         )}
         <View style={{ height: spacing.xl }} />
@@ -208,53 +225,79 @@ export default function LoansScreen() {
         <View style={s.modalOverlay}>
           <View style={[s.modalContent, { backgroundColor: c.white }]}>
             <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Apply for Micro-Loan</Text>
+              <Text style={[s.modalTitle, { color: c.primaryDark }]}>{quote ? 'Review Loan Terms' : 'Apply for a Personal Loan'}</Text>
               <TouchableOpacity onPress={resetApplyModal} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={24} color={c.text} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[s.fieldLabel, { color: c.text }]}>Agreement</Text>
-              {agreements.length === 0 ? (
-                <Text style={{ color: c.muted, fontSize: 13, marginBottom: spacing.sm }}>No agreements found on your account.</Text>
-              ) : (
-                <View style={[s.optionsGroup, { marginBottom: spacing.sm }]}>
-                  {agreements.map((a) => (
-                    <TouchableOpacity
-                      key={a.id}
-                      style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, agreementId === a.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
-                      onPress={() => setAgreementId(a.id)}
-                    >
-                      <Text style={[s.optionText, { color: c.text }, agreementId === a.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
-                        {a.status} · {formatCurrency(a.rentAmount)}/mo · #{a.id.slice(-6)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
-              <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder="50 - 10,000" placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
-              <Text style={[s.fieldLabel, { color: c.text }]}>Repayment Period</Text>
-              <View style={s.optionsGroup}>
-                {tenureOptions.map((t) => (
-                  <TouchableOpacity key={t.value} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, tenure === t.value && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => setTenure(t.value)}>
-                    <Text style={[s.optionText, { color: c.text }, tenure === t.value && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{t.label}</Text>
+              {!quote ? (
+                <>
+                  <Text style={[s.fieldLabel, { color: c.text }]}>Rental agreement (signed and active)</Text>
+                  {agreements.length === 0 ? (
+                    <Text style={{ color: c.muted, fontSize: 13, marginBottom: spacing.sm }}>No active, signed agreements on your account.</Text>
+                  ) : (
+                    <View style={[s.optionsGroup, { marginBottom: spacing.sm }]}>
+                      {agreements.map((a) => (
+                        <TouchableOpacity
+                          key={a.id}
+                          style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, agreementId === a.id && { borderColor: c.primary, backgroundColor: c.primary + '08' }]}
+                          onPress={() => setAgreementId(a.id)}
+                        >
+                          <Text style={[s.optionText, { color: c.text }, agreementId === a.id && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>
+                            {formatCurrency(a.rentAmount)}/mo · #{a.id.slice(-6)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  <Text style={[s.fieldLabel, { color: c.text }]}>Amount (GHS)</Text>
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} placeholder={terms ? `${terms.minAmount} - ${terms.maxAmount}` : ''} placeholderTextColor={c.muted} keyboardType="numeric" value={amount} onChangeText={setAmount} />
+                  <Text style={[s.fieldLabel, { color: c.text }]}>Repayment Period</Text>
+                  <View style={s.optionsGroup}>
+                    {tenureOptions.map((m) => (
+                      <TouchableOpacity key={m} style={[s.optionBtn, { backgroundColor: c.surface, borderColor: c.border }, tenureNum === m && { borderColor: c.primary, backgroundColor: c.primary + '08' }]} onPress={() => setTenure(String(m))}>
+                        <Text style={[s.optionText, { color: c.text }, tenureNum === m && { color: c.primary, fontFamily: 'Outfit_600SemiBold' }]}>{m} months</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <AITextInput label="Reason" aiContext="loan application reason" placeholder="Why do you need this loan? (min 10 chars)" numberOfLines={3} value={reason} onChangeText={setReason} />
+                  <TouchableOpacity style={[s.submitBtn, { backgroundColor: c.primary }, submitting && s.submitBtnDisabled]} onPress={handleReviewTerms} disabled={submitting} activeOpacity={0.85}>
+                    {submitting ? <ActivityIndicator color="#ffffff" /> : <Text style={s.submitBtnText}>Review terms</Text>}
                   </TouchableOpacity>
-                ))}
-              </View>
-              <AITextInput label="Reason" aiContext="loan application reason" placeholder="Why do you need this loan? (min 10 chars)" numberOfLines={3} value={reason} onChangeText={setReason} />
-              {amountNum > 0 && (
-                <View style={[s.calcCard, neuInset(c)]}>
-                  <Text style={[s.calcRow, { color: c.text }]}>Interest rate: <Text style={s.calcBold}>15% annual</Text></Text>
-                  <Text style={[s.calcRow, { color: c.text }]}>Monthly payment: <Text style={s.calcBold}>{formatCurrency(Math.round(monthlyPayment * 100) / 100)}</Text></Text>
-                  <Text style={[s.calcRow, { color: c.text }]}>Total repayment: <Text style={s.calcBold}>{formatCurrency(Math.round(totalRepayment * 100) / 100)}</Text></Text>
-                </View>
+                </>
+              ) : (
+                <>
+                  <View style={[s.calcCard, neuInset(c)]}>
+                    <Text style={[s.calcRow, { color: c.text }]}>Amount borrowed: <Text style={s.calcBold}>{formatCurrency(quote.principal)}</Text></Text>
+                    {quote.processingFee > 0 && <Text style={[s.calcRow, { color: c.text }]}>Processing fee (deducted): <Text style={s.calcBold}>{formatCurrency(quote.processingFee)}</Text></Text>}
+                    <Text style={[s.calcRow, { color: c.text }]}>You receive: <Text style={s.calcBold}>{formatCurrency(quote.netDisbursed)}</Text></Text>
+                    <Text style={[s.calcRow, { color: c.text }]}>Interest rate: <Text style={s.calcBold}>{quote.annualInterestRate}% a year</Text></Text>
+                    <Text style={[s.calcRow, { color: c.text }]}>APR (interest and fees): <Text style={s.calcBold}>{quote.apr}%</Text></Text>
+                    <Text style={[s.calcRow, { color: c.text }]}>Total repayment: <Text style={s.calcBold}>{formatCurrency(quote.totalRepayable)}</Text></Text>
+                    <Text style={[s.calcRow, { color: c.text }]}>Total cost of credit: <Text style={s.calcBold}>{formatCurrency(quote.totalCostOfCredit)}</Text></Text>
+                  </View>
+                  <Text style={[s.fieldLabel, { color: c.text }]}>Repayment schedule</Text>
+                  {quote.schedule.map((row) => (
+                    <Text key={row.installmentNumber} style={[s.calcRow, { color: c.text }]}>
+                      Month {row.installmentNumber}: {formatCurrency(row.amountDue)} ({formatCurrency(row.principal)} principal + {formatCurrency(row.interest)} interest)
+                    </Text>
+                  ))}
+                  <Text style={[s.cardMeta, { color: c.muted, marginTop: spacing.sm }]}>Payments start one month after the lender disburses the loan. Applying does not guarantee approval.</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md }}>
+                    <Switch value={accepted} onValueChange={setAccepted} />
+                    <Text style={[s.calcRow, { color: c.text, flex: 1 }]}>I have read these terms and accept them</Text>
+                  </View>
+                  <TouchableOpacity style={[s.submitBtn, { backgroundColor: c.primary }, (submitting || !accepted) && s.submitBtnDisabled]} onPress={handleApply} disabled={submitting || !accepted} activeOpacity={0.85}>
+                    {submitting ? <ActivityIndicator color="#ffffff" /> : (
+                      <><Ionicons name="checkmark-circle" size={18} color="#ffffff" /><Text style={s.submitBtnText}>Confirm and apply</Text></>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setQuote(null)} style={{ alignItems: 'center', marginBottom: spacing.md }}>
+                    <Text style={{ color: c.primary, fontFamily: 'Outfit_600SemiBold' }}>Back</Text>
+                  </TouchableOpacity>
+                </>
               )}
-              <TouchableOpacity style={[s.submitBtn, { backgroundColor: c.primary }, submitting && s.submitBtnDisabled]} onPress={handleApply} disabled={submitting} activeOpacity={0.85}>
-                {submitting ? <ActivityIndicator color="#ffffff" /> : (
-                  <><Ionicons name="checkmark-circle" size={18} color="#ffffff" /><Text style={s.submitBtnText}>Apply</Text></>
-                )}
-              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -302,8 +345,6 @@ const s = StyleSheet.create({
   repayBtnOutlineText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
   repayBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, paddingVertical: 10 },
   repayBtnText: { fontSize: 12, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
-  disburseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 10, marginTop: spacing.sm },
-  disburseBtnText: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', color: '#ffffff' },
 
   // Empty
   emptySection: { alignItems: 'center', paddingVertical: 40, gap: spacing.sm },

@@ -25,6 +25,7 @@ interface InsuranceProduct {
   excessAmount: number
   terms?: string
   active: boolean
+  isDemo?: boolean
 }
 
 interface InsuranceClaim {
@@ -32,18 +33,27 @@ interface InsuranceClaim {
   description: string
   amount: number
   status: 'pending' | 'approved' | 'rejected' | 'paid'
+  payoutAmount?: number
 }
 
 interface InsurancePolicy {
   id: string
   productId: string
   policyNumber: string
+  insurerPolicyNumber?: string
+  declineReason?: string
   status: PolicyStatus
   monthlyPremium: number
+  premiumPaid?: number
   startDate: string
   endDate: string
   claims: InsuranceClaim[]
 }
+
+const STATUS_LABELS: Record<PolicyStatus, string> = {
+  pending: 'Awaiting insurer', active: 'Active', lapsed: 'Lapsed', cancelled: 'Cancelled', claimed: 'Claim open',
+}
+const TERM_OPTIONS = [1, 3, 6, 12]
 
 const CATEGORY_LABELS: Record<Category, string> = {
   renters: 'Renters',
@@ -108,14 +118,22 @@ function BrowseTab() {
 
   const [selected, setSelected] = useState<InsuranceProduct | null>(null)
   const [buying, setBuying] = useState(false)
+  const [termMonths, setTermMonths] = useState(12)
+  // The whole term is paid up front — one monthly premium never buys a longer term.
+  const total = selected ? Math.round(selected.monthlyPremium * termMonths * 100) / 100 : 0
 
   async function buy() {
     if (!selected) return
     setBuying(true)
     try {
-      await api.post('/insurance/policies', { productId: selected.id, termMonths: 12 })
+      await api.post('/insurance/policies', { productId: selected.id, termMonths })
       qc.invalidateQueries({ queryKey: ['insurance-policies'] })
-      Alert.alert('Activated', `Policy "${selected.productName}" is now active.`)
+      Alert.alert(
+        selected.isDemo ? 'Demo policy active' : 'Application sent',
+        selected.isDemo
+          ? 'This is a demo product from a fictional insurer — not real cover.'
+          : `${selected.providerName} will issue your policy. Your premium is held until then; if they decline, it is refunded.`,
+      )
       setSelected(null)
     } catch (e) {
       const _err = e as { message?: string }
@@ -224,8 +242,22 @@ function BrowseTab() {
                   <SummaryRow label="Monthly premium" value={formatCurrency(selected.monthlyPremium)} c={c} />
                   <SummaryRow label="Coverage limit" value={formatCurrency(selected.coverageLimit)} c={c} />
                   <SummaryRow label="Excess" value={formatCurrency(selected.excessAmount)} c={c} />
-                  <SummaryRow label="Term" value="12 months" c={c} />
+                  <SummaryRow label="Premium for the term, paid now" value={formatCurrency(total)} c={c} />
                 </View>
+
+                <Text style={[s.label, { color: c.text }]}>Cover term</Text>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  {TERM_OPTIONS.map((m) => (
+                    <TouchableOpacity key={m} onPress={() => setTermMonths(m)} style={[s.filterChip, { backgroundColor: termMonths === m ? c.primary : c.surface, borderColor: termMonths === m ? c.primary : c.border }]}>
+                      <Text style={[s.filterChipText, { color: termMonths === m ? '#fff' : c.text }]}>{m} mo</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={[s.cardSub, { color: c.muted, marginBottom: spacing.sm }]}>
+                  {selected.isDemo
+                    ? 'Demo product from a fictional insurer — for testing only, not real cover.'
+                    : `${selected.providerName} underwrites and issues this policy and decides any claims. Your premium is held until they issue it.`}
+                </Text>
 
                 {selected.terms ? (
                   <View style={[s.termsBox, neuInset(c)]}>
@@ -243,7 +275,7 @@ function BrowseTab() {
                   {buying ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={s.submitText}>Pay {formatCurrency(selected.monthlyPremium)}</Text>
+                    <Text style={s.submitText}>Pay {formatCurrency(total)}</Text>
                   )}
                 </TouchableOpacity>
               </ScrollView>
@@ -279,6 +311,7 @@ function PoliciesTab() {
   const [claimPolicy, setClaimPolicy] = useState<InsurancePolicy | null>(null)
   const [claimAmount, setClaimAmount] = useState('')
   const [claimDesc, setClaimDesc] = useState('')
+  const [incidentDate, setIncidentDate] = useState('')
   const [filing, setFiling] = useState(false)
 
   async function fileClaim() {
@@ -292,17 +325,23 @@ function PoliciesTab() {
       Alert.alert('Invalid description', 'Description must be at least 10 characters')
       return
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(incidentDate)) {
+      Alert.alert('Incident date', 'Enter the date of the incident as YYYY-MM-DD')
+      return
+    }
     setFiling(true)
     try {
       await api.post(`/insurance/policies/${claimPolicy.id}/claim`, {
         amount: amt,
         description: claimDesc.trim(),
+        incidentDate,
       })
       qc.invalidateQueries({ queryKey: ['insurance-policies'] })
       Alert.alert('Filed', 'Claim submitted successfully')
       setClaimPolicy(null)
       setClaimAmount('')
       setClaimDesc('')
+      setIncidentDate('')
     } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message ?? 'Failed to file claim')
@@ -345,17 +384,18 @@ function PoliciesTab() {
                   <Text style={[s.cardSub, { color: c.muted }]} numberOfLines={1}>
                     {product?.providerName ?? 'Insurance Provider'}
                   </Text>
-                  <Text style={[s.policyNum, { color: c.muted }]}>{policy.policyNumber}</Text>
+                  <Text style={[s.policyNum, { color: c.muted }]}>{policy.insurerPolicyNumber ? `Policy ${policy.insurerPolicyNumber} · ` : ''}Ref {policy.policyNumber}</Text>
+                  {policy.declineReason ? <Text style={[s.policyNum, { color: c.danger }]}>Declined: {policy.declineReason}</Text> : null}
                 </View>
                 <View style={[s.statusBadge, { backgroundColor: STATUS_COLORS[policy.status] + '20' }]}>
-                  <Text style={[s.statusText, { color: STATUS_COLORS[policy.status] }]}>{policy.status}</Text>
+                  <Text style={[s.statusText, { color: STATUS_COLORS[policy.status] }]}>{STATUS_LABELS[policy.status]}</Text>
                 </View>
               </View>
 
               <View style={s.statRow}>
                 <View style={[s.statBox, neuInset(c), { flex: 1 }]}>
-                  <Text style={[s.statBoxLabel, { color: c.muted }]}>Premium</Text>
-                  <Text style={[s.statBoxValue, { color: c.text }]}>{formatCurrency(policy.monthlyPremium)}</Text>
+                  <Text style={[s.statBoxLabel, { color: c.muted }]}>Premium paid</Text>
+                  <Text style={[s.statBoxValue, { color: c.text }]}>{formatCurrency(policy.premiumPaid ?? policy.monthlyPremium)}</Text>
                 </View>
                 <View style={[s.statBox, neuInset(c), { flex: 1 }]}>
                   <Text style={[s.statBoxLabel, { color: c.muted }]}>Started</Text>
@@ -374,7 +414,7 @@ function PoliciesTab() {
                     <View key={cl.id} style={s.claimRow}>
                       <Text style={[s.claimDesc, { color: c.text }]} numberOfLines={1}>{cl.description}</Text>
                       <Text style={[s.claimAmount, { color: c.text }]}>
-                        {formatCurrency(cl.amount)} · {cl.status}
+                        {formatCurrency(cl.amount)} · {cl.status}{cl.payoutAmount != null ? ` (paid ${formatCurrency(cl.payoutAmount)})` : ''}
                       </Text>
                     </View>
                   ))}
@@ -408,9 +448,20 @@ function PoliciesTab() {
               {claimPolicy && (
                 <View style={[s.summaryBox, neuInset(c), { marginTop: 0 }]}>
                   <Text style={[s.termsLabel, { color: c.muted }]}>POLICY</Text>
-                  <Text style={[s.policyNum, { color: c.text, fontSize: 13 }]}>{claimPolicy.policyNumber}</Text>
+                  <Text style={[s.policyNum, { color: c.text, fontSize: 13 }]}>{claimPolicy.insurerPolicyNumber ?? claimPolicy.policyNumber}</Text>
+                  <Text style={[s.cardSub, { color: c.muted }]}>Covered {claimPolicy.startDate} to {claimPolicy.endDate}. Your insurer decides the claim.</Text>
                 </View>
               )}
+
+              <Text style={[s.label, { color: c.text }]}>Date of incident (YYYY-MM-DD)</Text>
+              <TextInput
+                style={[s.input, neuInset(c), { color: c.text }]}
+                value={incidentDate}
+                onChangeText={setIncidentDate}
+                placeholder="2026-09-01"
+                placeholderTextColor={c.muted}
+                autoCapitalize="none"
+              />
 
               <Text style={[s.label, { color: c.text }]}>Claim Amount (GHS)</Text>
               <TextInput

@@ -16,9 +16,6 @@ import type {
   AuthResponse,
   Conversation,
   ChatMessage,
-  Investment,
-  InvestmentOption,
-  Loan,
   CreditScore,
   TenantProfile,
   ProfileAccess,
@@ -800,84 +797,6 @@ export function useContributeToSavings() {
   })
 }
 
-// Investments
-export function useInvestmentOptions() {
-  return useQuery({
-    queryKey: ['investment-options'],
-    queryFn: () => api.get<InvestmentOption[]>('/investments/options'),
-  })
-}
-
-export function useInvestments() {
-  return useQuery({
-    queryKey: ['investments'],
-    queryFn: () => api.get<Investment[]>('/investments'),
-  })
-}
-
-export function useCreateInvestment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { type: string; amount: number; tenure: number; partnerId: string; riskDisclosureAccepted: boolean }) =>
-      api.post<Investment>('/investments', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['investments'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-export function useWithdrawInvestment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.post<Investment>(`/investments/${id}/withdraw`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['investments'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-// Loans
-export function useLoans() {
-  return useQuery({
-    queryKey: ['loans'],
-    queryFn: () => api.get<Loan[]>('/loans'),
-  })
-}
-
-export function useApplyForLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { agreementId: string; amount: number; tenure: number; reason: string }) =>
-      api.post<Loan>('/loans/apply', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loans'] }),
-  })
-}
-
-export function useDisburseLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.post<Loan>(`/loans/${id}/disburse`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
-export function useRepayLoan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, amount }: { id: string; amount: number }) =>
-      api.post<Loan>(`/loans/${id}/repay`, { amount }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans'] })
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-    },
-  })
-}
-
 // Disputes
 // Server defaults to pageSize 20 — callers that render the full list plus stats
 // must pass a larger pageSize or they'd silently see (and compute on) a subset.
@@ -1627,7 +1546,7 @@ export function useBuyPolicy() {
 export function useFileClaim() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; amount: number; description: string }) =>
+    mutationFn: ({ id, ...body }: { id: string; amount: number; description: string; incidentDate: string }) =>
       api.post<{ policy: InsurancePolicy; claim: unknown }>(`/insurance/policies/${id}/claim`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-policies'] }),
   })
@@ -1638,6 +1557,7 @@ export function useFileClaim() {
 export interface InsuranceClaimReview {
   id: string
   filedAt: string
+  incidentDate?: string
   amount: number
   status: 'pending' | 'approved' | 'rejected' | 'paid'
   description: string
@@ -1645,8 +1565,13 @@ export interface InsuranceClaimReview {
   payoutAmount?: number
   decidedBy?: string
   decidedAt?: string
+  decisionSource?: 'provider' | 'admin_recorded'
+  providerReference?: string
+  payoutReference?: string
   policyId: string
   policyNumber: string
+  insurerPolicyNumber?: string
+  remainingCoverage?: number
   policyHolderId: string
   policyHolderName?: string
   policyHolderEmail?: string
@@ -1674,8 +1599,12 @@ export function useDecideInsuranceClaim() {
       policyId: string
       claimId: string
       decision: 'approved' | 'rejected'
+      /** The insurer's own decision reference — admins only record insurer decisions. */
+      providerReference: string
       notes?: string
       payoutAmount?: number
+      /** Reference of the insurer's payout settlement (required to approve). */
+      settlementReference?: string
     }) =>
       api.post<{ policy: InsurancePolicy; claim: InsuranceClaimReview }>(
         `/insurance/policies/${policyId}/claims/${claimId}/decide`,
@@ -2105,6 +2034,7 @@ export function useApplyForFinancing() {
       purpose: string
       agreementId?: string
       propertyId?: string
+      advanceMonths?: number
       willUsePayrollDeduction?: boolean
     }) => api.post<FinancingApplication>('/financing/applications', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['financing-applications'] }),
@@ -2142,7 +2072,7 @@ export function useSignFinancingContract() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, signature }: { id: string; signature: string }) =>
-      api.post<FinancingContract>(`/financing/contracts/${id}/sign`, { signature }),
+      api.post<FinancingContract>(`/financing/contracts/${id}/sign`, { signature, acceptTerms: true }),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
       qc.invalidateQueries({ queryKey: ['financing-contract', vars.id] })
@@ -2209,8 +2139,12 @@ export function useAddContractNote() {
 export function useDisburseFinancingContract() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.post<FinancingContract>(`/financing/contracts/${id}/disburse`, {}),
-    onSuccess: (_d, id) => {
+    // Without a settlement reference the financier funds the disbursement from its own wallet.
+    mutationFn: ({ id, settlementReference }: { id: string; settlementReference?: string }) =>
+      api.post<FinancingContract>(`/financing/contracts/${id}/disburse`, settlementReference
+        ? { fundingSource: 'external_settlement', settlementReference }
+        : { fundingSource: 'financier_wallet' }),
+    onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
       qc.invalidateQueries({ queryKey: ['financing-contract', id] })
       qc.invalidateQueries({ queryKey: ['financing-portfolio'] })
@@ -2317,6 +2251,23 @@ export function useUpdateEmployee() {
   })
 }
 
+/** The caller's employment links, including invites awaiting their confirmation. */
+export function useMyEmployments() {
+  return useQuery({
+    queryKey: ['employments', 'mine'],
+    queryFn: () => api.get<PaginatedResponse<Employment & { employerName?: string }>>('/employers/employments/mine'),
+  })
+}
+
+export function useRespondToEmployment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, accept }: { id: string; accept: boolean }) =>
+      api.post<Employment>(`/employers/employments/${id}/${accept ? 'accept' : 'decline'}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employments', 'mine'] }),
+  })
+}
+
 export function useMyMandates() {
   return useQuery({
     queryKey: ['mandates', 'mine'],
@@ -2335,6 +2286,7 @@ export function useCreateMandate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: {
+      employmentId?: string
       allocationType: 'rent' | 'savings' | 'loan_repayment' | 'wallet_topup'
       targetEntityId?: string
       amountType: 'fixed' | 'percentage'
@@ -2847,7 +2799,7 @@ export function useMyInsuranceProviderProfile() {
 
 export interface InsuranceProviderProfileInput {
   institutionName: string
-  licenseNumber?: string
+  licenseNumber: string
   companyRegistrationNo?: string
   contactEmail: string
   contactPhone: string
@@ -2907,6 +2859,36 @@ export function useUpdateMyInsuranceProduct() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['insurance-provider-products'] })
       qc.invalidateQueries({ queryKey: ['insurance-products'] })
+    },
+  })
+}
+
+/** Policies written on the provider's own products (applications to issue, claims to decide). */
+export function useMyProviderPolicies(enabled = true) {
+  return useQuery({
+    queryKey: ['insurance-provider-policies'],
+    queryFn: () => api.get<{ items: InsurancePolicy[]; total: number }>('/insurance/providers/me/policies'),
+    enabled,
+  })
+}
+
+export function useProviderPolicyAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action, ...body }: { id: string } & ({ action: 'issue'; insurerPolicyNumber: string } | { action: 'decline'; reason: string })) =>
+      api.post<InsurancePolicy>(`/insurance/providers/me/policies/${id}/${action}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-provider-policies'] }),
+  })
+}
+
+export function useProviderDecideClaim() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ policyId, claimId, ...body }: { policyId: string; claimId: string; decision: 'approved' | 'rejected'; notes?: string; payoutAmount?: number }) =>
+      api.post<{ policy: InsurancePolicy }>(`/insurance/providers/me/policies/${policyId}/claims/${claimId}/decide`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['insurance-provider-policies'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
     },
   })
 }

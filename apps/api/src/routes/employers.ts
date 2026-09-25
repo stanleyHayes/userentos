@@ -88,7 +88,9 @@ router.get('/employees', authenticate, requireRole('employer'), requirePermissio
   const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName email phone').lean()
   const userMap = new Map(users.map((u) => [u._id.toString(), u]))
   const items = employments.map((e) => {
-    const u = userMap.get(e.userId)
+    // An unconfirmed invite shows the address the employer typed, never the account's name.
+    const confirmed = e.status !== 'pending' && e.status !== 'declined'
+    const u = confirmed ? userMap.get(e.userId) : undefined
     return {
       ...idOf(e),
       employerId: e.employerId.toString(),
@@ -99,7 +101,21 @@ router.get('/employees', authenticate, requireRole('employer'), requirePermissio
   success(res, { items, total: items.length, page: 1, pageSize: items.length, totalPages: 1 })
 })
 
-// Add employee — links existing user (by email) to employer
+/** Ask the employee to confirm; nothing is deducted until they do. */
+async function inviteEmployee(employerName: string, userId: string) {
+  try {
+    await notify({
+      userId,
+      title: 'Confirm your employer',
+      message: `${employerName} added you as an employee on RentOS. Confirm or decline in your payroll deductions settings — no deductions can be set up until you confirm.`,
+      actionUrl: '/financing/mandates',
+    })
+  } catch (e) {
+    console.warn('[employers] notify failed:', (e as Error).message)
+  }
+}
+
+// Invite employee — links an existing user (by email) once they accept
 router.post('/employees', authenticate, requireRole('employer'), requirePermission('employer:invite_employees'), async (req, res) => {
   const schema = z.object({
     email: z.string().email(),
@@ -123,18 +139,18 @@ router.post('/employees', authenticate, requireRole('employer'), requirePermissi
   const employment = await Employment.create({
     employerId: employer._id.toString(),
     userId: user._id.toString(),
+    inviteEmail: parsed.data.email.toLowerCase(),
     staffNumber: parsed.data.staffNumber,
     jobTitle: parsed.data.jobTitle,
     netMonthlySalary: parsed.data.netMonthlySalary,
     startDate: parsed.data.startDate,
-    status: 'active',
+    status: 'pending',
   })
-  employer.totalEmployees = (employer.totalEmployees ?? 0) + 1
-  await employer.save()
-  success(res, { ...idOf(employment.toObject()), employeeName: `${user.firstName} ${user.lastName}` }, 'Employee added', 201)
+  await inviteEmployee(employer.legalName, user._id.toString())
+  success(res, idOf(employment.toObject()), 'Invitation sent — the employee must confirm before any deduction', 201)
 })
 
-// Bulk CSV import — links many existing users to employer in one request
+// Bulk CSV import — invites many existing users; each must accept. No names are returned.
 router.post('/employees/bulk', authenticate, requireRole('employer'), requirePermission('employer:invite_employees'), async (req, res) => {
   const rowSchema = z.object({
     email: z.string().email(),
@@ -187,35 +203,42 @@ router.post('/employees/bulk', authenticate, requireRole('employer'), requirePer
       await Employment.create({
         employerId,
         userId: userIdStr,
+        inviteEmail: email,
         staffNumber: row.staffNumber,
         jobTitle: row.jobTitle,
         netMonthlySalary: row.netMonthlySalary,
         startDate: row.startDate,
-        status: 'active',
+        status: 'pending',
       })
+      await inviteEmployee(employer.legalName, userIdStr)
       created++
     } catch (e) {
       errors.push({ row: i + 1, email, reason: (e as Error).message })
     }
   }
 
-  if (created > 0) {
-    employer.totalEmployees = (employer.totalEmployees ?? 0) + created
-    await employer.save()
-  }
-
-  success(res, { created, skipped, errors }, `Imported ${created} employee${created === 1 ? '' : 's'}`, 201)
+  success(res, { created, skipped, errors }, `Invited ${created} employee${created === 1 ? '' : 's'} — each must confirm`, 201)
 })
 
 router.patch('/employees/:id', authenticate, requireRole('employer'), async (req, res) => {
+  const parsed = z.object({
+    status: z.enum(['active', 'on_leave', 'terminated']).optional(),
+    jobTitle: z.string().optional(),
+    netMonthlySalary: z.number().min(0).optional(),
+    staffNumber: z.string().optional(),
+    endDate: z.string().optional(),
+  }).safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
   const employer = await loadMyEmployer(req.user!.userId)
   const employment = await Employment.findById(param(req.params.id))
   if (!employer || !employment || employment.employerId !== employer._id.toString()) { error(res, 'Employee not found', 404); return }
   const previousStatus = employment.status
-  const allowed = ['status', 'jobTitle', 'netMonthlySalary', 'staffNumber', 'endDate'] as const
-  for (const field of allowed) {
-    if (req.body[field] !== undefined) employment.set(field, req.body[field])
+  // Only the employee can turn an invite into an employment link.
+  if ((previousStatus === 'pending' || previousStatus === 'declined') && parsed.data.status && parsed.data.status !== 'terminated') {
+    error(res, 'The employee has not confirmed this employment yet', 409); return
   }
+  employment.set(parsed.data)
   await employment.save()
 
   // Cascade: when an active employee is terminated, revoke all of their active mandates
@@ -246,6 +269,40 @@ router.patch('/employees/:id', authenticate, requireRole('employer'), async (req
 })
 
 // ────────────────────────────────────────
+// EMPLOYEE CONFIRMATION
+// ────────────────────────────────────────
+
+// Employee: my employment links, including invites awaiting my answer
+router.get('/employments/mine', authenticate, async (req, res) => {
+  const employments = await Employment.find({ userId: req.user!.userId }).sort({ createdAt: -1 }).lean()
+  const employers = await Employer.find({ _id: { $in: employments.map((e) => e.employerId) } }).select('legalName').lean()
+  const names = new Map(employers.map((e) => [e._id.toString(), e.legalName]))
+  const items = employments.map((e) => ({ ...idOf(e), employerName: names.get(e.employerId) }))
+  success(res, { items, total: items.length, page: 1, pageSize: items.length, totalPages: 1 })
+})
+
+router.post('/employments/:id/accept', authenticate, async (req, res) => {
+  const employment = await Employment.findOneAndUpdate(
+    { _id: param(req.params.id), userId: req.user!.userId, status: 'pending' },
+    { $set: { status: 'active', employeeAcceptedAt: new Date() }, $unset: { employeeDeclinedAt: 1 } },
+    { returnDocument: 'after' },
+  )
+  if (!employment) { error(res, 'Invitation not found', 404); return }
+  await Employer.updateOne({ _id: employment.employerId }, { $inc: { totalEmployees: 1 } })
+  success(res, idOf(employment.toObject()), 'Employment confirmed')
+})
+
+router.post('/employments/:id/decline', authenticate, async (req, res) => {
+  const employment = await Employment.findOneAndUpdate(
+    { _id: param(req.params.id), userId: req.user!.userId, status: 'pending' },
+    { $set: { status: 'declined', employeeDeclinedAt: new Date() } },
+    { returnDocument: 'after' },
+  )
+  if (!employment) { error(res, 'Invitation not found', 404); return }
+  success(res, idOf(employment.toObject()), 'Invitation declined')
+})
+
+// ────────────────────────────────────────
 // DEDUCTION MANDATES
 // ────────────────────────────────────────
 
@@ -273,20 +330,31 @@ router.get('/mandates', authenticate, requireRole('employer'), async (req, res) 
 // Employee: create + sign mandate
 router.post('/mandates', authenticate, async (req, res) => {
   const schema = z.object({
+    employmentId: z.string().optional(),
     allocationType: z.enum(['rent', 'savings', 'loan_repayment', 'wallet_topup']),
     targetEntityId: z.string().optional(),
     amountType: z.enum(['fixed', 'percentage']).default('fixed'),
-    amount: z.number().min(0),
+    amount: z.number().positive(),
     startDate: z.string(),
     endDate: z.string().optional(),
     noticePeriodDays: z.number().int().min(0).max(90).default(7),
     signature: z.string().min(3),
-  })
+  }).refine((d) => d.amountType !== 'percentage' || d.amount <= 100, { message: 'A percentage deduction cannot exceed 100%', path: ['amount'] })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const employment = await Employment.findOne({ userId: req.user!.userId, status: 'active' })
-  if (!employment) { error(res, 'No active employment on file — ask your employer to add you first'); return }
+  // The mandate goes to an employer the employee confirmed — never an arbitrary
+  // one of several links.
+  const employments = await Employment.find({ userId: req.user!.userId, status: 'active' })
+  const employment = parsed.data.employmentId
+    ? employments.find((e) => e._id.toString() === parsed.data.employmentId)
+    : employments.length === 1 ? employments[0] : undefined
+  if (!employment) {
+    error(res, parsed.data.employmentId
+      ? 'That employment is not an active, confirmed link on your account'
+      : employments.length > 1 ? 'Choose which employer this mandate is for' : 'No confirmed employment on file — ask your employer to invite you, then confirm it')
+    return
+  }
 
   let targetEntityType: 'agreement' | 'savings_plan' | 'financing_contract' | 'wallet' | undefined
   let targetLabel: string | undefined

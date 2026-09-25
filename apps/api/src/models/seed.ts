@@ -16,7 +16,7 @@ import { BlogPost } from './BlogPost.js'
 import { TenantProfile } from './TenantProfile.js'
 import { CreditScore } from './CreditScore.js'
 import { Review } from './Review.js'
-import { Loan } from './Loan.js'
+import { Loan, LOAN_OPEN_STATUSES } from './Loan.js'
 import { Investment } from './Investment.js'
 import { Conversation, Message } from './Conversation.js'
 import { Application } from './Application.js'
@@ -2022,6 +2022,8 @@ export async function seedDatabase() {
 
   const LOAN_REASONS = ['Need funds for rent advance on a new apartment', 'Emergency medical expenses for a family member', 'Bridging funds while waiting for salary', 'Home furniture and appliances purchase', 'School fees for my children', 'Vehicle repair to keep commuting to work', 'Business stock purchase for my shop', 'Relocation costs to a new city']
   const loanDocs: Record<string, unknown>[] = []
+  // The Loan model allows one open loan per borrower (unique partial index).
+  const openLoanUsers = new Set<string>(await Loan.distinct('userId', { status: { $in: [...LOAN_OPEN_STATUSES] } }))
   for (let i = 0; i < 25; i++) {
     const agr = rp(genActiveAgreements)
     const amount = ri(2, 20) * 500
@@ -2029,7 +2031,11 @@ export async function seedDatabase() {
     const r = 0.15 / 12
     const monthlyPayment = round2((amount * r) / (1 - Math.pow(1 + r, -tenure)))
     const totalRepayment = round2(monthlyPayment * tenure)
-    const status = weighted([['active', 40], ['repaid', 20], ['pending', 10], ['approved', 10], ['defaulted', 10], ['rejected', 10]])
+    let status = weighted([['active', 40], ['repaid', 20], ['pending', 10], ['approved', 10], ['defaulted', 10], ['rejected', 10]])
+    if ((LOAN_OPEN_STATUSES as readonly string[]).includes(status)) {
+      if (openLoanUsers.has(agr.tenantId)) status = 'repaid'
+      else openLoanUsers.add(agr.tenantId)
+    }
     const doc: Record<string, unknown> = {
       userId: agr.tenantId,
       agreementId: agr._id.toString(),

@@ -4,17 +4,24 @@ import { z } from 'zod'
 import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
 import { InsuranceProduct } from '../models/InsuranceProduct.js'
 import { InsurancePolicy } from '../models/InsurancePolicy.js'
+import { InsuranceProviderProfile, verifiedInsuranceProviderIds } from '../models/InsuranceProviderProfile.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
+import { demoInsuranceEnabled } from '../bootstrapInsurance.js'
 import { notify } from '../services/notify.js'
+import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { decideClaim, remainingCoverage, ClaimDecisionError } from '../services/insuranceClaims.js'
+import { recordAudit } from '../utils/audit.js'
+import { round2 } from '../utils/money.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 
 const router = Router()
 
 const CATEGORIES = ['renters', 'landlord', 'rent_guarantee', 'property_damage', 'tenant_default'] as const
+const MAX_TERM_MONTHS = 12
 
-function genPolicyNumber() {
+function genPolicyReference() {
   return `POL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 }
 
@@ -22,74 +29,90 @@ function genClaimId() {
   return `CLM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 }
 
+const idOf = <T extends { _id: unknown }>(doc: T) => ({ ...doc, id: (doc._id as Types.ObjectId).toString() })
+
+function addMonths(isoDate: string, months: number) {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Only an approved, licence-verified insurer's products are sold (demo products outside production). */
+async function sellableFilter(): Promise<Record<string, unknown>> {
+  const providerIds = [...await verifiedInsuranceProviderIds()]
+  return {
+    active: true,
+    $or: [
+      { providerId: { $in: providerIds }, isDemo: { $ne: true } },
+      ...(demoInsuranceEnabled() ? [{ isDemo: true }] : []),
+    ],
+  }
+}
+
+async function verifiedProvider(providerId: string) {
+  const ids = await verifiedInsuranceProviderIds()
+  if (!ids.has(providerId)) return null
+  return InsuranceProviderProfile.findById(providerId).lean()
+}
+
 // ─── Products ───
 
-// List active products (auth required, optional category filter)
+// List sellable products (auth required, optional category filter)
 router.get('/products', authenticate, async (req, res) => {
-  const filter: Record<string, unknown> = { active: true }
-  const category = req.query.category as string | undefined
-  if (category && CATEGORIES.includes(category as typeof CATEGORIES[number])) {
-    filter.category = category
-  }
-  // Admin sees all (active + inactive) when ?all=true
   const userRoles = req.user?.roles ?? []
   const isAdmin = userRoles.includes('admin') || userRoles.includes('super_admin')
-  if (isAdmin && req.query.all === 'true') {
-    delete filter.active
-  }
+  // Admin sees everything (including unsellable) when ?all=true
+  const filter: Record<string, unknown> = isAdmin && req.query.all === 'true' ? {} : await sellableFilter()
+  const category = req.query.category as string | undefined
+  if (category && CATEGORIES.includes(category as typeof CATEGORIES[number])) filter.category = category
 
   const products = await InsuranceProduct.find(filter).sort({ category: 1, monthlyPremium: 1 }).lean()
-  const items = products.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
+  const items = products.map(idOf)
   success(res, { items, total: items.length })
 })
 
-// Create product (admin/super_admin only)
-router.post('/products', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
-  const schema = z.object({
-    providerId: z.string().min(1),
-    providerName: z.string().min(1),
-    productName: z.string().min(1),
-    category: z.enum(['renters', 'landlord', 'rent_guarantee', 'property_damage', 'tenant_default']),
-    description: z.string().min(1),
-    coverageDetails: z.string().min(1),
-    monthlyPremium: z.number().min(0),
-    coverageLimit: z.number().min(0),
-    excessAmount: z.number().min(0).default(0),
-    terms: z.string().default(''),
-    active: z.boolean().default(true),
-    commissionPct: z.number().min(0).max(15).default(5),
-  })
-
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-
-  const product = await InsuranceProduct.create(parsed.data)
-  success(res, { ...product.toObject(), id: product._id.toString() }, 'Insurance product created', 201)
+const adminProductSchema = z.object({
+  providerId: z.string().min(1),
+  productName: z.string().min(1),
+  category: z.enum(CATEGORIES),
+  description: z.string().min(1),
+  coverageDetails: z.string().min(1),
+  monthlyPremium: z.number().positive(),
+  coverageLimit: z.number().positive(),
+  excessAmount: z.number().min(0).default(0),
+  terms: z.string().default(''),
+  active: z.boolean().default(true),
+  commissionPct: z.number().min(0).max(15).default(5),
 })
 
-// Update product (admin/super_admin only)
-router.patch('/products/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
-  const schema = z.object({
-    providerName: z.string().optional(),
-    productName: z.string().optional(),
-    category: z.enum(['renters', 'landlord', 'rent_guarantee', 'property_damage', 'tenant_default']).optional(),
-    description: z.string().optional(),
-    coverageDetails: z.string().optional(),
-    monthlyPremium: z.number().min(0).optional(),
-    coverageLimit: z.number().min(0).optional(),
-    excessAmount: z.number().min(0).optional(),
-    terms: z.string().optional(),
-    active: z.boolean().optional(),
-    commissionPct: z.number().min(0).max(15).optional(),
-  })
-
-  const parsed = schema.safeParse(req.body)
+// Create product (admin) — only on behalf of an approved, licence-verified insurer.
+router.post('/products', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const parsed = adminProductSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const product = await InsuranceProduct.findByIdAndUpdate(param(req.params.id), parsed.data, { returnDocument: 'after' })
-  if (!product) { error(res, 'Product not found', 404); return }
+  const provider = await verifiedProvider(parsed.data.providerId)
+  if (!provider) { error(res, 'Products must belong to an approved insurer with a verified licence'); return }
 
-  success(res, { ...product.toObject(), id: product._id.toString() }, 'Product updated')
+  const product = await InsuranceProduct.create({ ...parsed.data, providerName: provider.institutionName })
+  await recordAudit(req, 'insurance.product.create', 'InsuranceProduct', product._id.toString())
+  success(res, idOf(product.toObject() as { _id: unknown }), 'Insurance product created', 201)
+})
+
+// Update product (admin)
+router.patch('/products/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const parsed = adminProductSchema.omit({ providerId: true }).partial().safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+  const existing = await InsuranceProduct.findById(param(req.params.id)).lean()
+  if (!existing) { error(res, 'Product not found', 404); return }
+  if (parsed.data.active && !existing.isDemo && !await verifiedProvider(existing.providerId)) {
+    error(res, 'This insurer is not approved with a verified licence, so its products cannot be activated'); return
+  }
+
+  const product = await InsuranceProduct.findByIdAndUpdate(existing._id, { $set: parsed.data }, { returnDocument: 'after' })
+  if (!product) { error(res, 'Product not found', 404); return }
+  await recordAudit(req, 'insurance.product.update', 'InsuranceProduct', product._id.toString())
+  success(res, idOf(product.toObject() as { _id: unknown }), 'Product updated')
 })
 
 // ─── Policies ───
@@ -97,107 +120,84 @@ router.patch('/products/:id', authenticate, requireRole('admin', 'super_admin'),
 // List my policies
 router.get('/policies', authenticate, async (req, res) => {
   const policies = await InsurancePolicy.find({ userId: req.user!.userId }).sort({ createdAt: -1 }).lean()
-  const items = policies.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
-  success(res, { items, total: items.length })
+  success(res, { items: policies.map(idOf), total: policies.length })
 })
 
-// Buy policy (auth) — debits first premium from wallet
+// Apply for a policy. The whole term's premium is paid now (one monthly premium
+// never buys a longer term) and held until the insurer issues the policy.
 router.post('/policies', authenticate, async (req, res) => {
   const schema = z.object({
     productId: z.string(),
     agreementId: z.string().optional(),
     propertyId: z.string().optional(),
-    termMonths: z.number().int().min(1).max(36).default(12),
+    termMonths: z.number().int().min(1).max(MAX_TERM_MONTHS).default(12),
   })
 
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const { productId, agreementId, propertyId, termMonths } = parsed.data
+  const userId = req.user!.userId
 
-  const product = await InsuranceProduct.findById(productId)
-  if (!product || !product.active) { error(res, 'Insurance product is unavailable'); return }
+  const product = await InsuranceProduct.findOne({ _id: productId, ...await sellableFilter() }).lean()
+  if (!product) { error(res, 'Insurance product is unavailable'); return }
 
-  const premium = product.monthlyPremium
-  const now = new Date()
-  const startDate = now.toISOString().slice(0, 10)
-  const endDt = new Date(now)
-  endDt.setMonth(endDt.getMonth() + termMonths)
-  const endDate = endDt.toISOString().slice(0, 10)
-  const policyNumber = genPolicyNumber()
-  const ref = `INS-${policyNumber}`
+  const premiumTotal = round2(product.monthlyPremium * termMonths)
+  const startDate = new Date().toISOString().slice(0, 10)
+  const policyNumber = genPolicyReference()
+  const reference = `INS-${policyNumber}`
 
-  // Atomic conditional debit — single operation that only succeeds when the
-  // balance covers the premium, so concurrent purchases can't double-spend or
-  // drive the balance negative (previously a read-then-write race).
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: req.user!.userId, balance: { $gte: premium } },
-    { $inc: { balance: -premium } },
-    { returnDocument: 'after' },
-  )
-  if (!wallet) {
-    const exists = await Wallet.exists({ userId: req.user!.userId })
+  const debited = await debitWallet(userId, premiumTotal, { type: 'insurance_premium', reference, description: `Insurance premium (${termMonths} months) — ${product.productName}` })
+  if (!debited) {
+    const exists = await Wallet.exists({ userId })
     if (!exists) { error(res, 'Wallet not found. Please set up your wallet first.', 404); return }
-    error(res, `Insufficient wallet balance. You need GHS ${premium.toFixed(2)} for the first premium.`)
+    error(res, `Insufficient wallet balance. You need GHS ${premiumTotal.toFixed(2)} for ${termMonths} months of cover.`)
     return
   }
 
-  // Create + activate the policy. If this fails, refund the debit so the user is
-  // never charged without a policy (previously a partial-failure lost the money).
+  // Demo products have no insurer behind them, so they activate at once.
   const policy = await InsurancePolicy.create({
-    userId: req.user!.userId,
+    userId,
     productId: product._id.toString(),
+    providerId: product.providerId,
     agreementId,
     propertyId,
     startDate,
-    endDate,
-    monthlyPremium: premium,
-    status: 'active',
+    endDate: addMonths(startDate, termMonths),
+    monthlyPremium: product.monthlyPremium,
+    termMonths,
+    premiumPaid: premiumTotal,
+    status: product.isDemo ? 'active' : 'pending',
+    ...(product.isDemo ? { insurerPolicyNumber: `DEMO-${policyNumber}`, issuedAt: new Date().toISOString() } : {}),
     lastPaidAt: new Date().toISOString(),
     policyNumber,
     claims: [],
   }).catch(async () => {
-    await Wallet.updateOne({ userId: req.user!.userId }, { $inc: { balance: premium } })
+    await creditWallet(userId, premiumTotal, { type: 'refund', reference: `${reference}-REV`, description: 'Reversal of failed policy application' })
     return null
   })
   if (!policy) { error(res, 'Could not create policy; your wallet has been refunded.', 500); return }
 
-  // Record the ledger entry atomically (balanceAfter reflects the atomic debit).
-  await Wallet.updateOne(
-    { userId: req.user!.userId },
-    { $push: { transactions: {
-      type: 'withdrawal',
-      amount: premium,
-      balanceAfter: wallet.balance,
-      reference: ref,
-      description: `Insurance premium — ${product.productName}`,
-      createdAt: new Date().toISOString(),
-    } } },
-  )
-
   void notify({
-    userId: req.user!.userId,
-    title: 'Insurance Policy Active',
-    message: `Your ${product.productName} policy (${policyNumber}) is now active. First premium of GHS ${product.monthlyPremium.toFixed(2)} debited.`,
+    userId,
+    title: product.isDemo ? 'Demo Policy Active' : 'Insurance Application Sent',
+    message: product.isDemo
+      ? `Demo policy ${policyNumber} is active. This is test data, not real cover.`
+      : `Your application for ${product.productName} (${policyNumber}) was sent to ${product.providerName}. GHS ${premiumTotal.toFixed(2)} is held until they issue the policy; if they decline, it is refunded.`,
     actionUrl: '/insurance',
   })
 
-  success(
-    res,
-    {
-      policy: { ...policy.toObject(), id: policy._id.toString() },
-      wallet: { balance: wallet.balance },
-    },
-    'Policy purchased and activated',
-    201,
-  )
+  const wallet = await Wallet.findOne({ userId }).lean()
+  success(res, { policy: idOf(policy.toObject() as { _id: unknown }), wallet: { balance: wallet?.balance ?? 0 } },
+    product.isDemo ? 'Demo policy activated' : 'Application sent to the insurer', 201)
 })
 
-// File a claim
+// File a claim — only for a loss inside the paid-for cover period and within the cover.
 router.post('/policies/:id/claim', authenticate, async (req, res) => {
   const schema = z.object({
-    amount: z.number().min(1),
+    amount: z.number().positive(),
     description: z.string().min(10),
+    incidentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter the date of the incident'),
   })
 
   const parsed = schema.safeParse(req.body)
@@ -211,10 +211,21 @@ router.post('/policies/:id/claim', authenticate, async (req, res) => {
     return
   }
 
+  const { incidentDate, amount } = parsed.data
+  const today = new Date().toISOString().slice(0, 10)
+  if (incidentDate > today) { error(res, 'The incident date cannot be in the future'); return }
+  if (incidentDate < policy.startDate || incidentDate > policy.endDate) {
+    error(res, `The incident must fall within the cover period (${policy.startDate} to ${policy.endDate})`); return
+  }
+  const product = await InsuranceProduct.findById(policy.productId).select('coverageLimit').lean()
+  const remaining = product ? remainingCoverage(policy, product.coverageLimit) : 0
+  if (amount > remaining) { error(res, `The claim exceeds the cover remaining on this policy (GHS ${remaining.toFixed(2)})`); return }
+
   const claim = {
     id: genClaimId(),
     filedAt: new Date().toISOString(),
-    amount: parsed.data.amount,
+    incidentDate,
+    amount,
     status: 'pending' as const,
     description: parsed.data.description,
   }
@@ -225,22 +236,16 @@ router.post('/policies/:id/claim', authenticate, async (req, res) => {
   void notify({
     userId: req.user!.userId,
     title: 'Claim Filed',
-    message: `Claim ${claim.id} for GHS ${claim.amount.toFixed(2)} has been received and is pending review.`,
+    message: `Claim ${claim.id} for GHS ${claim.amount.toFixed(2)} was sent to your insurer for a decision.`,
     actionUrl: '/insurance',
   })
 
-  success(
-    res,
-    { policy: { ...policy.toObject(), id: policy._id.toString() }, claim },
-    'Claim filed',
-    201,
-  )
+  success(res, { policy: idOf(policy.toObject() as { _id: unknown }), claim }, 'Claim filed', 201)
 })
 
 // ─── Admin Claims Review ───
 
 // List all claims across policies, with applicant + product enrichment.
-// Restricted to admin/super_admin via requireRole + requirePermission.
 router.get('/claims', authenticate, requireRole('admin', 'super_admin'), requirePermission('insurance:review_claims'), async (req, res) => {
   const statusFilter = req.query.status as string | undefined
 
@@ -267,6 +272,7 @@ router.get('/claims', authenticate, requireRole('admin', 'super_admin'), require
         ...c,
         policyId: (p._id as { toString(): string }).toString(),
         policyNumber: p.policyNumber,
+        insurerPolicyNumber: p.insurerPolicyNumber,
         policyHolderId: p.userId,
         policyHolderName: u ? `${u.firstName} ${u.lastName}` : undefined,
         policyHolderEmail: u?.email,
@@ -275,6 +281,7 @@ router.get('/claims', authenticate, requireRole('admin', 'super_admin'), require
         providerName: prod?.providerName,
         category: prod?.category,
         coverageLimit: prod?.coverageLimit,
+        remainingCoverage: prod ? remainingCoverage(p, prod.coverageLimit, c.id) : undefined,
       })
     }
   }
@@ -285,105 +292,41 @@ router.get('/claims', authenticate, requireRole('admin', 'super_admin'), require
   success(res, { items, total: items.length })
 })
 
-// Approve or reject a claim
+// Record the insurer's decision on a claim. The decision is the insurer's; the
+// admin supplies the insurer's decision reference and, for a payout, the reference
+// of the settlement the insurer sent — the wallet credit is backed by that money.
 router.post('/policies/:policyId/claims/:claimId/decide', authenticate, requireRole('admin', 'super_admin'), requirePermission('insurance:review_claims'), async (req, res) => {
   const schema = z.object({
     decision: z.enum(['approved', 'rejected']),
+    providerReference: z.string().trim().min(3, 'Enter the insurer’s decision reference'),
     notes: z.string().optional(),
-    payoutAmount: z.number().min(0).optional(),
+    payoutAmount: z.number().positive().optional(),
+    settlementReference: z.string().trim().min(3).max(120).optional(),
   })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-
-  const policy = await InsurancePolicy.findById(param(req.params.policyId))
-  if (!policy) { error(res, 'Policy not found', 404); return }
-
-  const existing = policy.claims.find((c) => c.id === req.params.claimId)
-  if (!existing) { error(res, 'Claim not found', 404); return }
-  if (existing.status !== 'pending') { error(res, `Claim is already ${existing.status}`); return }
-
-  const decidedAt = new Date().toISOString()
-  const payoutAmount = parsed.data.decision === 'approved'
-    ? (parsed.data.payoutAmount ?? existing.amount)
-    : undefined
-
-  // Atomically decide the still-pending claim. Only one concurrent/duplicate
-  // request can match the { status: 'pending' } array element, so the payout
-  // below runs at most once — no double-payout under concurrency or retry.
-  const setFields: Record<string, unknown> = {
-    'claims.$.status': parsed.data.decision,
-    'claims.$.notes': parsed.data.notes,
-    'claims.$.decidedBy': req.user!.userId,
-    'claims.$.decidedAt': decidedAt,
-  }
-  if (payoutAmount !== undefined) setFields['claims.$.payoutAmount'] = payoutAmount
-
-  const claimed = await InsurancePolicy.findOneAndUpdate(
-    { _id: policy._id, claims: { $elemMatch: { id: req.params.claimId, status: 'pending' } } },
-    { $set: setFields },
-    { returnDocument: 'after' },
-  )
-  if (!claimed) { error(res, 'Claim is no longer pending', 409); return }
-
-  // If no pending claims remain and the policy was in 'claimed', return it to active.
-  if (claimed.status === 'claimed' && !claimed.claims.some((c) => c.status === 'pending')) {
-    await InsurancePolicy.updateOne({ _id: policy._id }, { $set: { status: 'active' } })
-    claimed.status = 'active'
-  }
-
-  const product = await InsuranceProduct.findById(claimed.productId).select('productName').lean()
-  const claim = claimed.claims.find((c) => c.id === req.params.claimId)!
-
-  // On approval, disburse the payout. The atomic decision above guarantees this
-  // runs at most once per claim.
-  if (parsed.data.decision === 'approved') {
-    const payout = payoutAmount ?? claim.amount
-    try {
-      const credited = await Wallet.findOneAndUpdate(
-        { userId: claimed.userId },
-        { $inc: { balance: payout } },
-        { returnDocument: 'after', upsert: true },
-      )
-      await Wallet.updateOne(
-        { userId: claimed.userId },
-        { $push: { transactions: {
-          type: 'deposit',
-          amount: payout,
-          balanceAfter: credited?.balance ?? payout,
-          reference: `CLAIM-${claim.id}`,
-          description: `Insurance claim payout — ${product?.productName ?? 'policy'}`,
-          createdAt: new Date().toISOString(),
-        } } },
-      )
-    } catch (e) {
-      console.error(`[insurance] claim ${claim.id} approved but payout credit FAILED:`, (e as Error).message)
-    }
+  if (parsed.data.decision === 'approved' && !parsed.data.settlementReference) {
+    error(res, 'Enter the reference of the insurer’s payout settlement'); return
   }
 
   try {
-    if (parsed.data.decision === 'approved') {
-      await notify({
-        userId: claimed.userId,
-        title: 'Insurance Claim Approved',
-        message: `Your claim ${claim.id} on policy ${claimed.policyNumber} (${product?.productName ?? 'policy'}) was approved for GHS ${(claim.payoutAmount ?? claim.amount).toFixed(2)}.${parsed.data.notes ? ` Notes: ${parsed.data.notes}` : ''}`,
-        actionUrl: '/insurance',
-      })
-    } else {
-      await notify({
-        userId: claimed.userId,
-        title: 'Insurance Claim Rejected',
-        message: `Your claim ${claim.id} on policy ${claimed.policyNumber} (${product?.productName ?? 'policy'}) was rejected.${parsed.data.notes ? ` Notes: ${parsed.data.notes}` : ''}`,
-        actionUrl: '/insurance',
-      })
-    }
-  } catch (e) {
-    console.warn('[insurance] notify failed:', (e as Error).message)
+    const result = await decideClaim({
+      policyId: param(req.params.policyId),
+      claimId: param(req.params.claimId),
+      decision: parsed.data.decision,
+      notes: parsed.data.notes,
+      payoutAmount: parsed.data.payoutAmount,
+      decidedBy: req.user!.userId,
+      source: 'admin_recorded',
+      providerReference: parsed.data.providerReference,
+      funding: parsed.data.settlementReference ? { kind: 'external_settlement', settlementReference: parsed.data.settlementReference } : undefined,
+    })
+    await recordAudit(req, `insurance.claim.record_${parsed.data.decision}`, 'InsurancePolicy', param(req.params.policyId), { claimId: param(req.params.claimId), providerReference: parsed.data.providerReference, settlementReference: parsed.data.settlementReference })
+    success(res, { policy: idOf(result.policy.toObject() as { _id: unknown }), claim: result.claim }, `Insurer decision recorded: ${parsed.data.decision}`)
+  } catch (err) {
+    if (err instanceof ClaimDecisionError) { error(res, err.message, err.status); return }
+    throw err
   }
-
-  success(res, {
-    policy: { ...claimed.toObject(), id: claimed._id.toString() },
-    claim,
-  }, `Claim ${parsed.data.decision}`)
 })
 
 export default router

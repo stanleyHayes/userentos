@@ -184,11 +184,12 @@ export default function FinancierScreen() {
     if (fName.trim().length < 3) { Alert.alert('Invalid name', 'Name must be at least 3 characters'); return }
     if (!minAmount || minAmount < 50 || !maxAmount || maxAmount < 50) { Alert.alert('Invalid amount', 'Min and max amounts must be at least GHS 50'); return }
     if (maxAmount < minAmount) { Alert.alert('Invalid amount', 'Max amount must be ≥ min amount'); return }
-    if (!Number.isInteger(minTenure) || minTenure < 1 || minTenure > 60 || !Number.isInteger(maxTenure) || maxTenure < 1 || maxTenure > 60) {
-      Alert.alert('Invalid tenure', 'Tenure must be whole months between 1 and 60'); return
+    // Server enforces the same 3-month floor (Google Play personal-loan policy) plus configurable rate/fee caps.
+    if (!Number.isInteger(minTenure) || minTenure < 3 || minTenure > 60 || !Number.isInteger(maxTenure) || maxTenure < 3 || maxTenure > 60) {
+      Alert.alert('Invalid tenure', 'Tenure must be whole months between 3 and 60'); return
     }
     if (maxTenure < minTenure) { Alert.alert('Invalid tenure', 'Max tenure must be ≥ min tenure'); return }
-    if (!Number.isFinite(rate) || rate < 0 || rate > 100) { Alert.alert('Invalid rate', 'APR must be between 0 and 100'); return }
+    if (!Number.isFinite(rate) || rate < 0) { Alert.alert('Invalid rate', 'Enter the annual interest rate'); return }
     if (fee < 0 || fee > 20) { Alert.alert('Invalid fee', 'Processing fee must be between 0 and 20%'); return }
     if (lateFee < 0 || lateFee > 50) { Alert.alert('Invalid fee', 'Late fee must be between 0 and 50%'); return }
     setCreating(true)
@@ -259,7 +260,7 @@ export default function FinancierScreen() {
   function disburse(contract: Contract) {
     Alert.alert(
       'Disburse Funds',
-      `Disburse ${formatCurrency(contract.principal)} to ${contract.applicantName ?? 'the applicant'}?`,
+      `Disburse ${formatCurrency(contract.principal)} (less the processing fee) to ${contract.productType === 'rent_advance' ? 'the landlord' : contract.applicantName ?? 'the applicant'}? The amount is debited from your wallet.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -267,7 +268,7 @@ export default function FinancierScreen() {
           onPress: async () => {
             setBusyId(contract.id)
             try {
-              await api.post(`/financing/contracts/${contract.id}/disburse`, {})
+              await api.post(`/financing/contracts/${contract.id}/disburse`, { fundingSource: 'financier_wallet' })
               qc.invalidateQueries({ queryKey: ['financing-contracts'] })
               Alert.alert('Disbursed', 'Funds have been disbursed')
             } catch (e) {

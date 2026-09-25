@@ -11,43 +11,85 @@ import { TenantProfile } from '../models/TenantProfile.js'
 import { Employment } from '../models/Employment.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
-import { approveApplication, disburseContract, applyRepayment } from '../services/financing.js'
+import { verifiedFinancierIds } from '../models/FinancierProfile.js'
+import { approveApplication, disburseContract, applyRepayment, buildCreditQuote, FinancingError } from '../services/financing.js'
+import { maxAdvanceMonthsFor } from '../services/legal/agreementCompliance.js'
+import { RENT_LAW } from '../services/legal/rentLaw.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { requireApprovedEntity } from '../middleware/entityApproval.js'
+import { requireVerifiedFinancierLicence } from '../middleware/financierLicence.js'
 
 const router = Router()
 
 const idOf = <T extends { _id: { toString(): string } }>(doc: T) => ({ ...doc, id: doc._id.toString() })
 
+// Offer bounds. Google Play's personal-loan policy bars terms of 60 days or less,
+// so every term is at least three months; the rate, fee and size caps are
+// configurable so a licensed partner's regulator-approved pricing can be set.
+const MIN_TENURE_MONTHS = 3
+const MAX_ANNUAL_RATE = Number(process.env.FINANCING_MAX_ANNUAL_RATE || 60)
+const MAX_PROCESSING_FEE_PCT = Number(process.env.FINANCING_MAX_PROCESSING_FEE_PCT || 10)
+const MAX_OFFER_AMOUNT = Number(process.env.FINANCING_MAX_OFFER_AMOUNT || 200000)
+
+/** APR including the processing fee, across the offer's tenure range (a % fee makes it independent of amount). */
+function withApr<T extends { minAmount: number; minTenureMonths: number; maxTenureMonths: number; annualInterestRate: number; processingFeePct: number }>(offer: T) {
+  const apr = (tenureMonths: number) => buildCreditQuote({ principal: offer.minAmount, annualInterestRate: offer.annualInterestRate, tenureMonths, processingFeePct: offer.processingFeePct }).apr
+  return { ...offer, aprRange: { min: apr(offer.maxTenureMonths), max: apr(offer.minTenureMonths) } }
+}
+
+const lender = [requireApprovedEntity('financier'), requireVerifiedFinancierLicence]
+
+function signedActive(agreement: { status?: string; tenantSignature?: string; landlordSignature?: string } | null) {
+  return !!agreement && agreement.status === 'active' && !!agreement.tenantSignature && !!agreement.landlordSignature
+}
+
+function termsHash(c: { _id: { toString(): string }; principal: number; annualInterestRate: number; tenureMonths: number; processingFee: number; apr?: number; totalRepayable: number; schedule: { installmentNumber: number; dueDate: string; amountDue: number }[] }) {
+  const terms = { id: c._id.toString(), principal: c.principal, annualInterestRate: c.annualInterestRate, tenureMonths: c.tenureMonths, processingFee: c.processingFee, apr: c.apr, totalRepayable: c.totalRepayable, schedule: c.schedule.map((s) => [s.installmentNumber, s.dueDate, s.amountDue]) }
+  return crypto.createHash('sha256').update(JSON.stringify(terms)).digest('hex')
+}
+
 // ────────────────────────────────────────
 // OFFERS
 // ────────────────────────────────────────
 
-// Public: list active offers (visible to applicants)
+// Public: list live offers — only from financiers whose licence is verified.
 router.get('/offers', authenticate, async (_req, res) => {
-  const offers = await FinancingOffer.find({ active: true }).lean()
-  success(res, { items: offers.map(idOf), total: offers.length, page: 1, pageSize: offers.length, totalPages: 1 })
+  const financiers = [...await verifiedFinancierIds()]
+  const offers = await FinancingOffer.find({ active: true, financierId: { $in: financiers } }).lean()
+  success(res, { items: offers.map((o) => withApr(idOf(o))), total: offers.length, page: 1, pageSize: offers.length, totalPages: 1 })
 })
 
 // Financier: list my offers
 router.get('/offers/mine', authenticate, requireRole('financier'), async (req, res) => {
   const offers = await FinancingOffer.find({ financierId: req.user!.userId }).lean()
-  success(res, { items: offers.map(idOf), total: offers.length, page: 1, pageSize: offers.length, totalPages: 1 })
+  success(res, { items: offers.map((o) => withApr(idOf(o))), total: offers.length, page: 1, pageSize: offers.length, totalPages: 1 })
 })
 
-// Financier: create offer (requires an admin-approved financier profile)
-router.post('/offers', authenticate, requireRole('financier'), requirePermission('financing:offer'), requireApprovedEntity('financier'), async (req, res) => {
+// Pre-application disclosure for a specific amount and term.
+router.get('/offers/:id/quote', authenticate, async (req, res) => {
+  const offer = await FinancingOffer.findById(param(req.params.id)).lean()
+  if (!offer) { error(res, 'Offer not found', 404); return }
+  const parsed = z.object({
+    amount: z.coerce.number().min(offer.minAmount).max(offer.maxAmount),
+    tenure: z.coerce.number().int().min(offer.minTenureMonths).max(offer.maxTenureMonths),
+  }).safeParse(req.query)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  success(res, buildCreditQuote({ principal: parsed.data.amount, annualInterestRate: offer.annualInterestRate, tenureMonths: parsed.data.tenure, processingFeePct: offer.processingFeePct }))
+})
+
+// Financier: create offer (requires an approved profile with a verified licence)
+router.post('/offers', authenticate, requireRole('financier'), requirePermission('financing:offer'), ...lender, async (req, res) => {
   const schema = z.object({
     name: z.string().min(3),
     productType: z.enum(['rent_advance', 'deposit_loan', 'rent_to_own']),
     description: z.string().default(''),
     minAmount: z.number().min(50),
-    maxAmount: z.number().min(50),
-    minTenureMonths: z.number().int().min(1).max(60),
-    maxTenureMonths: z.number().int().min(1).max(60),
-    annualInterestRate: z.number().min(0).max(100),
-    processingFeePct: z.number().min(0).max(20).default(0),
+    maxAmount: z.number().min(50).max(MAX_OFFER_AMOUNT, `Offers are capped at GHS ${MAX_OFFER_AMOUNT}`),
+    minTenureMonths: z.number().int().min(MIN_TENURE_MONTHS, `Terms must be at least ${MIN_TENURE_MONTHS} months`).max(60),
+    maxTenureMonths: z.number().int().min(MIN_TENURE_MONTHS, `Terms must be at least ${MIN_TENURE_MONTHS} months`).max(60),
+    annualInterestRate: z.number().min(0).max(MAX_ANNUAL_RATE, `The interest rate cannot exceed ${MAX_ANNUAL_RATE}% a year`),
+    processingFeePct: z.number().min(0).max(MAX_PROCESSING_FEE_PCT, `The processing fee cannot exceed ${MAX_PROCESSING_FEE_PCT}%`).default(0),
     lateFeePct: z.number().min(0).max(50).default(0),
     minCreditScore: z.number().min(0).max(100).default(0),
     requiresEmployment: z.boolean().default(true),
@@ -59,11 +101,11 @@ router.post('/offers', authenticate, requireRole('financier'), requirePermission
   if (parsed.data.maxTenureMonths < parsed.data.minTenureMonths) { error(res, 'maxTenureMonths must be ≥ minTenureMonths'); return }
 
   const offer = await FinancingOffer.create({ ...parsed.data, financierId: req.user!.userId, active: true })
-  success(res, idOf(offer.toObject()), 'Offer created', 201)
+  success(res, withApr(idOf(offer.toObject())), 'Offer created', 201)
 })
 
-// Financier: toggle offer active flag (requires an admin-approved financier profile)
-router.patch('/offers/:id', authenticate, requireRole('financier'), requireApprovedEntity('financier'), async (req, res) => {
+// Financier: toggle offer active flag (requires a verified licence)
+router.patch('/offers/:id', authenticate, requireRole('financier'), ...lender, async (req, res) => {
   const offer = await FinancingOffer.findById(param(req.params.id))
   if (!offer || offer.financierId !== req.user!.userId) { error(res, 'Offer not found', 404); return }
   if (typeof req.body.active === 'boolean') offer.active = req.body.active
@@ -80,9 +122,10 @@ router.post('/applications', authenticate, async (req, res) => {
   const schema = z.object({
     offerId: z.string(),
     amountRequested: z.number().min(50),
-    tenureMonths: z.number().int().min(1).max(60),
+    tenureMonths: z.number().int().min(MIN_TENURE_MONTHS, `Repayment must be over at least ${MIN_TENURE_MONTHS} months`).max(60),
     purpose: z.string().min(5),
     agreementId: z.string().optional(),
+    advanceMonths: z.number().int().min(1).optional(),
     propertyId: z.string().optional(),
     willUsePayrollDeduction: z.boolean().default(false),
   })
@@ -90,7 +133,8 @@ router.post('/applications', authenticate, async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   const offer = await FinancingOffer.findById(parsed.data.offerId)
-  if (!offer || !offer.active) { error(res, 'Offer not available'); return }
+  if (!offer || !offer.active || !(await verifiedFinancierIds()).has(offer.financierId)) { error(res, 'Offer not available'); return }
+  if (offer.financierId === req.user!.userId) { error(res, 'You cannot apply to your own offer', 403); return }
   if (parsed.data.amountRequested < offer.minAmount || parsed.data.amountRequested > offer.maxAmount) {
     error(res, `Amount must be between GHS ${offer.minAmount} and GHS ${offer.maxAmount}`); return
   }
@@ -101,10 +145,24 @@ router.post('/applications', authenticate, async (req, res) => {
   // A linked agreement must exist and belong to the applicant as tenant — at
   // sign time the contract's disbursement target (landlordId) comes from this
   // agreement, so an arbitrary id could redirect the payout to someone else.
+  const isRentAdvance = offer.productType === 'rent_advance'
+  if (isRentAdvance && !parsed.data.agreementId) { error(res, 'A rent advance must be linked to your signed rental agreement'); return }
   if (parsed.data.agreementId) {
-    const agreement = await Agreement.findById(parsed.data.agreementId).select('tenantId').lean()
+    const agreement = await Agreement.findById(parsed.data.agreementId).select('tenantId status tenantSignature landlordSignature rentAmount startDate endDate').lean()
     if (!agreement) { error(res, 'Linked agreement not found', 404); return }
     if (agreement.tenantId !== req.user!.userId) { error(res, 'You can only link an agreement where you are the tenant'); return }
+    if (isRentAdvance) {
+      if (!signedActive(agreement)) { error(res, 'A rent advance needs an active agreement that you and your landlord have signed'); return }
+      // Rent Act 1963 (Act 220) s.25: never advance more rent than the law allows the landlord to take.
+      const legalMonths = maxAdvanceMonthsFor(agreement.startDate, agreement.endDate)
+      const months = parsed.data.advanceMonths
+      if (!months) { error(res, 'State how many months of rent the advance covers'); return }
+      if (months > legalMonths) {
+        error(res, `The advance cannot cover more than ${legalMonths} month${legalMonths === 1 ? '' : 's'} of rent for this tenancy (${legalMonths === 1 ? RENT_LAW.monthlyAdvanceCitation : RENT_LAW.advanceCitation})`); return
+      }
+      const cap = agreement.rentAmount * months
+      if (parsed.data.amountRequested > cap) { error(res, `A ${months}-month advance on GHS ${agreement.rentAmount} rent is at most GHS ${cap}`); return }
+    }
   }
 
   const credit = await CreditScore.findOne({ userId: req.user!.userId })
@@ -128,6 +186,7 @@ router.post('/applications', authenticate, async (req, res) => {
     propertyId: parsed.data.propertyId,
     amountRequested: parsed.data.amountRequested,
     tenureMonths: parsed.data.tenureMonths,
+    advanceMonths: isRentAdvance ? parsed.data.advanceMonths : undefined,
     purpose: parsed.data.purpose,
     status: 'submitted',
     creditScoreAtApply: credit?.score,
@@ -159,7 +218,7 @@ router.get('/applications/:id', authenticate, async (req, res) => {
 })
 
 // Financier: approve
-router.post('/applications/:id/approve', authenticate, requireRole('financier'), requirePermission('financing:approve'), requireApprovedEntity('financier'), async (req, res) => {
+router.post('/applications/:id/approve', authenticate, requireRole('financier'), requirePermission('financing:approve'), ...lender, async (req, res) => {
   try {
     // Verify ownership BEFORE approveApplication, which persists the decision and
     // creates a contract — previously the 403 fired only after those side effects,
@@ -168,15 +227,16 @@ router.post('/applications/:id/approve', authenticate, requireRole('financier'),
     if (!existing) { error(res, 'Application not found', 404); return }
     if (existing.financierId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
-    const result = await approveApplication(param(req.params.id), req.user!.userId, req.body.notes)
+    const result = await approveApplication(param(req.params.id), req.user!.userId, req.body.notes, req.user!.userId)
     success(res, { application: idOf(result.application.toObject()), contract: idOf(result.contract.toObject()) })
   } catch (e) {
-    error(res, (e as Error).message)
+    if (e instanceof FinancingError) { error(res, e.message, e.status); return }
+    throw e
   }
 })
 
 // Financier: reject
-router.post('/applications/:id/reject', authenticate, requireRole('financier'), requirePermission('financing:approve'), requireApprovedEntity('financier'), async (req, res) => {
+router.post('/applications/:id/reject', authenticate, requireRole('financier'), requirePermission('financing:approve'), ...lender, async (req, res) => {
   const app = await FinancingApplication.findById(param(req.params.id))
   if (!app || app.financierId !== req.user!.userId) { error(res, 'Application not found', 404); return }
   // State guard: only an undecided application can be rejected — "rejecting" an
@@ -222,16 +282,30 @@ router.post('/contracts/:id/sign', authenticate, async (req, res) => {
   if (contract.applicantId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
   if (contract.status !== 'pending_disbursement') { error(res, 'Contract not in signable state'); return }
 
-  const signature = (req.body.signature ?? '').toString()
-  if (signature.length < 3) { error(res, 'Signature required'); return }
-
-  contract.signedByApplicant = true
-  contract.signedAt = new Date().toISOString()
+  const parsed = z.object({
+    signature: z.string().trim().min(3, 'Type your full name to sign'),
+    acceptTerms: z.boolean().refine((v) => v, 'You must accept the contract terms'),
+  }).safeParse(req.body)
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   // If linked to an agreement, set landlordId for disbursement target
   if (contract.agreementId && !contract.landlordId) {
     const agreement = await Agreement.findById(contract.agreementId)
+    if (contract.productType === 'rent_advance' && !signedActive(agreement)) { error(res, 'The linked rental agreement is no longer active and signed'); return }
     if (agreement) contract.landlordId = agreement.landlordId
+  }
+
+  // Keep what was signed, not just that it was: the typed name, when, from where,
+  // and a hash binding the signature to these exact terms.
+  const signedAt = new Date()
+  contract.signedByApplicant = true
+  contract.signedAt = signedAt.toISOString()
+  contract.applicantSignature = {
+    name: parsed.data.signature,
+    signedAt,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent')?.slice(0, 300),
+    termsHash: termsHash(contract),
   }
 
   await contract.save()
@@ -239,14 +313,24 @@ router.post('/contracts/:id/sign', authenticate, async (req, res) => {
 })
 
 // Financier: disburse
-router.post('/contracts/:id/disburse', authenticate, requireRole('financier'), requirePermission('financing:disburse'), requireApprovedEntity('financier'), async (req, res) => {
+router.post('/contracts/:id/disburse', authenticate, requireRole('financier'), requirePermission('financing:disburse'), ...lender, async (req, res) => {
+  // Funding defaults to the financier's own wallet; an external settlement must name its reference.
+  const parsed = z.discriminatedUnion('fundingSource', [
+    z.object({ fundingSource: z.literal('financier_wallet') }),
+    z.object({ fundingSource: z.literal('external_settlement'), settlementReference: z.string().trim().min(6).max(120) }),
+  ]).safeParse({ fundingSource: 'financier_wallet', ...req.body })
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
   const contract = await FinancingContract.findById(param(req.params.id))
   if (!contract || contract.financierId !== req.user!.userId) { error(res, 'Contract not found', 404); return }
   try {
-    const updated = await disburseContract(contract._id.toString())
+    const updated = await disburseContract(contract._id.toString(), parsed.data.fundingSource === 'external_settlement'
+      ? { kind: 'external_settlement', settlementReference: parsed.data.settlementReference }
+      : { kind: 'financier_wallet' })
     success(res, idOf(updated.toObject()), 'Disbursed')
   } catch (e) {
-    error(res, (e as Error).message)
+    if (e instanceof FinancingError) { error(res, e.message, e.status); return }
+    throw e
   }
 })
 

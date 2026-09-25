@@ -31,6 +31,7 @@ interface EmployerProfile {
 interface Employee {
   id: string
   employeeName?: string
+  inviteEmail?: string
   userId: string
   staffNumber?: string
   jobTitle?: string
@@ -279,7 +280,7 @@ export default function EmployerScreen() {
       })
       qc.invalidateQueries({ queryKey: ['employer-employees'] })
       qc.invalidateQueries({ queryKey: ['employer-me'] })
-      Alert.alert('Added', 'Employee linked to your company')
+      Alert.alert('Invitation sent', 'The employee must confirm the link before any deduction can be set up.')
       resetAddEmployee()
     } catch (e) {
       Alert.alert('Error', (e as { message?: string }).message ?? 'Failed to add employee')
@@ -667,7 +668,7 @@ export default function EmployerScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[s.cardTitle, { color: c.text }]} numberOfLines={1}>
-                          {e.employeeName ?? `Employee #${e.userId.slice(-6)}`}
+                          {e.employeeName ?? e.inviteEmail ?? `Employee #${e.userId.slice(-6)}`}
                         </Text>
                         <Text style={[s.cardSub, { color: c.muted }]} numberOfLines={1}>
                           {[e.jobTitle, e.staffNumber ? `#${e.staffNumber}` : null].filter(Boolean).join(' · ') || 'Staff'}
@@ -675,7 +676,7 @@ export default function EmployerScreen() {
                       </View>
                       <View style={[s.badge, { backgroundColor: sc.bg }]}>
                         <View style={[s.badgeDot, { backgroundColor: sc.text }]} />
-                        <Text style={[s.badgeText, { color: sc.text }]}>{e.status.replace(/_/g, ' ')}</Text>
+                        <Text style={[s.badgeText, { color: sc.text }]}>{e.status === 'pending' ? 'awaiting confirmation' : e.status.replace(/_/g, ' ')}</Text>
                       </View>
                     </View>
                     <View style={s.rows}>

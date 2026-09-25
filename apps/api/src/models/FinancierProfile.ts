@@ -2,10 +2,44 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export type EntityApprovalStatus = 'pending' | 'approved' | 'rejected'
 
+interface LicensedProfile {
+  approvalStatus: EntityApprovalStatus
+  licenseNumber?: string
+  licenseVerifiedBy?: string
+  licenseVerifiedAt?: Date
+  approvedBy?: string
+  approvedAt?: Date
+  invalidate(path: string, message: string): unknown
+}
+
+/**
+ * A regulated institution can't be approved without a licence number, and
+ * approving it is the admin's attestation that the licence was checked with the
+ * regulator — recorded here so "approved" and "licence verified" never diverge.
+ */
+export function requireVerifiedLicence(doc: LicensedProfile) {
+  if (doc.approvalStatus !== 'approved') {
+    doc.licenseVerifiedBy = undefined
+    doc.licenseVerifiedAt = undefined
+    return
+  }
+  if (!doc.licenseNumber?.trim()) {
+    doc.invalidate('licenseNumber', 'A licence number is required before this profile can be approved')
+    return
+  }
+  if (!doc.licenseVerifiedAt) {
+    doc.licenseVerifiedAt = doc.approvedAt ?? new Date()
+    doc.licenseVerifiedBy = doc.approvedBy
+  }
+}
+
 export interface IFinancierProfile extends Document {
   userId: string
   institutionName: string
+  /** BoG licence number. Required before approval; approval is the admin's attestation it was checked. */
   licenseNumber?: string
+  licenseVerifiedBy?: string
+  licenseVerifiedAt?: Date
   contactEmail: string
   contactPhone: string
   address?: string
@@ -21,7 +55,9 @@ export interface IFinancierProfile extends Document {
 const financierProfileSchema = new Schema<IFinancierProfile>({
   userId: { type: String, required: true, unique: true, index: true },
   institutionName: { type: String, required: true },
-  licenseNumber: String,
+  licenseNumber: { type: String, trim: true },
+  licenseVerifiedBy: String,
+  licenseVerifiedAt: Date,
   contactEmail: { type: String, required: true },
   contactPhone: { type: String, required: true },
   address: String,
@@ -31,4 +67,12 @@ const financierProfileSchema = new Schema<IFinancierProfile>({
   rejectionReason: String,
 }, { timestamps: true })
 
+financierProfileSchema.pre('validate', function () { requireVerifiedLicence(this) })
+
 export const FinancierProfile = mongoose.model<IFinancierProfile>('FinancierProfile', financierProfileSchema)
+
+/** Financiers whose offers may be live: approved with a verified licence. */
+export async function verifiedFinancierIds(): Promise<Set<string>> {
+  const profiles = await FinancierProfile.find({ approvalStatus: 'approved', licenseNumber: { $type: 'string', $ne: '' }, licenseVerifiedAt: { $exists: true } }).select('userId').lean()
+  return new Set(profiles.map((p) => p.userId))
+}

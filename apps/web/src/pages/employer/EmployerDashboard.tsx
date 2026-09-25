@@ -182,8 +182,8 @@ export function EmployerDashboard() {
               <div className="flex items-start gap-3">
                 <ShieldAlert size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-bold text-primary-dark dark:text-white mb-1">Labour Act 2003 (Act 651)</p>
-                  <p className="text-[11px] text-muted dark:text-gray-400">All voluntary deductions require the employee's signed mandate. Total deductions are capped at one-third of net pay.</p>
+                  <p className="text-xs font-bold text-primary-dark dark:text-white mb-1">Employee consent</p>
+                  <p className="text-[11px] text-muted dark:text-gray-400">Employees confirm their link to you and sign each deduction mandate. RentOS limits total deductions to one-third of net pay; your own legal obligations on deductions still apply.</p>
                 </div>
               </div>
             </CardContent>

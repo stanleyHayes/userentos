@@ -20,6 +20,8 @@ export interface IInsuranceProduct extends Document {
   terms: string
   active: boolean
   commissionPct: number
+  /** Fictional seed data for non-production environments — never sold in production. */
+  isDemo: boolean
 }
 
 const insuranceProductSchema = new Schema<IInsuranceProduct>(
@@ -41,6 +43,7 @@ const insuranceProductSchema = new Schema<IInsuranceProduct>(
     terms: { type: String, default: '' },
     active: { type: Boolean, default: true, index: true },
     commissionPct: { type: Number, default: 5, min: 0, max: 15 },
+    isDemo: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

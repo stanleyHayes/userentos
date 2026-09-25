@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -14,6 +16,7 @@ import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency } from '@/lib/utils'
 import { Banknote, Sparkles, Send } from 'lucide-react'
 import type { FinancingOffer } from '@/types'
+import type { LoanQuote } from '@/types/shared'
 
 export function FinancingOffersPage() {
   const { data, isLoading } = useFinancingOffers()
@@ -26,11 +29,22 @@ export function FinancingOffersPage() {
     tenureMonths: '',
     purpose: '',
     agreementId: '',
+    advanceMonths: '',
     willUsePayrollDeduction: false,
   })
 
   const offers = data?.items ?? []
-  const agreements = (agreementsData?.items ?? []).filter((a) => a.status === 'active' || a.status === 'pending_signatures')
+  // Only a tenancy that is in force can back financing; a rent advance requires one.
+  const agreements = (agreementsData?.items ?? []).filter((a) => a.status === 'active')
+  const isRentAdvance = selected?.productType === 'rent_advance'
+  const amount = Number(form.amountRequested)
+  const tenure = Number(form.tenureMonths)
+  const quoteReady = !!selected && amount >= selected.minAmount && amount <= selected.maxAmount && tenure >= selected.minTenureMonths && tenure <= selected.maxTenureMonths
+  const { data: quote } = useQuery({
+    queryKey: ['financing-quote', selected?.id, amount, tenure],
+    queryFn: () => api.get<LoanQuote>(`/financing/offers/${selected!.id}/quote?amount=${amount}&tenure=${tenure}`),
+    enabled: quoteReady,
+  })
 
   function openApply(offer: FinancingOffer) {
     setSelected(offer)
@@ -39,6 +53,7 @@ export function FinancingOffersPage() {
       tenureMonths: String(offer.minTenureMonths),
       purpose: '',
       agreementId: '',
+      advanceMonths: '',
       willUsePayrollDeduction: offer.requiresPayrollDeduction,
     })
   }
@@ -51,6 +66,7 @@ export function FinancingOffersPage() {
       tenureMonths: Number(form.tenureMonths),
       purpose: form.purpose,
       agreementId: form.agreementId || undefined,
+      advanceMonths: isRentAdvance ? Number(form.advanceMonths) : undefined,
       willUsePayrollDeduction: form.willUsePayrollDeduction,
     }, {
       onSuccess: () => {
@@ -88,7 +104,9 @@ export function FinancingOffersPage() {
                     <CardTitle>{o.name}</CardTitle>
                     <p className="text-[11px] text-muted dark:text-gray-500 capitalize mt-0.5">{o.productType.replace('_', ' ')}</p>
                   </div>
-                  <Badge variant="success" className="text-[10px]">{o.annualInterestRate}% APR</Badge>
+                  <Badge variant="success" className="text-[10px]">
+                    {o.aprRange ? `APR ${o.aprRange.min}–${o.aprRange.max}%` : `${o.annualInterestRate}% interest`}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
@@ -96,6 +114,7 @@ export function FinancingOffersPage() {
                 <div className="space-y-1 text-xs mb-4">
                   <Row label="Amount" value={`${formatCurrency(o.minAmount)} – ${formatCurrency(o.maxAmount)}`} />
                   <Row label="Tenure" value={`${o.minTenureMonths}–${o.maxTenureMonths} months`} />
+                  <Row label="Interest rate" value={`${o.annualInterestRate}% a year`} />
                   <Row label="Processing fee" value={`${o.processingFeePct}%`} />
                   <Row label="Min credit score" value={String(o.minCreditScore)} />
                 </div>
@@ -116,19 +135,30 @@ export function FinancingOffersPage() {
             <div className="p-3 rounded-lg bg-surface dark:bg-[#0c0e1a] text-xs">
               <p className="text-muted dark:text-gray-500">Allowed amount: <span className="font-bold text-primary-dark dark:text-white">{formatCurrency(selected.minAmount)} – {formatCurrency(selected.maxAmount)}</span></p>
               <p className="text-muted dark:text-gray-500">Tenure: <span className="font-bold text-primary-dark dark:text-white">{selected.minTenureMonths}–{selected.maxTenureMonths} months</span></p>
-              <p className="text-muted dark:text-gray-500">APR: <span className="font-bold text-primary-dark dark:text-white">{selected.annualInterestRate}%</span> · Processing fee: <span className="font-bold text-primary-dark dark:text-white">{selected.processingFeePct}%</span></p>
+              <p className="text-muted dark:text-gray-500">Interest: <span className="font-bold text-primary-dark dark:text-white">{selected.annualInterestRate}% a year</span> · Processing fee: <span className="font-bold text-primary-dark dark:text-white">{selected.processingFeePct}%</span></p>
+              {isRentAdvance && <p className="text-muted dark:text-gray-500 mt-1">A rent advance is paid to your landlord and cannot exceed what the Rent Act allows: six months' rent (one month for a monthly tenancy).</p>}
             </div>
             <Input id="apply-amount" type="number" label="Amount requested (GHS)" value={form.amountRequested} onChange={(e) => setForm((f) => ({ ...f, amountRequested: e.target.value }))} />
             <Input id="apply-tenure" type="number" label="Tenure (months)" value={form.tenureMonths} onChange={(e) => setForm((f) => ({ ...f, tenureMonths: e.target.value }))} />
             <Textarea id="apply-purpose" label="Purpose" value={form.purpose} onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))} rows={3} placeholder="What will you use this for?" />
-            {agreements.length > 0 && (
+            {(agreements.length > 0 || isRentAdvance) && (
               <Select
                 id="apply-agreement"
-                label="Link to rental agreement (optional)"
+                label={isRentAdvance ? 'Signed, active rental agreement' : 'Link to rental agreement (optional)'}
                 value={form.agreementId}
                 onChange={(e) => setForm((f) => ({ ...f, agreementId: e.target.value }))}
-                options={[{ value: '', label: '— None —' }, ...agreements.map((a) => ({ value: a.id, label: `${a.tenantName ?? 'Lease'} · ${formatCurrency(a.rentAmount)}/mo` }))]}
+                options={[{ value: '', label: isRentAdvance ? (agreements.length ? 'Choose an agreement' : 'No active agreements') : '— None —' }, ...agreements.map((a) => ({ value: a.id, label: `${a.tenantName ?? 'Lease'} · ${formatCurrency(a.rentAmount)}/mo` }))]}
               />
+            )}
+            {isRentAdvance && (
+              <Input id="apply-advance-months" type="number" label="Months of rent to advance (max 6)" value={form.advanceMonths} onChange={(e) => setForm((f) => ({ ...f, advanceMonths: e.target.value }))} />
+            )}
+            {quote && (
+              <div className="p-3 rounded-lg bg-surface dark:bg-[#0c0e1a] text-xs space-y-0.5">
+                <p>You receive <strong>{formatCurrency(quote.netDisbursed)}</strong> after a {formatCurrency(quote.processingFee)} fee</p>
+                <p>{quote.tenureMonths} payments of about <strong>{formatCurrency(quote.monthlyPayment)}</strong> · total <strong>{formatCurrency(quote.totalRepayable)}</strong></p>
+                <p>APR including fees <strong>{quote.apr}%</strong> · total cost of credit <strong>{formatCurrency(quote.totalCostOfCredit)}</strong></p>
+              </div>
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={form.willUsePayrollDeduction} onChange={(e) => setForm((f) => ({ ...f, willUsePayrollDeduction: e.target.checked }))} />
@@ -136,7 +166,7 @@ export function FinancingOffersPage() {
             </label>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setSelected(null)}>Cancel</Button>
-              <Button onClick={submit} disabled={apply.isPending || !form.amountRequested || !form.tenureMonths || form.purpose.length < 5}>
+              <Button onClick={submit} disabled={apply.isPending || !form.amountRequested || !form.tenureMonths || form.purpose.length < 5 || (isRentAdvance && (!form.agreementId || !form.advanceMonths))}>
                 <Send size={14} /> Submit Application
               </Button>
             </div>

@@ -27,6 +27,8 @@ interface Mandate {
   status: MandateStatus
 }
 
+interface EmploymentLink { id: string; employerName?: string; status: string }
+
 const STATUS_COLORS: Record<MandateStatus, string> = {
   pending: '#f59e0b',
   active: '#10b981',
@@ -53,6 +55,26 @@ export default function FinancingMandatesScreen() {
   })
 
   const mandates = data?.items ?? []
+  const { data: employmentData } = useQuery({
+    queryKey: ['employments', 'mine'],
+    queryFn: () => api.get<{ items: EmploymentLink[] }>('/employers/employments/mine'),
+  })
+  const invites = (employmentData?.items ?? []).filter((e) => e.status === 'pending')
+  const confirmed = (employmentData?.items ?? []).filter((e) => e.status === 'active')
+  const [employmentId, setEmploymentId] = useState('')
+  const [responding, setResponding] = useState<string | null>(null)
+
+  async function respond(id: string, accept: boolean) {
+    setResponding(id)
+    try {
+      await api.post(`/employers/employments/${id}/${accept ? 'accept' : 'decline'}`, {})
+      qc.invalidateQueries({ queryKey: ['employments', 'mine'] })
+    } catch (e) {
+      Alert.alert('Error', (e as { message?: string }).message ?? 'Could not update the invitation')
+    } finally {
+      setResponding(null)
+    }
+  }
 
   const [open, setOpen] = useState(false)
   const [allocationType, setAllocationType] = useState<AllocationType>('rent')
@@ -72,12 +94,22 @@ export default function FinancingMandatesScreen() {
     setAmount('')
     setStartDate(today)
     setSignature('')
+    setEmploymentId('')
   }
 
   async function submit() {
     const amountNum = Number(amount)
     if (!amountNum || amountNum <= 0) {
       Alert.alert('Invalid amount', 'Please enter a valid amount')
+      return
+    }
+    if (amountType === 'percentage' && amountNum > 100) {
+      Alert.alert('Invalid percentage', 'A percentage cannot exceed 100%')
+      return
+    }
+    const chosenEmployment = employmentId || (confirmed.length === 1 ? confirmed[0].id : '')
+    if (!chosenEmployment) {
+      Alert.alert('Choose your employer', confirmed.length ? 'Select which employer this mandate is for' : 'Confirm your employer first')
       return
     }
     if (signature.trim().length < 3) {
@@ -87,6 +119,7 @@ export default function FinancingMandatesScreen() {
     setSubmitting(true)
     try {
       await api.post('/employers/mandates', {
+        employmentId: chosenEmployment,
         allocationType,
         targetEntityId: targetEntityId.trim() || undefined,
         amountType,
@@ -145,10 +178,26 @@ export default function FinancingMandatesScreen() {
         <View style={[s.banner, { backgroundColor: c.accent + '08', borderColor: c.accent + '25' }]}>
           <Ionicons name="shield-checkmark" size={18} color={c.accent} />
           <Text style={[s.bannerText, { color: c.text }]}>
-            Under Labour Act 2003 (Act 651), s. 70, deductions from your wages require your written consent.
+            Deductions from your salary need your written consent, which a signed mandate records. Total deductions are limited to one-third of net pay (a RentOS limit).
             You can revoke any mandate at any time.
           </Text>
         </View>
+
+        {invites.map((inv) => (
+          <View key={inv.id} style={[s.banner, { backgroundColor: c.warning + '10', borderColor: c.warning + '30', flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={[s.bannerText, { color: c.text }]}>
+              {inv.employerName ?? 'An employer'} says you work for them. Confirm only if this is your employer — nothing can be deducted until you confirm and sign a mandate.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+              <TouchableOpacity style={[s.newBtn, { backgroundColor: c.primary, flex: 1, marginBottom: 0 }]} disabled={responding === inv.id} onPress={() => respond(inv.id, true)}>
+                <Text style={s.newBtnText}>Confirm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.newBtn, { backgroundColor: c.muted, flex: 1, marginBottom: 0 }]} disabled={responding === inv.id} onPress={() => respond(inv.id, false)}>
+                <Text style={s.newBtnText}>Not my employer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
 
         <TouchableOpacity
           style={[s.newBtn, { backgroundColor: c.primary }]}
@@ -230,6 +279,22 @@ export default function FinancingMandatesScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {confirmed.length > 1 && (
+                <>
+                  <Text style={[s.label, { color: c.text }]}>Employer</Text>
+                  <View style={s.optionGroup}>
+                    {confirmed.map((e) => (
+                      <TouchableOpacity
+                        key={e.id}
+                        style={[s.optionBtn, { borderColor: c.border, backgroundColor: c.surface }, employmentId === e.id && { borderColor: c.primary, backgroundColor: c.primary + '10' }]}
+                        onPress={() => setEmploymentId(e.id)}
+                      >
+                        <Text style={[s.optionText, { color: c.text }, employmentId === e.id && { color: c.primary, fontFamily: 'Outfit_700Bold' }]}>{e.employerName ?? `#${e.id.slice(-6)}`}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
               <Text style={[s.label, { color: c.text }]}>Allocation type</Text>
               <View style={s.optionGroup}>
                 {(['rent', 'savings', 'loan_repayment', 'wallet_topup'] as AllocationType[]).map((t) => (

@@ -17,7 +17,8 @@ router.get('/me', authenticate, requireRole('financier'), asyncHandler(async (re
 
 const upsertSchema = z.object({
   institutionName: z.string().min(2),
-  licenseNumber: z.string().optional(),
+  // The Bank of Ghana licence an admin must check before approving.
+  licenseNumber: z.string().trim().min(3, 'Enter your Bank of Ghana licence number'),
   contactEmail: z.string().email(),
   contactPhone: z.string().min(7),
   address: z.string().optional(),

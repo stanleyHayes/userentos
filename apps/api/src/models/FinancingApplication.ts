@@ -9,6 +9,8 @@ export interface IFinancingApplication extends Document {
   propertyId?: string
   amountRequested: number
   tenureMonths: number
+  /** Months of rent a rent advance covers — capped by Rent Act s.25. */
+  advanceMonths?: number
   purpose: string
   status: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'withdrawn'
   decisionNotes?: string
@@ -29,7 +31,8 @@ const applicationSchema = new Schema<IFinancingApplication>({
   agreementId: { type: String, index: true },
   propertyId: { type: String, index: true },
   amountRequested: { type: Number, required: true, min: 50 },
-  tenureMonths: { type: Number, required: true, min: 1, max: 60 },
+  tenureMonths: { type: Number, required: true, min: 3, max: 60 },
+  advanceMonths: { type: Number, min: 1 },
   purpose: { type: String, required: true, minlength: 5 },
   status: { type: String, required: true, enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'withdrawn'], default: 'submitted' },
   decisionNotes: String,

@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import {
   useMyMandates, useCreateMandate, useRevokeMandate,
   useAgreements, useSavingsPlans, useFinancingContracts,
+  useMyEmployments, useRespondToEmployment,
 } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -27,6 +28,8 @@ export function MyMandatesPage() {
   const { data: contractsData } = useFinancingContracts()
   const create = useCreateMandate()
   const revoke = useRevokeMandate()
+  const { data: employmentsData } = useMyEmployments()
+  const respond = useRespondToEmployment()
   const addToast = useToastStore((s) => s.addToast)
   const [open, setOpen] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
@@ -37,9 +40,14 @@ export function MyMandatesPage() {
     amount: '',
     startDate: today,
     signature: '',
+    employmentId: '',
   })
 
   const mandates = data?.items ?? []
+  const employments = employmentsData?.items ?? []
+  const invites = employments.filter((e) => e.status === 'pending')
+  const confirmed = employments.filter((e) => e.status === 'active')
+  const pctInvalid = form.amountType === 'percentage' && Number(form.amount) > 100
   const activeAgreements = (agreementsData?.items ?? []).filter((a) => a.status === 'active')
   const activeSavings = (savingsData?.items ?? []).filter((s) => s.status === 'active')
   const activeContracts = (contractsData?.items ?? []).filter((c) => c.status === 'active' || c.status === 'in_arrears')
@@ -59,6 +67,7 @@ export function MyMandatesPage() {
 
   function submit() {
     create.mutate({
+      employmentId: form.employmentId || (confirmed.length === 1 ? confirmed[0].id : undefined),
       allocationType: form.allocationType,
       targetEntityId: form.targetEntityId || undefined,
       amountType: form.amountType,
@@ -84,14 +93,29 @@ export function MyMandatesPage() {
         description="Authorize your employer to deduct rent, savings, or loan repayments from your salary."
         icon={<ShieldCheck size={22} />}
       >
-        <Button size="sm" onClick={() => setOpen(true)}><Plus size={14} /> New Mandate</Button>
+        <Button size="sm" onClick={() => setOpen(true)} disabled={confirmed.length === 0}><Plus size={14} /> New Mandate</Button>
       </PageHeader>
+
+      {invites.map((inv) => (
+        <Card key={inv.id}>
+          <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs">
+              <p className="font-bold text-primary-dark dark:text-white">{inv.employerName ?? 'An employer'} says you work for them</p>
+              <p className="text-muted dark:text-gray-400">Confirm only if this is your employer. Nothing can be deducted from your salary until you confirm and then sign a mandate.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={respond.isPending} onClick={() => respond.mutate({ id: inv.id, accept: true }, { onError: (e) => addToast((e as Error).message, 'error') })}>Confirm</Button>
+              <Button size="sm" variant="outline" disabled={respond.isPending} onClick={() => respond.mutate({ id: inv.id, accept: false }, { onError: (e) => addToast((e as Error).message, 'error') })}>Not my employer</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
 
       <Card>
         <CardContent className="p-4 flex items-start gap-3">
           <ShieldCheck size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-muted dark:text-gray-400">
-            Under <span className="font-semibold text-primary-dark dark:text-white">Labour Act 2003 (Act 651), s. 70</span>, deductions from your wages require your written consent. You can revoke any mandate at any time — it takes effect on the next payroll cycle after the notice period.
+            Deductions from your salary need your written consent, which this signed mandate records. Total deductions are limited to one-third of your net pay (a RentOS limit). You can revoke any mandate at any time — it takes effect on the next payroll cycle after the notice period.
           </div>
         </CardContent>
       </Card>
@@ -138,6 +162,15 @@ export function MyMandatesPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title="Sign Salary Deduction Mandate">
         <div className="space-y-4">
+          {confirmed.length > 1 && (
+            <Select
+              id="m-employer"
+              label="Employer"
+              value={form.employmentId}
+              onChange={(e) => setForm((f) => ({ ...f, employmentId: e.target.value }))}
+              options={[{ value: '', label: '— Select —' }, ...confirmed.map((e) => ({ value: e.id, label: e.employerName ?? e.id.slice(-6) }))]}
+            />
+          )}
           <Select
             id="m-alloc"
             label="Allocation type"
@@ -169,13 +202,13 @@ export function MyMandatesPage() {
               { value: 'percentage', label: 'Percentage of salary (%)' },
             ]}
           />
-          <Input id="m-amount" type="number" label={form.amountType === 'fixed' ? 'Amount (GHS)' : 'Percentage (%)'} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          <Input id="m-amount" type="number" label={form.amountType === 'fixed' ? 'Amount (GHS)' : 'Percentage (%)'} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} error={pctInvalid ? 'A percentage cannot exceed 100%' : undefined} />
           <Input id="m-start" type="date" label="Start date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
           <Input id="m-sig" label="Type your full name to sign" value={form.signature} onChange={(e) => setForm((f) => ({ ...f, signature: e.target.value }))} />
           <p className="text-[11px] text-muted dark:text-gray-500">By signing you authorize your employer to deduct this amount each pay period and disburse it to the selected target. You may revoke this mandate at any time.</p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submit} disabled={create.isPending || !form.amount || form.signature.length < 3}>Sign Mandate</Button>
+            <Button onClick={submit} disabled={create.isPending || !form.amount || pctInvalid || form.signature.length < 3 || (confirmed.length > 1 && !form.employmentId)}>Sign Mandate</Button>
           </div>
         </div>
       </Modal>

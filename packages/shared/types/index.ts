@@ -552,39 +552,85 @@ export interface TenantProfile {
 // --- Investment ---
 
 export type InvestmentType = 'treasury_bill' | 'government_bond'
-export type InvestmentStatus = 'active' | 'matured' | 'withdrawn' | 'pending'
+export type InvestmentStatus = 'pending' | 'active' | 'redemption_requested' | 'matured' | 'withdrawn' | 'rejected'
 
 export interface Investment {
   id: string
   userId: string
   type: InvestmentType
   amount: number
+  /** Partner's indicative annual rate — not guaranteed. */
   interestRate: number
   tenure: number
   startDate: string
   maturityDate: string
   status: InvestmentStatus
+  /** Indicative only; the actual payout is whatever the partner settles. */
   expectedReturn: number
   actualReturn?: number
   partnerId: string
+  productId?: string
+  partnerName?: string
+  partnerReference?: string
+  rejectionReason?: string
+  redemptionRequestedAt?: string
+  settledAmount?: number
+  settledAt?: string
   createdAt: string
   updatedAt: string
 }
 
+/** An admin-configured product of a verified partner (GET /investments/options). */
 export interface InvestmentOption {
   id: string
+  partnerId: string
+  partnerName: string
+  regulator: 'SEC' | 'BoG'
+  partnerLicenseNumber: string
   name: string
   type: InvestmentType
+  tenureDays: number
+  indicativeAnnualRate?: number
   minAmount: number
-  interestRate: number
-  tenure: number
-  partner: string
   description: string
+  riskWarning: string
 }
 
 // --- Loan ---
 
-export type LoanStatus = 'pending' | 'approved' | 'active' | 'repaid' | 'defaulted' | 'rejected'
+export type LoanStatus = 'pending' | 'pre_qualified' | 'pending_review' | 'approved' | 'active' | 'repaid' | 'defaulted' | 'rejected'
+
+export interface LoanScheduleItem {
+  installmentNumber: number
+  dueDate: string
+  principal: number
+  interest: number
+  amountDue: number
+}
+
+/** Server-computed pre-contract disclosure (GET /loans/quote). */
+export interface LoanQuote {
+  principal: number
+  tenureMonths: number
+  annualInterestRate: number
+  processingFee: number
+  netDisbursed: number
+  monthlyPayment: number
+  totalRepayable: number
+  totalCostOfCredit: number
+  apr: number
+  schedule: LoanScheduleItem[]
+}
+
+export interface LoanTerms {
+  annualInterestRate: number
+  processingFeePct: number
+  minAmount: number
+  maxAmount: number
+  minTenureMonths: number
+  maxTenureMonths: number
+  minCreditScore: number
+}
 
 export interface Loan {
   id: string
@@ -593,11 +639,21 @@ export interface Loan {
   amount: number
   interestRate: number
   tenure: number
+  processingFee?: number
+  apr?: number
   monthlyPayment: number
   totalRepayment: number
   amountPaid: number
   status: LoanStatus
   creditScoreAtApproval?: number
+  automatedAssessment?: { outcome: 'pre_qualified' | 'manual_review' | 'declined'; creditScore: number; reasons: string[]; assessedAt: string }
+  termsAcceptance?: { acceptedAt: string }
+  reviewRequestedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
+  decisionReason?: string
+  lenderId?: string
+  fundingSource?: 'lender_wallet' | 'external_settlement'
   disbursedAt?: string
   reason: string
   createdAt: string
@@ -628,6 +684,8 @@ export interface FinancingOffer {
   requiresEmployment: boolean
   requiresPayrollDeduction: boolean
   active: boolean
+  /** APR including the processing fee, from the longest to the shortest term. */
+  aprRange?: { min: number; max: number }
   createdAt: string
   updatedAt: string
 }
@@ -642,6 +700,8 @@ export interface FinancingApplication {
   propertyId?: string
   amountRequested: number
   tenureMonths: number
+  /** Months of rent a rent advance covers (Rent Act s.25 caps it). */
+  advanceMonths?: number
   purpose: string
   status: FinancingApplicationStatus
   decisionNotes?: string
@@ -680,12 +740,15 @@ export interface FinancingContract {
   annualInterestRate: number
   tenureMonths: number
   processingFee: number
+  apr?: number
   monthlyPayment: number
   totalRepayable: number
   amountRepaid: number
   status: FinancingContractStatus
   disbursedAt?: string
   disbursementReference?: string
+  fundingSource?: 'financier_wallet' | 'external_settlement'
+  applicantSignature?: { name: string; signedAt: string; termsHash: string }
   schedule: RepaymentScheduleItem[]
   payrollDeductionMandateId?: string
   signedByApplicant: boolean
@@ -698,7 +761,7 @@ export interface FinancingContract {
 // --- Employer / Payroll Deductions ---
 
 export type EmployerVerificationStatus = 'pending' | 'verified' | 'rejected'
-export type EmploymentStatus = 'active' | 'on_leave' | 'terminated' | 'pending'
+export type EmploymentStatus = 'active' | 'on_leave' | 'terminated' | 'pending' | 'declined'
 export type PayrollCycle = 'weekly' | 'biweekly' | 'monthly'
 export type DeductionAllocationType = 'rent' | 'savings' | 'loan_repayment' | 'wallet_topup'
 export type DeductionTargetType = 'agreement' | 'savings_plan' | 'financing_contract' | 'wallet'
@@ -733,7 +796,11 @@ export interface Employment {
   employerId: string
   employerName?: string
   userId: string
+  /** Shown only after the employee confirms the link. */
   employeeName?: string
+  /** The invited address, shown while the link awaits the employee's confirmation. */
+  inviteEmail?: string
+  employeeAcceptedAt?: string
   staffNumber?: string
   jobTitle?: string
   netMonthlySalary: number
@@ -1150,6 +1217,8 @@ export interface InsuranceProduct {
   terms: string
   active: boolean
   commissionPct: number
+  /** Fictional seed product (non-production only). */
+  isDemo?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -1157,6 +1226,7 @@ export interface InsuranceProduct {
 export interface InsuranceClaim {
   id: string
   filedAt: string
+  incidentDate?: string
   amount: number
   status: InsuranceClaimStatus
   description: string
@@ -1164,6 +1234,11 @@ export interface InsuranceClaim {
   payoutAmount?: number
   decidedBy?: string
   decidedAt?: string
+  /** 'provider': decided by the insurer; 'admin_recorded': an admin recorded the insurer's decision. */
+  decisionSource?: 'provider' | 'admin_recorded'
+  providerReference?: string
+  payoutReference?: string
+  paidAt?: string
 }
 
 export interface InsurancePolicy {
@@ -1175,8 +1250,15 @@ export interface InsurancePolicy {
   startDate: string
   endDate: string
   monthlyPremium: number
+  termMonths?: number
+  premiumPaid?: number
+  providerId?: string
   status: InsurancePolicyStatus
+  /** RentOS order reference; the insurer's number is insurerPolicyNumber once issued. */
   policyNumber: string
+  insurerPolicyNumber?: string
+  issuedAt?: string
+  declineReason?: string
   lastPaidAt?: string
   claims: InsuranceClaim[]
   createdAt: string
