@@ -665,6 +665,8 @@ export interface FinancingOffer {
   requiresEmployment: boolean
   requiresPayrollDeduction: boolean
   active: boolean
+  /** APR including the processing fee, from the longest to the shortest term. */
+  aprRange?: { min: number; max: number }
   createdAt: string
   updatedAt: string
 }
@@ -679,6 +681,8 @@ export interface FinancingApplication {
   propertyId?: string
   amountRequested: number
   tenureMonths: number
+  /** Months of rent a rent advance covers (Rent Act s.25 caps it). */
+  advanceMonths?: number
   purpose: string
   status: FinancingApplicationStatus
   decisionNotes?: string
@@ -717,12 +721,15 @@ export interface FinancingContract {
   annualInterestRate: number
   tenureMonths: number
   processingFee: number
+  apr?: number
   monthlyPayment: number
   totalRepayable: number
   amountRepaid: number
   status: FinancingContractStatus
   disbursedAt?: string
   disbursementReference?: string
+  fundingSource?: 'financier_wallet' | 'external_settlement'
+  applicantSignature?: { name: string; signedAt: string; termsHash: string }
   schedule: RepaymentScheduleItem[]
   payrollDeductionMandateId?: string
   signedByApplicant: boolean

@@ -22,6 +22,8 @@ export function FinancingContractDetailPage() {
   const user = useAuthStore((s) => s.user)
   const addToast = useToastStore((s) => s.addToast)
   const [signature, setSignature] = useState('')
+  const [accepted, setAccepted] = useState(false)
+  const [settlementReference, setSettlementReference] = useState('')
   const [repayAmount, setRepayAmount] = useState<string>('')
 
   if (!contract) {
@@ -64,10 +66,19 @@ export function FinancingContractDetailPage() {
         <Card>
           <CardHeader><CardTitle>Sign Contract</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-muted dark:text-gray-400">By signing, you authorize the financier to disburse funds and you agree to repay according to the schedule below. You also confirm the disclosed APR, processing fee, and late fee.</p>
+            <div className="rounded-md bg-surface dark:bg-[#0c0e1a] p-3 text-xs space-y-0.5">
+              <p>Principal <strong>{formatCurrency(contract.principal)}</strong> · processing fee <strong>{formatCurrency(contract.processingFee)}</strong> · you receive <strong>{formatCurrency(contract.principal - contract.processingFee)}</strong></p>
+              <p>Interest <strong>{contract.annualInterestRate}% a year</strong>{contract.apr != null ? <> · APR including fees <strong>{contract.apr}%</strong></> : null}</p>
+              <p>Total repayable <strong>{formatCurrency(contract.totalRepayable)}</strong> · total cost of credit <strong>{formatCurrency(contract.totalRepayable - (contract.principal - contract.processingFee))}</strong></p>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400">By signing, you authorize the financier to disburse funds and you agree to repay according to the schedule below. Your typed name, the time, and a fingerprint of these exact terms are kept as your signature record.</p>
             <Input id="contract-signature" label="Type your full name to sign" value={signature} onChange={(e) => setSignature(e.target.value)} />
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+              <span className="text-primary-dark dark:text-white">I have read the terms, APR and repayment schedule and accept them</span>
+            </label>
             <div className="flex justify-end">
-              <Button disabled={signature.length < 3 || sign.isPending} onClick={() => sign.mutate({ id: contract.id, signature }, {
+              <Button disabled={signature.trim().length < 3 || !accepted || sign.isPending} onClick={() => sign.mutate({ id: contract.id, signature }, {
                 onSuccess: () => addToast('Contract signed', 'success'),
                 onError: (e) => addToast((e as Error).message, 'error'),
               })}>
@@ -84,9 +95,10 @@ export function FinancingContractDetailPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-primary-dark dark:text-white">Ready to disburse</p>
-                <p className="text-xs text-muted dark:text-gray-500">Net of processing fee: {formatCurrency(contract.principal - contract.processingFee)}</p>
+                <p className="text-xs text-muted dark:text-gray-500">Net of processing fee: {formatCurrency(contract.principal - contract.processingFee)} — debited from your wallet unless you enter the reference of funds you already sent to the platform.</p>
+                <Input id="settlement-ref" label="External settlement reference (optional)" value={settlementReference} onChange={(e) => setSettlementReference(e.target.value)} />
               </div>
-              <Button onClick={() => disburse.mutate(contract.id, {
+              <Button onClick={() => disburse.mutate({ id: contract.id, settlementReference: settlementReference.trim() || undefined }, {
                 onSuccess: () => addToast('Disbursed', 'success'),
                 onError: (e) => addToast((e as Error).message, 'error'),
               })} disabled={disburse.isPending}>

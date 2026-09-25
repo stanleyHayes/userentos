@@ -2001,6 +2001,7 @@ export function useApplyForFinancing() {
       purpose: string
       agreementId?: string
       propertyId?: string
+      advanceMonths?: number
       willUsePayrollDeduction?: boolean
     }) => api.post<FinancingApplication>('/financing/applications', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['financing-applications'] }),
@@ -2038,7 +2039,7 @@ export function useSignFinancingContract() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, signature }: { id: string; signature: string }) =>
-      api.post<FinancingContract>(`/financing/contracts/${id}/sign`, { signature }),
+      api.post<FinancingContract>(`/financing/contracts/${id}/sign`, { signature, acceptTerms: true }),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
       qc.invalidateQueries({ queryKey: ['financing-contract', vars.id] })
@@ -2105,8 +2106,12 @@ export function useAddContractNote() {
 export function useDisburseFinancingContract() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.post<FinancingContract>(`/financing/contracts/${id}/disburse`, {}),
-    onSuccess: (_d, id) => {
+    // Without a settlement reference the financier funds the disbursement from its own wallet.
+    mutationFn: ({ id, settlementReference }: { id: string; settlementReference?: string }) =>
+      api.post<FinancingContract>(`/financing/contracts/${id}/disburse`, settlementReference
+        ? { fundingSource: 'external_settlement', settlementReference }
+        : { fundingSource: 'financier_wallet' }),
+    onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: ['financing-contracts'] })
       qc.invalidateQueries({ queryKey: ['financing-contract', id] })
       qc.invalidateQueries({ queryKey: ['financing-portfolio'] })

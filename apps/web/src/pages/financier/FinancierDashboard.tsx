@@ -153,7 +153,7 @@ export function FinancierDashboard() {
                           <Badge variant="success" className="text-[9px]">Signed</Badge>
                         </div>
                       </div>
-                      <Button size="sm" variant="primary" disabled={disburse.isPending} onClick={() => disburse.mutate(c.id, { onError: (e) => addToast((e as Error).message, 'error') })}>
+                      <Button size="sm" variant="primary" disabled={disburse.isPending} onClick={() => disburse.mutate({ id: c.id }, { onError: (e) => addToast((e as Error).message, 'error') })}>
                         <Send size={12} /> Disburse
                       </Button>
                     </div>

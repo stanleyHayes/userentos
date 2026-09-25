@@ -9,6 +9,7 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatCompact } from '../lib/format'
 import { api } from '../lib/api'
+import type { LoanQuote } from '../types/shared'
 
 interface FinancingOffer {
   id: string
@@ -25,9 +26,11 @@ interface FinancingOffer {
   requiresEmployment: boolean
   requiresPayrollDeduction: boolean
   active: boolean
+  aprRange?: { min: number; max: number }
 }
 
 interface OffersResponse { items: FinancingOffer[] }
+interface AgreementOption { id: string; status: string; rentAmount: number }
 
 export default function FinancingScreen() {
   const c = useThemeColors()
@@ -39,13 +42,30 @@ export default function FinancingScreen() {
   })
 
   const offers = data?.items?.filter((o) => o.active) ?? []
+  // Only a tenancy in force can back financing; a rent advance requires one.
+  const { data: agreementData } = useQuery({
+    queryKey: ['agreements', 'active'],
+    queryFn: () => api.get<{ items: AgreementOption[] }>('/agreements'),
+  })
+  const agreements = (agreementData?.items ?? []).filter((a) => a.status === 'active')
 
   const [selected, setSelected] = useState<FinancingOffer | null>(null)
   const [amount, setAmount] = useState('')
   const [tenure, setTenure] = useState('')
   const [purpose, setPurpose] = useState('')
   const [usePayroll, setUsePayroll] = useState(false)
+  const [agreementId, setAgreementId] = useState('')
+  const [advanceMonths, setAdvanceMonths] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isRentAdvance = selected?.productType === 'rent_advance'
+  const amountNum = Number(amount)
+  const tenureNum = Number(tenure)
+  const quoteReady = !!selected && amountNum >= selected.minAmount && amountNum <= selected.maxAmount && tenureNum >= selected.minTenureMonths && tenureNum <= selected.maxTenureMonths
+  const { data: quote } = useQuery({
+    queryKey: ['financing-quote', selected?.id, amountNum, tenureNum],
+    queryFn: () => api.get<LoanQuote>(`/financing/offers/${selected!.id}/quote?amount=${amountNum}&tenure=${tenureNum}`),
+    enabled: quoteReady,
+  })
 
   function openApply(offer: FinancingOffer) {
     setSelected(offer)
@@ -53,6 +73,8 @@ export default function FinancingScreen() {
     setTenure(String(offer.minTenureMonths))
     setPurpose('')
     setUsePayroll(offer.requiresPayrollDeduction)
+    setAgreementId('')
+    setAdvanceMonths('')
   }
 
   function close() {
@@ -61,12 +83,16 @@ export default function FinancingScreen() {
     setTenure('')
     setPurpose('')
     setUsePayroll(false)
+    setAgreementId('')
+    setAdvanceMonths('')
   }
 
   async function submit() {
     if (!selected) return
-    const amountNum = Number(amount)
-    const tenureNum = Number(tenure)
+    if (isRentAdvance && (!agreementId || !Number(advanceMonths))) {
+      Alert.alert('Rent advance', 'Choose your signed, active agreement and how many months of rent to advance')
+      return
+    }
     if (!amountNum || amountNum < selected.minAmount || amountNum > selected.maxAmount) {
       Alert.alert('Invalid amount', `Must be between ${formatCurrency(selected.minAmount)} and ${formatCurrency(selected.maxAmount)}`)
       return
@@ -86,6 +112,8 @@ export default function FinancingScreen() {
         amountRequested: amountNum,
         tenureMonths: tenureNum,
         purpose: purpose.trim(),
+        agreementId: agreementId || undefined,
+        advanceMonths: isRentAdvance ? Number(advanceMonths) : undefined,
         willUsePayrollDeduction: usePayroll,
       })
       qc.invalidateQueries({ queryKey: ['financing-applications'] })
@@ -137,7 +165,7 @@ export default function FinancingScreen() {
                   </Text>
                 </View>
                 <View style={[s.aprBadge, { backgroundColor: c.accent + '20' }]}>
-                  <Text style={[s.aprText, { color: c.accent }]}>{o.annualInterestRate}% APR</Text>
+                  <Text style={[s.aprText, { color: c.accent }]}>{o.aprRange ? `APR ${o.aprRange.min}–${o.aprRange.max}%` : `${o.annualInterestRate}% interest`}</Text>
                 </View>
               </View>
 
@@ -146,6 +174,7 @@ export default function FinancingScreen() {
               <View style={s.rows}>
                 <Row label="Amount" value={`${formatCompact(o.minAmount)} – ${formatCompact(o.maxAmount)}`} c={c} />
                 <Row label="Tenure" value={`${o.minTenureMonths}–${o.maxTenureMonths} mo`} c={c} />
+                <Row label="Interest" value={`${o.annualInterestRate}% a year`} c={c} />
                 <Row label="Processing fee" value={`${o.processingFeePct}%`} c={c} />
                 <Row label="Min credit" value={String(o.minCreditScore)} c={c} />
               </View>
@@ -203,10 +232,37 @@ export default function FinancingScreen() {
                     </Text>
                   </Text>
                   <Text style={[s.summaryRow, { color: c.muted }]}>
-                    APR: <Text style={[s.summaryBold, { color: c.text }]}>{selected.annualInterestRate}%</Text>
+                    Interest: <Text style={[s.summaryBold, { color: c.text }]}>{selected.annualInterestRate}% a year</Text>
                     {' '}- Processing: <Text style={[s.summaryBold, { color: c.text }]}>{selected.processingFeePct}%</Text>
                   </Text>
+                  {isRentAdvance && (
+                    <Text style={[s.summaryRow, { color: c.muted }]}>
+                      A rent advance is paid to your landlord and cannot exceed what the Rent Act allows: six months' rent (one month for a monthly tenancy).
+                    </Text>
+                  )}
                 </View>
+              )}
+
+              {(isRentAdvance || agreements.length > 0) && (
+                <>
+                  <Text style={[s.label, { color: c.text }]}>{isRentAdvance ? 'Signed, active agreement' : 'Link an agreement (optional)'}</Text>
+                  {agreements.length === 0 ? (
+                    <Text style={[s.summaryRow, { color: c.muted }]}>No active agreements on your account.</Text>
+                  ) : agreements.map((a) => (
+                    <TouchableOpacity key={a.id} style={s.checkboxRow} onPress={() => setAgreementId(agreementId === a.id ? '' : a.id)} activeOpacity={0.7}>
+                      <View style={[s.checkbox, { borderColor: c.border, backgroundColor: agreementId === a.id ? c.primary : 'transparent' }]}>
+                        {agreementId === a.id && <Ionicons name="checkmark" size={14} color="#fff" />}
+                      </View>
+                      <Text style={[s.checkboxLabel, { color: c.text }]}>{formatCurrency(a.rentAmount)}/mo · #{a.id.slice(-6)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+              {isRentAdvance && (
+                <>
+                  <Text style={[s.label, { color: c.text }]}>Months of rent to advance (max 6)</Text>
+                  <TextInput style={[s.input, neuInset(c), { color: c.text }]} keyboardType="numeric" value={advanceMonths} onChangeText={setAdvanceMonths} placeholder="e.g. 3" placeholderTextColor={c.muted} />
+                </>
               )}
 
               <Text style={[s.label, { color: c.text }]}>Amount requested (GHS)</Text>
@@ -228,6 +284,14 @@ export default function FinancingScreen() {
                 placeholder="0"
                 placeholderTextColor={c.muted}
               />
+
+              {quote && (
+                <View style={[s.summaryBox, neuInset(c)]}>
+                  <Text style={[s.summaryRow, { color: c.muted }]}>You receive <Text style={[s.summaryBold, { color: c.text }]}>{formatCurrency(quote.netDisbursed)}</Text> after a {formatCurrency(quote.processingFee)} fee</Text>
+                  <Text style={[s.summaryRow, { color: c.muted }]}>{quote.tenureMonths} payments of about <Text style={[s.summaryBold, { color: c.text }]}>{formatCurrency(quote.monthlyPayment)}</Text> · total <Text style={[s.summaryBold, { color: c.text }]}>{formatCurrency(quote.totalRepayable)}</Text></Text>
+                  <Text style={[s.summaryRow, { color: c.muted }]}>APR including fees <Text style={[s.summaryBold, { color: c.text }]}>{quote.apr}%</Text> · cost of credit <Text style={[s.summaryBold, { color: c.text }]}>{formatCurrency(quote.totalCostOfCredit)}</Text></Text>
+                </View>
+              )}
 
               <Text style={[s.label, { color: c.text }]}>Purpose</Text>
               <TextInput

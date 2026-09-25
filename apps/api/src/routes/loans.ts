@@ -3,6 +3,7 @@ import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
 import { requireApprovedEntity } from '../middleware/entityApproval.js'
+import { requireVerifiedFinancierLicence } from '../middleware/financierLicence.js'
 import { Loan, LOAN_LIMITS, LOAN_OPEN_STATUSES, LOAN_REVIEWABLE_STATUSES, type ILoanQuoteSnapshot } from '../models/Loan.js'
 import { Agreement } from '../models/Agreement.js'
 import { CreditScore } from '../models/CreditScore.js'
@@ -26,8 +27,8 @@ const idOf = <T extends { _id: unknown }>(doc: T) => ({ ...doc, id: (doc._id as 
 const isDuplicateKey = (err: unknown) => (err as { code?: number })?.code === 11000
 
 // Lenders (approved financier institutions) and explicitly authorised admins.
-const reviewer = [requireRole('financier', 'admin', 'super_admin'), requirePermission('financing:approve'), requireApprovedEntity('financier')]
-const disburser = [requireRole('financier', 'admin', 'super_admin'), requirePermission('financing:disburse'), requireApprovedEntity('financier')]
+const reviewer = [requireRole('financier', 'admin', 'super_admin'), requirePermission('financing:approve'), requireApprovedEntity('financier'), requireVerifiedFinancierLicence]
+const disburser = [requireRole('financier', 'admin', 'super_admin'), requirePermission('financing:disburse'), requireApprovedEntity('financier'), requireVerifiedFinancierLicence]
 
 function quote(amount: number, tenure: number) {
   return buildCreditQuote({ principal: amount, annualInterestRate: INTEREST_RATE, tenureMonths: tenure, processingFeePct: PROCESSING_FEE_PCT })

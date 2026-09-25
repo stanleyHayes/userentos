@@ -23,17 +23,23 @@ export interface IFinancingContract extends Document {
   annualInterestRate: number
   tenureMonths: number
   processingFee: number
+  /** APR including the processing fee, disclosed before signing. */
+  apr?: number
   monthlyPayment: number
   totalRepayable: number
   amountRepaid: number
   status: 'pending_disbursement' | 'active' | 'in_grace' | 'in_arrears' | 'closed' | 'defaulted' | 'settled'
   disbursedAt?: string
   disbursementReference?: string
+  /** Where the disbursed money came from — a disbursement never creates balance. */
+  fundingSource?: 'financier_wallet' | 'external_settlement'
   schedule: IRepaymentScheduleItem[]
   payrollDeductionMandateId?: string
   signedByApplicant: boolean
   signedByFinancier: boolean
   signedAt?: string
+  /** E-signature evidence: the typed name, when, from where, and a hash of the exact terms signed. */
+  applicantSignature?: { name: string; signedAt: Date; ipAddress?: string; userAgent?: string; termsHash: string }
   notes?: { text: string; by: string; at: string }[]
   lastReminderAt?: string
   lastArrearsCheckAt?: string
@@ -52,7 +58,7 @@ const scheduleItemSchema = new Schema<IRepaymentScheduleItem>({
 }, { _id: false })
 
 const contractSchema = new Schema<IFinancingContract>({
-  applicationId: { type: String, required: true, index: true },
+  applicationId: { type: String, required: true },
   financierId: { type: String, required: true, index: true },
   applicantId: { type: String, required: true, index: true },
   applicantName: String,
@@ -63,17 +69,26 @@ const contractSchema = new Schema<IFinancingContract>({
   annualInterestRate: { type: Number, required: true },
   tenureMonths: { type: Number, required: true },
   processingFee: { type: Number, default: 0 },
+  apr: Number,
   monthlyPayment: { type: Number, required: true },
   totalRepayable: { type: Number, required: true },
   amountRepaid: { type: Number, default: 0 },
   status: { type: String, required: true, enum: ['pending_disbursement', 'active', 'in_grace', 'in_arrears', 'closed', 'defaulted', 'settled'], default: 'pending_disbursement' },
   disbursedAt: String,
   disbursementReference: String,
+  fundingSource: { type: String, enum: ['financier_wallet', 'external_settlement'] },
   schedule: [scheduleItemSchema],
   payrollDeductionMandateId: String,
   signedByApplicant: { type: Boolean, default: false },
   signedByFinancier: { type: Boolean, default: false },
   signedAt: String,
+  applicantSignature: {
+    name: String,
+    signedAt: Date,
+    ipAddress: String,
+    userAgent: String,
+    termsHash: String,
+  },
   notes: [{ text: String, by: String, at: String }],
   lastReminderAt: String,
   lastArrearsCheckAt: String,
@@ -83,5 +98,10 @@ const contractSchema = new Schema<IFinancingContract>({
   // arrears cron) can't silently lose-update the schedule/amountRepaid — the loser
   // throws a VersionError and is handled by the caller (repay refunds, cron skips+retries).
 }, { timestamps: true, optimisticConcurrency: true })
+
+// One contract per application, even if approvals race.
+contractSchema.index({ applicationId: 1 }, { name: 'financing_contract_one_per_application', unique: true, partialFilterExpression: { applicationId: { $type: 'string' } } })
+// One external settlement funds one disbursement.
+contractSchema.index({ disbursementReference: 1 }, { name: 'financing_contract_disbursement_reference', unique: true, partialFilterExpression: { disbursementReference: { $type: 'string' } } })
 
 export const FinancingContract = mongoose.model<IFinancingContract>('FinancingContract', contractSchema)

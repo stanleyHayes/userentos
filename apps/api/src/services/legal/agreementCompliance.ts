@@ -31,6 +31,18 @@ function oneMonthAfter(start: Date): Date {
   return next
 }
 
+/**
+ * The most rent that may be taken in advance for a tenancy, in months (s.25):
+ * one month for a tenancy of a calendar month or less, otherwise six. Invalid
+ * dates get the stricter one-month ceiling.
+ */
+export function maxAdvanceMonthsFor(startDate: string, endDate: string): number {
+  const start = validDate(startDate)
+  const end = validDate(endDate)
+  if (!start || !end || end <= start || end <= oneMonthAfter(start)) return RENT_LAW.monthlyTenancyMaxAdvanceMonths
+  return RENT_LAW.maxAdvanceMonths
+}
+
 /** Recomputed from the terms; caller-supplied or legacy flags are never authoritative. */
 export function checkAgreementCompliance(data: AgreementTerms): ComplianceFlag[] {
   const flags: ComplianceFlag[] = []

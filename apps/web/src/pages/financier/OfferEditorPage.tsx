@@ -50,7 +50,8 @@ export function OfferEditorPage() {
     }
     if (minAmount <= 0) return 'Min amount must be greater than 0'
     if (minAmount > maxAmount) return 'Min amount cannot exceed max amount'
-    if (minTenure <= 0) return 'Min tenure must be at least 1 month'
+    // Server enforces the same floor (Google Play personal-loan policy) plus configurable rate/fee caps.
+    if (minTenure < 3) return 'Min tenure must be at least 3 months'
     if (minTenure > maxTenure) return 'Min tenure cannot exceed max tenure'
     if (rate < 0 || rate > 100) return 'Interest rate must be between 0 and 100%'
     if (fee < 0 || fee > 100) return 'Processing fee must be between 0 and 100%'
