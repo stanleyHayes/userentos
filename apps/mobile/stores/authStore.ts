@@ -45,6 +45,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hydrated: false,
 
   login: (user, token, refreshToken, opts) => {
+    // A signed-in state without an identity or credential is unusable and was
+    // reachable (e.g. an MFA challenge response passed through as a login).
+    // Refuse it before touching the current session.
+    if (!user?.id || typeof token !== 'string' || !token) throw new Error('Sign-in did not return a valid session. Please try again.')
     useNotificationStore.getState().reset()
     const biometricSession = opts?.biometricSession ?? false
     set({ user, token, refreshToken: refreshToken ?? null, biometricSession, isAuthenticated: true, sessionVersion: get().sessionVersion + 1 })
