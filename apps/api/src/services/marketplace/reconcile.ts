@@ -16,6 +16,7 @@
 import { WebhookEvent } from '../../models/WebhookEvent.js'
 import { MarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
 import { verifyTransaction } from './paystack.js'
+import { applySuccessfulCharge, chargeRefusal, SETTLEABLE_STATUSES } from './settle.js'
 import { logger } from '../../utils/logger.js'
 
 /** Give up after this many attempts; the row stays for a human to inspect. */
@@ -77,27 +78,33 @@ async function applyPaidEvent(reference: string, eventId: string): Promise<boole
 
   const transaction = await MarketplaceTransaction.findOne({ reference })
   if (!transaction) return false
-  if (transaction.status === 'paid') return false
 
-  const expected = transaction.grossAmount - transaction.discountAmount
-  if (Math.abs(verified.amount - expected) > 0.01) {
+  /*
+   * The same rules as the webhook and /verify. This path used to check only
+   * the amount and "not already paid", so a FAILED row whose reference had
+   * succeeded somewhere else on the shared Paystack account — a wallet
+   * deposit — was marked paid here, and sponsorships and bookings it paid for
+   * were never activated because none of settle's side effects ran.
+   */
+  const refusal = chargeRefusal(transaction, verified)
+  if (refusal === 'already_paid' || refusal === 'not_settleable') return false
+  if (refusal) {
+    const expected = transaction.grossAmount - transaction.discountAmount
     throw new Error(
-      `amount mismatch on ${reference}: expected ${expected}, provider reported ${verified.amount}`,
+      `${refusal.replace('_', ' ')} on ${reference}: expected ${expected} GHS, provider reported ${verified.amount} ${verified.currency ?? ''}`.trim(),
     )
   }
 
   const claimed = await MarketplaceTransaction.findOneAndUpdate(
-    { _id: transaction._id, status: { $ne: 'paid' }, processedEventIds: { $ne: eventId } },
-    {
-      $set: { status: 'paid', verifiedAt: new Date(), processorFeeAmount: verified.fees, settlementStatus: 'pending' },
-      $addToSet: { processedEventIds: eventId },
-    },
+    { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES }, processedEventIds: { $ne: eventId } },
+    { $addToSet: { processedEventIds: eventId } },
     { returnDocument: 'after' },
   )
   if (!claimed) return false
 
-  logger.info(`[Reconcile] Recovered ${reference} — marked paid from a replayed webhook`)
-  return true
+  const outcome = await applySuccessfulCharge(claimed, verified, 'reconcile')
+  if (outcome.applied) logger.info(`[Reconcile] Recovered ${reference} — marked paid from a replayed webhook`)
+  return outcome.applied
 }
 
 export interface ReconcileResult { examined: number; corrected: number }

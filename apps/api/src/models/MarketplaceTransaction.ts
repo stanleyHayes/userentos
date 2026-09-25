@@ -11,7 +11,23 @@ export type MarketplaceTransactionStatus =
   | 'initialized' | 'pending' | 'paid' | 'failed' | 'refunded' | 'partially_refunded' | 'disputed'
 
 export interface IMarketplaceTransaction extends Document {
+  /** Provider reference. Always server-generated — never a client value. */
   reference: string
+  /**
+   * The client's idempotency key, scoped to the buyer.
+   *
+   * This used to BE the provider reference, which let a caller name a
+   * reference that already belonged to another collection (a wallet deposit
+   * shares the same Paystack account) and have that charge verified as this
+   * order's payment.
+   */
+  idempotencyKey?: string
+  /**
+   * True when this transaction's id was sent to the provider as metadata, so
+   * settlement can prove the verified charge was initialized for THIS row.
+   * Absent on rows created before the binding existed.
+   */
+  providerBound?: boolean
   buyerId?: string
   buyerEmail: string
   /** Absent on a platform charge (sponsorship), where there is no seller. */
@@ -51,6 +67,8 @@ export interface IMarketplaceTransaction extends Document {
 
 const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   reference: { type: String, required: true, unique: true, index: true },
+  idempotencyKey: String,
+  providerBound: Boolean,
   buyerId: String,
   buyerEmail: { type: String, required: true },
   // Not required: a platform charge has no seller to pay. Only queries
@@ -85,5 +103,12 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   processedEventIds: { type: [String], default: [] },
   settlementStatus: { type: String, enum: ['pending', 'settled', 'unknown'], default: 'pending' },
 }, { timestamps: true })
+
+// A replayed key returns the buyer's original transaction; another buyer's
+// identical key is a different transaction, not a lookup into theirs.
+marketplaceTransactionSchema.index(
+  { buyerId: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } },
+)
 
 export const MarketplaceTransaction = mongoose.model<IMarketplaceTransaction>('MarketplaceTransaction', marketplaceTransactionSchema)
