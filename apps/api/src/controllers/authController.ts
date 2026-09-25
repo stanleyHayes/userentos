@@ -101,7 +101,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword)
+    const result = await authService.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword, getClientMeta(req).ipAddress)
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },
@@ -110,7 +110,7 @@ export const authController = {
     const { email } = req.body
     if (!email) { error(res, 'Email required'); return }
 
-    const result = await authService.forgotPassword(email)
+    const result = await authService.forgotPassword(email, getClientMeta(req).ipAddress)
     success(res, result.data, result.message)
   },
 
@@ -119,7 +119,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.resetPassword(parsed.data.token, parsed.data.newPassword)
+    const result = await authService.resetPassword(parsed.data.token, parsed.data.newPassword, getClientMeta(req).ipAddress)
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },
@@ -146,7 +146,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.mfaEnable(req.user!.userId, parsed.data.code)
+    const result = await authService.mfaEnable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress)
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },
@@ -156,7 +156,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.mfaDisable(req.user!.userId, parsed.data.code)
+    const result = await authService.mfaDisable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress)
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },

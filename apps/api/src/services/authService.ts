@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import type { Logger } from 'winston'
 import { config } from '../config/index.js'
 import type { UserRepository, WalletRepository } from '../repositories/index.js'
 import type { AuthPayload } from '../middleware/auth.js'
-import { notifyWelcome } from './notify.js'
+import { notify, notifyWelcome } from './notify.js'
 import { sendPasswordResetEmail } from './email.js'
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
 import { BiometricToken } from '../models/BiometricToken.js'
@@ -39,6 +40,18 @@ export function signDownloadToken(userId: string): string {
   })
 }
 
+/**
+ * A hash at the configured cost, compared against when the email is unknown
+ * so an unknown account costs the same bcrypt work as a wrong password — the
+ * response time must not reveal which emails are registered. Built lazily
+ * (once) so importing this module stays cheap.
+ */
+let dummyHash: Promise<string> | undefined
+function getDummyHash(): Promise<string> {
+  dummyHash ??= bcrypt.hash(crypto.randomBytes(32).toString('hex'), config.bcryptRounds)
+  return dummyHash
+}
+
 export class AuthService {
   constructor(
     private readonly userRepo: UserRepository,
@@ -64,6 +77,23 @@ export class AuthService {
     // 'session' purpose is what `authenticate` requires — without it the token
     // must not work as a general credential (MFA bypass fix).
     return jwt.sign({ ...payload, purpose: 'session' }, config.jwtSecret, { expiresIn: config.jwtAccessExpiresIn })
+  }
+
+  /** Best-effort audit record for an authentication event (never throws). */
+  private audit(action: string, userId: string, ipAddress?: string, details?: Record<string, unknown>) {
+    void recordAuditEntry({ userId, action, entityType: 'User', entityId: userId === 'anonymous' ? 'unknown' : userId, details, ipAddress })
+  }
+
+  /**
+   * Tell the account holder about a credential change — exempt 'security'
+   * category, so it is delivered whatever their notification toggles.
+   */
+  private securityNotice(userId: string, title: string, message: string) {
+    try {
+      void notify({ userId, title, message, actionUrl: '/settings?tab=security', category: 'security' })
+    } catch (err) {
+      this.logger.warn(`Security notice failed for ${userId}: ${(err as Error).message}`)
+    }
   }
 
   /** Evidence trail for each acceptance; User.consents keeps only the latest. */
@@ -145,13 +175,19 @@ export class AuthService {
   async login(email: string, password: string, deviceLabel?: string, ipAddress?: string) {
     const user = await this.userRepo.findByEmail(email)
     if (!user) {
+      // Same bcrypt cost as a real comparison — see getDummyHash.
+      await bcrypt.compare(password, await getDummyHash())
       this.logger.warn(`Login attempt with unknown email: ${email}`)
+      // The attempted address is not stored: it may be a typo of someone
+      // else's email. The IP is what an investigation needs.
+      this.audit('auth.login.failure', 'anonymous', ipAddress, { reason: 'unknown_account' })
       return { error: 'Invalid email or password', status: 401 }
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash)
     if (!valid) {
       this.logger.warn(`Failed login attempt for: ${email}`)
+      this.audit('auth.login.failure', user._id.toString(), ipAddress, { reason: 'bad_password' })
       return { error: 'Invalid email or password', status: 401 }
     }
 
@@ -163,6 +199,7 @@ export class AuthService {
         { expiresIn: 300 },
       )
       this.logger.info(`MFA challenge issued for: ${email}`)
+      this.audit('auth.login.mfa_challenge', user._id.toString(), ipAddress)
       return { data: { mfaRequired: true, mfaToken } }
     }
 
@@ -172,6 +209,7 @@ export class AuthService {
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in: ${email}`)
+    this.audit('auth.login.success', user._id.toString(), ipAddress, { method: 'password', device: deviceLabel })
 
     return { data: { user: safeUser, token, refreshToken } }
   }
@@ -201,6 +239,7 @@ export class AuthService {
 
     if (!verifyTotp(user.mfaSecret, code)) {
       this.logger.warn(`Failed MFA attempt for user: ${userId}`)
+      this.audit('auth.login.failure', userId, ipAddress, { reason: 'bad_mfa_code' })
       return { error: 'Invalid authentication code', status: 401 }
     }
 
@@ -210,6 +249,7 @@ export class AuthService {
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in with MFA: ${user.email}`)
+    this.audit('auth.login.success', user._id.toString(), ipAddress, { method: 'password+totp', device: deviceLabel })
 
     return { data: { user: safeUser, token, refreshToken } }
   }
@@ -249,7 +289,7 @@ export class AuthService {
   }
 
   /** Confirm MFA enrollment by verifying a code against the pending secret. */
-  async mfaEnable(userId: string, code: string) {
+  async mfaEnable(userId: string, code: string, ipAddress?: string) {
     const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (user.mfaEnabled) return { error: 'MFA is already enabled', status: 400 }
@@ -262,11 +302,13 @@ export class AuthService {
     user.mfaEnabled = true
     await user.save()
     this.logger.info(`MFA enabled for user: ${user.email}`)
+    this.audit('auth.mfa.enable', userId, ipAddress)
+    this.securityNotice(userId, 'Two-factor authentication turned on', 'Two-factor authentication was turned on for your RentOS account. If this was not you, reset your password and contact support now.')
     return { data: null, message: 'Two-factor authentication enabled' }
   }
 
   /** Disable MFA — requires a valid code from the current secret. */
-  async mfaDisable(userId: string, code: string) {
+  async mfaDisable(userId: string, code: string, ipAddress?: string) {
     const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (!user.mfaEnabled || !user.mfaSecret) return { error: 'MFA is not enabled', status: 400 }
@@ -279,6 +321,8 @@ export class AuthService {
     user.mfaSecret = undefined
     await user.save()
     this.logger.info(`MFA disabled for user: ${user.email}`)
+    this.audit('auth.mfa.disable', userId, ipAddress)
+    this.securityNotice(userId, 'Two-factor authentication turned off', 'Two-factor authentication was turned off for your RentOS account. If this was not you, reset your password and contact support now.')
     return { data: null, message: 'Two-factor authentication disabled' }
   }
 
@@ -358,7 +402,7 @@ export class AuthService {
     return { data: null }
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(userId: string, currentPassword: string, newPassword: string, ipAddress?: string) {
     const user = await this.userRepo.findById(userId)
     if (!user) {
       return { error: 'User not found', status: 404 }
@@ -367,6 +411,7 @@ export class AuthService {
     const valid = await bcrypt.compare(currentPassword, user.passwordHash)
     if (!valid) {
       this.logger.warn(`Failed password change attempt for user: ${userId}`)
+      this.audit('auth.password.change_failed', userId, ipAddress)
       return { error: 'Current password is incorrect', status: 401 }
     }
 
@@ -379,10 +424,12 @@ export class AuthService {
     await this.revokeAllSessions(userId, 'credentials_changed')
 
     this.logger.info(`Password changed for user: ${userId}`)
+    this.audit('auth.password.change', userId, ipAddress)
+    this.securityNotice(userId, 'Your password was changed', 'The password for your RentOS account was changed and you were signed out on other devices. If this was not you, reset your password and contact support now.')
     return { data: null, message: 'Password changed successfully' }
   }
 
-  async forgotPassword(email: string) {
+  async forgotPassword(email: string, ipAddress?: string) {
     const user = await this.userRepo.findByEmail(email)
     if (!user) {
       // Don't reveal whether email exists
@@ -397,6 +444,7 @@ export class AuthService {
     )
 
     this.logger.info(`Password reset token generated for: ${email}`)
+    this.audit('auth.password.reset_requested', user._id.toString(), ipAddress)
 
     // Send asynchronously so the response time doesn't reveal whether the
     // email exists (timing oracle) and SMTP latency can't stall the request.
@@ -407,7 +455,7 @@ export class AuthService {
     return { data: null, message: 'If that email is registered, a reset link has been sent.' }
   }
 
-  async resetPassword(token: string, newPassword: string) {
+  async resetPassword(token: string, newPassword: string, ipAddress?: string) {
     let userId: string
     let tokenIat: number | undefined
     try {
@@ -438,6 +486,8 @@ export class AuthService {
     await this.revokeAllSessions(userId, 'credentials_changed')
 
     this.logger.info(`Password reset completed for user: ${userId}`)
+    this.audit('auth.password.reset', userId, ipAddress)
+    this.securityNotice(userId, 'Your password was reset', 'The password for your RentOS account was reset and you were signed out on all devices. If this was not you, contact support now.')
     return { data: null, message: 'Password reset successfully' }
   }
 }
