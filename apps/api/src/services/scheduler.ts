@@ -27,6 +27,7 @@ import { AuditLog } from '../models/AuditLog.js'
 import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
 import { retentionCutoff } from '../config/retention.js'
+import { payoutsOffered, reconcileUncertainPayouts } from './payouts/reconcile.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
@@ -601,6 +602,22 @@ export function startScheduler() {
       logger.error('[Scheduler] Payment reconciliation error:', err)
     }
   })
+
+  // ─── Payout reconciliation: every 5 minutes ───
+  // Transfers whose outcome the provider never confirmed stay 'processing'
+  // with needsReconciliation (routes/payouts.ts). Ask the provider, through
+  // the same path as the admin's POST /payouts/:id/reconcile, with per-payout
+  // backoff. Only while payouts can be offered at all.
+  cron.schedule('*/5 * * * *', async () => {
+    if (!payoutsOffered()) return
+    if (!(await acquireCronLock('payout-reconcile', LOCK_TTL_RECONCILE))) return
+    try {
+      const result = await reconcileUncertainPayouts()
+      if (result.examined) logger.info('[Scheduler] Payout reconciliation', result)
+    } catch (err) {
+      logger.error('[Scheduler] Payout reconciliation error:', err)
+    }
+  }, { timezone: GHANA_TZ })
 
   // ─── Daily 10:00 Ghana time: subscription lifecycle ───
   // (a) remind landlords 7 days before subscriptionEndDate;

@@ -48,6 +48,10 @@ export interface IPayout extends Document {
    * a provider webhook settles what actually happened.
    */
   needsReconciliation?: boolean
+  /** Scheduled provider checks so far, and when the next is due (backoff). */
+  reconcileAttempts?: number
+  lastReconcileAt?: Date
+  nextReconcileAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -71,7 +75,13 @@ const payoutSchema = new Schema<IPayout>({
   failureReason: String,
   refunded: { type: Boolean, default: false },
   needsReconciliation: Boolean,
+  reconcileAttempts: Number,
+  lastReconcileAt: Date,
+  nextReconcileAt: Date,
 }, { timestamps: true })
+
+// The reconciliation sweep's query: held payouts, oldest first.
+payoutSchema.index({ needsReconciliation: 1, status: 1, approvedAt: 1 }, { partialFilterExpression: { needsReconciliation: true } })
 
 export const Payout = mongoose.model<IPayout>('Payout', payoutSchema)
 
