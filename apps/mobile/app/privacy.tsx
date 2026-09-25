@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScrollView, Text, TextInput, TouchableOpacity, View, Linking, Share } from 'react-native'
+import { ScrollView, Text, TextInput, TouchableOpacity, View, Linking, Share, Platform } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
@@ -7,6 +7,16 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { clearBiometricCredential } from '../lib/credentialStorage'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
+
+/**
+ * Store subscriptions are billed by Apple/Google, not RentOS: closing the
+ * account cannot cancel them, so subscribers must be told and sent to the
+ * store's own management page. Each native build names only its own store.
+ */
+const STORE_SUBSCRIPTIONS = [
+  { platform: 'ios', store: 'App Store', name: 'the App Store', url: 'https://apps.apple.com/account/subscriptions' },
+  { platform: 'android', store: 'Google Play', name: 'Google Play', url: 'https://play.google.com/store/account/subscriptions' },
+] as const
 
 export default function PrivacyScreen() {
   const c = useThemeColors()
@@ -44,6 +54,13 @@ export default function PrivacyScreen() {
     finally { setBusy(false) }
   }
 
+  const stores = STORE_SUBSCRIPTIONS.filter((s) => Platform.OS === 'web' || s.platform === Platform.OS)
+
+  async function openStoreSubscriptions(url: string) {
+    try { await Linking.openURL(url) }
+    catch { setMessage('Unable to open subscription settings. Open them from your device settings or store app.') }
+  }
+
   async function openPolicy(path: string) {
     try { await Linking.openURL(`https://userentos.com/${path}`) }
     catch { setMessage('Unable to open the policy. Visit userentos.com in your browser.') }
@@ -62,6 +79,17 @@ export default function PrivacyScreen() {
         <TouchableOpacity accessibilityRole="button" style={{ ...button, backgroundColor: '#b42318', opacity: busy || confirmation !== 'DELETE' ? 0.5 : 1 }} disabled={busy || confirmation !== 'DELETE'} onPress={deleteAccount}><Text style={{ color: '#fff' }}>{busy ? 'Please wait…' : 'Delete my account'}</Text></TouchableOpacity>
       </>}
       {!!message && <Text accessibilityLiveRegion="polite" style={{ color: c.text }}>{message}</Text>}
+    </View>
+    <View style={[neuCard(c), { padding: spacing.lg, gap: spacing.sm }]}>
+      <Text style={{ color: c.text, fontWeight: '700' }}>Subscribed through {stores.map((s) => s.name).join(' or ')}?</Text>
+      <Text style={{ color: c.text }}>
+        Deleting your RentOS account does not cancel a subscription billed by {stores.map((s) => s.name).join(' or ')}. Cancel it in your store account to stop future charges{closed ? '.' : ' — ideally before you delete your account.'}
+      </Text>
+      {stores.map((s) => (
+        <TouchableOpacity key={s.store} accessibilityRole="link" onPress={() => openStoreSubscriptions(s.url)}>
+          <Text style={{ color: c.primary }}>Manage {s.store} subscriptions</Text>
+        </TouchableOpacity>
+      ))}
     </View>
     <TouchableOpacity accessibilityRole="link" onPress={() => openPolicy('privacy')}><Text style={{ color: c.primary }}>Privacy policy</Text></TouchableOpacity>
     <TouchableOpacity accessibilityRole="link" onPress={() => openPolicy('terms')}><Text style={{ color: c.primary }}>Terms of service</Text></TouchableOpacity>
