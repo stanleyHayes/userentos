@@ -591,17 +591,29 @@ function VerificationQueue() {
   const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: ['verification-requests'],
-    queryFn: () => api.get<{ items: { id: string; firstName: string; lastName: string; ghanaCardId: string; roles: string[] }[] }>('/users/verification-requests'),
+    queryFn: () => api.get<{ items: { id: string; firstName: string; lastName: string; ghanaCardLast4?: string; roles: string[] }[] }>('/users/verification-requests'),
   })
   const decide = useMutation({
     mutationFn: ({ id, approve }: { id: string; approve: boolean }) => api.post(`/users/${id}/${approve ? 'verify-identity' : 'reject-verification'}`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['verification-requests'] }),
   })
+  // The full number is an audited disclosure, fetched only on demand and never cached.
+  const [revealed, setRevealed] = useState<Record<string, string>>({})
+  async function reveal(id: string) {
+    const reason = window.prompt('Why do you need the full Ghana Card number? This is recorded in the audit log.')?.trim()
+    if (!reason) return
+    try {
+      const { ghanaCardId } = await api.post<{ ghanaCardId: string }>(`/users/${id}/ghana-card/reveal`, { reason })
+      setRevealed((r) => ({ ...r, [id]: ghanaCardId }))
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
   if (!data?.items.length) return null
   return <Card><CardHeader><CardTitle>Identity verification queue</CardTitle></CardHeader><CardContent className="space-y-2">
     {data.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
-      <div><p className="text-sm font-bold">{item.firstName} {item.lastName}</p><p className="text-xs text-muted">{item.ghanaCardId} · {item.roles.join(', ')}</p></div>
-      <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => decide.mutate({ id: item.id, approve: false })}>Reject</Button><Button size="sm" onClick={() => decide.mutate({ id: item.id, approve: true })}>Verify</Button></div>
+      <div><p className="text-sm font-bold">{item.firstName} {item.lastName}</p><p className="text-xs text-muted">{revealed[item.id] ?? `Card ending ${item.ghanaCardLast4 ?? '—'}`} · {item.roles.join(', ')}</p></div>
+      <div className="flex gap-2">{!revealed[item.id] && <Button size="sm" variant="outline" onClick={() => reveal(item.id)}>Show full number</Button>}<Button size="sm" variant="outline" onClick={() => decide.mutate({ id: item.id, approve: false })}>Reject</Button><Button size="sm" onClick={() => decide.mutate({ id: item.id, approve: true })}>Verify</Button></div>
     </div>)}
   </CardContent></Card>
 }

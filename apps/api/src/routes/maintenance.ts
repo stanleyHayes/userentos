@@ -11,6 +11,7 @@ import { notify } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
+import { isAdminStaff } from '../utils/accessControl.js'
 
 const router = Router()
 
@@ -73,6 +74,11 @@ function isAdminRole(roles: string[]): boolean {
   return roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
 }
 
+/** Regulators oversee requests but do not get tenants' phone numbers. */
+function tenantPhoneFor(roles: string[], tenant: { phone?: string } | null | undefined): string {
+  return roles.includes('government') && !isAdminStaff(roles) ? '' : tenant?.phone ?? ''
+}
+
 function statusLabel(s: string): string {
   return s.replace('_', ' ')
 }
@@ -128,7 +134,7 @@ router.get(
         propertyTitle: prop?.title ?? 'Unknown property',
         propertyAddress: prop?.address,
         tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Unknown',
-        tenantPhone: (tenant as { phone?: string } | undefined)?.phone ?? '',
+        tenantPhone: tenantPhoneFor(roles, tenant),
       }
     })
 
@@ -178,7 +184,7 @@ router.get(
       propertyTitle: property?.title ?? 'Unknown property',
       propertyAddress: property?.address,
       tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Unknown',
-      tenantPhone: (tenant as { phone?: string } | undefined)?.phone ?? '',
+      tenantPhone: tenantPhoneFor(roles, tenant),
     })
   })
 )

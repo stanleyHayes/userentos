@@ -42,13 +42,22 @@ import { disconnectUser } from '../services/socket.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
 import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
-import { decryptPii, PII_FIELDS } from '../utils/piiCrypto.js'
+import { decryptPii, piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
+import { ADMIN_ROLES, isAdminStaff } from '../utils/accessControl.js'
 import { ownProfileView } from '../services/tenantProfileViews.js'
 import { evidenceForViewer } from '../services/agreementEvidence.js'
 import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
+
+const STAFF_ROLES = ['government', 'legal_officer', ...ADMIN_ROLES]
+const isStaffViewer = (roles: readonly string[]) => roles.some((r) => STAFF_ROLES.includes(r))
+/** What administrators see about another account: support fields, no secrets or evidence. */
+const ADMIN_USER_FIELDS = 'firstName lastName email phone roles activeRole permissions isVerified verificationStatus profileImage mfaEnabled suspendedAt suspensionReason subscriptionPackageId subscriptionEndDate invitedBy createdAt updatedAt'
+/** Regulators and legal officers: who holds which role, never how to reach them. */
+const STAFF_USER_FIELDS = 'firstName lastName roles activeRole isVerified verificationStatus createdAt'
+const pick = (doc: Record<string, unknown>, fields: string) => Object.fromEntries(fields.split(' ').filter((f) => doc[f] !== undefined).map((f) => [f, doc[f]]))
 
 router.get('/me', authenticate, async (req, res) => {
   const user = await User.findById(req.user!.userId)
@@ -252,27 +261,52 @@ router.get('/government', authenticate, requireRole('government', 'admin', 'supe
   success(res, items)
 })
 
-// Get user info by ID. Sensitive fields (email, phone, roles, permissions) are
-// only returned for one's own record or to privileged staff — otherwise any
-// authenticated user could enumerate every account's PII by iterating ObjectIds.
-// Admin/government: list pending identity-verification requests.
+// Identity review is an administrator task (Act 843 minimisation): the queue
+// shows only the card's last four characters; the full number is a separate,
+// audited disclosure (POST /:id/ghana-card/reveal).
 // NOTE: must precede GET /:id or 'verification-requests' is treated as an id.
-router.get('/verification-requests', authenticate, requireRole('government', 'admin', 'super_admin'), async (_req, res) => {
+router.get('/verification-requests', authenticate, requireRole(...ADMIN_ROLES), async (_req, res) => {
   const users = await User.find({ verificationStatus: 'pending', deletedAt: null })
-    .select('firstName lastName email phone ghanaCardId roles createdAt')
+    .select('firstName lastName ghanaCardId roles createdAt')
     .sort({ createdAt: 1 })
     .limit(100)
     .lean()
-  // Reviewers must compare the card itself, so this staff-only queue decrypts it.
-  success(res, { items: users.map((u) => ({ ...u, ghanaCardId: decryptPii(u.ghanaCardId, PII_FIELDS.userGhanaCard), id: (u._id as unknown as { toString(): string }).toString() })) })
+  success(res, { items: users.map(({ ghanaCardId, ...u }) => ({ ...u, ghanaCardLast4: piiLast4(ghanaCardId, PII_FIELDS.userGhanaCard), id: String(u._id) })) })
 })
 
+/**
+ * The one way staff read a full Ghana Card number, for a stated support
+ * reason. The audit record is written first and is not best-effort: if it
+ * cannot be stored, the number is not disclosed.
+ */
+router.post('/:id/ghana-card/reveal', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
+  const parsed = z.object({ reason: z.string().trim().min(3, 'Give a reason for viewing the full number').max(300) }).safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const user = await User.findById(req.params.id).select('ghanaCardId').lean()
+  const ghanaCardId = user ? decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard) : undefined
+  if (!ghanaCardId) { error(res, 'No Ghana Card on file for this user', 404); return }
+  await AuditLog.create({
+    userId: req.user!.userId,
+    action: 'users.ghana_card.reveal',
+    entityType: 'User',
+    entityId: String(user!._id),
+    details: JSON.stringify({ reason: parsed.data.reason }),
+    ipAddress: req.ip,
+  })
+  res.setHeader('Cache-Control', 'no-store')
+  success(res, { ghanaCardId })
+})
+
+// Get user info by ID. Contact details and access claims are returned only
+// for one's own record or to administrators — otherwise any authenticated user
+// (or a regulator account) could enumerate PII by iterating ObjectIds.
 router.get('/:id', authenticate, async (req, res) => {
   const isSelf = req.params.id === req.user!.userId
-  const isPrivileged = req.user!.roles.some((r) => ['government', 'admin', 'super_admin', 'legal_officer'].includes(r))
-  const fields = isSelf || isPrivileged
+  const fields = isSelf || isAdminStaff(req.user!.roles)
     ? 'firstName lastName email phone profileImage isVerified activeRole roles permissions'
-    : 'firstName lastName profileImage isVerified activeRole'
+    : isStaffViewer(req.user!.roles)
+      ? 'firstName lastName profileImage isVerified activeRole roles'
+      : 'firstName lastName profileImage isVerified activeRole'
   const user = await User.findById(req.params.id).select(fields).lean()
   if (!user) { error(res, 'User not found', 404); return }
   success(res, { ...user, id: (user._id as Types.ObjectId).toString() })
@@ -294,13 +328,16 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : ''
   const role = typeof req.query.role === 'string' ? req.query.role.trim() : ''
 
+  const admin = isAdminStaff(req.user!.roles)
   const filter: Record<string, unknown> = {}
   if (search) {
     const safe = escapeRegex(search)
     filter.$or = [
       { firstName: new RegExp(safe, 'i') },
       { lastName: new RegExp(safe, 'i') },
-      { email: new RegExp(safe, 'i') },
+      // Searching by an address they cannot see would still let a regulator
+      // confirm whose account an email belongs to.
+      ...(admin ? [{ email: new RegExp(safe, 'i') }] : []),
     ]
   }
   if (role) filter.roles = role
@@ -318,8 +355,9 @@ router.get('/', authenticate, requireRole('government', 'admin', 'super_admin', 
      * and 2 both contained the same two accounts. _id is unique, so appending
      * it makes the order total and the paging exact.
      */
-    // National IDs stay out of the directory; the verification queue is the one place staff see them.
-    User.find(filter).select('-passwordHash -__v -ghanaCardId').sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+    // An allowlist, so new account fields (consent IPs, settings, tokens) stay
+    // out of the directory by default. No national IDs for anyone here.
+    User.find(filter).select(admin ? ADMIN_USER_FIELDS : STAFF_USER_FIELDS).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
   ])
   const items = users.map((u) => ({ ...u, id: (u._id as Types.ObjectId).toString() }))
   success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
@@ -413,8 +451,8 @@ router.patch('/me/tax-reporting-consent', authenticate, requireRole('landlord'),
   success(res, { taxReportingConsent: parsed.data.consent }, 'Tax reporting preference updated')
 })
 
-// Admin/government: approve identity verification → the verified badge shows
-router.post('/:id/verify-identity', authenticate, requireRole('government', 'admin', 'super_admin'), async (req, res) => {
+// Admin identity review: the only route to isVerified and the verified badge.
+router.post('/:id/verify-identity', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
   const user = await User.findById(req.params.id)
   if (!user) { error(res, 'User not found', 404); return }
   if (user.verificationStatus !== 'pending') { error(res, 'No pending verification for this user', 409); return }
@@ -426,8 +464,8 @@ router.post('/:id/verify-identity', authenticate, requireRole('government', 'adm
   success(res, { verificationStatus: 'verified', isVerified: true }, 'User verified')
 })
 
-// Admin/government: reject a verification request
-router.post('/:id/reject-verification', authenticate, requireRole('government', 'admin', 'super_admin'), async (req, res) => {
+// Admin identity review: reject a verification request
+router.post('/:id/reject-verification', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
   const user = await User.findById(req.params.id)
   if (!user) { error(res, 'User not found', 404); return }
   if (user.verificationStatus !== 'pending') { error(res, 'No pending verification for this user', 409); return }
@@ -505,8 +543,7 @@ router.patch('/:id/permissions', authenticate, requirePermission('users:manage_p
     ipAddress: req.ip,
   }).catch((err) => console.warn('[users/permissions] audit log failed:', (err as Error).message))
 
-  const { ghanaCardId: _card, ...safe } = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
-  success(res, safe, 'Permissions updated')
+  success(res, { ...pick(user.toObject() as unknown as Record<string, unknown>, ADMIN_USER_FIELDS), id: user._id.toString() }, 'Permissions updated')
 })
 
 // Delete a user

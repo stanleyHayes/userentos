@@ -81,3 +81,15 @@ export const PERMISSIONS = Object.keys(PERMISSION_SET) as [Permission, ...Permis
 
 /** Roles only a super admin may hand out, whatever else the caller holds. */
 export const SUPER_ADMIN_ONLY_ROLES: readonly UserRole[] = ['super_admin', 'admin']
+
+/*
+ * Act 843 minimisation: only administrators handle account support, so only
+ * they see other people's contact details. Regulators (government) and legal
+ * officers work from names, statuses and aggregates — never another person's
+ * email, phone or national ID number.
+ */
+export const ADMIN_ROLES: readonly UserRole[] = ['admin', 'super_admin']
+
+export function isAdminStaff(roles: readonly string[] | undefined): boolean {
+  return !!roles?.some((r) => (ADMIN_ROLES as readonly string[]).includes(r))
+}
