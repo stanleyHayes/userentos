@@ -634,6 +634,8 @@ export function startScheduler() {
           title: 'Subscription Expiring Soon',
           message: `Your subscription expires on ${new Date(u.subscriptionEndDate!).toISOString().slice(0, 10)}. Renew to keep your listing limits.`,
           actionUrl: '/subscription',
+          // A renewal nudge, not account activity: the payment-reminder toggle applies.
+          category: 'payment',
         }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
       }
       if (reminded) logger.info(`[Scheduler] Sent ${reminded} subscription renewal reminder(s)`)

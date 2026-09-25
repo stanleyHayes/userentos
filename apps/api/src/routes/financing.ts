@@ -477,9 +477,9 @@ router.post('/contracts/:id/remind', authenticate, requireRole('financier'), req
   c.lastReminderAt = new Date().toISOString()
   c.lastContactAt = c.lastReminderAt
   await c.save()
-  // Use existing notify
+  // A reminder, so the borrower's payment-reminder preference applies.
   const { notify } = await import('../services/notify.js')
-  void notify({ userId: c.applicantId, title: 'Payment Reminder', message: `Your financing contract ${c._id.toString().slice(-6)} has overdue payments. Please make a payment to avoid further fees.`, actionUrl: `/financing/contracts/${c._id}` })
+  void notify({ userId: c.applicantId, title: 'Payment Reminder', message: `Your financing contract ${c._id.toString().slice(-6)} has overdue payments. Please make a payment to avoid further fees.`, actionUrl: `/financing/contracts/${c._id}`, category: 'payment' })
   success(res, idOf(c.toObject()))
 })
 
