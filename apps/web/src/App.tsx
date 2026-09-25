@@ -268,7 +268,7 @@ export default function App() {
             <Route path="/financing/contracts" element={<RequireRole roles={['financier']}><FinancingContractsPage /></RequireRole>} />
             <Route path="/financing/contracts/:id" element={<RequireRole roles={['financier', 'tenant', 'landlord']}><FinancingContractDetailPage /></RequireRole>} />
             <Route path="/financing/collections" element={<RequireRole roles={['financier']}><CollectionsPage /></RequireRole>} />
-            <Route path="/admin/feature-flags" element={<RequireRole roles={['admin']}><FeatureFlagsPage /></RequireRole>} />
+            <Route path="/admin/feature-flags" element={<RequireRole roles={['super_admin']}><FeatureFlagsPage /></RequireRole>} />
             <Route path="/financing/mandates" element={<MyMandatesPage />} />
             {/* Employer */}
             <Route path="/employer/profile" element={<RequireRole roles={['employer']}><EmployerProfilePage /></RequireRole>} />
