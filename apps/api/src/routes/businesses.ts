@@ -15,6 +15,8 @@ import { notify } from '../services/notify.js'
 import { requireApprovedEntity } from '../middleware/entityApproval.js'
 import { logger } from '../utils/logger.js'
 import { summarizeInquiryStatuses } from '../services/businessAnalytics.js'
+import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
+import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 
 const router = Router()
 
@@ -244,7 +246,7 @@ router.get('/:id/reviews', authenticate, async (req, res) => {
   const business = await Business.findById(businessId).select('_id').lean()
   if (!business) { error(res, 'Business not found', 404); return }
   const [reviews, eligibleInquiry] = await Promise.all([
-    BusinessReview.find({ businessId }).sort({ createdAt: -1 }).lean(),
+    BusinessReview.find({ businessId, removed: { $ne: true } }).sort({ createdAt: -1 }).lean(),
     BusinessInquiry.exists({ businessId, requesterId: req.user!.userId, status: 'won' }),
   ])
   success(res, { items: reviews.map(idOf), canReview: !!eligibleInquiry })
@@ -261,15 +263,24 @@ router.post('/:id/reviews', authenticate, async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const eligibleInquiry = await BusinessInquiry.exists({ businessId, requesterId: req.user!.userId, status: 'won' })
   if (!eligibleInquiry) { error(res, 'Only verified customers can review this business', 403); return }
+  const screened = screenText(parsed.data.review)
+  if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
   const author = await User.findById(req.user!.userId).select('firstName lastName').lean()
   if (!author) { error(res, 'User not found', 404); return }
+  // A moderator's removal stands: re-posting may not overwrite it.
+  if (await BusinessReview.exists({ businessId, authorId: req.user!.userId, removed: true })) {
+    error(res, 'Your review of this business was removed by moderation.', 403); return
+  }
   const saved = await BusinessReview.findOneAndUpdate(
     { businessId, authorId: req.user!.userId },
     { ...parsed.data, authorName: `${author.firstName} ${author.lastName}`.trim() },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   ).lean()
+  if (saved && shouldReport(screened, 'public')) {
+    void reportFlaggedContent({ targetType: 'business_review', targetId: String(saved._id), ownerId: req.user!.userId, label: parsed.data.review, verdict: screened })
+  }
   const summary = await BusinessReview.aggregate<{ average: number; count: number }>([
-    { $match: { businessId } },
+    { $match: { businessId, removed: { $ne: true } } },
     { $group: { _id: null, average: { $avg: '$rating' }, count: { $sum: 1 } } },
   ])
   await Business.findByIdAndUpdate(businessId, {

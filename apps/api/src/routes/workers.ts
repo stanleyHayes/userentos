@@ -244,6 +244,7 @@ router.get('/:id/reviews', authenticate, async (req, res) => {
     workerId: req.params.id,
     status: 'completed',
     rating: { $exists: true, $ne: null },
+    reviewRemoved: { $ne: true },
   }).sort({ createdAt: -1 }).limit(20).lean()
 
   const reviews = bookings.map((b) => ({

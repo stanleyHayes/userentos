@@ -8,6 +8,8 @@ import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
+import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
+import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 
 const router = Router()
 
@@ -80,10 +82,10 @@ router.post('/', authenticate, async (req, res) => {
   const schema = z.object({
     propertyId: z.string(),
     rating: z.number().int().min(1).max(5),
-    title: z.string().min(1),
-    content: z.string().min(10),
-    pros: z.array(z.string()).default([]),
-    cons: z.array(z.string()).default([]),
+    title: z.string().min(1).max(160),
+    content: z.string().min(10).max(5000),
+    pros: z.array(z.string().max(200)).max(20).default([]),
+    cons: z.array(z.string().max(200)).max(20).default([]),
     wouldRecommend: z.boolean().default(true),
     landlordResponsive: z.number().int().min(1).max(5).default(3),
     maintenance: z.number().int().min(1).max(5).default(3),
@@ -127,6 +129,9 @@ router.post('/', authenticate, async (req, res) => {
   const existing = await Review.findOne({ propertyId: parsed.data.propertyId, userId })
   if (existing) { error(res, 'You have already reviewed this property', 409); return }
 
+  const screened = screenText(parsed.data.title, parsed.data.content, ...parsed.data.pros, ...parsed.data.cons)
+  if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
+
   // Get user name
   const user = await User.findById(userId)
   const userName = user ? `${user.firstName} ${user.lastName}` : 'Anonymous'
@@ -138,6 +143,9 @@ router.post('/', authenticate, async (req, res) => {
     // True by construction: the tenancy check above is the only way here.
     verified: true,
   })
+  if (shouldReport(screened, 'public')) {
+    void reportFlaggedContent({ targetType: 'review', targetId: review._id.toString(), ownerId: userId, label: parsed.data.title, verdict: screened })
+  }
 
   success(res, { ...review.toObject(), id: review._id.toString() }, 'Review submitted', 201)
 })

@@ -12,13 +12,23 @@ import mongoose, { Schema, type Document } from 'mongoose'
 /**
  * What can be reported.
  *
- * Deliberately limited to targets the admin queue can actually action today.
- * `user` is missing because there is no account-suspension mechanism yet — a
- * resolution that claims to have suspended an account while the account keeps
- * working would be worse than not offering the option.
+ * Deliberately limited to targets the admin queue can actually action: every
+ * type here has a removal in services/contentReports.ts (`user` is actioned by
+ * account suspension instead). `review` is a property review; business and
+ * worker reviews are their own types because they live in other collections —
+ * a `worker_review` is identified by the service booking that carries it.
  */
-export const REPORT_TARGET_TYPES = ['property', 'storefront', 'blog_post', 'review', 'message', 'user'] as const
+export const REPORT_TARGET_TYPES = [
+  'property', 'storefront', 'blog_post', 'review', 'message', 'user',
+  'business', 'worker', 'business_review', 'worker_review',
+] as const
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number]
+
+/**
+ * Reporter id on reports filed by the automated content filter. Shaped like an
+ * ObjectId so the admin queue's user lookup casts it cleanly; no account has it.
+ */
+export const SYSTEM_REPORTER_ID = '000000000000000000000000'
 
 /**
  * Why. Kept short and mutually understandable rather than legalistic — a

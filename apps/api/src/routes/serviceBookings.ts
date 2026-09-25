@@ -5,6 +5,9 @@ import { ServiceBooking } from '../models/ServiceBooking.js'
 import { Worker } from '../models/Worker.js'
 import { success, error } from '../utils/response.js'
 import { emitBookingCreated, emitBookingUpdated } from '../services/bookingEvents.js'
+import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
+import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
+import { recomputeWorkerRating } from '../services/workerRating.js'
 
 const router = Router()
 
@@ -231,6 +234,12 @@ router.patch('/:id', authenticate, async (req, res) => {
   if ((parsed.data.rating !== undefined || parsed.data.review !== undefined) && booking.status !== 'completed') {
     error(res, 'You can only rate a completed booking', 409); return
   }
+  // A review moderation removed stays removed; the requester may not rewrite it.
+  if ((parsed.data.rating !== undefined || parsed.data.review !== undefined) && booking.reviewRemoved) {
+    error(res, 'Your review of this job was removed by moderation.', 403); return
+  }
+  const screenedReview = parsed.data.review === undefined ? null : screenText(parsed.data.review)
+  if (screenedReview?.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
 
   // Apply updates
   Object.assign(booking, updates)
@@ -276,14 +285,13 @@ router.patch('/:id', authenticate, async (req, res) => {
 
   await booking.save()
 
+  if (screenedReview && shouldReport(screenedReview, 'public')) {
+    void reportFlaggedContent({ targetType: 'worker_review', targetId: String(booking._id), ownerId: booking.requesterId, label: parsed.data.review, verdict: screenedReview })
+  }
+
   // Recompute the worker's rating + reviewCount from all rated bookings so the
   // marketplace minRating filter and rating sort actually work (never updated before).
-  if (parsed.data.rating !== undefined) {
-    const rated = await ServiceBooking.find({ workerId: booking.workerId, rating: { $gt: 0 } }).select('rating').lean()
-    const count = rated.length
-    const avg = count ? rated.reduce((s, b) => s + (b.rating || 0), 0) / count : 0
-    await Worker.findByIdAndUpdate(booking.workerId, { $set: { rating: Math.round(avg * 10) / 10, reviewCount: count } })
-  }
+  if (parsed.data.rating !== undefined) await recomputeWorkerRating(booking.workerId)
 
   // Determine what changed for notifications
   const changedFields = Object.keys(parsed.data).filter((k) => k !== 'note')

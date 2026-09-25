@@ -19,6 +19,11 @@ import { getIO } from './socket.js'
 import { Storefront } from '../models/Storefront.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { Review } from '../models/Review.js'
+import { Business } from '../models/Business.js'
+import { BusinessReview } from '../models/BusinessReview.js'
+import { Worker } from '../models/Worker.js'
+import { ServiceBooking } from '../models/ServiceBooking.js'
+import { recomputeWorkerRating } from './workerRating.js'
 import { envNumber } from '../utils/env.js'
 
 /** How many reports one account may file per rolling hour. */
@@ -93,6 +98,23 @@ export async function resolveReportTarget(type: ReportTargetType, id: string, re
       const r = await Review.findById(id).select('title userId').lean()
       return r ? { exists: true, label: r.title, ownerId: r.userId } : { exists: false }
     }
+    case 'business': {
+      const b = await Business.findById(id).select('name ownerId').lean()
+      return b ? { exists: true, label: b.name, ownerId: b.ownerId } : { exists: false }
+    }
+    case 'worker': {
+      const w = await Worker.findById(id).select('name userId').lean()
+      return w ? { exists: true, label: w.name, ownerId: w.userId } : { exists: false }
+    }
+    case 'business_review': {
+      const r = await BusinessReview.findById(id).select('review rating authorId removed').lean()
+      return r && !r.removed ? { exists: true, label: r.review?.slice(0, 2000) || `${r.rating}-star review`, ownerId: r.authorId } : { exists: false }
+    }
+    case 'worker_review': {
+      // Identified by the booking that carries the rating and text.
+      const b = await ServiceBooking.findById(id).select('review rating requesterId reviewRemoved').lean()
+      return b && b.rating && !b.reviewRemoved ? { exists: true, label: b.review?.slice(0, 2000) || `${b.rating}-star review`, ownerId: b.requesterId } : { exists: false }
+    }
   }
 }
 
@@ -144,6 +166,32 @@ export async function removeReportedContent(
     case 'review': {
       const res = await Review.updateOne({ _id: id }, { $set: { removed: true, removedReason: reason } })
       return res.matchedCount > 0
+    }
+    // A business or worker profile leaves the public directory the same way
+    // a failed KYC review keeps it out: both directories list approved only.
+    case 'business': {
+      const res = await Business.updateOne({ _id: id }, { $set: { approvalStatus: 'rejected', rejectionReason: reason } })
+      return res.matchedCount > 0
+    }
+    case 'worker': {
+      const res = await Worker.updateOne({ _id: id }, { $set: { approvalStatus: 'rejected', rejectionReason: reason } })
+      return res.matchedCount > 0
+    }
+    case 'business_review': {
+      const review = await BusinessReview.findOneAndUpdate({ _id: id }, { $set: { removed: true, removedReason: reason } }, { returnDocument: 'after' }).lean()
+      if (!review) return false
+      const [summary] = await BusinessReview.aggregate<{ average: number; count: number }>([
+        { $match: { businessId: review.businessId, removed: { $ne: true } } },
+        { $group: { _id: null, average: { $avg: '$rating' }, count: { $sum: 1 } } },
+      ])
+      await Business.updateOne({ _id: review.businessId }, { $set: { ratingAvg: Math.round((summary?.average ?? 0) * 10) / 10, reviewCount: summary?.count ?? 0 } })
+      return true
+    }
+    case 'worker_review': {
+      const booking = await ServiceBooking.findOneAndUpdate({ _id: id }, { $set: { reviewRemoved: true, reviewRemovedReason: reason } }, { returnDocument: 'after' }).lean()
+      if (!booking) return false
+      await recomputeWorkerRating(booking.workerId)
+      return true
     }
   }
 }
