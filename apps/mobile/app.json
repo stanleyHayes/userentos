@@ -178,7 +178,6 @@
       "adaptiveIcon": {
         "backgroundColor": "#1e3a5f",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "gh.rentos.mobile",
