@@ -6,9 +6,41 @@
 
 ---
 
+## Ghana and App Store Compliance — continued 2026-09-25
+
+**Owner:** Claude (continuing Codex's work below). **Status:** engineering substantially complete; external obligations open. Ledger: [COMPLIANCE_AUDIT.md](COMPLIANCE_AUDIT.md) (status table and "Claude checkpoint").
+
+**What changed.** Codex's client follow-up for notification preferences was finished. Three read-only audits (App Store/Play readiness, Ghana regulatory mapping, API security) then found verified defects beyond the ledger, which were fixed in seven parallel workstreams and merged into `main` locally:
+
+- A server-side gate keeps regulated financial services off in production until licensed (`docs/compliance/regulated-features.md`).
+- Money-creating and privilege-escalation loopholes are closed.
+- Tenancies now require tenant-signed leases, with e-signature evidence.
+- Consent is captured, the privacy notice and Terms are accurate, and notification preferences are enforced.
+- ID numbers are encrypted and minimised.
+- UGC reporting and filtering cover listings, reviews, businesses and workers.
+- Mobile store readiness: brand assets, MFA, permissions, deep links and a splash matching the web.
+- Dependency advisories are patched.
+
+**Not pushed.** Render auto-deploys `main`, so publishing is the owner's decision. Before deploying:
+
+- set `PII_ENCRYPTION_KEY` and `LEGAL_ENTITY`;
+- keep `REGULATED_FEATURES` empty unless licensed;
+- keep `PAYMENTS_PROVIDER_MODE=live`;
+- run `src/scripts/encryptPiiFields.ts`, `removeSpecialCategoryProfileFields.ts` and `revokeUnreviewedVerification.ts` once.
+
+The submission guide is `docs/compliance/store-submission.md`.
+
+**Open follow-ups.**
+
+- Admin UIs for investment partners and loan review (gated features).
+- Show the off-plan rejection reason to developers.
+- An intermittent cross-tab session e2e test.
+- Verify the rights-check keyword rules and legal articles with a Ghanaian lawyer.
+- Review of the Twi filter word list by a Twi speaker.
+
 ## Ghana and App Store Compliance — 2026-09-12
 
-**Owner:** Codex. **Status:** IN PROGRESS. **Goal:** end-to-end compliance engineering, remaining feature completion and bug repair.
+**Owner:** Codex. **Status:** superseded by the 2026-09-25 section above. **Goal:** end-to-end compliance engineering, remaining feature completion and bug repair.
 
 The live scope, source register, findings, verification and external obligations are maintained in [COMPLIANCE_AUDIT.md](COMPLIANCE_AUDIT.md). This work supersedes stale completion assumptions, without erasing earlier evidence.
 

@@ -1,21 +1,52 @@
 # Ghana and app-store compliance delivery
 
-Audit started 12 September 2026. Owner: Codex. Status: IN PROGRESS.
+Audit started 12 September 2026 by Codex; continued by Claude from 25 September 2026. Status: engineering substantially complete; external obligations open (see table).
 
 This ledger tracks engineering evidence and external obligations separately. It does not certify that every Ghana law applies, or that RentOS holds any registration, licence or store approval. Prior audit completion claims must be reconciled against current code and runtime.
 
 | ID | Scope | Status | Evidence / remaining work |
 |---|---|---|---|
-| C01 | Rental agreement controls | IN PROGRESS | Shared checks at model validation and signing; enacted-law citation, date validation, special-condition review, closed-agreement edit guard. 12 regression tests pass. Still audit short tenancies, receipts, renewal/payment paths and legal corpus. |
-| C02 | Privacy and erasure | IN PROGRESS | Web/native deletion and export, public deletion page and session invalidation implemented. Worker retry isolation and conversation preview cleanup verified. Full related-collection/upload erasure, retention classification and export coverage remain open. |
-| C03 | Consent and AI processing | IN PROGRESS | Audit third-party AI disclosure/consent, training use, marketing preferences, minors, identity data, automated decisions and appeals. |
-| C04 | UGC safety | IN PROGRESS | Bilateral contact blocking, user/message reports, moderator queue/recovery and account enforcement implemented with browser/API checks. Preventive filtering, operational appeals, historical content handling and native-device verification remain open. |
-| C05 | Store payments | IN PROGRESS | Classify rent/physical services separately from digital plans, promotion and subscriptions; verify native billing, restoration, disclosures and backend receipt validation or eligible consumption-only distribution. |
-| C06 | Native release | IN PROGRESS | Audit permission purposes/minimisation, SDK privacy manifests, API/SDK targets, data-safety labels, age ratings, reviewer access, support URLs and device runs. |
-| C07 | Ghana regulated activities | TODO / EXTERNAL | Determine actual operator/partner roles for payments, wallet custody, credit, investments, insurance and real-estate agency. Verify licences and regulator requirements before enabling regulated production flows. |
-| C08 | Ghana tax, commerce and contracts | TODO | Verify current GRA rent/withholding/VAT obligations, receipts, seller identity, pricing/refund terms, electronic records/signatures, complaint/ADR flows and applicable AML obligations. |
-| C09 | Remaining functionality and defects | TODO | Reconcile agent_plan.md, FEATURE_AUDIT.md, ROLE_CAPABILITIES.md, SPEC_IMPLEMENTATION_AUDIT.md and AI roadmap with implementation. Run API/web/mobile quality checks and isolated E2E; repair proven gaps. |
-| C10 | Release evidence | TODO / EXTERNAL | Engineering checks, native builds and runtime walkthroughs; separately record DPC/licensing evidence, legal review, production configuration and store submission outcomes. |
+| C01 | Rental agreement controls | ENGINEERING DONE; legal review pending | Codex's agreement checks, plus (25 Sep): only tenant-signed leases establish a tenancy (contact details, credit, disputes, reviews, maintenance, rent payments, deductions); Act 772 signature evidence (identity, time, IP, device, terms hash, consent) on agreements, renewals and financing contracts; renewals need the tenant's signature before terms change; s.25 advance caps on agreements, listings and rent advances. Open: lawyer review of generated agreements, Terms and legal articles. |
+| C02 | Privacy and erasure | ENGINEERING DONE; operator evidence pending | Export/erasure (Codex), plus: versioned Terms/Privacy/18+ consent with evidence; privacy notice rebuilt from the processor inventory; retention periods in `config/retention.ts` with TTLs; tombstone minimised; Ghana Card numbers AES-256-GCM encrypted, last-4 for landlords and admins (audited reveal), none for government; religion/ethnicity removed; shared passports minimal. Open: DPC registration, `LEGAL_ENTITY` details, backup/provider erasure, run cleanup scripts in production. |
+| C03 | Consent and AI processing | ENGINEERING DONE; legal review pending | Per-request AI sharing consent (Codex); notification preferences enforced per channel and category with unsubscribe links; promotions in-app only (no marketing consent collected); automated loan decisions only pre-qualify with reasons and a human-review route; credit scoring gated. |
+| C04 | UGC safety | ENGINEERING DONE; operations pending | Blocking and chat reports (Codex); reports on listings, reviews, businesses, workers (web and mobile); text filter on chat and reviews with auto-reports; moderation and off-plan review queues; Terms conduct clause with 24-hour action commitment. Open: staffed moderation, Twi word-list review, native-device walkthrough. |
+| C05 | Store payments | ENGINEERING DONE; sandbox evidence pending | IAP-only digital plans with restore/manage and server verification (Codex); rent and real-world services external; regulated money features gated. Open: StoreKit/Play sandbox evidence with production products. |
+| C06 | Native release | ENGINEERING DONE; submission pending | Brand icons/splash (mobile splash matches web), permissions blocked or requested in context, export compliance, remote build numbers, MFA sign-in, deep links mapped, dead controls removed, AI disclaimer, public /support page, `docs/compliance/store-submission.md`. Open: signed builds and privacy report, device runs, store forms, review outcomes. |
+| C07 | Ghana regulated activities | GATED IN CODE; licences EXTERNAL | Server-side gate for rent collection, wallet, lending, financing, investments, insurance, payroll and credit reporting: off in production unless licensed basis recorded (`docs/compliance/regulated-features.md`); real firm names removed; lender/insurer/financier licence verification; REAC licence recording for agencies. Open: determine operator/partner roles and obtain licences before enabling any feature. |
+| C08 | Ghana tax, commerce and contracts | PARTIAL | Terms cover refunds, fixed-term mobile-money plans vs store auto-renew, taxes at checkout, electronic signatures (Act 772) without guaranteeing enforceability. Open: verify GRA rent tax/withholding/VAT duties, show applicable taxes at checkout, seller identity, ADR route, AML obligations. |
+| C09 | Remaining functionality and defects | ENGINEERING DONE with listed follow-ups | Three audits (store, regulatory, security) found verified defects; all fixed with tests in seven workstreams (see Claude checkpoint). Known open: intermittent cross-tab session e2e test; admin UIs for investment partners and loan review (gated features); off-plan rejection reason not shown to the developer. |
+| C10 | Release evidence | ENGINEERING RECORDED; EXTERNAL pending | Test, build and export evidence in the Claude checkpoint. Open: DPC/licensing evidence, legal review, production configuration and data migration, store submission outcomes. |
+
+## Claude checkpoint — 25 September 2026
+
+Owner from this date: Claude (continuing Codex's ledger). Three read-only audits (store review, Ghana regulatory mapping, API security) found verified defects beyond the rows below; they were fixed in parallel workstreams and merged into `main` locally. Nothing has been pushed: Render auto-deploys `main`.
+
+### Regulated activities (C07)
+- Server-side gate `config/regulatedFeatures.ts` + `middleware/regulatedFeature.ts`: rent_collection, wallet, lending, financing, investments, insurance, payroll, credit_reporting. Production enables none unless `REGULATED_FEATURES` lists them and `REGULATED_BASIS_<FEATURE>` records the licence/partner basis, or boot fails. Routes 403 `FEATURE_UNAVAILABLE`; savings auto-debit stops; clients read `GET /api/platform/features` and hide/refuse screens (unknown = off); passport omits credit score; financier/employer sign-up withheld. Runtime-verified in production mode on a spare port. Doc: docs/compliance/regulated-features.md.
+- Simulated payments refused in production unless `ALLOW_SIMULATED_PAYMENTS=true`; mode checked at boot.
+- Real firm names removed (Databank, Epack, SIC, GLICO, Enterprise, MTN, UCC, Stanbic in demo data); insurance never seeded in production.
+- Loans: lender/admin-funded disbursement only, human review, one open loan (unique index), ≥3-month term, server APR/total cost, acceptance recorded. Investments: partner-confirmed orders and settlements only. Insurance: verified insurer licence, insurer-owned claims within cover. Financing: Act 220 s.25 advance cap via `maxAdvanceMonthsFor`, funded disbursement, licence-verified financiers, signature evidence. Payroll: employee-accepted employment, mandate caps.
+- Estate agency: REAC licence number on agency profiles, admin verification page, public page shows status, no owner id, moderated listings only.
+
+### Security loopholes fixed
+Loan self-disbursement money creation; invitation super_admin escalation via Mongoose object cast; marketplace settlement by reused payment reference; draft agreements creating fake tenancies (contact, credit, disputes, penalties, reviews); move-out zero-refund during dispute; profile-access contact leak; verification surviving identity edits; role changes not revoking sessions; dispute upload before authorisation; landlord-set lifecycle statuses; self-priced featured listings; author posts on the official blog; coupon burning; self-set booking prices; storefront domain squatting; webhook DNS-rebinding SSRF; payout timeout refunds.
+
+### Privacy and consent (C02, C03)
+Terms/Privacy/18+ acceptance recorded with versions, time, IP, UA; re-accept banner; invitations validated. Notification preferences enforced per channel/category with unsubscribe links. Privacy notice and Terms rewritten from the processor inventory; unverifiable claims removed. Ghana Card numbers AES-256-GCM encrypted (`PII_ENCRYPTION_KEY`, boot-checked; backfill `src/scripts/encryptPiiFields.ts`); landlords see idVerified + last 4 only. Shared passports minimal; completion metric relabelled; auth events audited; login timing equalised.
+
+### UGC and store readiness (C04, C06)
+Report controls on listings, reviews, businesses, workers (mobile); text filter on chat and reviews with auto-reports; mobile MFA sign-in; rights-check public; deep links mapped; dead controls removed; brand icons/splash from the web mark; mobile splash matches web; Android permissions blocked; export compliance; remote build numbers; push asked in context; AI legal disclaimer; store-billing notice on deletion; public /support page. Submission guide: docs/compliance/store-submission.md.
+
+### Verification (merged `main`, 25 September 2026)
+- API: 1,542/1,542 tests across 175 files, with the opt-in MongoDB suites (`RENTOS_TEST_MONGO_URI=mongodb://localhost:28018/rentos_compliance_e2e`); typecheck and lint clean.
+- Web and mobile: typecheck and lint clean. API and web production builds pass. iOS and Android Expo exports bundle.
+- Mobile Expo-web Playwright: 114/114. Web Playwright against the isolated e2e stack: 163 passed, 0 failed, 64 skipped (specs that need other configs).
+- Production-mode runtime check on a spare port: every regulated route returns 403 FEATURE_UNAVAILABLE; boot refuses a feature without a recorded basis, simulated payments, and a missing PII key.
+- `npm audit --omit=dev`: 0 vulnerabilities in API, web and mobile.
+- Known intermittent: `cross-tab-session.spec.ts:47` fails occasionally (about 1 in 10 local runs); instrumented repeats showed no token overwrite or refresh, so it is recorded as test timing, not an app defect.
+
+### Still external or open
+Ghana registrations (DPC, company details in LEGAL_ENTITY), licences or partner agreements for any regulated feature, lawyer review of Terms/legal articles, Twi filter word-list review, staffed moderation (24h) and human-review mailbox, store forms and review outcomes, production data migration (PII backfill, indexes), admin UIs for investment partners/loan review (gated features).
 
 ## Source register
 

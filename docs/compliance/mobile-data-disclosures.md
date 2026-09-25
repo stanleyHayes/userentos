@@ -24,6 +24,16 @@ All categories below can be associated with a signed-in account. Apple manifest 
 | Searches | `(tabs)/properties.tsx`, `local-services.tsx`, `auth/register.tsx` | Search criteria sent to the API and saved search preferences. Apple SearchHistory; Play In-app search history. Retention and ephemeral-processing answers must match endpoint/cache/log behavior. |
 | Other personal data | `auth/register.tsx`, `tenant-profile.tsx`; API `models/RefreshToken.ts`, `models/AuditLog.ts` | Optional Ghana Card ID, demographic/profile details and IP/security metadata. Apple OtherDataTypes; Play Other personal info and relevant identifiers. Exact government-ID retention and access controls remain under review. |
 
+### Changes since 13 September (25 September 2026)
+
+- **Regulated financial features are off in production by default** (`REGULATED_FEATURES`, see [regulated-features.md](regulated-features.md)). While they are off, the app shows no rent payment, wallet, savings, loans, investments, insurance, financing, payroll or credit score screens, and the API refuses those requests. So no Payment information, Credit information or the financial parts of Other financial information are collected. Answer the store forms for the configuration you actually ship. If you enable a feature, update the forms in the same release that discloses it.
+- **Consent evidence.** Accepting the Terms and Privacy Policy stores the document versions, time, IP address, user agent and 18+ confirmation, for account security and to prove consent. Apple: Other data types. Play: Other info. Account deletion erases these fields.
+- **Ghana Card / national ID numbers** are encrypted at rest (AES-256-GCM). Landlords with approved profile access see only whether ID was reviewed and the last four digits, never document or selfie images.
+- **Shared tenant passports** no longer include the tenant's email or exact lifetime payment total.
+- **Reports** can now be made on listings, reviews, business and service-provider profiles as well as messages and users. Objectionable text in messages and reviews is filtered on submission, and borderline text creates an automated report.
+- **Push permission** is requested only after the user chooses to turn notifications on.
+- **Notification preferences** are enforced server-side. Optional categories respect the user's email, SMS and push choices, and optional emails carry a manage-preferences link.
+
 Apple functionality purposes cover features, account security and user-requested transactions. Analytics purposes are included for records used by existing operational reports. Personalization covers saved preferences and profile-based matching. These declarations do not authorize those uses or settle their lawfulness.
 
 ## Decisions required before store submission
