@@ -2,7 +2,8 @@ import { test, expect } from '../fixtures/auth'
 
 // API base URL — defaults to the CI/dev port; override with E2E_API_URL when
 // the local API runs on a different port.
-const API_BASE = process.env.E2E_API_URL || 'http://localhost:3002'
+// The isolated e2e API, never the dev server on 3002 and its database.
+const API_BASE = process.env.E2E_API_URL || `http://localhost:${process.env.E2E_API_PORT || '3402'}`
 
 /**
  * Tenant views an agreement and signs it.
