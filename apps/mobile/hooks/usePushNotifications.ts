@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as Notifications from 'expo-notifications'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '../stores/authStore'
 import { registerForPushNotifications, unregisterPushToken } from '../lib/push'
 import { safeAppRoute } from '../lib/safeRoute'
 import { createSessionCallbackGuard } from '../lib/sessionCallbacks'
+import { onPushOptIn } from '../lib/pushSession'
 
 export function usePushNotifications() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -12,6 +13,11 @@ export function usePushNotifications() {
   const sessionVersion = useAuthStore((s) => s.sessionVersion)
   const router = useRouter()
   const tokenRef = useRef<string | null>(null)
+  // Bumped when the user grants permission from the in-context pre-prompt, so
+  // this session registers its token then (sign-in itself never prompts).
+  const [optInCount, setOptInCount] = useState(0)
+
+  useEffect(() => onPushOptIn(() => setOptInCount((n) => n + 1)), [])
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return
@@ -27,7 +33,7 @@ export function usePushNotifications() {
         tokenRef.current = null
       }
     }
-  }, [isAuthenticated, userId, sessionVersion])
+  }, [isAuthenticated, userId, sessionVersion, optInCount])
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return

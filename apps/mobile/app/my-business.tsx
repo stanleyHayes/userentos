@@ -10,6 +10,7 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
+import { ReportContentModal, type ReportTarget } from '../components/ReportContentModal'
 
 type Category = 'furniture' | 'appliances' | 'internet' | 'moving' | 'cleaning' | 'other'
 type ListingType = 'product' | 'service' | 'discount'
@@ -74,6 +75,7 @@ interface Analytics {
 
 interface Review {
   id: string
+  authorId?: string
   authorName: string
   rating: number
   review?: string
@@ -300,6 +302,7 @@ function Dashboard({
   const [tab, setTab] = useState<Tab>('listings')
   const [addVisible, setAddVisible] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
 
   const analyticsQuery = useQuery({
     queryKey: ['my-analytics'],
@@ -609,11 +612,32 @@ function Dashboard({
                 {r.review ? (
                   <Text style={[s.listingDesc, { color: c.muted }]}>{r.review}</Text>
                 ) : null}
+                {r.authorId ? (
+                  <TouchableOpacity
+                    style={s.reportLink}
+                    // No business-review report type exists yet: report the
+                    // author, with the review attached for the moderator.
+                    onPress={() => setReportTarget({
+                      type: 'user',
+                      id: r.authorId!,
+                      noun: 'review',
+                      context: `Reported review ${r.id} on business "${business.name}" (${r.rating}/5): ${r.review?.trim() || '(rating only)'}`,
+                    })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report review"
+                    hitSlop={6}
+                  >
+                    <Ionicons name="flag-outline" size={11} color={c.muted} />
+                    <Text style={[s.reportLinkText, { color: c.muted }]}>Report</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))
           )}
         </>
       )}
+
+      <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       <AddListingModal visible={addVisible} onClose={() => setAddVisible(false)} />
     </ScrollView>
@@ -937,6 +961,8 @@ const s = StyleSheet.create({
 
   starRow: { flexDirection: 'row', gap: 2 },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reportLink: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingTop: 6 },
+  reportLinkText: { fontSize: 11, fontFamily: 'Outfit_400Regular' },
   reviewAuthor: { fontSize: 13, fontFamily: 'Outfit_700Bold', flex: 1 },
   reviewDate: { fontSize: 10, fontFamily: 'Outfit_400Regular' },
 })

@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
+import { ReportContentModal, type ReportTarget } from '../components/ReportContentModal'
 
 interface Booking {
   id: string
@@ -77,6 +78,7 @@ export default function BookingsScreen() {
   const filtered = statusFilter === 'all' ? items : items.filter((b) => b.status === statusFilter)
 
   const canActAsWorker = viewMode === 'worker'
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
 
   return (
     <View style={[s.container, { backgroundColor: c.background }]}>
@@ -173,6 +175,24 @@ export default function BookingsScreen() {
                   <Ionicons name="star" size={14} color="#f59e0b" />
                   <Text style={[s.ratingText, { color: c.text }]}>{b.rating}</Text>
                   {b.review && <Text style={[s.reviewText, { color: c.textLight }]}>"{b.review}"</Text>}
+                  {/* A provider can report an abusive review left by the customer.
+                      There is no booking-review report type yet, so the author is
+                      reported with the review attached. */}
+                  {canActAsWorker && b.review && b.requesterId ? (
+                    <TouchableOpacity
+                      onPress={() => setReportTarget({
+                        type: 'user',
+                        id: b.requesterId!,
+                        noun: 'review',
+                        context: `Reported review on service booking ${b.id ?? b._id} (${b.rating}/5): ${b.review}`,
+                      })}
+                      accessibilityRole="button"
+                      accessibilityLabel="Report review"
+                      hitSlop={6}
+                    >
+                      <Ionicons name="flag-outline" size={13} color={c.muted} />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               )}
 
@@ -298,6 +318,8 @@ export default function BookingsScreen() {
           ))
         )}
       </ScrollView>
+
+      <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       {/* Quote Modal (worker) */}
       <Modal visible={quoteModal} animationType="slide" transparent>

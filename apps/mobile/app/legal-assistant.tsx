@@ -38,6 +38,14 @@ export default function LegalAssistantScreen() {
 
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: c.surface }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      {/* Always visible, before and during the conversation: AI answers about
+          the law must never read as legal advice. */}
+      <View testID="legal-disclaimer" style={[s.disclaimer, { backgroundColor: c.warning + '14', borderColor: c.warning + '40' }]}>
+        <Ionicons name="information-circle-outline" size={16} color={c.warning} />
+        <Text style={[s.disclaimerText, { color: c.text }]}>
+          General information only, not legal advice. AI answers can be wrong or out of date. For advice on your situation, consult a lawyer or the Rent Control Department.
+        </Text>
+      </View>
       {messages.length === 0 ? (
         <View style={s.empty}>
           <View style={[s.emptyIcon, { backgroundColor: c.primary + '10' }]}>
@@ -100,6 +108,8 @@ export default function LegalAssistantScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  disclaimer: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: spacing.md, marginTop: spacing.sm, padding: 10, borderRadius: 10, borderWidth: 1 },
+  disclaimerText: { flex: 1, fontSize: 12, fontFamily: 'Outfit_500Medium', lineHeight: 17 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
   emptyIcon: { width: 64, height: 64, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md },
   emptyTitle: { fontSize: 20, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },

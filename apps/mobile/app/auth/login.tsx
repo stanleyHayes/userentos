@@ -20,6 +20,14 @@ import {
   type BiometricCapability,
 } from '../../lib/biometric'
 
+interface LoginResponse {
+  user?: User
+  token?: string
+  refreshToken?: string
+  mfaRequired?: boolean
+  mfaToken?: string
+}
+
 export default function LoginScreen() {
   const c = useThemeColors()
   const router = useRouter()
@@ -32,6 +40,10 @@ export default function LoginScreen() {
   const [bioLoading, setBioLoading] = useState(false)
   const [capability, setCapability] = useState<BiometricCapability | null>(null)
   const [bioEnabled, setBioEnabled] = useState(false)
+  // Second login step for accounts with two-factor authentication. The
+  // short-lived challenge token stays in memory only — never in a route param.
+  const [mfaToken, setMfaToken] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -48,52 +60,88 @@ export default function LoginScreen() {
     return () => { cancelled = true }
   }, [])
 
-  async function loginWithCredentials(emailInput: string, passwordInput: string) {
-    const data = await api.post<{ user: User; token: string; refreshToken?: string }>('/auth/login', {
-      email: emailInput, password: passwordInput,
-    })
+  /** Only a response carrying a real user and access token may start a session. */
+  function completeSignIn(data: LoginResponse) {
+    if (!data?.user?.id || !data.token) throw new Error('Unexpected response from the server. Please try again.')
     // Persist the refresh token so the 401 auto-refresh works and password users
     // aren't logged out the moment the short-lived access token expires.
     login(data.user, data.token, data.refreshToken)
     router.replace('/(tabs)')
-    return data
+  }
+
+  async function loginWithCredentials(emailInput: string, passwordInput: string): Promise<'signed-in' | 'mfa'> {
+    const data = await api.post<LoginResponse>('/auth/login', {
+      email: emailInput, password: passwordInput,
+    })
+    // MFA accounts answer { mfaRequired, mfaToken } with no session yet; the
+    // session only exists after the TOTP code is verified at /auth/login/mfa.
+    if (data?.mfaRequired) {
+      if (!data.mfaToken) throw new Error('Two-factor sign-in could not start. Please try again.')
+      setMfaCode('')
+      setMfaToken(data.mfaToken)
+      return 'mfa'
+    }
+    completeSignIn(data)
+    return 'signed-in'
+  }
+
+  function offerBiometricEnrollment() {
+    // After a successful password login, offer to enable biometric (only if available + not yet enabled)
+    if (!capability?.available || bioEnabled) return
+    Alert.alert(
+      `Enable ${biometricLabel(capability.primary)} login?`,
+      `Sign in faster next time using ${biometricLabel(capability.primary).toLowerCase()}. A long-lived refresh token is stored encrypted on this device — your password is not.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: async () => {
+            const ok = await authenticateWithBiometric(`Enable ${biometricLabel(capability.primary)} login`)
+            if (!ok) return
+            try {
+              await enableBiometricLogin(password)
+              setBioEnabled(true)
+            } catch (err) {
+              Alert.alert('Could not enable', (err as { message?: string }).message ?? 'Try again later.')
+            }
+          },
+        },
+      ],
+    )
   }
 
   async function handleLogin() {
     if (!email || !password) { setError('Please fill in all fields'); return }
     setError(''); setLoading(true)
     try {
-      await loginWithCredentials(email, password)
-      // After a successful password login, offer to enable biometric (only if available + not yet enabled)
-      if (capability?.available && !bioEnabled) {
-        Alert.alert(
-          `Enable ${biometricLabel(capability.primary)} login?`,
-          `Sign in faster next time using ${biometricLabel(capability.primary).toLowerCase()}. A long-lived refresh token is stored encrypted on this device — your password is not.`,
-          [
-            { text: 'Not now', style: 'cancel' },
-            {
-              text: 'Enable',
-              onPress: async () => {
-                const ok = await authenticateWithBiometric(`Enable ${biometricLabel(capability.primary)} login`)
-                if (!ok) return
-                try {
-                  await enableBiometricLogin(password)
-                  setBioEnabled(true)
-                } catch (err) {
-      const _err = err as { message?: string }
-      Alert.alert('Could not enable', (err as { message?: string }).message ?? 'Try again later.')
-    }
-              },
-            },
-          ],
-        )
-      }
+      if (await loginWithCredentials(email, password) === 'signed-in') offerBiometricEnrollment()
     } catch (e) {
-      const _err = e as { message?: string }
       setError((e as { message?: string }).message || 'Login failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleVerifyMfa() {
+    if (mfaCode.length !== 6) { setError('Enter the 6-digit code from your authenticator app'); return }
+    setError(''); setLoading(true)
+    try {
+      completeSignIn(await api.post<LoginResponse>('/auth/login/mfa', { mfaToken, code: mfaCode }))
+      offerBiometricEnrollment()
+    } catch (e) {
+      const message = (e as { message?: string }).message || 'Verification failed'
+      setError(message)
+      // The challenge lasts five minutes; once it has expired only a fresh
+      // password step can issue a new one.
+      if (/expired/i.test(message)) { setMfaToken(''); setMfaCode('') }
+      else setMfaCode('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function cancelMfa() {
+    setMfaToken(''); setMfaCode(''); setError('')
   }
 
   async function runBiometricLogin(silentOnFail = false) {
@@ -136,11 +184,50 @@ export default function LoginScreen() {
       title="The keys to your housing world."
       subtitle="Manage homes, payments, people, and services from one trusted workspace built for Ghana."
       formEyebrow="Secure workspace access"
-      formTitle="Welcome back"
-      formSubtitle="Sign in to continue to your RentOS workspace."
+      formTitle={mfaToken ? 'Two-factor authentication' : 'Welcome back'}
+      formSubtitle={mfaToken ? 'Enter the 6-digit code from your authenticator app to finish signing in.' : 'Sign in to continue to your RentOS workspace.'}
     >
-        {error ? <View style={s.errorBox}><Text style={[s.errorText, { color: c.danger }]}>{error}</Text></View> : null}
+        {error ? <View style={s.errorBox}><Text accessibilityLiveRegion="polite" style={[s.errorText, { color: c.danger }]}>{error}</Text></View> : null}
 
+        {mfaToken ? (
+          <View style={s.form}>
+            <Text style={[s.label, { color: c.text }]}>Authentication code</Text>
+            <View style={[s.inputWrap, authInset(c)]}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={c.muted} />
+              <TextInput
+                style={[s.input, s.codeInput, { color: c.text }]}
+                accessibilityLabel="Authentication code"
+                placeholder="000000"
+                placeholderTextColor={c.muted}
+                value={mfaCode}
+                onChangeText={(text) => setMfaCode(text.replace(/\D/g, '').slice(0, 6))}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+                onSubmitEditing={handleVerifyMfa}
+              />
+            </View>
+            <PressScale
+              style={[s.button, { backgroundColor: c.primary, opacity: mfaCode.length === 6 ? 1 : 0.6 }]}
+              onPress={handleVerifyMfa}
+              disabled={loading || mfaCode.length !== 6}
+              accessibilityRole="button"
+              accessibilityLabel="Verify code"
+            >
+              {loading ? <ActivityIndicator color="#ffffff" /> : (
+                <>
+                  <Text style={s.buttonText}>Verify</Text>
+                  <Ionicons name="arrow-forward" size={17} color="#ffffff" />
+                </>
+              )}
+            </PressScale>
+            <Pressable onPress={cancelMfa} accessibilityRole="button" style={s.backLink}>
+              <Text style={[s.link, { color: c.primary }]}>Back to sign in</Text>
+            </Pressable>
+          </View>
+        ) : <>
         {showBio ? (
           <View style={s.bioPanel}>
             <PressScale
@@ -228,6 +315,7 @@ export default function LoginScreen() {
             <Link href="/rights-check" style={[s.link, { color: c.primary }]}>Check if it&apos;s legal</Link>
           </View>
         </View>
+        </>}
     </AuthShell>
   )
 }
@@ -237,6 +325,8 @@ const s = StyleSheet.create({
   label: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm },
   inputWrap: { height: 54, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { flex: 1, height: '100%', fontSize: 15, fontFamily: 'Outfit_400Regular' },
+  codeInput: { fontSize: 20, letterSpacing: 6, fontFamily: 'Outfit_600SemiBold' },
+  backLink: { alignSelf: 'center', paddingVertical: spacing.sm, marginTop: spacing.sm },
   passwordLabelRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   passwordWrap: { flexDirection: 'row', alignItems: 'center', height: 52 },
   leadingIcon: { marginLeft: spacing.md },

@@ -13,7 +13,6 @@ interface PricingAnalysis { marketMedian: number; marketAverage: number; compara
 interface RentTrend { month: string; averageRent: number; listingCount: number }
 interface TrendsResponse { trends: RentTrend[] }
 interface FairPriceResult { isFair: boolean; verdict: string; suggestedRange?: { min: number; max: number } }
-interface ModelStatus { isTrained: boolean; r2Score?: number; sampleCount?: number }
 interface MlPrediction {
   predictedRent: number
   confidenceInterval?: { low: number; high: number }
@@ -26,7 +25,7 @@ const TABS = [
   { key: 'analysis', label: 'Analysis', icon: 'trending-up-outline' as const },
   { key: 'trends', label: 'Trends', icon: 'stats-chart-outline' as const },
   { key: 'fair', label: 'Fair Price', icon: 'checkmark-circle-outline' as const },
-  { key: 'ml', label: 'ML Predict', icon: 'flash-outline' as const },
+  { key: 'ml', label: 'Estimate', icon: 'flash-outline' as const },
 ]
 
 export default function PricingScreen() {
@@ -85,12 +84,6 @@ export default function PricingScreen() {
       amenities: ['Water', 'Electricity', 'Security'],
     }),
     onSuccess: (data) => setMlResult(data),
-  })
-
-  const modelStatusQuery = useQuery({
-    queryKey: ['model-status'],
-    queryFn: () => api.get<ModelStatus>('/pricing/model-status'),
-    enabled: activeTab === 'ml',
   })
 
   return (
@@ -229,33 +222,24 @@ export default function PricingScreen() {
         {activeTab === 'ml' && (
           <View>
             <View style={[s.card, neuCard(c)]}>
-              <Text style={[s.sectionTitle, { color: c.text }]}>ML Model Status</Text>
-              {modelStatusQuery.isLoading ? (
-                <ActivityIndicator color={c.primary} />
-              ) : modelStatusQuery.data ? (
-                <>
-                  <Text style={[s.mlStat, { color: c.textLight }]}>
-                    Trained: {modelStatusQuery.data.isTrained ? 'Yes' : 'No'}
-                  </Text>
-                  <Text style={[s.mlStat, { color: c.textLight }]}>
-                    R²: {String(modelStatusQuery.data.r2Score ?? 'N/A')}
-                  </Text>
-                  <Text style={[s.mlStat, { color: c.textLight }]}>
-                    Samples: {String(modelStatusQuery.data.sampleCount ?? 0)}
-                  </Text>
-                </>
-              ) : null}
+              {/* Model diagnostics (training state, R², sample count) are an
+                  operator concern and live in the web admin model-performance view,
+                  not in the consumer app. */}
+              <Text style={[s.sectionTitle, { color: c.text }]}>Rent estimate</Text>
+              <Text style={[s.mlStat, { color: c.textLight }]}>
+                An estimate of the monthly rent for a property with the details above, based on RentOS listing data. Use it as a guide, not a valuation.
+              </Text>
               <TouchableOpacity
                 style={[s.generateBtn, { backgroundColor: c.primary, marginTop: spacing.md }]}
                 onPress={() => mlPredictMutation.mutate()}
                 disabled={mlPredictMutation.isPending}
               >
-                {mlPredictMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.generateBtnText}>Predict Rent</Text>}
+                {mlPredictMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.generateBtnText}>Estimate rent</Text>}
               </TouchableOpacity>
             </View>
             {mlResult && (
               <View style={[s.card, neuCard(c)]}>
-                <Text style={[s.sectionTitle, { color: c.text }]}>ML Prediction</Text>
+                <Text style={[s.sectionTitle, { color: c.text }]}>Estimated rent</Text>
                 <Text style={[s.mlRent, { color: c.primary }]}>GHS {String(mlResult.predictedRent)}</Text>
                 <Text style={[s.mlStat, { color: c.textLight }]}>
                   Range: GHS {String(mlResult.confidenceInterval?.low)} - GHS {String(mlResult.confidenceInterval?.high)}

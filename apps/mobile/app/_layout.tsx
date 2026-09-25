@@ -25,6 +25,7 @@ import { useAppSocket } from '../hooks/useAppSocket'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { InAppNotificationProvider } from '../components/InAppNotification'
 import { RegulatedScreenGate } from '../components/RegulatedScreenGate'
+import { authRedirect } from '../lib/publicRoutes'
 
 ExpoSplashScreen.preventAutoHideAsync()
 
@@ -46,12 +47,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return
-    const inAuthGroup = segments[0] === 'auth'
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/auth/login')
-    } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)')
-    }
+    // Signed-out users may stay on the auth group and the few public screens
+    // (e.g. the rights check linked from login); everything else needs a session.
+    const redirect = authRedirect(segments, isAuthenticated)
+    if (redirect) router.replace(redirect)
   }, [isAuthenticated, hydrated, segments])
 
   if (!hydrated) return null
