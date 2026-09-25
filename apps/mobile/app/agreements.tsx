@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as SecureStore from 'expo-secure-store'
 import { router } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
-import { neuCard } from '../lib/neu'
+import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
@@ -13,7 +13,11 @@ import { useAuthStore } from '../stores/authStore'
 interface Agreement {
   id: string; propertyId: string; rentAmount: number; status: string
   startDate: string; endDate: string
+  landlordId?: string; tenantId?: string; landlordSignature?: string; tenantSignature?: string
 }
+
+/** What the signer is shown — fetched fresh so the fingerprint matches the terms on screen. */
+interface SignTarget { id: string; version: number; termsHash: string; statement: string }
 
 /* Move-in checklist (mirrors client/src/components/agreements/MoveInChecklist.tsx).
    Progress persists per agreement in SecureStore; tasks with a business
@@ -104,15 +108,19 @@ function MoveInChecklist({ agreementId, propertyId }: { agreementId: string; pro
 export default function AgreementsScreen() {
   const c = useThemeColors()
   const isTenant = useAuthStore((state) => state.user?.activeRole === 'tenant')
+  const userId = useAuthStore((state) => state.user?.id)
   const [agreements, setAgreements] = useState<Agreement[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState<string | null>(null)
+  const [signTarget, setSignTarget] = useState<SignTarget | null>(null)
+  const [signatureName, setSignatureName] = useState('')
+  const [consent, setConsent] = useState(false)
 
   const statusColors: Record<string, string> = {
     active: c.accent,
-    pending_signature: c.warning,
-    pending: c.warning,
+    pending_signatures: c.warning,
+    draft: c.warning,
     expired: c.muted,
     terminated: c.danger,
     signed: c.primary,
@@ -129,20 +137,30 @@ export default function AgreementsScreen() {
 
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
-  async function handleSign(id: string) {
-    Alert.alert('Sign Agreement', 'Are you sure you want to sign this agreement?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign',
-        onPress: async () => {
-          setSigning(id)
-          try {
-            await api.post(`/agreements/${id}/sign`, {})
-            await load()
-          } catch { /* no-op */ } finally { setSigning(null) }
-        },
-      },
-    ])
+  async function openSign(id: string) {
+    setSigning(id)
+    try {
+      const detail = await api.get<{ version: number; termsHash: string; signatureConsentStatement: string }>(`/agreements/${id}`)
+      setSignatureName('')
+      setConsent(false)
+      setSignTarget({ id, version: detail.version, termsHash: detail.termsHash, statement: detail.signatureConsentStatement })
+    } catch (e) {
+      Alert.alert('Error', (e as { message?: string }).message || 'Could not load the agreement')
+    } finally { setSigning(null) }
+  }
+
+  async function submitSignature() {
+    if (!signTarget) return
+    setSigning(signTarget.id)
+    try {
+      // The server records name, time, device and the terms fingerprint, and
+      // refuses the signature if the terms changed since they were loaded.
+      await api.post(`/agreements/${signTarget.id}/sign`, { signatureName: signatureName.trim(), termsHash: signTarget.termsHash, consent: true })
+      setSignTarget(null)
+      await load()
+    } catch (e) {
+      Alert.alert('Could not sign', (e as { message?: string }).message || 'Please try again')
+    } finally { setSigning(null) }
   }
 
   // Tenants get a move-in checklist under their active agreement (this screen
@@ -151,7 +169,8 @@ export default function AgreementsScreen() {
 
   function renderAgreement({ item }: { item: Agreement }) {
     const statusColor = statusColors[item.status] ?? c.muted
-    const isPending = item.status === 'pending_signature' || item.status === 'pending'
+    const alreadySigned = (item.landlordId === userId && !!item.landlordSignature) || (item.tenantId === userId && !!item.tenantSignature)
+    const isPending = (item.status === 'draft' || item.status === 'pending_signatures') && !alreadySigned
     return (
       <View>
       <View style={[s.card, neuCard(c)]}>
@@ -164,7 +183,7 @@ export default function AgreementsScreen() {
             <Text style={[s.cardProp, { color: c.muted }]}>Property: {item.propertyId.slice(0, 8).toUpperCase()}</Text>
           </View>
           <View style={[s.badge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[s.badgeText, { color: statusColor }]}>{item.status.replace('_', ' ')}</Text>
+            <Text style={[s.badgeText, { color: statusColor }]}>{item.status.replace(/_/g, ' ')}</Text>
           </View>
         </View>
 
@@ -187,7 +206,7 @@ export default function AgreementsScreen() {
         </View>
 
         {isPending && (
-          <TouchableOpacity style={[s.signBtn, { backgroundColor: c.primary }]} onPress={() => handleSign(item.id)} disabled={signing === item.id}>
+          <TouchableOpacity style={[s.signBtn, { backgroundColor: c.primary }]} onPress={() => openSign(item.id)} disabled={signing === item.id}>
             {signing === item.id ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
@@ -227,6 +246,41 @@ export default function AgreementsScreen() {
           )
         }
       />
+
+      <Modal visible={!!signTarget} animationType="slide" transparent onRequestClose={() => setSignTarget(null)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: c.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text }]}>Sign Agreement</Text>
+              <TouchableOpacity onPress={() => setSignTarget(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close">
+                <Ionicons name="close" size={24} color={c.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[s.modalHint, { color: c.muted }]}>Type your full legal name. It is recorded as your electronic signature.</Text>
+            <TextInput
+              style={[s.nameInput, neuInset(c), { color: c.text }]}
+              value={signatureName}
+              onChangeText={setSignatureName}
+              placeholder="Full legal name"
+              placeholderTextColor={c.muted}
+              autoCapitalize="words"
+              maxLength={100}
+            />
+            <View style={s.consentRow}>
+              <Switch value={consent} onValueChange={setConsent} trackColor={{ false: c.border, true: c.primary + '60' }} thumbColor={consent ? c.primary : '#f4f3f4'} accessibilityLabel="I agree to sign electronically" />
+              <Text style={[s.consentText, { color: c.text }]}>{signTarget?.statement}</Text>
+            </View>
+            <Text style={[s.fingerprint, { color: c.muted }]}>Version {signTarget?.version} · terms fingerprint {signTarget?.termsHash.slice(0, 16)}…</Text>
+            <TouchableOpacity
+              style={[s.signBtn, { backgroundColor: c.primary }, (!consent || signatureName.trim().length < 2) && { opacity: 0.5 }]}
+              onPress={submitSignature}
+              disabled={!consent || signatureName.trim().length < 2 || !!signing}
+            >
+              {signing ? <ActivityIndicator size="small" color="#ffffff" /> : <Text style={s.signBtnText}>Confirm & Sign</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -264,4 +318,14 @@ const s = StyleSheet.create({
   taskLabel: { flex: 1, fontSize: 13, fontFamily: 'Outfit_500Medium' },
   nearbyLink: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
   cityNote: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: spacing.sm },
+  // Signature sheet
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.md },
+  modalHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginBottom: spacing.sm },
+  nameInput: { paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, fontFamily: 'Outfit_500Medium' },
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: spacing.md },
+  consentText: { flex: 1, fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },
+  fingerprint: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: spacing.sm },
 })

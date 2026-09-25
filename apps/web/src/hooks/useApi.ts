@@ -225,9 +225,10 @@ export function useCreateAgreement() {
 export function useSignAgreement() {
   const qc = useQueryClient()
   return useMutation({
-    // The typed legal name is recorded as the e-signature.
-    mutationFn: ({ id, signatureName }: { id: string; signatureName: string }) =>
-      api.post<RentalAgreement>(`/agreements/${id}/sign`, { signatureName }),
+    // The typed legal name is the e-signature; termsHash pins it to the exact
+    // version the signer reviewed (the server rejects it if the terms changed).
+    mutationFn: ({ id, signatureName, termsHash }: { id: string; signatureName: string; termsHash: string }) =>
+      api.post<RentalAgreement>(`/agreements/${id}/sign`, { signatureName, termsHash, consent: true }),
     // Both keys. The list is ['agreements']; the detail page is
     // ['agreement', id], and React Query matches by key PREFIX, so
     // invalidating the list alone left an open detail page stale — after

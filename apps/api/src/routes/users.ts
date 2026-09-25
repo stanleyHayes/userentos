@@ -44,6 +44,7 @@ import { escapeRegex } from '../utils/params.js'
 import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
 import { decryptPii, PII_FIELDS } from '../utils/piiCrypto.js'
 import { ownProfileView } from '../services/tenantProfileViews.js'
+import { evidenceForViewer } from '../services/agreementEvidence.js'
 import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 const router = Router()
@@ -136,7 +137,8 @@ router.get('/me/export', authenticate, async (req, res) => {
     // The subject's own export carries their national ID in the clear.
     user: user ? { ...user, ghanaCardId: decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard), id: (user._id as Types.ObjectId).toString() } : null,
     tenantProfile: tenantProfile ? ownProfileView(tenantProfile) : null,
-    agreements,
+    // The counterparty's signing IP/device is their personal data, not ours to export.
+    agreements: agreements.map((a) => ({ ...a, signatureEvidence: evidenceForViewer(a.signatureEvidence, userId, false) })),
     payments,
     applications,
     disputes,

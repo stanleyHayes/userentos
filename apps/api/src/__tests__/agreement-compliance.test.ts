@@ -3,6 +3,7 @@ import type { Request, Response } from 'express'
 import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
 import { Agreement } from '../models/Agreement.js'
 import { agreementController } from '../controllers/agreementController.js'
+import { agreementTermsHash } from '../services/agreementEvidence.js'
 
 const terms = { startDate: '2026-01-01', endDate: '2027-01-01', advanceMonths: 6, terms: [] }
 const lease = () => new Agreement({ ...terms, propertyId: 'property', landlordId: 'owner', tenantId: 'tenant', rentAmount: 1000 })
@@ -36,7 +37,7 @@ describe('agreement compliance across creation and signing', () => {
     vi.spyOn(Agreement, 'findById').mockResolvedValue(doc)
     const save = vi.spyOn(doc, 'save')
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
-    await agreementController.sign({ body: { signatureName: 'Owner Name' }, params: { id: doc.id }, user: { userId: 'owner' } } as unknown as Request, res as unknown as Response)
+    await agreementController.sign({ body: { signatureName: 'Owner Name', termsHash: agreementTermsHash(doc), consent: true }, params: { id: doc.id }, user: { userId: 'owner' } } as unknown as Request, res as unknown as Response)
     expect(res.status).toHaveBeenCalledWith(400)
     expect(save).not.toHaveBeenCalled()
     expect(doc.landlordSignature).toBeUndefined()
@@ -78,7 +79,7 @@ describe('monthly and shorter tenancy advances', () => {
     vi.spyOn(Agreement, 'findById').mockResolvedValue(doc)
     const save = vi.spyOn(doc, 'save')
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
-    await agreementController.sign({ body: { signatureName: 'Owner Name' }, params: { id: doc.id }, user: { userId: 'owner' } } as unknown as Request, res as unknown as Response)
+    await agreementController.sign({ body: { signatureName: 'Owner Name', termsHash: agreementTermsHash(doc), consent: true }, params: { id: doc.id }, user: { userId: 'owner' } } as unknown as Request, res as unknown as Response)
     expect(res.status).toHaveBeenCalledWith(400)
     expect(save).not.toHaveBeenCalled()
     expect(doc.landlordSignature).toBeUndefined()

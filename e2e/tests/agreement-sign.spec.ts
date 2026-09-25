@@ -86,11 +86,13 @@ test.describe('agreement signing', () => {
     const agreementId: string = createData.data.id
 
     // ── 5. Landlord signs the agreement → status becomes pending_signatures ──
-    // The server records the typed legal name as the e-signature.
-    await request.post(`${API_BASE}/api/agreements/${agreementId}/sign`, {
+    // The server records the typed legal name as the e-signature, bound to the
+    // terms fingerprint the signer saw, with explicit e-signature consent.
+    const landlordSign = await request.post(`${API_BASE}/api/agreements/${agreementId}/sign`, {
       headers: { Authorization: `Bearer ${landlordToken}` },
-      data: { signatureName: 'Yaw Osei' },
+      data: { signatureName: 'Yaw Osei', termsHash: createData.data.termsHash, consent: true },
     })
+    expect(landlordSign.ok(), `Landlord signing failed: ${await landlordSign.text()}`).toBeTruthy()
 
     // ── 6. UI: tenant signs the agreement ──
     await page.goto('/agreements')
@@ -114,6 +116,7 @@ test.describe('agreement signing', () => {
       await textbox.fill('Kwame Asante')
     }
 
+    await page.getByTestId('signature-consent').check()
     await page.getByTestId('signature-confirm').click()
     await expect(page.getByTestId('agreement-signed-badge')).toBeVisible({ timeout: 15_000 })
   })
