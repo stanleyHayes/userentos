@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 import { Building2, MapPin, Phone, Users } from 'lucide-react'
 
 interface AgencyData {
-  agency: { name: string; description?: string; phone: string; city: string; logo?: string; teamMembers: { name: string; role: string }[] }
+  agency: { name: string; description?: string; phone: string; city: string; logo?: string; teamMembers: { name: string; role: string }[]; licence: { number: string; verified: boolean } | null }
   listings: { id: string; title: string; rentAmount: number; address: { city: string }; images?: string[] }[]
 }
 export function PublicAgencyPage() {
@@ -20,6 +20,11 @@ export function PublicAgencyPage() {
     <header className="rounded-3xl bg-primary p-8 text-white">
       <Building2 size={32} /><h1 className="mt-4 text-3xl font-extrabold">{data.agency.name}</h1>
       <p className="mt-2 max-w-2xl text-white/75">{data.agency.description}</p>
+      <p className="mt-3 text-sm text-white/85">
+        {data.agency.licence
+          ? `REAC licence ${data.agency.licence.number} · ${data.agency.licence.verified ? 'verified by RentOS with REAC' : 'not yet verified by RentOS'}`
+          : 'No REAC estate agency licence provided'}
+      </p>
       <div className="mt-4 flex gap-4 text-sm"><span><MapPin size={14} className="inline" /> {data.agency.city}</span><a href={`tel:${data.agency.phone}`}><Phone size={14} className="inline" /> {data.agency.phone}</a></div>
     </header>
     {!!data.agency.teamMembers.length && <Card><h2 className="mb-3 flex items-center gap-2 font-bold"><Users size={16} />Team</h2><div className="flex flex-wrap gap-3">{data.agency.teamMembers.map((member) => <div key={member.name} className="rounded-xl bg-surface p-3"><p className="font-bold">{member.name}</p><p className="text-xs text-muted">{member.role}</p></div>)}</div></Card>}

@@ -10,6 +10,11 @@ export interface IAgencyProfile extends Document {
   city: string
   logo?: string
   teamMembers: { name: string; role: string; phone?: string }[]
+  // Real Estate Agency Act 2020 (Act 1047): agents and brokers must hold a REAC
+  // licence. The number is self-reported until an admin checks it with REAC.
+  reacLicenceNumber?: string
+  reacLicenceVerifiedAt?: Date
+  reacLicenceVerifiedBy?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -25,6 +30,9 @@ const agencyProfileSchema = new Schema<IAgencyProfile>(
     city: { type: String, required: true },
     logo: String,
     teamMembers: { type: [{ name: String, role: String, phone: String }], default: [] },
+    reacLicenceNumber: { type: String, trim: true },
+    reacLicenceVerifiedAt: Date,
+    reacLicenceVerifiedBy: String,
   },
   { timestamps: true },
 )

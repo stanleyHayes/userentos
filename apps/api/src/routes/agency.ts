@@ -8,6 +8,8 @@ import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
+import { recordAudit } from '../utils/audit.js'
+import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 
 const router = Router()
 
@@ -35,7 +37,24 @@ const agencySchema = z.object({
     role: z.string().min(2),
     phone: z.string().optional(),
   })).max(20).optional(),
+  // Empty string clears it. Any change drops an earlier admin verification.
+  reacLicenceNumber: z.union([z.literal(''), z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9/.\- ]+$/, 'Enter the licence number as shown on your REAC certificate')]).optional(),
 })
+
+/** Public view: no owner account id, and licence status instead of reviewer details. */
+function publicAgency<T extends { _id: unknown; ownerId?: string; reacLicenceNumber?: string; reacLicenceVerifiedAt?: Date; reacLicenceVerifiedBy?: string }>(agency: T) {
+  const { ownerId: _ownerId, reacLicenceVerifiedBy: _verifiedBy, reacLicenceVerifiedAt, reacLicenceNumber, ...rest } = agency
+  return { ...idOf(rest), licence: reacLicenceNumber ? { number: reacLicenceNumber, verified: !!reacLicenceVerifiedAt } : null }
+}
+
+function applyLicence(agency: { reacLicenceNumber?: string; reacLicenceVerifiedAt?: Date; reacLicenceVerifiedBy?: string }, value: string | undefined) {
+  if (value === undefined) return
+  const next = value.trim() || undefined
+  if (next === agency.reacLicenceNumber) return
+  agency.reacLicenceNumber = next
+  agency.reacLicenceVerifiedAt = undefined
+  agency.reacLicenceVerifiedBy = undefined
+}
 
 // POST /api/agency/me — create or update my agency profile (property_manager/landlord)
 router.post('/me', authenticate, requireRole('property_manager', 'landlord'), async (req, res) => {
@@ -51,7 +70,9 @@ router.post('/me', authenticate, requireRole('property_manager', 'landlord'), as
       const taken = await AgencyProfile.exists({ slug: baseSlug, _id: { $ne: existing._id } })
       existing.slug = taken ? `${baseSlug}-${existing._id.toString().slice(-4)}` : baseSlug
     }
-    Object.assign(existing, parsed.data)
+    const { reacLicenceNumber, ...details } = parsed.data
+    Object.assign(existing, details)
+    applyLicence(existing, reacLicenceNumber)
     await existing.save()
     success(res, idOf(existing.toObject()), 'Agency profile updated')
     return
@@ -61,7 +82,8 @@ router.post('/me', authenticate, requireRole('property_manager', 'landlord'), as
   if (await AgencyProfile.exists({ slug })) {
     slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`
   }
-  const agency = await AgencyProfile.create({ ...parsed.data, slug, ownerId: req.user!.userId })
+  const { reacLicenceNumber, ...details } = parsed.data
+  const agency = await AgencyProfile.create({ ...details, reacLicenceNumber: reacLicenceNumber?.trim() || undefined, slug, ownerId: req.user!.userId })
   success(res, idOf(agency.toObject()), 'Agency profile created', 201)
 })
 
@@ -142,18 +164,42 @@ router.delete('/delegations/:id', authenticate, requireRole('landlord'), async (
   success(res, null, 'Delegation revoked')
 })
 
+// GET /api/agency/admin/licences?status=pending|verified — licence review queue
+router.get('/admin/licences', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const verified = req.query.status === 'verified'
+  const items = await AgencyProfile.find({ reacLicenceNumber: { $exists: true, $ne: '' }, reacLicenceVerifiedAt: { $exists: verified } })
+    .select('name slug city phone email reacLicenceNumber reacLicenceVerifiedAt updatedAt')
+    .sort({ updatedAt: -1 }).limit(100).lean()
+  success(res, { items: items.map(idOf) })
+})
+
+// PATCH /api/agency/:id/licence — record the result of checking the number with REAC
+router.patch('/:id/licence', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const parsed = z.object({ verified: z.boolean() }).strict().safeParse(req.body)
+  if (!parsed.success) { error(res, 'Provide verified: true or false'); return }
+  const agency = await AgencyProfile.findById(param(req.params.id))
+  if (!agency) { error(res, 'Agency not found', 404); return }
+  if (parsed.data.verified && !agency.reacLicenceNumber) { error(res, 'This agency has not provided a licence number', 409); return }
+  agency.reacLicenceVerifiedAt = parsed.data.verified ? new Date() : undefined
+  agency.reacLicenceVerifiedBy = parsed.data.verified ? req.user!.userId : undefined
+  await agency.save()
+  void recordAudit(req, parsed.data.verified ? 'agency.licence_verified' : 'agency.licence_unverified', 'AgencyProfile', agency.id, { licence: agency.reacLicenceNumber })
+  success(res, publicAgency(agency.toObject()))
+})
+
 // GET /api/agency/:slug — public branded agency page (+ its published listings)
 router.get('/:slug', async (req, res) => {
   const agency = await AgencyProfile.findOne({ slug: new RegExp(`^${escapeRegex(String(req.params.slug))}$`, 'i') }).lean()
   if (!agency) { error(res, 'Agency not found', 404); return }
 
-  const listings = await Property.find({ landlordId: agency.ownerId, status: 'available' })
+  // Only listings that passed moderation are public anywhere, including here.
+  const listings = await Property.find({ landlordId: agency.ownerId, status: 'available', listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } })
     .select('title type rentAmount bedrooms bathrooms address images')
     .limit(24)
     .lean()
 
   success(res, {
-    agency: idOf(agency),
+    agency: publicAgency(agency),
     listings: listings.map(idOf),
   })
 })

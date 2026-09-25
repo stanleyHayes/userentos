@@ -22,6 +22,8 @@ interface Agency {
   email?: string
   city: string
   teamMembers: { name: string; role: string; phone?: string }[]
+  reacLicenceNumber?: string
+  reacLicenceVerifiedAt?: string
 }
 
 interface Delegation {
@@ -45,6 +47,8 @@ export function AgencyPage() {
   const { data: propertiesData } = useProperties({ mine: role === 'landlord' })
   const agency = data?.agency
   const [form, setForm] = useState({ name: '', phone: '', email: '', city: '', description: '', team: '' })
+  // undefined until edited, so saving other fields never clears the licence.
+  const [licence, setLicence] = useState<string | undefined>(undefined)
   const [delegation, setDelegation] = useState({ propertyId: '', delegateEmail: '', scopes: ['applications', 'leads'] })
 
   const save = useMutation({
@@ -54,6 +58,7 @@ export function AgencyPage() {
       email: form.email || agency?.email || undefined,
       city: form.city || agency?.city,
       description: form.description || agency?.description || undefined,
+      ...(licence !== undefined ? { reacLicenceNumber: licence.trim() } : {}),
       teamMembers: form.team.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
         const [name, memberRole, phone] = line.split(',').map((part) => part.trim())
         return { name, role: memberRole || 'Agent', ...(phone ? { phone } : {}) }
@@ -87,6 +92,15 @@ export function AgencyPage() {
             <Input id="agency-phone" label="Phone" value={form.phone || agency?.phone || ''} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             <Input id="agency-email" label="Email" value={form.email || agency?.email || ''} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
             <Input id="agency-city" label="City" value={form.city || agency?.city || ''} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+          </div>
+          <div>
+            <Input id="agency-licence" label="REAC licence number" value={licence ?? agency?.reacLicenceNumber ?? ''} onChange={(e) => setLicence(e.target.value)} placeholder="As shown on your REAC certificate" />
+            <p className="mt-1 text-xs text-muted dark:text-gray-400">
+              Needed if you act as an estate agent or broker for other owners (Real Estate Agency Act 2020, Act 1047). It shows as unverified until RentOS confirms it with REAC; changing it resets that check.
+            </p>
+            {agency?.reacLicenceNumber && (agency.reacLicenceVerifiedAt
+              ? <Badge variant="success" className="mt-2">Licence verified by RentOS</Badge>
+              : <Badge variant="warning" className="mt-2">Licence not yet verified</Badge>)}
           </div>
           <Textarea id="agency-description" label="Description" value={form.description || agency?.description || ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           <Textarea id="agency-team" label="Team members (one per line: name, role, phone)" value={form.team} onChange={(e) => setForm((f) => ({ ...f, team: e.target.value }))} placeholder="Ama Mensah, Senior Agent, 024..." />
