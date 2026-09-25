@@ -46,7 +46,7 @@ export function AuthLayout() {
   const isRegister = location.pathname === '/register'
   const journey = isRegister
     ? [
-        { icon: Home, title: 'Choose your place', copy: 'Search verified homes with clearer records.' },
+        { icon: Home, title: 'Choose your place', copy: 'Search listings that are moderated before they go live.' },
         { icon: ShieldCheck, title: 'Build your trust profile', copy: 'Carry references, history, and documents once.' },
         { icon: FileSignature, title: 'Move in with confidence', copy: 'Sign, pay, and manage the tenancy in one flow.' },
       ]

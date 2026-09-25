@@ -361,7 +361,7 @@ function BusinessDetail({
         {business.isVerified && (
           <View style={[s.catBadge, { backgroundColor: '#10b98115' }]}>
             <Ionicons name="shield-checkmark" size={11} color="#10b981" />
-            <Text style={[s.catText, { color: '#10b981' }]}>Verified</Text>
+            <Text style={[s.catText, { color: '#10b981' }]}>Reviewed by RentOS</Text>
           </View>
         )}
         {business.reviewCount ? (

@@ -10,7 +10,6 @@ import {
   Lock,
   Mail,
   MapPin,
-  Phone,
   Scale,
   Search,
   Shield,
@@ -154,10 +153,6 @@ export function Footer() {
               <a href={`mailto:${CONTACT_EMAIL.support}`} className="flex items-center gap-3 text-white/58 transition-colors hover:text-white">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-400/10 text-sky-200"><Mail size={15} /></span>
                 {CONTACT_EMAIL.support}
-              </a>
-              <a href="tel:+233300000000" className="flex items-center gap-3 text-white/58 transition-colors hover:text-white">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-200"><Phone size={15} /></span>
-                +233 30 000 0000
               </a>
               <p className="flex items-center gap-3 text-white/58">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/10 text-amber-200"><MapPin size={15} /></span>

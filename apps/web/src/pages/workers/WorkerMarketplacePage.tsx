@@ -115,7 +115,7 @@ export function WorkerMarketplacePage() {
       <PageHeader
         eyebrow="Services"
         title="Essential Worker Marketplace"
-        description="Find verified tradespeople for maintenance, repairs, and emergency services."
+        description="Find tradespeople for maintenance, repairs, and emergency services."
         icon={<Wrench size={22} />}
       >
         <Button size="sm" variant="outline" onClick={() => navigate('/workers/join')}>

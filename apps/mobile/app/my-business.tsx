@@ -595,7 +595,7 @@ function Dashboard({
             <View style={s.empty}>
               <Ionicons name="star-outline" size={48} color={c.muted} />
               <Text style={[s.emptyTitle, { color: c.text }]}>No reviews yet</Text>
-              <Text style={[s.emptySub, { color: c.muted }]}>Reviews from verified customers will appear here.</Text>
+              <Text style={[s.emptySub, { color: c.muted }]}>Customers can review you once you mark their request as won.</Text>
             </View>
           ) : (
             reviews.map((r) => (

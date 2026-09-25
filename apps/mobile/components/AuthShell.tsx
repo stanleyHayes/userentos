@@ -29,7 +29,7 @@ interface AuthShellProps {
 }
 
 const TRUST_POINTS: { icon: IconName; label: string }[] = [
-  { icon: 'shield-checkmark-outline', label: 'Verified identities' },
+  { icon: 'shield-checkmark-outline', label: 'Moderated listings' },
   { icon: 'key-outline', label: 'Secure access' },
   { icon: 'home-outline', label: 'One housing workspace' },
 ]

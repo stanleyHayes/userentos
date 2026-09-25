@@ -228,7 +228,7 @@ export function PropertyDetailPage() {
                   <MapPin size={13} className="mt-0.5 flex-shrink-0" />
                   <span>{p.address?.street}, {p.address?.city}, {p.address?.region}</span>
                 </div>
-                {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · Verified landlord' : ''}</p>}
+                {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · ID reviewed by RentOS' : ''}</p>}
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">Listed rent</p>
                   <div className="mt-1 flex items-baseline gap-1">

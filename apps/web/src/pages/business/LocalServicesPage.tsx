@@ -160,10 +160,12 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="default" className="text-[10px]">{businessCategoryLabel(business.category)}</Badge>
+          {/* isVerified is set when an admin approves the business profile —
+              it is a moderation review, not a licence or quality check. */}
           {business.isVerified ? (
-            <Badge variant="success" className="text-[10px]"><ShieldCheck size={10} /> Verified</Badge>
+            <Badge variant="success" className="text-[10px]"><ShieldCheck size={10} /> Profile reviewed by RentOS</Badge>
           ) : (
-            <Badge variant="muted" className="text-[10px]">Not yet verified</Badge>
+            <Badge variant="muted" className="text-[10px]">Not yet reviewed</Badge>
           )}
         </div>
 
@@ -211,7 +213,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
             {reviewsData?.canReview && <button type="button" onClick={() => setReviewForm({ rating: 5, review: '' })} className="text-xs font-semibold text-primary hover:underline">Write a review</button>}
           </div>
           {reviews.length === 0 ? (
-            <p className="text-xs italic text-muted">No verified-customer reviews yet.</p>
+            <p className="text-xs italic text-muted">No customer reviews yet.</p>
           ) : (
             <div className="space-y-3">
               {reviews.map((review) => (
@@ -244,7 +246,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
 
         {reviewForm && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-            <p className="text-sm font-bold text-primary-dark dark:text-white">Your verified-customer review</p>
+            <p className="text-sm font-bold text-primary-dark dark:text-white">Your review</p>
             <div className="my-3 flex gap-1">
               {Array.from({ length: 5 }, (_, i) => (
                 <button key={i} type="button" aria-label={`${i + 1} stars`} onClick={() => setReviewForm((current) => current ? { ...current, rating: i + 1 } : null)} className="text-amber-500">
