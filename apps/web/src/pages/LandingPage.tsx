@@ -9,6 +9,8 @@ import { Footer } from '@/components/layout/Footer'
 import { useAuthRehydrate, useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
+import { useRegulatedFeatures } from '@/hooks/useApi'
+import type { RegulatedFeatureKey } from '../../../../packages/shared/regulatedFeatures'
 import {
   CountUp,
   Magnetic,
@@ -82,7 +84,9 @@ interface AbuseCheckResult {
   signUpCta: string
 }
 
-const platformModules = [
+// `requires`: a regulated service shown only once the operator offers it, so
+// the public page never advertises an unlicensed financial product.
+const platformModules: { title: string; description: string; icon: React.ReactNode; href: string; requires?: RegulatedFeatureKey[] }[] = [
   {
     title: 'Public registry and discovery',
     description: 'Search public property records, browse listings, save homes, and review property details before applying.',
@@ -90,8 +94,8 @@ const platformModules = [
     href: '/registry',
   },
   {
-    title: 'Tenant passport and credit',
-    description: 'Build a tenant profile with documents, references, rent history, achievements, and a RentOS credit score.',
+    title: 'Tenant passport',
+    description: 'Build a tenant profile with documents, references, rent history and achievements, and share a summary with landlords.',
     icon: <ShieldCheck size={22} />,
     href: '/register',
   },
@@ -106,24 +110,28 @@ const platformModules = [
     description: 'Help tenants plan ahead with rent goals, savings progress, streaks, and payment readiness signals.',
     icon: <PiggyBank size={22} />,
     href: '/register',
+    requires: ['wallet'],
   },
   {
     title: 'Financing and collections',
     description: 'Support rent advances, deposit loans, offers, applications, contracts, mandates, and collections reviews.',
     icon: <Banknote size={22} />,
     href: '/register',
+    requires: ['financing'],
   },
   {
     title: 'Employer payroll mandates',
     description: 'Connect employers to employee records, payroll runs, salary deductions, and mandate approvals.',
     icon: <BriefcaseBusiness size={22} />,
     href: '/register',
+    requires: ['payroll'],
   },
   {
     title: 'Insurance marketplace',
     description: 'Compare renter, landlord, rent guarantee, property damage, and tenant default cover with claims tracking.',
     icon: <ShieldPlus size={22} />,
     href: '/register',
+    requires: ['insurance'],
   },
   {
     title: 'Maintenance and service work',
@@ -151,7 +159,7 @@ const platformModules = [
   },
 ]
 
-const roleRoutes = [
+const roleRoutes: { title: string; description: string; icon: React.ReactNode; checks: string[]; requires?: RegulatedFeatureKey[] }[] = [
   {
     title: 'Tenants',
     description: 'Find reviewed listings with rent shown up front, apply and sign digitally, pay online with receipts, and build a portable rental history.',
@@ -187,18 +195,21 @@ const roleRoutes = [
     description: 'Review rent-financing applications that tenants choose to send you — including the RentOS payment history and score they share with that application — and collect repayments digitally.',
     icon: <Landmark size={22} />,
     checks: ['Applications', 'Rental financing', 'Digital collections', 'Portfolio view'],
+    requires: ['financing'],
   },
   {
     title: 'Insurers',
     description: 'Offer rent protection, property and tenant cover, and damage claims, integrated directly into the rental agreement.',
     icon: <ShieldPlus size={22} />,
     checks: ['Rent protection', 'Property cover', 'Damage claims', 'Agreement integration'],
+    requires: ['insurance'],
   },
   {
     title: 'Employers',
     description: 'Maintain employee records, approve payroll deduction mandates, and run payroll with clear approval workflows.',
     icon: <BriefcaseBusiness size={22} />,
     checks: ['Employees', 'Mandates', 'Payroll', 'Approvals'],
+    requires: ['payroll'],
   },
   {
     title: 'Developers',
@@ -215,8 +226,8 @@ const roleRoutes = [
 ]
 
 const workflow = [
-  { title: 'Review', description: 'Listing moderation, identity-document review, and employer and insurance confirmations keep records dependable.', icon: <Shield size={20} /> },
-  { title: 'Transact', description: 'Payments, agreements, financing contracts, payroll deductions, and savings plans move through auditable rails.', icon: <CreditCard size={20} /> },
+  { title: 'Review', description: 'Listing moderation, identity-document review and licence checks keep records dependable.', icon: <Shield size={20} /> },
+  { title: 'Transact', description: 'Agreements, signatures, payment records and receipts move through auditable rails.', icon: <CreditCard size={20} /> },
   { title: 'Operate', description: 'Maintenance, worker bookings, messages, disputes, applications, and claims stay visible to the right role.', icon: <CalendarCheck size={20} /> },
   { title: 'Govern', description: 'Analytics, simulations, public records, admin queues, and compliance reviews keep the platform accountable.', icon: <BarChart3 size={20} /> },
 ]
@@ -244,6 +255,9 @@ function SectionHeader({ title, description }: { title: string; description: str
 }
 
 export function LandingPage() {
+  const { data: regulatedFeatures } = useRegulatedFeatures()
+  // Unknown status hides regulated services rather than advertising them.
+  const offered = (requires?: RegulatedFeatureKey[]) => !requires || (!!regulatedFeatures && requires.some((key) => regulatedFeatures[key]))
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [abuseQuery, setAbuseQuery] = useState('')
   const [abuseLoading, setAbuseLoading] = useState(false)
@@ -334,7 +348,7 @@ export function LandingPage() {
   const drawerLinks = [
     { href: '#features', label: 'Features', desc: 'Everything in one platform', icon: Sparkles },
     { href: '#roles', label: 'Roles', desc: 'A workspace for everyone', icon: Users },
-    { href: '#operations', label: 'Operations', desc: 'Payments, savings & disputes', icon: BarChart3 },
+    { href: '#operations', label: 'Operations', desc: 'Payments, receipts & disputes', icon: BarChart3 },
     { href: '#rights', label: 'Rights', desc: 'Know where you stand', icon: ShieldCheck },
     { href: '/registry', label: 'Registry', desc: 'Reviewed rental listings', icon: Search },
     { href: '/rental-laws', label: 'Rental Laws', desc: 'Tenancy law in plain language', icon: Scale },
@@ -572,7 +586,7 @@ export function LandingPage() {
                   {[
                     { label: 'Listing reviewed', detail: 'Checked before publishing', icon: ShieldCheck, color: 'text-emerald-300' },
                     { label: 'Agreement ready', detail: 'Digital signing secured', icon: FileSignature, color: 'text-blue-300' },
-                    { label: 'Rent on track', detail: 'Payment + savings active', icon: PiggyBank, color: 'text-amber-300' },
+                    { label: 'Rent on track', detail: 'Payments and receipts recorded', icon: PiggyBank, color: 'text-amber-300' },
                   ].map(({ label, detail, icon: Icon, color }, index) => (
                     <div key={label} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
                       <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.07]', color)}><Icon size={19} /></span>
@@ -611,7 +625,7 @@ export function LandingPage() {
           </div>
         </div>
         <div className="relative grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[280px]">
-          {platformModules.map((item, i) => (
+          {platformModules.filter((item) => offered(item.requires)).map((item, i) => (
             <Animate
               key={item.title}
               animation="fade-up"
@@ -657,7 +671,7 @@ export function LandingPage() {
             <Link to="/register" className="mt-8 inline-flex"><Button variant="secondary">Choose your workspace <Send size={16} /></Button></Link>
           </div>
           <div className="space-y-3">
-            {roleRoutes.map((role, i) => (
+            {roleRoutes.filter((role) => offered(role.requires)).map((role, i) => (
               <Animate key={role.title} animation="fade-up" delay={i * 70}>
                 <article className="group grid gap-5 rounded-3xl border border-white/10 bg-white/[0.055] p-5 backdrop-blur-md transition-all hover:border-white/20 hover:bg-white/[0.08] sm:grid-cols-[auto_1fr_auto] sm:items-center">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08] text-secondary shadow-[6px_6px_16px_rgba(0,0,0,0.3),-4px_-4px_12px_rgba(255,255,255,0.05)]">{role.icon}</span>
@@ -688,7 +702,7 @@ export function LandingPage() {
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {[
                 ['Public trust', 'Registry, laws, tenant passports, and shared records.'],
-                ['Money movement', 'Payments, savings, financing, deductions, and insurance.'],
+                ['Rent records', 'Payment history, receipts, agreements and disputes.'],
                 ['Daily operations', 'Maintenance, bookings, messages, documents, and claims.'],
                 ['Governance', 'Analytics, policy simulation, reviews, and admin ledgers.'],
               ].map(([title, description]) => (
@@ -851,18 +865,18 @@ export function LandingPage() {
         <div className="rounded-3xl bg-[#0f1f33] p-6 text-white md:p-10">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
-              <h2 className="font-display text-3xl font-extrabold leading-tight md:text-5xl">Compliance, finance, and service records in one admin view.</h2>
+              <h2 className="font-display text-3xl font-extrabold leading-tight md:text-5xl">Compliance and service records in one admin view.</h2>
               <p className="mt-5 text-base leading-relaxed text-white/60">
-                Platform admins now have dedicated pages for financing operations, employer networks, maintenance command, and policy portfolios, plus packages, claims, feature flags, users, government reviews, and analytics.
+                Platform admins have dedicated pages for listing and content moderation, identity and licence reviews, maintenance command, users, government reviews and analytics.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
-                { title: 'Financing Operations', value: 'Contracts, arrears, signatures', icon: <Banknote size={18} /> },
-                { title: 'Employer Network', value: 'Verification and mandates', icon: <BriefcaseBusiness size={18} /> },
+                { title: 'Moderation Queue', value: 'Reports on listings, reviews and messages', icon: <Shield size={18} /> },
                 { title: 'Maintenance Command', value: 'Urgency and vendor schedule', icon: <Hammer size={18} /> },
-                { title: 'Policy Portfolio', value: 'Premiums, claims, coverage', icon: <ShieldPlus size={18} /> },
-              ].map((item) => (
+                { title: 'Financing Operations', value: 'Contracts, arrears, signatures', icon: <Banknote size={18} />, requires: ['financing'] as RegulatedFeatureKey[] },
+                { title: 'Policy Portfolio', value: 'Premiums, claims, coverage', icon: <ShieldPlus size={18} />, requires: ['insurance'] as RegulatedFeatureKey[] },
+              ].filter((item) => offered(item.requires)).map((item) => (
                 <div key={item.title} className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-secondary">{item.icon}</span>
                   <p className="mt-4 font-display text-base font-extrabold">{item.title}</p>
