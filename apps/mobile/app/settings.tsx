@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Alert, ActivityIndicator, Switch,
@@ -20,13 +20,7 @@ import {
   isBiometricEnabled,
   type BiometricCapability,
 } from '../lib/biometric'
-
-const languages = [
-  { code: 'en', label: 'English', native: 'English' },
-  { code: 'tw', label: 'Twi', native: 'Twi' },
-  { code: 'ga', label: 'Ga', native: 'Ga' },
-  { code: 'ee', label: 'Ewe', native: 'Ewe' },
-]
+import { parseNotificationPreferences, type NotificationPreferenceKey, type NotificationPreferences } from '../../../packages/shared/notificationPreferences'
 
 const themeOptions = [
   { value: 'light' as const, label: 'Light', desc: 'Clean & bright', icon: 'sunny-outline' as const },
@@ -34,7 +28,7 @@ const themeOptions = [
   { value: 'system' as const, label: 'System', desc: 'Match your OS', icon: 'phone-portrait-outline' as const },
 ]
 
-const notificationPrefs = [
+const notificationPrefs: { key: NotificationPreferenceKey; label: string; desc: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'email', label: 'Email Notifications', desc: 'Receive updates via email', icon: 'mail-outline' as const },
   { key: 'sms', label: 'SMS Notifications', desc: 'Get text message alerts', icon: 'chatbubble-outline' as const },
   { key: 'push', label: 'Push Notifications', desc: 'Mobile push alerts', icon: 'notifications-outline' as const },
@@ -300,97 +294,99 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
 
 /* ─── Appearance Tab ─── */
 function AppearanceTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
+  const mounted = useMounted()
   const { mode, setMode } = useThemeStore()
-  const [language, setLanguage] = useState('en')
+  const [syncFailed, setSyncFailed] = useState(false)
 
-  function handleTheme(value: 'light' | 'dark' | 'system') {
+  async function handleTheme(value: 'light' | 'dark' | 'system') {
+    // The theme applies on this device immediately; account sync is best effort
+    // but a failure is reported rather than silently implying it was saved.
     setMode(value)
-    api.patch('/settings', { theme: value }).catch(() => {})
-  }
-
-  function handleLanguage(code: string) {
-    setLanguage(code)
-    api.patch('/settings', { language: code }).catch(() => {})
+    setSyncFailed(false)
+    try { await api.patch('/settings', { theme: value }) }
+    catch { if (mounted.current) setSyncFailed(true) }
   }
 
   return (
-    <>
-      {/* Theme */}
-      <View style={[s.section, neuCard(c)]}>
-        <View style={s.sectionHeader}>
-          <Ionicons name="color-palette-outline" size={20} color={c.primary} />
-          <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Theme</Text>
-        </View>
-        <View style={s.optionGrid}>
-          {themeOptions.map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                s.themeCard,
-                { borderColor: c.border },
-                mode === opt.value && { borderColor: c.primary, backgroundColor: c.primary + '08' },
-              ]}
-              onPress={() => handleTheme(opt.value)}
-              activeOpacity={0.7}
-            >
-              {mode === opt.value && (
-                <View style={[s.checkBadge, { backgroundColor: c.primary }]}>
-                  <Ionicons name="checkmark" size={10} color="#fff" />
-                </View>
-              )}
-              <View style={[s.themeIcon, { backgroundColor: mode === opt.value ? c.primary + '18' : c.surface }]}>
-                <Ionicons name={opt.icon} size={22} color={mode === opt.value ? c.primary : c.muted} />
-              </View>
-              <Text style={[s.themeLabel, { color: c.primaryDark }]}>{opt.label}</Text>
-              <Text style={[s.themeDesc, { color: c.muted }]}>{opt.desc}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+    <View style={[s.section, neuCard(c)]}>
+      <View style={s.sectionHeader}>
+        <Ionicons name="color-palette-outline" size={20} color={c.primary} />
+        <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Theme</Text>
       </View>
-
-      {/* Language */}
-      <View style={[s.section, neuCard(c)]}>
-        <View style={s.sectionHeader}>
-          <Ionicons name="globe-outline" size={20} color={c.primary} />
-          <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Language</Text>
-        </View>
-        <View style={s.langGrid}>
-          {languages.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[
-                s.langCard,
-                { borderColor: c.border },
-                language === lang.code && { borderColor: c.primary, backgroundColor: c.primary + '08' },
-              ]}
-              onPress={() => handleLanguage(lang.code)}
-              activeOpacity={0.7}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[s.langLabel, { color: c.primaryDark }]}>{lang.label}</Text>
-                <Text style={[s.langNative, { color: c.muted }]}>{lang.native}</Text>
+      <View style={s.optionGrid}>
+        {themeOptions.map((opt) => (
+          <TouchableOpacity
+            key={opt.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === opt.value }}
+            style={[
+              s.themeCard,
+              { borderColor: c.border },
+              mode === opt.value && { borderColor: c.primary, backgroundColor: c.primary + '08' },
+            ]}
+            onPress={() => void handleTheme(opt.value)}
+            activeOpacity={0.7}
+          >
+            {mode === opt.value && (
+              <View style={[s.checkBadge, { backgroundColor: c.primary }]}>
+                <Ionicons name="checkmark" size={10} color="#fff" />
               </View>
-              {language === lang.code && (
-                <Ionicons name="checkmark" size={18} color={c.primary} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+            )}
+            <View style={[s.themeIcon, { backgroundColor: mode === opt.value ? c.primary + '18' : c.surface }]}>
+              <Ionicons name={opt.icon} size={22} color={mode === opt.value ? c.primary : c.muted} />
+            </View>
+            <Text style={[s.themeLabel, { color: c.primaryDark }]}>{opt.label}</Text>
+            <Text style={[s.themeDesc, { color: c.muted }]}>{opt.desc}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-    </>
+      {syncFailed && (
+        <Text accessibilityRole="alert" style={{ color: c.text, marginTop: spacing.md }}>
+          Theme changed on this device, but it could not be saved to your account.
+        </Text>
+      )}
+    </View>
   )
 }
 
 /* ─── Notifications Tab ─── */
-function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(
-    Object.fromEntries(notificationPrefs.map((p) => [p.key, true]))
-  )
+type PendingPreference = { key: NotificationPreferenceKey; value: boolean }
 
-  function toggle(key: string) {
-    const updated = { ...prefs, [key]: !prefs[key] }
-    setPrefs(updated)
-    api.patch('/settings', { notifications: updated }).catch(() => {})
+function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
+  const mounted = useMounted()
+  const [prefs, setPrefs] = useState<NotificationPreferences | null>(null)
+  const [loadState, setLoadState] = useState<'loading' | 'failed' | 'ready'>('loading')
+  const [saving, setSaving] = useState(false)
+  const [failed, setFailed] = useState<PendingPreference | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoadState('loading')
+    try {
+      // Only a complete saved snapshot is shown; defaults would misstate choices.
+      const next = parseNotificationPreferences(await api.get('/settings'))
+      if (!mounted.current) return
+      setPrefs(next)
+      setLoadState(next ? 'ready' : 'failed')
+    } catch {
+      if (mounted.current) setLoadState('failed')
+    }
+  }, [mounted])
+  useEffect(() => { void load() }, [load])
+
+  async function save(change: PendingPreference) {
+    setSaving(true); setFailed(null); setSaved(false)
+    try {
+      // Send only the changed channel so a stale snapshot cannot overwrite another save.
+      const next = parseNotificationPreferences(await api.patch('/settings', { notifications: { [change.key]: change.value } }))
+      if (!next) throw new Error('Incomplete settings response')
+      if (!mounted.current) return
+      setPrefs(next); setSaved(true)
+    } catch {
+      if (mounted.current) setFailed(change)
+    } finally {
+      if (mounted.current) setSaving(false)
+    }
   }
 
   return (
@@ -399,7 +395,16 @@ function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
         <Ionicons name="notifications-outline" size={20} color={c.primary} />
         <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Notification Preferences</Text>
       </View>
-      {notificationPrefs.map((pref, i) => (
+      {loadState === 'loading' && <ActivityIndicator accessibilityLabel="Loading notification preferences" color={c.primary} />}
+      {loadState === 'failed' && (
+        <View accessibilityRole="alert">
+          <Text style={{ color: c.text }}>Could not load notification preferences.</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry notification preferences" onPress={() => void load()}>
+            <Text style={[s.retryText, { color: c.primary }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {loadState === 'ready' && prefs && notificationPrefs.map((pref, i) => (
         <View key={pref.key} style={[s.notifRow, i < notificationPrefs.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border + '40' }]}>
           <View style={[s.notifIcon, { backgroundColor: prefs[pref.key] ? c.primary + '14' : c.surface }]}>
             <Ionicons name={pref.icon} size={16} color={prefs[pref.key] ? c.primary : c.muted} />
@@ -409,15 +414,35 @@ function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
             <Text style={[s.notifDesc, { color: c.muted }]}>{pref.desc}</Text>
           </View>
           <Switch
+            accessibilityLabel={pref.label}
             value={prefs[pref.key]}
-            onValueChange={() => toggle(pref.key)}
+            disabled={saving}
+            onValueChange={(value) => void save({ key: pref.key, value })}
             trackColor={{ false: c.border, true: c.primary + '60' }}
             thumbColor={prefs[pref.key] ? c.primary : '#f4f3f4'}
           />
         </View>
       ))}
+      {failed && (
+        <View accessibilityRole="alert">
+          <Text style={{ color: c.text, marginTop: spacing.sm }}>Could not save notification preference.</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry saving preference" disabled={saving} onPress={() => void save(failed)}>
+            <Text style={[s.retryText, { color: c.primary }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {saved && <Text accessibilityLiveRegion="polite" style={{ color: c.text, marginTop: spacing.sm }}>Notification preference saved.</Text>}
     </View>
   )
+}
+
+function useMounted() {
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  return mounted
 }
 
 /* ─── Shared Components ─── */
@@ -476,16 +501,12 @@ const s = StyleSheet.create({
   themeIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   themeLabel: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   themeDesc: { fontSize: 10, fontFamily: 'Outfit_400Regular', textAlign: 'center' },
-  // Language
-  langGrid: { gap: 8 },
-  langCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, borderWidth: 2, paddingVertical: 12, paddingHorizontal: 16 },
-  langLabel: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
-  langNative: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 1 },
   // Notifications
   notifRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
   notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   notifLabel: { fontSize: 14, fontFamily: 'Outfit_600SemiBold' },
   notifDesc: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 1 },
+  retryText: { fontFamily: 'Outfit_600SemiBold', paddingVertical: spacing.sm },
   // Biometric
   bioRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   bioRowTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },

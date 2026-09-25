@@ -1428,11 +1428,17 @@ export function useSettings() {
   })
 }
 
+export type UserSettingsPatch = Partial<Omit<UserSettings, 'notifications'>> & { notifications?: Partial<UserSettings['notifications']> }
+
 export function useUpdateSettings() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Partial<UserSettings>) => api.patch<UserSettings>('/settings', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+    mutationFn: (body: UserSettingsPatch) => api.patch<UserSettings>('/settings', body),
+    onSuccess: (settings) => {
+      // The response is the merged saved state; show it immediately, then confirm.
+      qc.setQueryData(['settings'], settings)
+      return qc.invalidateQueries({ queryKey: ['settings'] })
+    },
   })
 }
 
