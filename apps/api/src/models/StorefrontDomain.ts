@@ -16,6 +16,12 @@ export interface IStorefrontDomain extends Document {
   status: 'pending' | 'verified' | 'active' | 'failed' | 'removed'
   tlsStatus: 'none' | 'provisioning' | 'active' | 'failed'
   verifiedAt?: Date
+  /**
+   * When the current storefront claimed the domain. Unlike updatedAt it does
+   * not move when verification is retried, so an unverified claim cannot be
+   * kept alive by clicking Verify. Absent on older rows; createdAt stands in.
+   */
+  claimedAt?: Date
   lastCheckedAt?: Date
   failureReason?: string
   /** Which hosting provider was asked to issue the certificate. */
@@ -35,6 +41,7 @@ const storefrontDomainSchema = new Schema<IStorefrontDomain>({
   status: { type: String, enum: ['pending', 'verified', 'active', 'failed', 'removed'], default: 'pending', index: true },
   tlsStatus: { type: String, enum: ['none', 'provisioning', 'active', 'failed'], default: 'none' },
   verifiedAt: Date,
+  claimedAt: Date,
   lastCheckedAt: Date,
   failureReason: String,
   tlsProvider: String,
