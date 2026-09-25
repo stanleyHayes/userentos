@@ -14,9 +14,10 @@ import { formatCurrency } from '@/lib/utils'
 import {
   useMyInsuranceProviderProfile, useUpsertInsuranceProviderProfile,
   useMyInsuranceProducts, useCreateMyInsuranceProduct, useUpdateMyInsuranceProduct,
+  useMyProviderPolicies, useProviderPolicyAction, useProviderDecideClaim,
 } from '@/hooks/useApi'
 import { useToastStore } from '@/stores/toastStore'
-import type { InsuranceProduct, InsuranceCategory } from '@/types'
+import type { InsuranceProduct, InsuranceCategory, InsurancePolicy } from '@/types'
 
 const CATEGORY_LABELS: Record<InsuranceCategory, string> = {
   renters: 'Renters',
@@ -101,6 +102,8 @@ export function ProviderProductsPage() {
 
           {editing && <EditProductModal product={editing} onClose={() => setEditing(null)} />}
           {creating && <CreateProductModal onClose={() => setCreating(false)} />}
+
+          <ProviderPoliciesPanel />
         </div>
       ) : (
         <EmptyState
@@ -134,7 +137,7 @@ function ProviderProfileForm() {
     try {
       await upsert.mutateAsync({
         institutionName: form.institutionName,
-        licenseNumber: form.licenseNumber || undefined,
+        licenseNumber: form.licenseNumber.trim(),
         companyRegistrationNo: form.companyRegistrationNo || undefined,
         contactEmail: form.contactEmail,
         contactPhone: form.contactPhone,
@@ -150,12 +153,12 @@ function ProviderProfileForm() {
     <Card>
       <h2 className="text-sm font-bold text-primary-dark dark:text-white">Register as an insurance provider</h2>
       <p className="text-xs text-muted dark:text-gray-400 mt-1 mb-4">
-        Your details are reviewed by an administrator before your account can list products.
+        An administrator checks your NIC licence before your account can list products. You issue the policies and decide the claims on your products.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <TextField id="ip-name" label="Institution Name" value={form.institutionName} onChange={(e) => uf('institutionName', e.target.value)} fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
         <div className="grid grid-cols-2 gap-3">
-          <TextField id="ip-license" label="License Number" value={form.licenseNumber} onChange={(e) => uf('licenseNumber', e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField id="ip-license" label="NIC Licence Number" value={form.licenseNumber} onChange={(e) => uf('licenseNumber', e.target.value)} fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
           <TextField id="ip-regno" label="Company Registration No." value={form.companyRegistrationNo} onChange={(e) => uf('companyRegistrationNo', e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -292,5 +295,77 @@ function CreateProductModal({ onClose }: { onClose: () => void }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+// ─── Policies and claims on the provider's products ───
+
+function ProviderPoliciesPanel() {
+  const { data, isLoading } = useMyProviderPolicies()
+  const policyAction = useProviderPolicyAction()
+  const decideClaim = useProviderDecideClaim()
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const policies = data?.items ?? []
+  const toast = useToastStore.getState().addToast
+
+  const pendingPolicies = policies.filter((p) => p.status === 'pending')
+  const openClaims = policies.flatMap((p) => p.claims.filter((c) => c.status === 'pending').map((c) => ({ policy: p, claim: c })))
+
+  async function run(action: Promise<unknown>, message: string) {
+    try { await action; toast(message, 'success') } catch (err) { toast((err as Error).message || 'Action failed', 'error') }
+  }
+  const draft = (key: string) => drafts[key] ?? ''
+  const setDraft = (key: string, value: string) => setDrafts((d) => ({ ...d, [key]: value }))
+
+  function issue(policy: InsurancePolicy) {
+    const insurerPolicyNumber = draft(`issue-${policy.id}`).trim()
+    if (!insurerPolicyNumber) { toast('Enter your policy number to issue this policy', 'error'); return }
+    void run(policyAction.mutateAsync({ id: policy.id, action: 'issue', insurerPolicyNumber }), 'Policy issued — premium released to your wallet')
+  }
+  function decline(policy: InsurancePolicy) {
+    const reason = draft(`issue-${policy.id}`).trim()
+    if (reason.length < 3) { toast('Enter a reason in the field to decline', 'error'); return }
+    void run(policyAction.mutateAsync({ id: policy.id, action: 'decline', reason }), 'Application declined and premium refunded')
+  }
+  function decide(policy: InsurancePolicy, claimId: string, decision: 'approved' | 'rejected') {
+    const value = draft(`claim-${claimId}`)
+    const payoutAmount = decision === 'approved' ? Number(value) : undefined
+    if (decision === 'approved' && !(payoutAmount! > 0)) { toast('Enter the payout you approve', 'error'); return }
+    void run(decideClaim.mutateAsync({ policyId: policy.id, claimId, decision, payoutAmount, notes: decision === 'rejected' ? value || undefined : undefined }),
+      decision === 'approved' ? 'Claim paid from your wallet' : 'Claim rejected')
+  }
+
+  if (isLoading) return <Skeleton className="h-24 rounded-xl" />
+
+  return (
+    <div className="space-y-3 pt-4">
+      <h2 className="text-sm font-bold text-primary-dark dark:text-white">Applications to issue ({pendingPolicies.length})</h2>
+      {pendingPolicies.length === 0 ? <p className="text-xs text-muted">No applications waiting.</p> : pendingPolicies.map((p) => (
+        <Card key={p.id} className="flex flex-col gap-2">
+          <p className="text-xs text-primary-dark dark:text-white">Ref {p.policyNumber} · {p.termMonths ?? 1} months · premium held {formatCurrency(p.premiumPaid ?? 0)}</p>
+          <TextField id={`issue-${p.id}`} label="Your policy number (or reason to decline)" value={draft(`issue-${p.id}`)} onChange={(e) => setDraft(`issue-${p.id}`, e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => issue(p)} disabled={policyAction.isPending}>Issue policy</Button>
+            <Button size="sm" variant="outline" onClick={() => decline(p)} disabled={policyAction.isPending}>Decline and refund</Button>
+          </div>
+        </Card>
+      ))}
+
+      <h2 className="text-sm font-bold text-primary-dark dark:text-white pt-2">Claims to decide ({openClaims.length})</h2>
+      {openClaims.length === 0 ? <p className="text-xs text-muted">No open claims.</p> : openClaims.map(({ policy, claim }) => (
+        <Card key={claim.id} className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-primary-dark dark:text-white">{claim.id} · policy {policy.insurerPolicyNumber ?? policy.policyNumber}</p>
+            <Badge variant="warning">{formatCurrency(claim.amount)} claimed</Badge>
+          </div>
+          <p className="text-xs text-muted">Incident {claim.incidentDate ?? 'not stated'} · {claim.description}</p>
+          <TextField id={`claim-${claim.id}`} label="Payout to approve (GHS), or rejection notes" value={draft(`claim-${claim.id}`)} onChange={(e) => setDraft(`claim-${claim.id}`, e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => decide(policy, claim.id, 'approved')} disabled={decideClaim.isPending}>Approve and pay</Button>
+            <Button size="sm" variant="outline" onClick={() => decide(policy, claim.id, 'rejected')} disabled={decideClaim.isPending}>Reject</Button>
+          </div>
+        </Card>
+      ))}
+    </div>
   )
 }

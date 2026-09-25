@@ -1,8 +1,9 @@
 /**
  * Production seed — plants exactly one owner account plus the platform
  * reference data (subscription plans, Ghana rental-law articles, educational
- * blog posts, feature flags, partner insurance products). No demo users, no
- * fake properties, agreements, payments, or disputes.
+ * blog posts, feature flags). No demo users, no fake properties, agreements,
+ * payments, disputes, or insurance products — insurance products come only
+ * from licensed providers approved in the admin console.
  *
  *   npm run seed:production            # idempotent — safe to re-run
  *   npm run seed:production -- --reset # DROPS every collection first
@@ -24,7 +25,6 @@ import { LegalArticle } from './models/LegalArticle.js'
 import { BlogPost } from './models/BlogPost.js'
 import { claimBootstrap } from './models/BootstrapState.js'
 import { bootstrapFeatureFlags } from './bootstrapFeatureFlags.js'
-import { bootstrapInsurance } from './bootstrapInsurance.js'
 import { SUBSCRIPTION_PACKAGES, LEGAL_ARTICLES, BLOG_POSTS } from './data/referenceData.js'
 
 function requireEnv(name: string): string {
@@ -104,7 +104,6 @@ async function seedReferenceData() {
   console.log(`  Blog posts:            ${await BlogPost.countDocuments()}`)
 
   await bootstrapFeatureFlags()
-  await bootstrapInsurance()
 }
 
 async function main() {

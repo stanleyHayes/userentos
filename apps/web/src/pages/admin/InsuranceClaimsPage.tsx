@@ -69,6 +69,9 @@ function DetailTile({ label, value, icon }: { label: string; value: string; icon
   )
 }
 
+interface ClaimDraft { notes: string; payoutAmount: string; providerReference: string; settlementReference: string }
+const EMPTY_DRAFT: ClaimDraft = { notes: '', payoutAmount: '', providerReference: '', settlementReference: '' }
+
 export function InsuranceClaimsPage() {
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'paid' | 'all'>('pending')
   const [search, setSearch] = useState('')
@@ -79,7 +82,7 @@ export function InsuranceClaimsPage() {
   const decide = useDecideInsuranceClaim()
   const addToast = useToastStore((s) => s.addToast)
 
-  const [decisionDraft, setDecisionDraft] = useState<Record<string, { notes: string; payoutAmount: string }>>({})
+  const [decisionDraft, setDecisionDraft] = useState<Record<string, ClaimDraft>>({})
 
   const items = activeClaimsQuery.data?.items ?? []
   const allClaims = allClaimsQuery.data?.items ?? items
@@ -103,33 +106,33 @@ export function InsuranceClaimsPage() {
     ].some((value) => value?.toLowerCase().includes(searchQuery)))
     : items
 
-  function getDraft(claimId: string, claim: InsuranceClaimReview) {
-    return decisionDraft[claimId] ?? { notes: '', payoutAmount: String(claim.payoutAmount ?? claim.amount) }
+  function getDraft(claimId: string) {
+    return decisionDraft[claimId] ?? EMPTY_DRAFT
   }
 
-  function setDraft(claimId: string, patch: Partial<{ notes: string; payoutAmount: string }>) {
-    setDecisionDraft((prev) => {
-      const cur = prev[claimId] ?? { notes: '', payoutAmount: '' }
-      return { ...prev, [claimId]: { ...cur, ...patch } }
-    })
+  function setDraft(claimId: string, patch: Partial<ClaimDraft>) {
+    setDecisionDraft((prev) => ({ ...prev, [claimId]: { ...(prev[claimId] ?? EMPTY_DRAFT), ...patch } }))
   }
 
+  // The insurer decides; this records its decision. The payout is never
+  // assumed to be the amount claimed.
   function decideClaim(claim: InsuranceClaimReview, decision: 'approved' | 'rejected') {
-    const draft = getDraft(claim.id, claim)
-    const payoutAmount = decision === 'approved'
-      ? Number(draft.payoutAmount || claim.amount)
-      : undefined
-    if (decision === 'approved' && (Number.isNaN(payoutAmount as number) || (payoutAmount as number) < 0)) {
-      addToast('Enter a valid payout amount', 'error')
-      return
+    const draft = getDraft(claim.id)
+    if (!draft.providerReference.trim()) { addToast('Enter the insurer’s decision reference', 'error'); return }
+    const payoutAmount = decision === 'approved' ? Number(draft.payoutAmount) : undefined
+    if (decision === 'approved') {
+      if (!payoutAmount || payoutAmount <= 0 || payoutAmount > claim.amount) { addToast('Enter the payout the insurer approved (no more than the amount claimed)', 'error'); return }
+      if (!draft.settlementReference.trim()) { addToast('Enter the reference of the insurer’s payout settlement', 'error'); return }
     }
     decide.mutate(
       {
         policyId: claim.policyId,
         claimId: claim.id,
         decision,
+        providerReference: draft.providerReference.trim(),
         notes: draft.notes || undefined,
         payoutAmount,
+        settlementReference: decision === 'approved' ? draft.settlementReference.trim() : undefined,
       },
       {
         onSuccess: () => {
@@ -150,7 +153,7 @@ export function InsuranceClaimsPage() {
       <PageHeader
         eyebrow="Platform admin"
         title="Insurance Claims Review"
-        description="Review policy claims, set payout amounts, and keep decision notes close to the claim record."
+        description="Insurers decide claims. Use this to record an insurer's decision made off-platform, with its reference and the payout settlement it sent."
         icon={<ShieldAlert size={22} />}
         accent="#f59e0b"
       >
@@ -220,7 +223,7 @@ export function InsuranceClaimsPage() {
       ) : (
         <div className="space-y-4">
           {visibleItems.map((claim) => {
-            const draft = getDraft(claim.id, claim)
+            const draft = getDraft(claim.id)
             const isPending = claim.status === 'pending'
             const coveragePct = claim.coverageLimit
               ? Math.min(100, Math.round((claim.amount / claim.coverageLimit) * 100))
@@ -278,9 +281,17 @@ export function InsuranceClaimsPage() {
                   {isPending ? (
                     <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-400/20 dark:bg-amber-400/10">
                       <div>
-                        <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Decision Panel</h4>
-                        <p className="mt-1 text-xs leading-relaxed text-amber-800/75 dark:text-amber-200/70">Approve with a payout or reject with review notes.</p>
+                        <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Record insurer decision</h4>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-800/75 dark:text-amber-200/70">
+                          Only record what {claim.providerName ?? 'the insurer'} decided. A payout is credited only against the insurer's settlement reference{claim.remainingCoverage != null ? `; cover remaining ${formatCurrency(claim.remainingCoverage)}` : ''}.
+                        </p>
                       </div>
+                      <Input
+                        id={`provider-ref-${claim.id}`}
+                        label="Insurer decision reference"
+                        value={draft.providerReference}
+                        onChange={(e) => setDraft(claim.id, { providerReference: e.target.value })}
+                      />
                       <Textarea
                         id={`notes-${claim.id}`}
                         label="Decision notes"
@@ -291,23 +302,29 @@ export function InsuranceClaimsPage() {
                       <Input
                         id={`payout-${claim.id}`}
                         type="number"
-                        label="Payout (GHS)"
+                        label="Payout approved by insurer (GHS)"
                         value={draft.payoutAmount}
                         onChange={(e) => setDraft(claim.id, { payoutAmount: e.target.value })}
+                      />
+                      <Input
+                        id={`settlement-${claim.id}`}
+                        label="Insurer payout settlement reference"
+                        value={draft.settlementReference}
+                        onChange={(e) => setDraft(claim.id, { settlementReference: e.target.value })}
                       />
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Button
                           onClick={() => decideClaim(claim, 'approved')}
                           disabled={decide.isPending}
                         >
-                          <Check size={14} /> Approve
+                          <Check size={14} /> Record approval
                         </Button>
                         <Button
                           variant="danger"
                           onClick={() => decideClaim(claim, 'rejected')}
                           disabled={decide.isPending}
                         >
-                          <X size={14} /> Reject
+                          <X size={14} /> Record rejection
                         </Button>
                       </div>
                     </div>

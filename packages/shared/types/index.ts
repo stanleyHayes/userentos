@@ -1187,6 +1187,8 @@ export interface InsuranceProduct {
   terms: string
   active: boolean
   commissionPct: number
+  /** Fictional seed product (non-production only). */
+  isDemo?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -1194,6 +1196,7 @@ export interface InsuranceProduct {
 export interface InsuranceClaim {
   id: string
   filedAt: string
+  incidentDate?: string
   amount: number
   status: InsuranceClaimStatus
   description: string
@@ -1201,6 +1204,11 @@ export interface InsuranceClaim {
   payoutAmount?: number
   decidedBy?: string
   decidedAt?: string
+  /** 'provider': decided by the insurer; 'admin_recorded': an admin recorded the insurer's decision. */
+  decisionSource?: 'provider' | 'admin_recorded'
+  providerReference?: string
+  payoutReference?: string
+  paidAt?: string
 }
 
 export interface InsurancePolicy {
@@ -1212,8 +1220,15 @@ export interface InsurancePolicy {
   startDate: string
   endDate: string
   monthlyPremium: number
+  termMonths?: number
+  premiumPaid?: number
+  providerId?: string
   status: InsurancePolicyStatus
+  /** RentOS order reference; the insurer's number is insurerPolicyNumber once issued. */
   policyNumber: string
+  insurerPolicyNumber?: string
+  issuedAt?: string
+  declineReason?: string
   lastPaidAt?: string
   claims: InsuranceClaim[]
   createdAt: string

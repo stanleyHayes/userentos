@@ -15,7 +15,7 @@ import {
 import { formatCurrency } from '@/lib/utils'
 import {
   useInsuranceProducts, useMyPolicies, useBuyPolicy, useFileClaim, useWallet,
-  useCreateInsuranceProduct, useUpdateInsuranceProduct,
+  useCreateInsuranceProduct, useUpdateInsuranceProduct, useApprovals,
 } from '@/hooks/useApi'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { useAuthStore } from '@/stores/authStore'
@@ -37,6 +37,16 @@ const CATEGORY_VARIANTS: Record<InsuranceCategory, 'default' | 'success' | 'warn
   property_damage: 'danger',
   tenant_default: 'muted',
 }
+
+const POLICY_STATUS_LABELS: Record<string, string> = {
+  pending: 'Awaiting insurer',
+  active: 'Active',
+  lapsed: 'Lapsed',
+  cancelled: 'Cancelled',
+  claimed: 'Claim open',
+}
+
+const TERM_OPTIONS = [1, 3, 6, 12]
 
 const POLICY_STATUS_VARIANTS: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'muted'> = {
   pending: 'warning',
@@ -200,7 +210,10 @@ function ProductCard({ product, onBuy }: { product: InsuranceProduct; onBuy: () 
           <h3 className="text-sm font-bold text-primary-dark dark:text-white truncate">{product.productName}</h3>
           <p className="text-[11px] text-muted dark:text-gray-500 truncate">{product.providerName}</p>
         </div>
-        <Badge variant={CATEGORY_VARIANTS[product.category]}>{CATEGORY_LABELS[product.category]}</Badge>
+        <div className="flex gap-1">
+          {product.isDemo && <Badge variant="danger">Demo</Badge>}
+          <Badge variant={CATEGORY_VARIANTS[product.category]}>{CATEGORY_LABELS[product.category]}</Badge>
+        </div>
       </div>
 
       <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3">{product.description}</p>
@@ -231,14 +244,16 @@ function ProductCard({ product, onBuy }: { product: InsuranceProduct; onBuy: () 
 function BuyPolicyModal({ product, onClose }: { product: InsuranceProduct; onClose: () => void }) {
   const { data: wallet, isLoading: walletLoading, isError: walletError, refetch: refetchWallet, isFetching: walletFetching } = useWallet()
   const buy = useBuyPolicy()
+  const [termMonths, setTermMonths] = useState(12)
+  const total = Math.round(product.monthlyPremium * termMonths * 100) / 100
   const balance = wallet?.balance ?? 0
-  const insufficient = balance < product.monthlyPremium
+  const insufficient = balance < total
 
   async function handleBuy() {
     if (walletLoading || walletError || !wallet || insufficient) return
     try {
-      await buy.mutateAsync({ productId: product.id, termMonths: 12 })
-      useToastStore.getState().addToast(`Policy ${product.productName} activated.`, 'success')
+      await buy.mutateAsync({ productId: product.id, termMonths })
+      useToastStore.getState().addToast(product.isDemo ? 'Demo policy activated (test data, not real cover).' : `Application sent to ${product.providerName}. Your premium is held until they issue the policy.`, 'success')
       onClose()
     } catch (err) {
       useToastStore.getState().addToast((err as Error).message || 'Failed to buy policy', 'error')
@@ -269,11 +284,28 @@ function BuyPolicyModal({ product, onClose }: { product: InsuranceProduct; onClo
             <span className="text-muted dark:text-gray-500">Excess</span>
             <span className="font-bold text-primary-dark dark:text-white">{formatCurrency(product.excessAmount)}</span>
           </div>
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between items-center text-xs">
             <span className="text-muted dark:text-gray-500">Term</span>
-            <span className="font-bold text-primary-dark dark:text-white">12 months</span>
+            <select
+              aria-label="Cover term"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-xs font-bold text-primary-dark dark:text-white"
+              value={termMonths}
+              onChange={(e) => setTermMonths(Number(e.target.value))}
+            >
+              {TERM_OPTIONS.map((m) => <option key={m} value={m}>{m} month{m === 1 ? '' : 's'}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-muted dark:text-gray-500">Premium for the whole term, paid now</span>
+            <span className="font-bold text-primary-dark dark:text-white">{formatCurrency(total)}</span>
           </div>
         </div>
+
+        <p className="text-[11px] text-muted dark:text-gray-400">
+          {product.isDemo
+            ? 'Demo product from a fictional insurer — for testing only, not real cover.'
+            : `${product.providerName} underwrites this cover and issues the policy. Your premium is held until they do; if they decline, it is refunded. Claims are decided by ${product.providerName}.`}
+        </p>
 
         <div className={`rounded-xl p-3 flex items-center gap-2 ${insufficient ? 'bg-danger/10 text-danger' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'}`}>
           <WalletIcon size={14} />
@@ -297,7 +329,7 @@ function BuyPolicyModal({ product, onClose }: { product: InsuranceProduct; onClo
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleBuy} disabled={insufficient || buy.isPending}>
-            {buy.isPending ? 'Processing...' : `Pay ${formatCurrency(product.monthlyPremium)}`}
+            {buy.isPending ? 'Processing...' : `Pay ${formatCurrency(total)}`}
           </Button>
         </div>
       </div>
@@ -361,15 +393,18 @@ function PolicyCard({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-primary-dark dark:text-white">{productName}</h3>
           <p className="text-[11px] text-muted dark:text-gray-500">{providerName}</p>
-          <p className="text-[10px] font-mono text-muted dark:text-gray-500 mt-0.5">{policy.policyNumber}</p>
+          <p className="text-[10px] font-mono text-muted dark:text-gray-500 mt-0.5">
+            {policy.insurerPolicyNumber ? `Policy ${policy.insurerPolicyNumber} · ` : ''}Ref {policy.policyNumber}
+          </p>
+          {policy.declineReason && <p className="text-[11px] text-danger mt-0.5">Declined: {policy.declineReason}</p>}
         </div>
-        <Badge variant={POLICY_STATUS_VARIANTS[policy.status] ?? 'default'}>{policy.status}</Badge>
+        <Badge variant={POLICY_STATUS_VARIANTS[policy.status] ?? 'default'}>{POLICY_STATUS_LABELS[policy.status] ?? policy.status}</Badge>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-2">
-          <p className="text-muted dark:text-gray-500">Premium</p>
-          <p className="font-bold text-primary-dark dark:text-white">{formatCurrency(policy.monthlyPremium)}</p>
+          <p className="text-muted dark:text-gray-500">Premium paid</p>
+          <p className="font-bold text-primary-dark dark:text-white">{formatCurrency(policy.premiumPaid ?? policy.monthlyPremium)}</p>
         </div>
         <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-2">
           <p className="text-muted dark:text-gray-500">Started</p>
@@ -389,7 +424,7 @@ function PolicyCard({
               <div key={c.id} className="flex items-center justify-between text-[11px]">
                 <span className="text-gray-600 dark:text-gray-300 truncate flex-1">{c.description}</span>
                 <Badge variant={c.status === 'paid' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'} className="ml-2">
-                  {formatCurrency(c.amount)} - {c.status}
+                  {formatCurrency(c.amount)} - {c.status}{c.payoutAmount != null ? ` (paid ${formatCurrency(c.payoutAmount)})` : ''}
                 </Badge>
               </div>
             ))}
@@ -410,10 +445,17 @@ function FileClaimModal({ policy, onClose }: { policy: InsurancePolicy; onClose:
   const fileClaim = useFileClaim()
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
+  const [incidentDate, setIncidentDate] = useState('')
   const [formError, setFormError] = useState('')
+  const today = new Date().toISOString().slice(0, 10)
+  const latest = policy.endDate < today ? policy.endDate : today
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!incidentDate) {
+      setFormError('Enter the date the incident happened.')
+      return
+    }
     const num = Number(amount)
     if (!num || num <= 0) {
       setFormError('Enter a claim amount greater than 0.')
@@ -425,7 +467,7 @@ function FileClaimModal({ policy, onClose }: { policy: InsurancePolicy; onClose:
     }
     setFormError('')
     try {
-      await fileClaim.mutateAsync({ id: policy.id, amount: num, description })
+      await fileClaim.mutateAsync({ id: policy.id, amount: num, description, incidentDate })
       useToastStore.getState().addToast('Claim filed successfully.', 'success')
       onClose()
     } catch (err) {
@@ -438,8 +480,20 @@ function FileClaimModal({ policy, onClose }: { policy: InsurancePolicy; onClose:
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div className="rounded-xl bg-surface dark:bg-[#0c0e1a] p-3">
           <p className="text-[10px] font-bold text-muted dark:text-gray-500 uppercase tracking-wider mb-1">Policy</p>
-          <p className="text-xs font-mono text-primary-dark dark:text-white">{policy.policyNumber}</p>
+          <p className="text-xs font-mono text-primary-dark dark:text-white">{policy.insurerPolicyNumber ?? policy.policyNumber}</p>
+          <p className="text-[11px] text-muted mt-1">Covered {policy.startDate} to {policy.endDate}. Your insurer decides the claim.</p>
         </div>
+
+        <TextField
+          id="claim-incident-date"
+          label="Date of incident"
+          type="date"
+          value={incidentDate}
+          onChange={(e) => setIncidentDate(e.target.value)}
+          fullWidth
+          required
+          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: policy.startDate, max: latest } }}
+        />
 
         <TextField
           id="claim-amount"
@@ -592,9 +646,9 @@ function EditProductModal({ product, onClose }: { product: InsuranceProduct; onC
 
 function CreateProductModal({ onClose }: { onClose: () => void }) {
   const create = useCreateInsuranceProduct()
+  const { data: providers } = useApprovals('insurance_provider', 'approved', 1, 100)
   const [form, setForm] = useState({
     providerId: '',
-    providerName: '',
     productName: '',
     category: 'renters' as InsuranceCategory,
     description: '',
@@ -615,7 +669,6 @@ function CreateProductModal({ onClose }: { onClose: () => void }) {
     try {
       await create.mutateAsync({
         providerId: form.providerId,
-        providerName: form.providerName,
         productName: form.productName,
         category: form.category,
         description: form.description,
@@ -637,10 +690,16 @@ function CreateProductModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title="New Insurance Product">
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-3">
-          <TextField id="np-providerId" label="Provider ID" value={form.providerId} onChange={(e) => uf('providerId', e.target.value)} fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField id="np-providerName" label="Provider Name" value={form.providerName} onChange={(e) => uf('providerName', e.target.value)} fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
-        </div>
+        <TextField
+          id="np-providerId" label="Insurer (approved, licence verified)" select value={form.providerId}
+          onChange={(e) => uf('providerId', e.target.value)}
+          fullWidth required slotProps={{ inputLabel: { shrink: true }, select: { native: true } }}
+        >
+          <option value="">Choose an insurer</option>
+          {(providers?.items ?? []).map((p) => (
+            <option key={p._id} value={p._id}>{p.institutionName}{p.licenseNumber ? ` — licence ${p.licenseNumber}` : ''}</option>
+          ))}
+        </TextField>
         <TextField id="np-productName" label="Product Name" value={form.productName} onChange={(e) => uf('productName', e.target.value)} fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
         <TextField
           id="np-category" label="Category" select value={form.category}
