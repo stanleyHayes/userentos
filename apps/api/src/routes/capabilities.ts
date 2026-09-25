@@ -25,6 +25,7 @@ import {
 } from '../services/capabilityLogic.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { signedTenancyFilter } from '../services/tenancyRelationship.js'
 
 const router = Router()
 const idOf = (doc: Record<string, unknown>) => ({ ...doc, id: String(doc._id) })
@@ -34,8 +35,9 @@ const sendCsv = (res: Parameters<typeof success>[0], name: string, rows: Record<
   res.send(rowsToCsv(rows))
 }
 
+// Rental history is tenancies the tenant signed, not drafts a landlord addressed to them.
 router.get('/tenant/rental-history.csv', authenticate, requireRole('tenant'), async (req, res) => {
-  const agreements = await Agreement.find({ tenantId: req.user!.userId }).sort({ startDate: -1 }).lean()
+  const agreements = await Agreement.find(signedTenancyFilter({ tenantId: req.user!.userId })).sort({ startDate: -1 }).lean()
   sendCsv(res, 'rentos-rental-history.csv', agreements.map((item) => ({
     agreementId: item._id, propertyId: item.propertyId, startDate: item.startDate,
     endDate: item.endDate, monthlyRent: item.rentAmount, status: item.status,
@@ -204,7 +206,8 @@ router.get('/financier/decision/:applicationId', authenticate, requireRole('fina
   const applicantId = application.applicantId
   const [score, agreements, payments] = await Promise.all([
     CreditScore.findOne({ userId: applicantId }).lean(),
-    Agreement.find({ tenantId: applicantId }).lean(),
+    // A credit decision must not count leases the applicant never signed.
+    Agreement.find(signedTenancyFilter({ tenantId: applicantId })).lean(),
     Payment.find({ tenantId: applicantId }).lean(),
   ])
   success(res, {

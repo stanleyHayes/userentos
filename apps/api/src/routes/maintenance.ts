@@ -12,6 +12,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 import { isAdminStaff } from '../utils/accessControl.js'
+import { signedTenancyFilter } from '../services/tenancyRelationship.js'
 
 const router = Router()
 
@@ -216,19 +217,19 @@ router.post(
     }
 
     // Tenancy check: the requester must live (or have lived) at this property
-    // under an agreement — otherwise any tenant can spam arbitrary landlords.
-    const tenancy = await Agreement.exists({
-      propertyId: data.propertyId,
-      tenantId: userId.toString(),
-    })
+    // under a lease they signed — a landlord's draft naming them is not one,
+    // and without this any tenant can spam arbitrary landlords.
+    const tenancy = await Agreement.exists(signedTenancyFilter({ propertyId: data.propertyId, tenantId: userId.toString() }))
     if (!tenancy) {
       error(res, 'You can only file maintenance requests for properties you rent', 403)
       return
     }
     if (data.agreementId) {
-      const agreement = await Agreement.findById(data.agreementId).select('propertyId').lean()
-      if (!agreement || agreement.propertyId !== data.propertyId) {
-        error(res, 'agreementId does not belong to this property')
+      const agreement = Types.ObjectId.isValid(data.agreementId)
+        ? await Agreement.exists(signedTenancyFilter({ _id: data.agreementId, propertyId: data.propertyId, tenantId: userId.toString() }))
+        : null
+      if (!agreement) {
+        error(res, 'agreementId is not your signed agreement for this property')
         return
       }
     }
