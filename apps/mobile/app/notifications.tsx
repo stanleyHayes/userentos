@@ -5,6 +5,7 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
+import { PushPermissionPrompt } from '../components/PushPermissionPrompt'
 
 interface Notification {
   id: string; title: string; message: string; type: string
@@ -93,6 +94,7 @@ export default function NotificationsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderNotification}
         contentContainerStyle={s.list}
+        ListHeaderComponent={<PushPermissionPrompt />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
         ListEmptyComponent={
           loading ? (
