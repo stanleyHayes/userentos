@@ -144,6 +144,9 @@ if (envOrigins.length === 0 && isProduction) {
   )
 }
 
+// The CORS headers depend on Origin even when an origin is refused, so say so
+// to any cache in front of the API.
+app.use((_req, res, next) => { res.vary('Origin'); next() })
 app.use(
   cors({
     origin: createCorsOrigin({
@@ -162,12 +165,6 @@ app.use(
 app.use('/api/webhooks/payments', paymentWebhookRoutes)
 app.use('/api/webhooks/marketplace', marketplaceWebhookRoutes)
 app.use('/api/webhooks/payouts', payoutWebhookRoutes)
-
-app.use(express.json({ limit: '100kb' }))
-
-// NoSQL injection guard — strip $-prefixed / dotted keys from all input
-// before any route can feed them into a Mongoose query.
-app.use(sanitizeRequest)
 
 // ─── Simulator → finalize bridge ───
 // In `PAYMENTS_PROVIDER_MODE !== 'live'`, the simulator dispatches a completion
@@ -284,6 +281,12 @@ app.get('/api/health', (_req, res) => {
 // Baseline limiter for everything else under /api — generous, so legitimate
 // use is unaffected but unauthenticated scraping loops are capped.
 app.use('/api', apiLimiter)
+// Bodies are parsed after the limiters, so a malformed or oversized body is
+// still counted against them instead of failing before they run.
+app.use(express.json({ limit: '100kb' }))
+// NoSQL injection guard — strip $-prefixed / dotted keys from all input
+// before any route can feed them into a Mongoose query.
+app.use(sanitizeRequest)
 // Request logging middleware. Query strings are stripped: they can carry
 // credentials (e.g. ?token= on download links) and must never hit log files.
 app.use((req, res, next) => {

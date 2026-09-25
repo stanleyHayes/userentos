@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import type { RegulatedFeature } from '../config/regulatedFeatures.js'
 import { LegalArticle } from '../models/LegalArticle.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { LEGAL_ARTICLES, BLOG_POSTS, SUPERSEDED_SEED_CONTENT, reviewedOnly } from './referenceData.js'
@@ -71,6 +72,12 @@ export async function seedReviewedReferenceContent(): Promise<{ articles: Conten
     } else if (existing.content !== post.content && untouchedSeed(existing, SUPERSEDED_SEED_CONTENT.blogPosts[post.slug])) {
       await BlogPost.updateOne({ _id: existing._id }, { $set: post })
       posts.corrected++
+    }
+    // Visibility metadata follows the seed even on edited copies; leave updatedAt
+    // alone so the copy still reads as untouched for future corrections.
+    const requiresFeature = (post as { requiresFeature?: RegulatedFeature }).requiresFeature
+    if (existing && requiresFeature) {
+      await BlogPost.updateOne({ _id: existing._id, requiresFeature: { $ne: requiresFeature } }, { $set: { requiresFeature } }, { timestamps: false })
     }
   }
   const seededSlugs = new Set(reviewedPosts.map((p) => p.slug))

@@ -1,7 +1,7 @@
 {
   "name": "RentOS Ghana — Digital Rental Housing",
   "short_name": "RentOS",
-  "description": "Find properties, sign compliant agreements, pay rent by mobile money, and know your rights.",
+  "description": "Find reviewed rental listings, sign agreements electronically, keep your rent records, and know your rights.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f7fa",

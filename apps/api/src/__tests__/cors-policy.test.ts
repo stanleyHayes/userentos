@@ -56,3 +56,13 @@ describe('CORS origin policy', () => {
     }
   })
 })
+
+describe('cast errors', () => {
+  it('do not echo the raw input or internal field names', async () => {
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const err = Object.assign(new Error('Cast to ObjectId failed'), { name: 'CastError', kind: 'ObjectId', value: 'not-an-id', path: '_id' })
+    errorHandler(err, {} as never, res as never, (() => {}) as never)
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Invalid id' })
+  })
+})

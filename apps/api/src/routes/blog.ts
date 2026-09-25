@@ -6,6 +6,7 @@ import { BlogPost } from '../models/BlogPost.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { User } from '../models/User.js'
+import { REGULATED_FEATURES, isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 
 const router = Router()
 
@@ -38,9 +39,16 @@ const PLATFORM_ONLY: Record<string, unknown> = {
   ] }],
 }
 
+// Posts about a regulated service stay hidden while it isn't offered, so the
+// blog never advertises something the operator isn't licensed to provide.
+function offeredOnly(): Record<string, unknown> {
+  const off = REGULATED_FEATURES.filter((feature) => !isRegulatedFeatureEnabled(feature))
+  return off.length ? { requiresFeature: { $nin: off } } : {}
+}
+
 // Public: list published posts on the platform's own blog
 router.get('/', async (req, res) => {
-  const filter: Record<string, unknown> = { published: true, ...PLATFORM_ONLY }
+  const filter: Record<string, unknown> = { published: true, ...PLATFORM_ONLY, ...offeredOnly() }
   if (req.query.tag) filter.tags = req.query.tag
   if (req.query.search) {
     const escaped = escapeRegex(String(req.query.search))
@@ -57,7 +65,7 @@ router.get('/', async (req, res) => {
 
 // Public: get single post by slug
 router.get('/slug/:slug', async (req, res) => {
-  const slugFilter: Record<string, unknown> = { slug: param(req.params.slug), published: true, ...PLATFORM_ONLY }
+  const slugFilter: Record<string, unknown> = { slug: param(req.params.slug), published: true, ...PLATFORM_ONLY, ...offeredOnly() }
   const post = await BlogPost.findOne(slugFilter).lean()
   if (!post) { error(res, 'Post not found', 404); return }
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })

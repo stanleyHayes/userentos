@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { REGULATED_FEATURES, type RegulatedFeature } from '../config/regulatedFeatures.js'
 
 export interface IBlogPost extends Document {
   title: string
@@ -19,6 +20,8 @@ export interface IBlogPost extends Document {
    * flag existed — see PLATFORM_ONLY in routes/blog.ts for how those are read.
    */
   platform?: boolean
+  // A post that describes a regulated service is public only while it is offered.
+  requiresFeature?: RegulatedFeature
   status?: 'draft' | 'in_review' | 'scheduled' | 'published' | 'archived' | 'removed'
   scheduledFor?: Date
   /**
@@ -46,6 +49,7 @@ const blogPostSchema = new Schema<IBlogPost>({
   authorId: { type: String, index: true },
   storefrontId: { type: String, index: true },
   platform: { type: Boolean, index: true },
+  requiresFeature: { type: String, enum: REGULATED_FEATURES },
   status: { type: String, enum: ['draft', 'in_review', 'scheduled', 'published', 'archived', 'removed'], default: 'draft', index: true },
   scheduledFor: Date,
   publishedAt: Date,

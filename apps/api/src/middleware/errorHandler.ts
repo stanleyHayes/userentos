@@ -37,7 +37,8 @@ export function errorHandler(
   if (err.name === 'CastError') {
     const castErr = err as { kind?: string; value?: string; path?: string }
     logger.warn(`Cast error: invalid ${castErr.kind} for value "${castErr.value}"`)
-    res.status(400).json({ success: false, error: `Invalid ${castErr.path}: ${castErr.value}` })
+    // Don't echo the input or internal field names back to the caller.
+    res.status(400).json({ success: false, error: castErr.path === '_id' ? 'Invalid id' : `Invalid value for ${castErr.path}` })
     return
   }
 
