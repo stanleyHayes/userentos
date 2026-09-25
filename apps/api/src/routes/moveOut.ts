@@ -29,6 +29,15 @@ function isParty(mo: { tenantId: string; landlordId: string }, userId: string): 
   return mo.tenantId === userId || mo.landlordId === userId
 }
 
+// A disputed move-out is frozen until staff resolve it; closed/paid are terminal.
+const LOCKED_STATUSES = ['refund_paid', 'closed', 'disputed'] as const
+
+function lockedError(res: Response, status: string | undefined) {
+  error(res, status === 'disputed'
+    ? 'This move-out is disputed — it is frozen until the dispute is resolved'
+    : 'This move-out is already settled', 409)
+}
+
 function recomputeRefund(damages: { cost: number }[], deposit: number): { deductionsTotal: number; refundAmount: number } {
   const deductionsTotal = damages.reduce((sum, d) => sum + (Number(d.cost) || 0), 0)
   const refundAmount = Math.max(0, deposit - deductionsTotal)
@@ -167,16 +176,18 @@ router.post(
     const mo = await MoveOut.findById(param(req.params.id))
     if (!mo) { error(res, 'Move-out not found', 404); return }
     if (mo.landlordId !== userId) { error(res, 'Only the landlord can schedule the inspection', 403); return }
-    if (mo.status === 'closed' || mo.status === 'refund_paid') {
-      error(res, 'Cannot schedule an inspection on a closed move-out'); return
-    }
 
     const parsed = scheduleSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    mo.inspectionDate = parsed.data.inspectionDate
-    mo.status = 'inspection_scheduled'
-    await mo.save()
+    // Rescheduling must not walk a disputed move-out out of 'disputed' — that
+    // would re-enable process-refund without the dispute ever being resolved.
+    const scheduled = await MoveOut.findOneAndUpdate(
+      { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
+      { $set: { inspectionDate: parsed.data.inspectionDate, status: 'inspection_scheduled' } },
+      { returnDocument: 'after' },
+    )
+    if (!scheduled) { lockedError(res, (await MoveOut.findById(mo._id).select('status').lean())?.status); return }
 
     void notify({
       userId: mo.tenantId,
@@ -185,7 +196,7 @@ router.post(
       actionUrl: `/agreements/${mo.agreementId}/move-out`,
     })
 
-    success(res, idOf(mo.toObject()))
+    success(res, idOf(scheduled.toObject()))
   })
 )
 
@@ -208,24 +219,24 @@ router.post(
     const mo = await MoveOut.findById(param(req.params.id))
     if (!mo) { error(res, 'Move-out not found', 404); return }
     if (mo.landlordId !== userId) { error(res, 'Only the landlord can submit inspection', 403); return }
-    if (mo.status === 'closed' || mo.status === 'refund_paid') {
-      error(res, 'Inspection cannot be submitted on a closed move-out'); return
-    }
 
     const parsed = inspectionSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    if (parsed.data.inspectionNotes !== undefined) mo.inspectionNotes = parsed.data.inspectionNotes
-    mo.damages = parsed.data.damages.map((d) => ({ description: d.description, cost: d.cost, photos: d.photos }))
-    const { deductionsTotal, refundAmount } = recomputeRefund(mo.damages, mo.securityDeposit)
-    mo.deductionsTotal = deductionsTotal
-    mo.refundAmount = refundAmount
-
-    // If currently disputed, leave the status alone. Otherwise advance to refund_pending.
-    if (mo.status !== 'disputed') {
-      mo.status = 'refund_pending'
-    }
-    await mo.save()
+    const damages = parsed.data.damages.map((d) => ({ description: d.description, cost: d.cost, photos: d.photos }))
+    const { deductionsTotal, refundAmount } = recomputeRefund(damages, mo.securityDeposit)
+    // While disputed, the findings under review are frozen: a landlord
+    // rewriting the damages would change what the mediator settles on. The
+    // status predicate is atomic so a concurrent tenant dispute also wins.
+    const inspected = await MoveOut.findOneAndUpdate(
+      { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
+      { $set: {
+        damages, deductionsTotal, refundAmount, status: 'refund_pending',
+        ...(parsed.data.inspectionNotes !== undefined ? { inspectionNotes: parsed.data.inspectionNotes } : {}),
+      } },
+      { returnDocument: 'after' },
+    )
+    if (!inspected) { lockedError(res, (await MoveOut.findById(mo._id).select('status').lean())?.status); return }
 
     void notify({
       userId: mo.tenantId,
@@ -234,7 +245,7 @@ router.post(
       actionUrl: `/agreements/${mo.agreementId}/move-out`,
     })
 
-    success(res, idOf(mo.toObject()))
+    success(res, idOf(inspected.toObject()))
   })
 )
 
@@ -379,7 +390,7 @@ router.post(
     if (refundAmount > 0) {
       // 1. Atomically claim the refund — concurrent/retried calls can't double-pay.
       const claimed = await MoveOut.findOneAndUpdate(
-        { _id: mo._id, status: { $nin: ['refund_paid', 'closed', 'disputed'] } },
+        { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
         { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: ref } },
         { returnDocument: 'after' },
       )
@@ -422,11 +433,23 @@ router.post(
       mo.refundedAt = new Date().toISOString()
       mo.refundReference = ref
     } else {
-      // No refund owed — still issue a reference for traceability
-      mo.refundReference = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}-ZERO`
-      mo.refundedAt = new Date().toISOString()
-      mo.status = 'refund_paid'
-      await mo.save()
+      // No refund owed — still issue a reference for traceability. Same
+      // atomic guard as a paid refund: a zero settlement must not close out a
+      // disputed move-out (the dispute may be about the deductions themselves).
+      const zeroRef = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}-ZERO`
+      const settled = await MoveOut.findOneAndUpdate(
+        { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
+        { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: zeroRef } },
+        { returnDocument: 'after' },
+      )
+      if (!settled) {
+        const current = await MoveOut.findById(mo._id).select('status').lean()
+        error(res, current?.status === 'disputed' ? 'Resolve the dispute before processing the refund' : 'Refund has already been processed', 409)
+        return
+      }
+      mo.status = settled.status
+      mo.refundedAt = settled.refundedAt
+      mo.refundReference = settled.refundReference
     }
 
     void notify({
