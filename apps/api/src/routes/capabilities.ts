@@ -240,7 +240,9 @@ router.get('/financier/targeting', authenticate, requireRole('financier'), async
 
 router.get('/financier/securitized-report.csv', authenticate, requireRole('financier'), async (req, res) => {
   const contracts = await FinancingContract.find({ financierId: req.user!.userId }).sort({ createdAt: -1 }).limit(5000).lean()
-  sendCsv(res, 'bog-securitized-report.csv', contracts.map((item) => ({
+  // Neutral names: this is the financier's own data, not a Bank of Ghana or
+  // SSNIT filing, and the file name must not suggest one.
+  sendCsv(res, 'rentos-portfolio-export.csv', contracts.map((item) => ({
     contractId: item._id, productType: item.productType, principal: item.principal,
     totalRepayable: item.totalRepayable, amountRepaid: item.amountRepaid, status: item.status,
   })))
@@ -305,7 +307,7 @@ router.get('/employer/compliance.csv', authenticate, requireRole('employer'), as
   const employer = await Employer.findOne({ ownerId: req.user!.userId }).lean()
   if (!employer) { error(res, 'Employer profile not found', 404); return }
   const runs = await PayrollRun.find({ employerId: employer._id.toString(), status: 'processed' }).sort({ periodStart: -1 }).lean()
-  sendCsv(res, 'ssnit-tax-deduction-report.csv', runs.flatMap((run) => run.deductions.map((deduction) => ({
+  sendCsv(res, 'rentos-payroll-deduction-export.csv', runs.flatMap((run) => run.deductions.map((deduction) => ({
     employerTIN: employer.tin, ssnitEmployerNumber: employer.ssnitEmployerNumber,
     period: run.periodLabel, employeeId: deduction.employeeId, employeeName: deduction.employeeName,
     allocationType: deduction.allocationType, amount: deduction.amount, status: deduction.status,
