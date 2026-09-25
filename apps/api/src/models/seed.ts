@@ -159,13 +159,13 @@ export async function seedDatabase() {
       'analytics:view',
     ] },
     // Employers — payroll-deduction partners
-    { email: 'mtn-hr@rentos.gh', phone: '0244111000', firstName: 'MTN', lastName: 'Ghana HR', passwordHash: hash, roles: ['employer'], activeRole: 'employer', isVerified: true, permissions: [
+    { email: 'telecom-hr@rentos.gh', phone: '0244111000', firstName: 'Akwaaba Telecom', lastName: 'HR', passwordHash: hash, roles: ['employer'], activeRole: 'employer', isVerified: true, permissions: [
       'users:view',
       'employer:view_employees', 'employer:invite_employees',
       'employer:configure_deductions', 'employer:approve_deductions',
       'employer:run_payroll', 'employer:disburse', 'employer:view_payroll_reports',
     ] },
-    { email: 'ucc-hr@rentos.gh', phone: '0244222000', firstName: 'UCC', lastName: 'HR', passwordHash: hash, roles: ['employer'], activeRole: 'employer', isVerified: true, permissions: [
+    { email: 'college-hr@rentos.gh', phone: '0244222000', firstName: 'Coastal College', lastName: 'HR', passwordHash: hash, roles: ['employer'], activeRole: 'employer', isVerified: true, permissions: [
       'users:view',
       'employer:view_employees', 'employer:invite_employees',
       'employer:configure_deductions', 'employer:approve_deductions',
@@ -545,16 +545,16 @@ export async function seedDatabase() {
   // ════════════════════════════════════════════
 
   await Investment.insertMany([
-    { userId: t1, type: 'treasury_bill', amount: 5000, interestRate: 28.5, tenure: 91, startDate: '2026-01-15', maturityDate: '2026-04-16', status: 'active', expectedReturn: 356.71, partnerId: 'databank' },
-    { userId: t3, type: 'treasury_bill', amount: 10000, interestRate: 27.0, tenure: 182, startDate: '2025-10-01', maturityDate: '2026-04-01', status: 'active', expectedReturn: 1346.30, partnerId: 'databank' },
-    { userId: t3, type: 'government_bond', amount: 20000, interestRate: 22.5, tenure: 365, startDate: '2025-06-01', maturityDate: '2026-06-01', status: 'active', expectedReturn: 4500, partnerId: 'stanbic' },
-    { userId: t2, type: 'treasury_bill', amount: 3000, interestRate: 26.0, tenure: 91, startDate: '2025-09-01', maturityDate: '2025-12-01', status: 'matured', expectedReturn: 194.63, actualReturn: 194.63, partnerId: 'databank' },
-    { userId: t3, type: 'government_bond', amount: 15000, interestRate: 21.0, tenure: 365, startDate: '2024-06-01', maturityDate: '2025-06-01', status: 'withdrawn', expectedReturn: 3150, actualReturn: 3150, partnerId: 'stanbic' },
-    { userId: t1, type: 'government_bond', amount: 8000, interestRate: 23.0, tenure: 730, startDate: '2025-07-01', maturityDate: '2027-07-01', status: 'active', expectedReturn: 3680, partnerId: 'stanbic' },
-    { userId: t2, type: 'treasury_bill', amount: 2000, interestRate: 29.0, tenure: 182, startDate: '2026-03-18', maturityDate: '2026-09-16', status: 'pending', expectedReturn: 289.04, partnerId: 'databank' },
-    { userId: t5, type: 'treasury_bill', amount: 15000, interestRate: 28.0, tenure: 182, startDate: '2025-11-01', maturityDate: '2026-05-02', status: 'active', expectedReturn: 2093.15, partnerId: 'databank' },
-    { userId: t5, type: 'government_bond', amount: 30000, interestRate: 24.0, tenure: 730, startDate: '2025-08-01', maturityDate: '2027-08-01', status: 'active', expectedReturn: 14400, partnerId: 'stanbic' },
-    { userId: t6, type: 'treasury_bill', amount: 7000, interestRate: 27.5, tenure: 91, startDate: '2026-02-01', maturityDate: '2026-05-03', status: 'active', expectedReturn: 480.14, partnerId: 'databank' },
+    { userId: t1, type: 'treasury_bill', amount: 5000, interestRate: 28.5, tenure: 91, startDate: '2026-01-15', maturityDate: '2026-04-16', status: 'active', expectedReturn: 356.71, partnerId: 'demo-partner-a' },
+    { userId: t3, type: 'treasury_bill', amount: 10000, interestRate: 27.0, tenure: 182, startDate: '2025-10-01', maturityDate: '2026-04-01', status: 'active', expectedReturn: 1346.30, partnerId: 'demo-partner-a' },
+    { userId: t3, type: 'government_bond', amount: 20000, interestRate: 22.5, tenure: 365, startDate: '2025-06-01', maturityDate: '2026-06-01', status: 'active', expectedReturn: 4500, partnerId: 'demo-partner-b' },
+    { userId: t2, type: 'treasury_bill', amount: 3000, interestRate: 26.0, tenure: 91, startDate: '2025-09-01', maturityDate: '2025-12-01', status: 'matured', expectedReturn: 194.63, actualReturn: 194.63, partnerId: 'demo-partner-a' },
+    { userId: t3, type: 'government_bond', amount: 15000, interestRate: 21.0, tenure: 365, startDate: '2024-06-01', maturityDate: '2025-06-01', status: 'withdrawn', expectedReturn: 3150, actualReturn: 3150, partnerId: 'demo-partner-b' },
+    { userId: t1, type: 'government_bond', amount: 8000, interestRate: 23.0, tenure: 730, startDate: '2025-07-01', maturityDate: '2027-07-01', status: 'active', expectedReturn: 3680, partnerId: 'demo-partner-b' },
+    { userId: t2, type: 'treasury_bill', amount: 2000, interestRate: 29.0, tenure: 182, startDate: '2026-03-18', maturityDate: '2026-09-16', status: 'pending', expectedReturn: 289.04, partnerId: 'demo-partner-a' },
+    { userId: t5, type: 'treasury_bill', amount: 15000, interestRate: 28.0, tenure: 182, startDate: '2025-11-01', maturityDate: '2026-05-02', status: 'active', expectedReturn: 2093.15, partnerId: 'demo-partner-a' },
+    { userId: t5, type: 'government_bond', amount: 30000, interestRate: 24.0, tenure: 730, startDate: '2025-08-01', maturityDate: '2027-08-01', status: 'active', expectedReturn: 14400, partnerId: 'demo-partner-b' },
+    { userId: t6, type: 'treasury_bill', amount: 7000, interestRate: 27.5, tenure: 91, startDate: '2026-02-01', maturityDate: '2026-05-03', status: 'active', expectedReturn: 480.14, partnerId: 'demo-partner-a' },
   ])
 
   // ════════════════════════════════════════════
@@ -1131,25 +1131,25 @@ export async function seedDatabase() {
   const [employer1, employer2] = await Employer.insertMany([
     {
       ownerId: employerOwner1._id.toString(),
-      legalName: 'Scancom PLC (MTN Ghana)',
-      tradingName: 'MTN Ghana',
+      legalName: 'Akwaaba Telecom Ltd (fictional demo)',
+      tradingName: 'Akwaaba Telecom',
       tin: 'GH-TIN-001234567',
       ssnitEmployerNumber: 'SSN-EMP-12345',
       industry: 'Telecommunications',
       address: { street: 'Independence Avenue', city: 'Accra', region: 'Greater Accra', digitalAddress: 'GA-184-3528' },
-      contactEmail: 'mtn-hr@rentos.gh', contactPhone: '0244111000',
+      contactEmail: 'telecom-hr@rentos.gh', contactPhone: '0244111000',
       payrollCycle: 'monthly', paydayDayOfMonth: 28,
       verificationStatus: 'verified', verifiedBy: gov._id.toString(), verifiedAt: now, totalEmployees: 0,
     },
     {
       ownerId: employerOwner2._id.toString(),
-      legalName: 'University of Cape Coast',
+      legalName: 'Coastal University College (fictional demo)',
       tradingName: 'UCC',
       tin: 'GH-TIN-009876543',
       ssnitEmployerNumber: 'SSN-EMP-54321',
       industry: 'Education',
       address: { street: 'University Ave', city: 'Cape Coast', region: 'Central', digitalAddress: 'CC-094-1212' },
-      contactEmail: 'ucc-hr@rentos.gh', contactPhone: '0244222000',
+      contactEmail: 'college-hr@rentos.gh', contactPhone: '0244222000',
       payrollCycle: 'monthly', paydayDayOfMonth: 25,
       verificationStatus: 'verified', verifiedBy: gov._id.toString(), verifiedAt: now, totalEmployees: 0,
     },
@@ -2076,7 +2076,7 @@ export async function seedDatabase() {
       maturityDate: maturity.toISOString().slice(0, 10),
       status,
       expectedReturn,
-      partnerId: rp(['databank', 'stanbic']),
+      partnerId: rp(['demo-partner-a', 'demo-partner-b']),
     }
     if (status === 'matured' || status === 'withdrawn') doc.actualReturn = expectedReturn
     invDocs.push(doc)
@@ -2389,8 +2389,8 @@ export async function seedDatabase() {
   if (ownerEmail) logCred(`  Owner Admin:    ${ownerEmail}  (super_admin — password from SEED_ADMIN_PASSWORD env)`)
   logCred('  Financier 1:    bloom@rentos.gh       (offers rent advance + deposit loans)')
   logCred('  Financier 2:    rentplus@rentos.gh    (payroll-linked, lower rates)')
-  logCred('  Employer 1:     mtn-hr@rentos.gh      (MTN Ghana — 3 employees, monthly payroll)')
-  logCred('  Employer 2:     ucc-hr@rentos.gh      (University of Cape Coast — 1 employee)')
+  logCred('  Employer 1:     telecom-hr@rentos.gh      (Akwaaba Telecom, fictional — 3 employees, monthly payroll)')
+  logCred('  Employer 2:     college-hr@rentos.gh      (Coastal University College, fictional — 1 employee)')
   logCred('  Business 1:     furniture@rentos.gh   (Adom Furnishings — furniture store, Accra)')
   logCred('  Business 2:     internet@rentos.gh    (SwiftLink Ghana — internet provider, Tema)')
   logCred('\nPending invitations:')

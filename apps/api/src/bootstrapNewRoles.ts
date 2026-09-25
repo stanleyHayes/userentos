@@ -52,8 +52,8 @@ async function run() {
   })
 
   const employerOwner1 = await ensureUser({
-    email: 'mtn-hr@rentos.gh', phone: '0244111000',
-    firstName: 'MTN', lastName: 'Ghana HR',
+    email: 'telecom-hr@rentos.gh', phone: '0244111000',
+    firstName: 'Akwaaba Telecom', lastName: 'HR',
     roles: ['employer'], activeRole: 'employer',
     permissions: [
       'users:view',
@@ -64,8 +64,8 @@ async function run() {
   })
 
   const employerOwner2 = await ensureUser({
-    email: 'ucc-hr@rentos.gh', phone: '0244222000',
-    firstName: 'UCC', lastName: 'HR',
+    email: 'college-hr@rentos.gh', phone: '0244222000',
+    firstName: 'Coastal College', lastName: 'HR',
     roles: ['employer'], activeRole: 'employer',
     permissions: [
       'users:view',
@@ -123,30 +123,30 @@ async function run() {
   if (!mtn) {
     mtn = await Employer.create({
       ownerId: employerOwner1._id.toString(),
-      legalName: 'Scancom PLC (MTN Ghana)',
-      tradingName: 'MTN Ghana',
+      legalName: 'Akwaaba Telecom Ltd (fictional demo)',
+      tradingName: 'Akwaaba Telecom',
       tin: 'GH-TIN-001234567',
       ssnitEmployerNumber: 'SSN-EMP-12345',
       industry: 'Telecommunications',
       address: { street: 'Independence Avenue', city: 'Accra', region: 'Greater Accra', digitalAddress: 'GA-184-3528' },
-      contactEmail: 'mtn-hr@rentos.gh', contactPhone: '0244111000',
+      contactEmail: 'telecom-hr@rentos.gh', contactPhone: '0244111000',
       payrollCycle: 'monthly', paydayDayOfMonth: 28,
       verificationStatus: 'verified', verifiedAt: new Date().toISOString(), totalEmployees: 0,
     })
-    console.log('Created MTN employer profile.')
+    console.log('Created demo telecom employer profile.')
   }
 
   let ucc = await Employer.findOne({ ownerId: employerOwner2._id.toString() })
   if (!ucc) {
     ucc = await Employer.create({
       ownerId: employerOwner2._id.toString(),
-      legalName: 'University of Cape Coast',
-      tradingName: 'UCC',
+      legalName: 'Coastal University College (fictional demo)',
+      tradingName: 'Coastal College',
       tin: 'GH-TIN-009876543',
       ssnitEmployerNumber: 'SSN-EMP-54321',
       industry: 'Education',
       address: { street: 'University Ave', city: 'Cape Coast', region: 'Central', digitalAddress: 'CC-094-1212' },
-      contactEmail: 'ucc-hr@rentos.gh', contactPhone: '0244222000',
+      contactEmail: 'college-hr@rentos.gh', contactPhone: '0244222000',
       payrollCycle: 'monthly', paydayDayOfMonth: 25,
       verificationStatus: 'verified', verifiedAt: new Date().toISOString(), totalEmployees: 0,
     })
