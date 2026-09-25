@@ -45,6 +45,39 @@ Report controls on listings, reviews, businesses, workers (mobile); text filter 
 - `npm audit --omit=dev`: 0 vulnerabilities in API, web and mobile.
 - Known intermittent: `cross-tab-session.spec.ts:47` fails occasionally (about 1 in 10 local runs); instrumented repeats showed no token overwrite or refresh, so it is recorded as test timing, not an app defect.
 
+### Production rollout (25 September 2026)
+Deployed to Render (`rentos-api`) and Vercel (`userentos`) from `main` at d3cf714, 767249a, f8c628a and c1e5c6d. Each deploy went live on the new build.
+
+**Render environment set via the REST API.**
+- `PII_ENCRYPTION_KEY`: new; a backup is in the git-ignored `apps/api/.env.production`.
+- `PAYMENTS_PROVIDER_MODE`: changed from `simulated` to `live`. Production had been completing checkouts without moving money. No Paystack keys are configured, so collections are refused until they are added.
+- `CORS_ALLOWED_ORIGINS`: added `https://*.userentos.com`.
+- `REGULATED_FEATURES`: left unset, so every regulated feature is off (confirmed live).
+
+**Production data changes.**
+- The one plaintext Ghana Card number was encrypted. Afterwards: 0 plaintext, and the value decrypts with the backup key.
+- No profiles held religion or ethnicity data, and no accounts were marked verified without review, so nothing needed changing there.
+- 8 blog posts and 8 legal articles were corrected. The loan and investment promotions were archived. Posts about savings, credit scores and mobile-money rent payments are hidden while those services are off.
+- Render one-off jobs run without a shell, so each command must be a single argument with no spaces.
+
+**Verification.** Two read-only multi-agent passes against production. The first found issues, which were fixed in the three follow-up deploys. The second confirmed:
+- Regulated-feature gating works, and financier sign-up is refused.
+- CORS: rejected origins get normal handling with no CORS headers; allowed origins and platform subdomains work; `Vary: Origin` is sent.
+- API headers are hardened (no X-Powered-By).
+- Parser and cast errors return generic messages, and malformed bodies are rate-limited.
+- The web app sends security headers.
+- Corrected content and site copy are live.
+- There were no regressions in the web app's preflights (Authorization and Idempotency-Key headers).
+
+**Still for the operator.**
+- Add Paystack keys (or keep payments unavailable).
+- Attach a wildcard `*.userentos.com` domain on Vercel for storefront subdomains; this needs DNS.
+- Tighten DMARC from `p=none`.
+- Set `SENTRY_DSN` / `REDIS_URL`.
+- Point the web `VITE_API_URL` at `https://api.userentos.com`; it currently uses the Render hostname, which works but is less portable.
+- Add real listings before App Review.
+- Complete the registration, licensing and legal items in the table above.
+
 ### Still external or open
 Ghana registrations (DPC, company details in LEGAL_ENTITY), licences or partner agreements for any regulated feature, lawyer review of Terms/legal articles, Twi filter word-list review, staffed moderation (24h) and human-review mailbox, store forms and review outcomes, production data migration (PII backfill, indexes), admin UIs for investment partners/loan review (gated features).
 
