@@ -45,7 +45,8 @@ function getScoreInfo(score: number) {
 export default function CreditScoreScreen() {
   const c = useThemeColors()
   const { user } = useAuthStore()
-  const canLookup = user?.activeRole === 'landlord' || user?.activeRole === 'admin' || user?.activeRole === 'government'
+  // Government sees aggregates only (web); admin lookups are audited server-side.
+  const canLookup = user?.activeRole === 'landlord' || user?.activeRole === 'admin'
   const [data, setData] = useState<CreditScoreData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
