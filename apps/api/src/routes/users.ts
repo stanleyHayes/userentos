@@ -41,6 +41,8 @@ import { DeviceToken } from '../models/DeviceToken.js'
 import { disconnectUser } from '../services/socket.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
+import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
+import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -178,16 +180,38 @@ router.delete('/me', authenticate, async (req, res) => {
   success(res, null, 'Account closed and core profile erased. Related personal records are scheduled for deletion after 30 days. Records needed for legal obligations or disputes may be retained. This action cannot be undone.')
 })
 
+const profilePatchSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').max(60).optional(),
+  lastName: z.string().trim().min(1, 'Last name is required').max(60).optional(),
+  phone: z.string().trim().max(20).optional(),
+  // '' or null clears the card on file; anything else must be a Ghana Card PIN.
+  ghanaCardId: z.union([z.null(), z.string()]).optional()
+    .refine((v) => v == null || v.trim() === '' || normalizeGhanaCardId(v) !== null, 'Ghana Card ID must look like GHA-123456789-0'),
+  activeRole: z.string().max(40).optional(),
+})
+
 router.patch('/me', authenticate, async (req, res) => {
+  const parsed = profilePatchSchema.safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const user = await User.findById(req.user!.userId)
   if (!user) { error(res, 'User not found', 404); return }
 
-  const { firstName, lastName, phone, ghanaCardId, activeRole } = req.body
-  if (firstName) user.firstName = firstName
-  if (lastName) user.lastName = lastName
+  const { firstName, lastName, phone, ghanaCardId, activeRole } = parsed.data
+  const before = { firstName: user.firstName, lastName: user.lastName, ghanaCardId: user.ghanaCardId ?? null }
+  if (firstName !== undefined) user.firstName = firstName
+  if (lastName !== undefined) user.lastName = lastName
   if (phone) user.phone = phone
-  if (ghanaCardId) user.ghanaCardId = ghanaCardId
+  if (ghanaCardId !== undefined) user.ghanaCardId = ghanaCardId && ghanaCardId.trim() ? normalizeGhanaCardId(ghanaCardId)! : undefined
   if (activeRole && user.roles.includes(activeRole)) user.activeRole = activeRole
+
+  // Verification attests to a specific name + Ghana Card. Changing either
+  // after approval must not keep the badge (or a pending review) attached
+  // to an identity that was never checked.
+  const identityChanged = before.firstName !== user.firstName || before.lastName !== user.lastName || before.ghanaCardId !== (user.ghanaCardId ?? null)
+  if (identityChanged && (user.isVerified || user.verificationStatus !== 'none')) {
+    user.isVerified = false
+    user.verificationStatus = 'none'
+  }
   await user.save()
 
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe())
@@ -450,12 +474,18 @@ router.patch('/:id/permissions', authenticate, requirePermission('users:manage_p
     }
   }
 
+  const before = JSON.stringify({ roles: [...user.roles].sort(), permissions: [...(user.permissions ?? [])].sort() })
   if (permissions !== undefined) user.permissions = permissions
   if (roles !== undefined) {
     user.roles = roles
     if (!roles.includes(user.activeRole)) user.activeRole = roles[0]
   }
   await user.save()
+  // Roles/permissions ride inside access tokens — revoke every session so a
+  // demoted account cannot keep acting on its old claims until expiry.
+  if (JSON.stringify({ roles: [...user.roles].sort(), permissions: [...(user.permissions ?? [])].sort() }) !== before) {
+    await revokeAccountSessions(user._id.toString(), 'permissions_changed')
+  }
 
   // Audit trail for this privileged action.
   await AuditLog.create({
