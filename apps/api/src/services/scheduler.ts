@@ -26,6 +26,7 @@ import { logger } from '../utils/logger.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
+import { retentionCutoff } from '../config/retention.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
@@ -751,8 +752,7 @@ export function startScheduler() {
   cron.schedule('0 3 * * *', async () => {
     if (!(await acquireCronLock('audit-purge', LOCK_TTL_DAILY))) return
     try {
-      const cutoff = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000)
-      const result = await AuditLog.deleteMany({ createdAt: { $lt: cutoff } })
+      const result = await AuditLog.deleteMany({ createdAt: { $lt: retentionCutoff('auditLog') } })
       if ((result.deletedCount ?? 0) > 0) {
         logger.info(`[Scheduler] Purged ${result.deletedCount} audit logs older than 2 years`)
       }

@@ -1,4 +1,5 @@
 import mongoose, { Schema } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 // Short-lived delivery deduplication only. Purchase history lives in StorePurchase.
 const schema = new Schema({
@@ -7,5 +8,5 @@ const schema = new Schema({
   processedAt: { type: Date, required: true, default: Date.now },
 })
 schema.index({ subscription: 1, messageId: 1 }, { unique: true })
-schema.index({ processedAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 })
+schema.index({ processedAt: 1 }, { expireAfterSeconds: ttlSeconds('storeNotification') })
 export const StoreNotification = mongoose.model('StoreNotification', schema)

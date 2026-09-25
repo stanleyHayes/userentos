@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Anonymous pageview record for the public property registry. IPs are stored
@@ -25,8 +26,8 @@ const registryPageViewSchema = new Schema<IRegistryPageView>(
   { timestamps: true },
 )
 
-// Compound index for time-series queries
-registryPageViewSchema.index({ createdAt: -1 })
+// Time-series queries, and expiry: views are kept 13 months (config/retention.ts).
+registryPageViewSchema.index({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds('registryPageView') })
 registryPageViewSchema.index({ path: 1, createdAt: -1 })
 
 export const RegistryPageView = mongoose.model<IRegistryPageView>(

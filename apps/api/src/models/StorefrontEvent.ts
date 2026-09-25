@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Anonymous traffic events for a seller's storefront (spec §4).
@@ -57,6 +58,6 @@ storefrontEventSchema.index({ storefrontSlug: 1, type: 1, createdAt: -1 })
  * before it, so 180 days is the real floor; 400 leaves room for a year-on-year
  * view later without letting the collection grow without bound.
  */
-storefrontEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 400 })
+storefrontEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: ttlSeconds('storefrontEvent') })
 
 export const StorefrontEvent = mongoose.model<IStorefrontEvent>('StorefrontEvent', storefrontEventSchema)
