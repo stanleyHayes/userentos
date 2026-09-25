@@ -118,15 +118,20 @@ describe('marketplace webhook (spec §8.4)', () => {
   it('applies a duplicate event only once', async () => {
     const body = JSON.stringify({ event: 'charge.success', id: 'evt-dup', data: { reference: 'MKT-2' } })
     const doc = {
-      _id: 'txn-1', reference: 'MKT-2', grossAmount: 1000, discountAmount: 0,
-      platformFeeAmount: 50, status: 'pending', save: vi.fn(),
+      _id: 'txn-1', reference: 'MKT-2', currency: 'GHS', grossAmount: 1000, discountAmount: 0,
+      platformFeeAmount: 50, status: 'pending', providerBound: true, save: vi.fn(),
     }
     vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue(doc as never)
     // First delivery claims the event id; the replay finds it already claimed.
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate)
-      .mockResolvedValueOnce({ ...doc, save: doc.save } as never)
-      .mockResolvedValueOnce(null as never)
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 1000, reference: 'MKT-2', currency: 'GHS', fees: 15, raw: {} })
+    // The paid transition is the other guarded update.
+    let claims = 0
+    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockImplementation((async (filter: Record<string, unknown>) => {
+      if ('processedEventIds' in filter) return ++claims === 1 ? { ...doc } : null
+      return { ...doc, status: 'paid' }
+    }) as never)
+    paystack.verifyTransaction.mockResolvedValue({
+      status: 'success', amount: 1000, reference: 'MKT-2', currency: 'GHS', fees: 15, metadata: { rentosTransactionId: 'txn-1' }, raw: {},
+    })
 
     const send = () => fetch(`${baseUrl}/paystack`, {
       method: 'POST',
@@ -138,11 +143,13 @@ describe('marketplace webhook (spec §8.4)', () => {
     await send()
     await new Promise((r) => setTimeout(r, 120))
 
-    // The guarded update ran twice, but only the first claim applied a change.
-    expect(MarketplaceTransaction.findOneAndUpdate).toHaveBeenCalledTimes(2)
-    const guard = vi.mocked(MarketplaceTransaction.findOneAndUpdate).mock.calls[0][0] as unknown as Record<string, unknown>
-    expect(guard).toMatchObject({ processedEventIds: { $ne: 'evt-dup' } })
-    expect(doc.save).toHaveBeenCalledTimes(1)
+    // The claim ran for both deliveries, but only the first went on to settle.
+    const calls = vi.mocked(MarketplaceTransaction.findOneAndUpdate).mock.calls.map((c) => c[0] as unknown as Record<string, unknown>)
+    expect(calls.filter((f) => 'processedEventIds' in f)).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ processedEventIds: { $ne: 'evt-dup' } })
+    expect(calls.filter((f) => !('processedEventIds' in f))).toEqual([
+      { _id: 'txn-1', status: { $in: ['initialized', 'pending'] } },
+    ])
   })
 
   it('refuses to mark paid when server-side verification disagrees', async () => {

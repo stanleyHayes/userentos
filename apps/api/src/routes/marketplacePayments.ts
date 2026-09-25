@@ -22,7 +22,7 @@ import {
   initializePlatformTransaction,
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
-import { applySuccessfulCharge } from '../services/marketplace/settle.js'
+import { applySuccessfulCharge, BINDING_KEY, SETTLEABLE_STATUSES } from '../services/marketplace/settle.js'
 import { resolveQuote } from '../services/marketplace/pricing.js'
 
 const router = Router()
@@ -163,9 +163,35 @@ const initSchema = z.object({
   email: z.string().email(),
   // No discountAmount either — the discount is derived from couponCode below.
   couponCode: z.string().max(40).optional(),
-  /** Client-supplied idempotency key (spec §15). */
+  /** Client-supplied idempotency key (spec §15). Scoped to the buyer; never
+   *  the provider reference. */
   idempotencyKey: z.string().min(8).max(80).optional(),
 })
+
+/**
+ * The provider reference, always minted here.
+ *
+ * It used to be the client's idempotency key when one was sent. Rent, wallet
+ * deposits and orders share one Paystack account, so a buyer could send the
+ * reference of their own successful wallet deposit: Paystack refused the
+ * duplicate, the row was kept as failed, and /verify then found the deposit's
+ * success and marked the order paid.
+ */
+const newReference = (prefix: 'MKT' | 'SPN') =>
+  `${prefix}-${Date.now()}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`
+
+/** The replayed response for an idempotency key this buyer already used. */
+async function replayed(buyerId: string, idempotencyKey: string) {
+  const existing = await MarketplaceTransaction.findOne({ buyerId, idempotencyKey }).lean()
+  return existing
+    ? { reference: existing.reference, accessCode: existing.providerAccessCode, alreadyInitialized: true }
+    : null
+}
+
+const isDuplicateKey = (err: unknown) => (err as { code?: number }).code === 11000
+
+/** How long an unfinished checkout holds one of its coupon's uses. */
+const COUPON_HOLD_MS = 30 * 60_000
 
 /**
  * Start a split payment.
@@ -187,17 +213,27 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const input = parsed.data
 
-  // Idempotency: replay of the same key returns the original transaction
-  // rather than charging twice.
+  const buyerId = req.user!.userId
+
+  // Idempotency: this buyer replaying the same key gets the original
+  // transaction back rather than a second charge.
   if (input.idempotencyKey) {
-    const existing = await MarketplaceTransaction.findOne({ reference: input.idempotencyKey }).lean()
-    if (existing) {
-      success(res, {
-        reference: existing.reference,
-        accessCode: existing.providerAccessCode,
-        alreadyInitialized: true,
-      }, 'Payment already initialized')
-      return
+    const replay = await replayed(buyerId, input.idempotencyKey)
+    if (replay) { success(res, replay, 'Payment already initialized'); return }
+  }
+
+  /** Create the row; a concurrent request with the same key loses to the first. */
+  const createTransaction = async (fields: Record<string, unknown>) => {
+    try {
+      return await MarketplaceTransaction.create({
+        ...fields, buyerId, idempotencyKey: input.idempotencyKey, providerBound: true,
+      })
+    } catch (err) {
+      if (input.idempotencyKey && isDuplicateKey(err)) {
+        const replay = await replayed(buyerId, input.idempotencyKey)
+        if (replay) { success(res, replay, 'Payment already initialized'); return null }
+      }
+      throw err
     }
   }
 
@@ -223,12 +259,10 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
    * decision, not a checkout one.
    */
   if (quote.payee === 'platform') {
-    const reference = input.idempotencyKey
-      ?? `SPN-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
+    const reference = newReference('SPN')
 
-    const transaction = await MarketplaceTransaction.create({
+    const transaction = await createTransaction({
       reference,
-      buyerId: req.user!.userId,
       buyerEmail: input.email,
       sponsorshipId: quote.sponsorshipId,
       purpose: input.purpose,
@@ -242,6 +276,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       discountAmount: 0,
       status: 'initialized',
     })
+    if (!transaction) return
 
     try {
       const init = await initializePlatformTransaction({
@@ -249,6 +284,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
         amount: quote.amount,
         reference,
         metadata: {
+          [BINDING_KEY]: String(transaction._id),
           purpose: input.purpose,
           sponsorshipId: quote.sponsorshipId,
           description: quote.description,
@@ -303,11 +339,23 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   let discountSource: 'platform' | 'seller' | undefined
 
   if (input.couponCode) {
+    // A use is only counted when a payment settles, so checkouts already
+    // under way with this code count against its limits here.
+    const unsettled = {
+      couponCode: input.couponCode.trim().toUpperCase(),
+      status: { $in: SETTLEABLE_STATUSES },
+      createdAt: { $gt: new Date(Date.now() - COUPON_HOLD_MS) },
+    }
+    const [mine, total] = await Promise.all([
+      MarketplaceTransaction.countDocuments({ ...unsettled, buyerId }),
+      MarketplaceTransaction.countDocuments(unsettled),
+    ])
     const coupon = await validateCoupon({
       code: input.couponCode,
-      userId: req.user!.userId,
+      userId: buyerId,
       amount: quote.amount,
       sellerId: quote.sellerId,
+      inFlight: { mine, total },
     })
     if (!coupon.valid) { error(res, coupon.reason ?? 'That coupon cannot be used.', 422); return }
     discountAmount = coupon.discountAmount
@@ -322,11 +370,10 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     discountAmount,
   })
 
-  const reference = input.idempotencyKey ?? `MKT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
+  const reference = newReference('MKT')
 
-  const transaction = await MarketplaceTransaction.create({
+  const transaction = await createTransaction({
     reference,
-    buyerId: req.user!.userId,
     buyerEmail: input.email,
     sellerId: quote.sellerId,
     bookingId: quote.bookingId,
@@ -345,6 +392,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     subaccountCode: account.subaccountCode,
     status: 'initialized',
   })
+  if (!transaction) return
 
   try {
     const init = await initializeSplitTransaction({
@@ -353,7 +401,10 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       reference,
       subaccountCode: account.subaccountCode,
       feeBearer: split.feeBearer,
-      metadata: { bookingId: quote.bookingId, sellerId: quote.sellerId, purpose: input.purpose, description: quote.description },
+      metadata: {
+        [BINDING_KEY]: String(transaction._id),
+        bookingId: quote.bookingId, sellerId: quote.sellerId, purpose: input.purpose, description: quote.description,
+      },
     })
 
     transaction.providerAccessCode = init.accessCode
@@ -376,10 +427,17 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   }
 }))
 
-/** Server-side verification — never trust the browser redirect (spec §8.4). */
-router.get('/verify/:reference', asyncHandler(async (req, res) => {
+/**
+ * Server-side verification — never trust the browser redirect (spec §8.4).
+ *
+ * Authenticated and scoped to the buyer: anyone holding a reference could
+ * otherwise drive settlement of an order that is not theirs and read its
+ * economics back.
+ */
+router.get('/verify/:reference', authenticate, asyncHandler(async (req, res) => {
   const reference = param(req.params.reference)
-  const transaction = await MarketplaceTransaction.findOne({ reference })
+  const isAdmin = req.user!.roles.some((r) => r === 'admin' || r === 'super_admin')
+  const transaction = await MarketplaceTransaction.findOne(isAdmin ? { reference } : { reference, buyerId: req.user!.userId })
   if (!transaction) { error(res, 'Transaction not found', 404); return }
 
   try {

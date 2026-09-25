@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import type { Types } from 'mongoose'
+import { isValidObjectId, type Types } from 'mongoose'
 import { z } from 'zod'
 import { authenticate } from '../middleware/auth.js'
 import { Review } from '../models/Review.js'
@@ -8,8 +8,21 @@ import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
+import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
+import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 
 const router = Router()
+
+/*
+ * Only verified reviews are shown or averaged. A review is verified when its
+ * author held a signed tenancy for the property — see POST below, which now
+ * refuses everyone else. Older rows written before that rule may be
+ * unverified; they stay stored but are never displayed or counted.
+ */
+const VISIBLE = { removed: { $ne: true }, verified: true }
+
+/** Agreement states that mean the tenancy actually happened: signed, then live or ended. */
+const LIVED_IN = ['active', 'expired', 'terminated']
 
 // Get reviews for a property + summary (paginated; summary computed in Mongo)
 router.get('/property/:propertyId', async (req, res) => {
@@ -21,9 +34,9 @@ router.get('/property/:propertyId', async (req, res) => {
   const [reviews, summaryAgg] = await Promise.all([
     // `removed` is set when an admin actions an abuse report; a removed review
     // must not appear anywhere a reader or the rating average can see it.
-    Review.find({ propertyId, removed: { $ne: true } }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+    Review.find({ propertyId, ...VISIBLE }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
     Review.aggregate([
-      { $match: { propertyId, removed: { $ne: true } } },
+      { $match: { propertyId, ...VISIBLE } },
       { $group: {
         _id: null,
         count: { $sum: 1 },
@@ -69,10 +82,10 @@ router.post('/', authenticate, async (req, res) => {
   const schema = z.object({
     propertyId: z.string(),
     rating: z.number().int().min(1).max(5),
-    title: z.string().min(1),
-    content: z.string().min(10),
-    pros: z.array(z.string()).default([]),
-    cons: z.array(z.string()).default([]),
+    title: z.string().min(1).max(160),
+    content: z.string().min(10).max(5000),
+    pros: z.array(z.string().max(200)).max(20).default([]),
+    cons: z.array(z.string().max(200)).max(20).default([]),
     wouldRecommend: z.boolean().default(true),
     landlordResponsive: z.number().int().min(1).max(5).default(3),
     maintenance: z.number().int().min(1).max(5).default(3),
@@ -83,24 +96,56 @@ router.post('/', authenticate, async (req, res) => {
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
+  const userId = req.user!.userId
+  const property = isValidObjectId(parsed.data.propertyId)
+    ? await Property.findById(parsed.data.propertyId).select('landlordId').lean()
+    : null
+  if (!property) { error(res, 'Property not found', 404); return }
+
+  /*
+   * Only someone who actually rented the place may review it.
+   *
+   * Anyone could review any property, a landlord could review their own, and
+   * "verified" was granted for ANY agreement — a draft the landlord created
+   * and nobody signed counted. Unverified reviews also counted in the average,
+   * so the rating was whatever the loudest accounts said. The reviewer now
+   * needs an agreement for this property that both parties signed and that is
+   * live or has ended, and must not be the landlord or manager of it.
+   */
+  const tenancy = property.landlordId === userId ? null : await Agreement.exists({
+    propertyId: parsed.data.propertyId,
+    tenantId: userId,
+    landlordId: { $ne: userId },
+    status: { $in: LIVED_IN },
+    tenantSignature: { $exists: true, $nin: [null, ''] },
+    landlordSignature: { $exists: true, $nin: [null, ''] },
+  })
+  if (!tenancy) {
+    error(res, 'Only tenants with a signed tenancy for this property can review it.', 403)
+    return
+  }
+
   // Check if user already reviewed
-  const existing = await Review.findOne({ propertyId: parsed.data.propertyId, userId: req.user!.userId })
+  const existing = await Review.findOne({ propertyId: parsed.data.propertyId, userId })
   if (existing) { error(res, 'You have already reviewed this property', 409); return }
 
-  // Check if user was/is a tenant of this property
-  const agreement = await Agreement.findOne({ propertyId: parsed.data.propertyId, tenantId: req.user!.userId })
-  const verified = !!agreement
+  const screened = screenText(parsed.data.title, parsed.data.content, ...parsed.data.pros, ...parsed.data.cons)
+  if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
 
   // Get user name
-  const user = await User.findById(req.user!.userId)
+  const user = await User.findById(userId)
   const userName = user ? `${user.firstName} ${user.lastName}` : 'Anonymous'
 
   const review = await Review.create({
     ...parsed.data,
-    userId: req.user!.userId,
+    userId,
     userName,
-    verified,
+    // True by construction: the tenancy check above is the only way here.
+    verified: true,
   })
+  if (shouldReport(screened, 'public')) {
+    void reportFlaggedContent({ targetType: 'review', targetId: review._id.toString(), ownerId: userId, label: parsed.data.title, verdict: screened })
+  }
 
   success(res, { ...review.toObject(), id: review._id.toString() }, 'Review submitted', 201)
 })
@@ -122,7 +167,7 @@ router.get('/neighborhood/:city', async (req, res) => {
 
   const [agg, recent] = await Promise.all([
     Review.aggregate([
-      { $match: { propertyId: { $in: propertyIds }, removed: { $ne: true } } },
+      { $match: { propertyId: { $in: propertyIds }, ...VISIBLE } },
       { $group: {
         _id: null,
         count: { $sum: 1 },
@@ -131,7 +176,7 @@ router.get('/neighborhood/:city', async (req, res) => {
         recommend: { $sum: { $cond: ['$wouldRecommend', 1, 0] } },
       } },
     ]),
-    Review.find({ propertyId: { $in: propertyIds }, removed: { $ne: true } }).sort({ createdAt: -1 }).limit(10).lean(),
+    Review.find({ propertyId: { $in: propertyIds }, ...VISIBLE }).sort({ createdAt: -1 }).limit(10).lean(),
   ])
 
   const s = agg[0] ?? { count: 0 }

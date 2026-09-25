@@ -25,6 +25,8 @@ import { Wallet } from '../models/Wallet.js'
 import { User } from '../models/User.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { getPayoutProvider } from '../services/payouts/index.js'
+import { TransferRejectedError } from '../services/payouts/types.js'
+import { finalizePayout } from '../services/payouts/finalize.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -36,6 +38,9 @@ const router = Router()
 
 /** Below this a payout costs more in provider fees than it is worth. */
 const MIN_PAYOUT_AMOUNT = 10
+
+/** How long after sending a "no such transfer" answer is believed. */
+const NOT_FOUND_GRACE_MS = 15 * 60_000
 
 const accountSchema = z.object({
   type: z.enum(['mobile_money', 'ghipss']),
@@ -60,10 +65,12 @@ function payoutView(p: {
   reference: string
   destination: { bankName: string; accountNumber: string; accountName: string }
   failureReason?: string
+  needsReconciliation?: boolean
   createdAt?: Date
   paidAt?: Date
 }) {
   return {
+    needsReconciliation: !!p.needsReconciliation,
     id: (p._id as Types.ObjectId).toString(),
     userId: p.userId,
     amount: p.amount,
@@ -317,12 +324,80 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
     })
     success(res, payoutView(claimed as never), 'Payout sent — awaiting provider confirmation')
   } catch (err) {
-    // The transfer never got accepted, so put it back in the queue rather than
-    // leaving it stuck in 'processing' with no provider reference.
-    await Payout.updateOne({ _id: claimed._id, status: 'processing' }, { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '' } })
-    logger.error(`[Payouts] transfer failed for ${claimed.reference}: ${(err as Error).message}`)
-    error(res, 'The provider rejected this transfer. It has been returned to the queue.', 502)
+    if (err instanceof TransferRejectedError) {
+      // The provider answered and created no transfer: safe to queue again.
+      await Payout.updateOne({ _id: claimed._id, status: 'processing' }, { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '' } })
+      logger.error(`[Payouts] transfer rejected for ${claimed.reference}: ${err.message}`)
+      error(res, 'The provider rejected this transfer. It has been returned to the queue.', 502)
+      return
+    }
+    /*
+     * No answer is not a refusal. This used to send every failure back to
+     * 'requested', where a timed-out transfer that had in fact gone through
+     * could be declined — refunding the wallet for money already paid out —
+     * or approved again. It stays 'processing', which decline cannot touch,
+     * until the provider is asked what happened.
+     */
+    await Payout.updateOne({ _id: claimed._id, status: 'processing' }, {
+      $set: { needsReconciliation: true, failureReason: 'The provider did not confirm the transfer; reconcile before any other action.' },
+    })
+    logger.error(`[Payouts] transfer outcome unknown for ${claimed.reference}: ${(err as Error).message}`)
+    void recordAudit(req, 'payout.outcome_unknown', 'Payout', String(claimed._id), { amount: claimed.amount, error: (err as Error).message })
+    error(res, 'The provider did not answer. The payout is held as processing until it is reconciled with the provider — do not decline or resend it.', 504)
   }
+}))
+
+/**
+ * Settle a payout whose transfer outcome is unknown by asking the provider.
+ *
+ * The only way out of needsReconciliation besides the provider's own webhook.
+ * A refund happens only when the provider says the transfer failed, or has no
+ * record of it at all well after it was sent.
+ */
+router.post('/:id/reconcile', authenticate, requirePermission('payments:process'), asyncHandler(async (req, res) => {
+  const payout = await Payout.findById(param(req.params.id))
+  if (!payout) { error(res, 'Payout not found', 404); return }
+  if (payout.status !== 'processing') { error(res, `This payout is already ${payout.status}`, 409); return }
+
+  let lookup
+  try {
+    lookup = await getPayoutProvider().verifyTransfer(payout.reference)
+  } catch (err) {
+    logger.error(`[Payouts] reconciliation lookup failed for ${payout.reference}: ${(err as Error).message}`)
+    error(res, 'The provider could not be reached. Nothing was changed; try again later.', 502)
+    return
+  }
+
+  if (lookup.status === 'paid' || lookup.status === 'failed') {
+    const moved = await finalizePayout({
+      reference: payout.reference,
+      providerRef: lookup.providerRef ?? payout.providerRef ?? '',
+      status: lookup.status,
+      amount: lookup.amount ?? 0,
+      timestamp: new Date().toISOString(),
+      failureReason: lookup.failureReason,
+      raw: { reconciledBy: req.user!.userId },
+    }, { source: 'admin' })
+    // finalizePayout refuses an amount mismatch; that stays flagged for a human.
+    if (!moved) { error(res, 'The provider\'s record does not match this payout. It stays held for review.', 409); return }
+    await Payout.updateOne({ _id: payout._id }, { $unset: { needsReconciliation: '' } })
+  } else if (lookup.status === 'not_found') {
+    // No record right after sending can be the provider catching up; only a
+    // long silence means the transfer was never created.
+    const sentAt = payout.approvedAt?.getTime() ?? 0
+    if (Date.now() - sentAt < NOT_FOUND_GRACE_MS) {
+      error(res, 'The provider has no record of this transfer yet. Try again in a few minutes.', 409)
+      return
+    }
+    await Payout.updateOne(
+      { _id: payout._id, status: 'processing' },
+      { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '', needsReconciliation: '', failureReason: '' } },
+    )
+  }
+
+  void recordAudit(req, 'payout.reconciled', 'Payout', String(payout._id), { providerStatus: lookup.status })
+  const fresh = await Payout.findById(payout._id).lean()
+  success(res, payoutView(fresh as never), lookup.status === 'pending' ? 'The provider still reports this transfer as pending' : 'Payout reconciled with the provider')
 }))
 
 /** Decline a request and give the money back. */

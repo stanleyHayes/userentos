@@ -505,8 +505,8 @@ export function AuthorPostsPage() {
                 <p className="text-xs font-semibold text-primary-dark dark:text-white">Publish to my storefront</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted dark:text-gray-500">
                   {storefront
-                    ? `Attaches the post to ${storefront.name}, so it shows on that feed as well as the RentOS blog.`
-                    : 'You do not have a storefront yet, so this post will publish under your byline alone.'}
+                    ? `Attaches the post to ${storefront.name}, so it shows on that storefront's blog. The RentOS blog carries RentOS editorial only.`
+                    : 'You do not have a storefront yet. The RentOS blog carries RentOS editorial only, so this post will not be listed there.'}
                 </p>
               </div>
               <Switch

@@ -14,15 +14,29 @@ function escapeRegex(input: string): string {
 }
 
 /**
- * A post belongs to a seller's storefront rather than to RentOS editorial.
+ * What counts as RentOS editorial.
  *
  * The platform blog and a storefront's blog are different publications that
- * happen to share a collection. Without this, every post a seller wrote for
- * their own storefront was listed on RentOS's editorial blog (spec §6).
+ * happen to share a collection. "Has no storefront" used to be the whole test,
+ * but any author can save a post with attachToStorefront: false — and that
+ * post then appeared on the official RentOS blog under the author's byline.
+ *
+ * A post is editorial when staff created it here (`platform: true`). Posts
+ * from before the flag carry no `platform` field; among those, staff and seed
+ * posts still hold the schema's default status 'draft' while live, because
+ * only the authoring flow ever moves a post to 'published'. The authoring
+ * routes always write `platform: false`, so nothing they create can match the
+ * legacy branch.
  */
 // `$eq: null` matches both an explicit null and a missing field, which is how
 // a post with no storefront is actually stored.
-const PLATFORM_ONLY: Record<string, unknown> = { storefrontId: { $eq: null } }
+const PLATFORM_ONLY: Record<string, unknown> = {
+  storefrontId: { $eq: null },
+  $and: [{ $or: [
+    { platform: true },
+    { platform: { $exists: false }, status: { $in: ['draft', null] } },
+  ] }],
+}
 
 // Public: list published posts on the platform's own blog
 router.get('/', async (req, res) => {
@@ -96,6 +110,8 @@ router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer
     ...parsed.data,
     author: byline || 'RentOS editorial',
     authorId: req.user!.userId,
+    // The only place a post becomes RentOS editorial.
+    platform: true,
   })
   success(res, { ...post.toObject(), id: post._id.toString() }, 'Post created', 201)
 })

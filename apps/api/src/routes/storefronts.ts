@@ -32,6 +32,9 @@ import {
 
 const router = Router()
 
+/** How long an unverified custom-domain claim blocks other storefronts. */
+export const PENDING_CLAIM_TTL_MS = 72 * 60 * 60 * 1000
+
 /** Map an entitlement failure to 402 — "your plan does not include this". */
 function handleEntitlement(err: unknown, res: Parameters<typeof error>[0]): boolean {
   if (err instanceof EntitlementError) {
@@ -183,8 +186,33 @@ router.post('/me/domains', authenticate, asyncHandler(async (req, res) => {
   if (!valid.ok) { error(res, valid.reason); return }
 
   const existing = await StorefrontDomain.findOne({ domain })
-  if (existing && existing.status !== 'removed') {
-    error(res, 'That domain is already connected to a storefront', 409)
+  const storefrontId = String(storefront._id)
+
+  /*
+   * An unverified claim lapses.
+   *
+   * Anyone with the entitlement could add a domain they did not own and never
+   * verify it, and because a pending row blocked every other storefront, the
+   * real owner could never connect their own domain. A claim nobody has proven
+   * within PENDING_CLAIM_TTL_MS no longer blocks anyone. The claimant cannot
+   * simply renew their own lapsed claim for another window either, or a
+   * script could hold a domain forever.
+   */
+  const now = Date.now()
+  const claimedAt = existing ? (existing.claimedAt ?? existing.createdAt).getTime() : 0
+  const unverified = !!existing && ['pending', 'failed'].includes(existing.status) && !existing.verifiedAt
+  const lapsed = unverified && now - claimedAt > PENDING_CLAIM_TTL_MS
+  if (existing && existing.status !== 'removed' && !lapsed) {
+    const mine = existing.storefrontId === storefrontId
+    error(res, unverified
+      ? mine
+        ? 'You have already added this domain. Publish the DNS records, then verify it.'
+        : 'That domain is awaiting ownership verification by another storefront. Unverified claims lapse after 72 hours.'
+      : 'That domain is already connected to a storefront', 409)
+    return
+  }
+  if (existing && lapsed && existing.storefrontId === storefrontId && now - claimedAt < 2 * PENDING_CLAIM_TTL_MS) {
+    error(res, 'Your claim on this domain lapsed without verification. It is open to its owner for 72 hours before you can claim it again.', 409)
     return
   }
 
@@ -195,23 +223,28 @@ router.post('/me/domains', authenticate, asyncHandler(async (req, res) => {
    * removed threw a duplicate-key error and surfaced as a 500 — a seller who
    * removed a domain could never add it back. Reusing the row also means the
    * previous verification history is not silently duplicated.
+   *
+   * Conditional on the token just read, so two storefronts taking over the
+   * same lapsed claim at once cannot both believe they won.
    */
   let record
   if (existing) {
-    existing.storefrontId = String(storefront._id)
-    existing.verificationToken = newVerificationToken()
-    existing.status = 'pending'
-    existing.tlsStatus = 'none'
-    existing.tlsChallenges = []
-    existing.verifiedAt = undefined
-    existing.failureReason = undefined
-    record = await existing.save()
+    record = await StorefrontDomain.findOneAndUpdate(
+      { _id: existing._id, verificationToken: existing.verificationToken, status: existing.status },
+      {
+        $set: { storefrontId, verificationToken: newVerificationToken(), status: 'pending', tlsStatus: 'none', tlsChallenges: [], claimedAt: new Date(now) },
+        $unset: { verifiedAt: 1, failureReason: 1 },
+      },
+      { returnDocument: 'after' },
+    )
+    if (!record) { error(res, 'That domain was just claimed. Refresh and try again.', 409); return }
   } else {
     record = await StorefrontDomain.create({
-      storefrontId: String(storefront._id),
+      storefrontId,
       domain,
       verificationToken: newVerificationToken(),
       status: 'pending',
+      claimedAt: new Date(now),
     })
   }
 

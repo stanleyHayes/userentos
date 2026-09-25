@@ -40,6 +40,28 @@ export interface TransferInput {
   reason: string
 }
 
+/**
+ * The provider definitively refused the transfer: it answered, and it did not
+ * create one. Only this may send a payout back to the queue. Any other
+ * failure — a timeout, a dropped connection, a 5xx, a "duplicate reference" —
+ * leaves the outcome unknown, because the transfer may have been created.
+ */
+export class TransferRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TransferRejectedError'
+  }
+}
+
+/** What the provider says about a transfer we sent, asked by our reference. */
+export interface TransferLookup {
+  status: PayoutStatusValue | 'not_found'
+  providerRef?: string
+  /** GHS major units, when the provider reports it. */
+  amount?: number
+  failureReason?: string
+}
+
 export interface TransferResult {
   /** PSP transfer handle (Paystack TRF_xxx). */
   providerRef: string
@@ -81,8 +103,14 @@ export interface PayoutProvider {
    */
   createRecipient(input: RecipientInput): Promise<RecipientResult>
 
-  /** Push money out. A `pending` result is normal; the webhook confirms. */
+  /**
+   * Push money out. A `pending` result is normal; the webhook confirms.
+   * Throws TransferRejectedError only when no transfer was created.
+   */
   sendTransfer(input: TransferInput): Promise<TransferResult>
+
+  /** Ask the provider what became of a transfer, by our reference. */
+  verifyTransfer(reference: string): Promise<TransferLookup>
 
   /** Verify a webhook against the raw request bytes. */
   verifyWebhook(rawBody: string, headers: Record<string, string>): boolean

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Promotion, CouponRedemption } from '../models/Promotion.js'
 import { AffiliateProfile, AffiliateAttribution, AffiliateCommission } from '../models/Affiliate.js'
-import { validateCoupon, redeemCoupon } from '../services/marketplace/coupons.js'
+import { validateCoupon, redeemForTransaction } from '../services/marketplace/coupons.js'
 import { recordAttribution, createCommission } from '../services/marketplace/affiliate.js'
 
 vi.mock('../models/Promotion.js', () => ({
@@ -79,18 +79,47 @@ describe('coupons (spec §10)', () => {
     expect((await validateCoupon({ code: 'X', userId: 'u1', amount: 100, sellerId: 'seller-a' })).valid).toBe(true)
   })
 
-  it('claims redemption atomically so the last coupon cannot go twice', async () => {
-    mockPromo(promo({ usageLimit: 1 }))
-    vi.mocked(Promotion.findOneAndUpdate).mockResolvedValue(null as never) // lost the race
+  it('counts checkouts still in flight against the per-user and total limits', async () => {
+    mockPromo(promo({ perUserLimit: 1 }))
+    const mine = await validateCoupon({ code: 'X', userId: 'u1', amount: 100, inFlight: { mine: 1, total: 1 } })
+    expect(mine.valid).toBe(false)
+    expect(mine.reason).toMatch(/checkout you have not finished/i)
 
-    const result = await redeemCoupon({ code: 'X', userId: 'u1', amount: 100 })
+    mockPromo(promo({ usageLimit: 3, usedCount: 2 }))
+    expect((await validateCoupon({ code: 'X', userId: 'u1', amount: 100, inFlight: { mine: 0, total: 1 } })).valid).toBe(false)
+    expect((await validateCoupon({ code: 'X', userId: 'u1', amount: 100, inFlight: { mine: 0, total: 0 } })).valid).toBe(true)
+  })
+})
 
-    expect(result.valid).toBe(false)
-    expect(result.reason).toMatch(/just been fully redeemed/i)
-    expect(CouponRedemption.create).not.toHaveBeenCalled()
+describe('coupon redemption at settlement', () => {
+  const charge = { reference: 'MKT-1', buyerId: 'buyer1', couponCode: 'save10', discountAmount: 100 }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(Promotion.findOne).mockReturnValue({ select: () => ({ lean: vi.fn().mockResolvedValue({ _id: 'promo-1' }) }) } as never)
+  })
 
-    const guard = vi.mocked(Promotion.findOneAndUpdate).mock.calls[0][0] as unknown as Record<string, unknown>
-    expect(guard).toHaveProperty('$or')
+  it('enforces the total and per-buyer limits in one conditional increment', async () => {
+    vi.mocked(Promotion.findOneAndUpdate).mockResolvedValue({ _id: 'promo-1' } as never)
+
+    await expect(redeemForTransaction(charge)).resolves.toEqual({ redeemed: true })
+
+    const [filter, update] = vi.mocked(Promotion.findOneAndUpdate).mock.calls[0] as unknown as [Record<string, unknown>, Record<string, unknown>]
+    expect(JSON.stringify(filter)).toContain('$perUserCounts.buyer1')
+    expect(JSON.stringify(filter)).toContain('$usageLimit')
+    expect(update).toEqual({ $inc: { usedCount: 1, 'perUserCounts.buyer1': 1 } })
+    expect(CouponRedemption.create).toHaveBeenCalledWith(expect.objectContaining({ code: 'SAVE10', userId: 'buyer1', transactionRef: 'MKT-1' }))
+  })
+
+  it('records a settlement that lost the race for the last use as over the limit', async () => {
+    vi.mocked(Promotion.findOneAndUpdate).mockResolvedValue(null as never)
+
+    await expect(redeemForTransaction(charge)).resolves.toEqual({ redeemed: false, reason: 'limit_reached' })
+    expect(CouponRedemption.create).toHaveBeenCalledWith(expect.objectContaining({ overLimit: true }))
+  })
+
+  it('does nothing for a payment that carried no discount', async () => {
+    await expect(redeemForTransaction({ ...charge, discountAmount: 0 })).resolves.toEqual({ redeemed: false, reason: 'no_coupon' })
+    expect(Promotion.findOneAndUpdate).not.toHaveBeenCalled()
   })
 })
 

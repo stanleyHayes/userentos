@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { authenticate, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { writeLimiter } from '../middleware/rateLimit.js'
-import { ContentReport, REPORT_TARGET_TYPES, REPORT_REASONS } from '../models/ContentReport.js'
+import { ContentReport, REPORT_TARGET_TYPES, REPORT_REASONS, SYSTEM_REPORTER_ID } from '../models/ContentReport.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -143,7 +143,7 @@ router.get('/admin/queue', authenticate, requireRole('admin', 'super_admin'), as
       return {
         ...r,
         id: String(r._id),
-        reporterName: reporter ? `${reporter.firstName} ${reporter.lastName}`.trim() : 'Unknown',
+        reporterName: r.reporterId === SYSTEM_REPORTER_ID ? 'Automated content filter' : reporter ? `${reporter.firstName} ${reporter.lastName}`.trim() : 'Unknown',
         reporterEmail: reporter?.email,
         ownerName: owner ? `${owner.firstName} ${owner.lastName}`.trim() : undefined,
         ownerEmail: owner?.email,

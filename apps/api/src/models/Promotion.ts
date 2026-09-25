@@ -23,6 +23,12 @@ export interface IPromotion extends Document {
   minimumSpend?: number
   eligiblePropertyIds: string[]
   usedCount: number
+  /**
+   * Settled redemptions per buyer id. Kept on the promotion so the per-user
+   * limit is enforced in the same conditional update as the total limit —
+   * a count of redemption rows cannot be checked and written atomically.
+   */
+  perUserCounts?: Map<string, number>
   status: 'active' | 'paused' | 'expired' | 'disabled'
   disabledReason?: string
   createdAt: Date
@@ -43,6 +49,9 @@ const promotionSchema = new Schema<IPromotion>({
   minimumSpend: Number,
   eligiblePropertyIds: { type: [String], default: [] },
   usedCount: { type: Number, default: 0 },
+  // Never selected by default: the owner's promotion list must not become a
+  // list of which accounts bought from them.
+  perUserCounts: { type: Map, of: Number, select: false },
   status: { type: String, enum: ['active', 'paused', 'expired', 'disabled'], default: 'active', index: true },
   disabledReason: String,
 }, { timestamps: true })
@@ -56,6 +65,11 @@ export interface ICouponRedemption extends Document {
   userId: string
   transactionRef?: string
   discountAmount: number
+  /**
+   * The payment settled at the discounted price after the limit had been
+   * reached by concurrent checkouts. Recorded for review, never counted.
+   */
+  overLimit?: boolean
   createdAt: Date
 }
 
@@ -65,6 +79,7 @@ const couponRedemptionSchema = new Schema<ICouponRedemption>({
   userId: { type: String, required: true, index: true },
   transactionRef: String,
   discountAmount: { type: Number, required: true, min: 0 },
+  overLimit: Boolean,
 }, { timestamps: { createdAt: true, updatedAt: false } })
 
 couponRedemptionSchema.index({ promotionId: 1, userId: 1 })

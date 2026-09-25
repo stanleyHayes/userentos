@@ -13,6 +13,12 @@ export interface IBlogPost extends Document {
   authorId?: string
   /** Storefront this post belongs to; scopes the storefront blog feed. */
   storefrontId?: string
+  /**
+   * RentOS editorial. Set only by the staff routes in routes/blog.ts; the
+   * authoring routes always write false. Absent on posts written before the
+   * flag existed — see PLATFORM_ONLY in routes/blog.ts for how those are read.
+   */
+  platform?: boolean
   status?: 'draft' | 'in_review' | 'scheduled' | 'published' | 'archived' | 'removed'
   scheduledFor?: Date
   /**
@@ -39,6 +45,7 @@ const blogPostSchema = new Schema<IBlogPost>({
   published: { type: Boolean, default: false },
   authorId: { type: String, index: true },
   storefrontId: { type: String, index: true },
+  platform: { type: Boolean, index: true },
   status: { type: String, enum: ['draft', 'in_review', 'scheduled', 'published', 'archived', 'removed'], default: 'draft', index: true },
   scheduledFor: Date,
   publishedAt: Date,

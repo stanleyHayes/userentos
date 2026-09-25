@@ -196,7 +196,21 @@ export interface VerifiedTransaction {
   paidAt?: string
   /** Paystack's own processing fee, in major units. */
   fees?: number
+  /** Metadata sent at initialization, echoed back by the provider. */
+  metadata?: Record<string, unknown>
   raw: unknown
+}
+
+/** Paystack echoes metadata as an object, or as the JSON string it was sent as. */
+function parseMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value !== 'string') return undefined
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -205,7 +219,7 @@ export interface VerifiedTransaction {
  */
 export async function verifyTransaction(reference: string): Promise<VerifiedTransaction> {
   const data = await call<{
-    status: string; reference: string; amount: number; currency: string; paid_at?: string; fees?: number
+    status: string; reference: string; amount: number; currency: string; paid_at?: string; fees?: number; metadata?: unknown
   }>(`/transaction/verify/${encodeURIComponent(reference)}`)
 
   return {
@@ -215,6 +229,7 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
     currency: data.currency,
     paidAt: data.paid_at,
     fees: typeof data.fees === 'number' ? data.fees / 100 : undefined,
+    metadata: parseMetadata(data.metadata),
     raw: data,
   }
 }

@@ -41,6 +41,13 @@ export interface IPayout extends Document {
   failureReason?: string
   /** True once the wallet has been credited back, so a retry cannot double-refund. */
   refunded: boolean
+  /**
+   * The provider never answered the transfer request (timeout, dropped
+   * connection, 5xx), so money may or may not have left. The payout stays
+   * 'processing' — which decline cannot touch — until POST /:id/reconcile or
+   * a provider webhook settles what actually happened.
+   */
+  needsReconciliation?: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -63,6 +70,7 @@ const payoutSchema = new Schema<IPayout>({
   paidAt: Date,
   failureReason: String,
   refunded: { type: Boolean, default: false },
+  needsReconciliation: Boolean,
 }, { timestamps: true })
 
 export const Payout = mongoose.model<IPayout>('Payout', payoutSchema)

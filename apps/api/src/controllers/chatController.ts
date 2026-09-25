@@ -11,6 +11,8 @@ import { getIO } from '../services/socket.js'
 import { logger } from '../utils/logger.js'
 import { contactBlocked, blockedContacts } from '../services/userBlocks.js'
 import { UserBlock } from '../models/UserBlock.js'
+import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
+import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 
 const createConversationSchema = z.object({
   participantId: z.string().min(1),
@@ -202,12 +204,18 @@ export const chatController = {
     if (!recipientId || await contactBlocked(userId, recipientId) || !await User.exists({ _id: recipientId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
       error(res, 'Messaging is unavailable for this contact.', 403); return
     }
+    // Slurs, threats and abuse aimed at the recipient never reach them.
+    const screened = screenText(parsed.data.text)
+    if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
     const message = await Message.create({
       conversationId,
       senderId: userId,
       text: parsed.data.text,
       read: false,
     })
+    if (shouldReport(screened, 'private')) {
+      void reportFlaggedContent({ targetType: 'message', targetId: message._id.toString(), ownerId: userId, label: parsed.data.text, verdict: screened })
+    }
 
     // Update conversation lastMessage and increment unread for the other participant.
     // Atomic $inc — the previous get→set→save read-modify-write lost increments

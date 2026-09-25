@@ -26,6 +26,8 @@ interface Booking {
   scheduledTime?: string
   estimatedCost?: number
   finalCost?: number
+  /** A final cost above the accepted quote; it only applies once the requester approves it. */
+  proposedFinalCost?: number
   quoteAmount?: number
   quoteAccepted: boolean
   paymentStatus: 'pending' | 'partial' | 'paid'
@@ -267,6 +269,17 @@ export function MyBookingsPage() {
                       {/* Declining a quote cancels the booking — there is no separate 'declined' state. */}
                       <Button size="sm" variant="ghost" disabled={rowPending} onClick={() => handleCancel(booking)}>
                         <X size={12} className="mr-1" /> Decline
+                      </Button>
+                    </>
+                  )}
+                  {booking.proposedFinalCost !== undefined && (
+                    <>
+                      <span className="text-xs text-muted self-center">Worker asks for GHS {booking.proposedFinalCost.toFixed(2)}</span>
+                      <Button size="sm" disabled={rowPending} onClick={() => updateBooking.mutate({ id: booking._id, body: { approveFinalCost: true } })}>
+                        <CheckCircle size={12} className="mr-1" /> Approve new price
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={rowPending} onClick={() => updateBooking.mutate({ id: booking._id, body: { approveFinalCost: false } })}>
+                        <X size={12} className="mr-1" /> Keep quote
                       </Button>
                     </>
                   )}

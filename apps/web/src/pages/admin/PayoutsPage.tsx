@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -11,7 +13,7 @@ import {
 import { usePayoutQueue, useApprovePayout, useDeclinePayout, type Payout } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
-import { Banknote, Check, Clock3, Landmark, Smartphone, X, AlertTriangle } from 'lucide-react'
+import { Banknote, Check, Clock3, Landmark, Smartphone, X, AlertTriangle, RefreshCw } from 'lucide-react'
 
 const STATUS_TABS = [
   { label: 'Awaiting approval', value: 'requested' },
@@ -34,6 +36,7 @@ export function PayoutsPage() {
   const { data, isLoading } = usePayoutQueue(status)
   const approve = useApprovePayout()
   const decline = useDeclinePayout()
+  const qc = useQueryClient()
 
   const [declining, setDeclining] = useState<Payout | null>(null)
   const [reason, setReason] = useState('')
@@ -41,11 +44,29 @@ export function PayoutsPage() {
   const payouts = data?.items ?? []
   const total = useMemo(() => (data?.items ?? []).reduce((sum, p) => sum + p.amount, 0), [data?.items])
 
+  // A sent transfer the provider never confirmed stays 'processing' and can
+  // only be settled by asking the provider — never by declining it.
+  const reconcile = useMutation({
+    mutationFn: (id: string) => api.post<Payout>(`/payouts/${id}/reconcile`, {}),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['payout-queue'] }),
+  })
+
   function onApprove(payout: Payout) {
     if (!confirm(`Send ${formatCurrency(payout.amount)} to ${payout.destination.accountName} (${payout.destination.accountNumber})?`)) return
     approve.mutate(payout.id, {
       onSuccess: () => toast.success('Payout sent — awaiting provider confirmation'),
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not send the payout'),
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : 'Could not send the payout')
+        // A timeout moves it to 'processing'; refresh so it is not approved twice.
+        qc.invalidateQueries({ queryKey: ['payout-queue'] })
+      },
+    })
+  }
+
+  function onReconcile(payout: Payout) {
+    reconcile.mutate(payout.id, {
+      onSuccess: () => toast.success('Checked with the provider'),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not reach the provider'),
     })
   }
 
@@ -143,6 +164,12 @@ export function PayoutsPage() {
                     )}
                   </div>
                 </div>
+
+                {payout.status === 'processing' && (
+                  <Button variant="outline" onClick={() => onReconcile(payout)} disabled={reconcile.isPending}>
+                    <RefreshCw size={14} /> Check with provider
+                  </Button>
+                )}
 
                 {payout.status === 'requested' && (
                   <div className="flex gap-2">

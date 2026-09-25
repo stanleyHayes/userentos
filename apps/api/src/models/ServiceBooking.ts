@@ -19,6 +19,8 @@ export interface IServiceBooking extends Document {
   scheduledTime?: string
   estimatedCost?: number
   finalCost?: number
+  /** A final cost above the accepted quote, waiting for the customer to approve it. */
+  proposedFinalCost?: number
   quoteProvided: boolean
   quoteAmount?: number
   quoteAccepted: boolean
@@ -28,6 +30,9 @@ export interface IServiceBooking extends Document {
   recurrence: 'none' | 'weekly' | 'biweekly' | 'monthly'
   rating?: number
   review?: string
+  /** Set by an admin acting on an abuse report: hidden, and no longer in the worker rating. */
+  reviewRemoved?: boolean
+  reviewRemovedReason?: string
   images: string[]
   notes: { text: string; by: string; at: string }[]
   createdAt: Date
@@ -57,6 +62,7 @@ const serviceBookingSchema = new Schema<IServiceBooking>({
   scheduledTime: String,
   estimatedCost: Number,
   finalCost: Number,
+  proposedFinalCost: Number,
   quoteProvided: { type: Boolean, default: false },
   quoteAmount: Number,
   quoteAccepted: { type: Boolean, default: false },
@@ -65,6 +71,8 @@ const serviceBookingSchema = new Schema<IServiceBooking>({
   recurrence: { type: String, enum: ['none', 'weekly', 'biweekly', 'monthly'], default: 'none' },
   rating: Number,
   review: String,
+  reviewRemoved: Boolean,
+  reviewRemovedReason: String,
   images: { type: [String], default: [] },
   notes: { type: [{ text: String, by: String, at: String }], default: [] },
 }, { timestamps: true })

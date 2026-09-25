@@ -19,7 +19,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { requireEntitlement, requireQuota, EntitlementError } from '../services/entitlements.js'
-import { validateCoupon, redeemCoupon } from '../services/marketplace/coupons.js'
+import { validateCoupon } from '../services/marketplace/coupons.js'
 import { recordAttribution } from '../services/marketplace/affiliate.js'
 
 const router = Router()
@@ -204,22 +204,13 @@ router.post('/promotions/validate', authenticate, asyncHandler(async (req, res) 
   success(res, result)
 }))
 
-/** Consume a coupon against a transaction. */
-router.post('/promotions/redeem', authenticate, asyncHandler(async (req, res) => {
-  const schema = z.object({
-    code: z.string().min(1),
-    amount: z.number().positive(),
-    transactionRef: z.string().optional(),
-    sellerId: z.string().optional(),
-    propertyId: z.string().optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-
-  const result = await redeemCoupon({ ...parsed.data, userId: req.user!.userId }, parsed.data.transactionRef)
-  if (!result.valid) { error(res, result.reason ?? 'This coupon cannot be used', 422); return }
-  success(res, result, 'Coupon applied')
-}))
+/*
+ * There is no redeem endpoint. POST /promotions/redeem took any code, any
+ * amount and any transactionRef from any signed-in account and counted a use,
+ * so a competitor could exhaust a seller's limited coupon without buying
+ * anything. A use is now recorded only by settlement, when the payment that
+ * carried the discount is confirmed (services/marketplace/settle.ts).
+ */
 
 router.post('/promotions/:id/disable', authenticate, requireRole('admin', 'super_admin'), asyncHandler(async (req, res) => {
   const schema = z.object({ reason: z.string().min(3).max(300) })

@@ -6,6 +6,9 @@ export interface IBusinessReview extends Document {
   authorName: string
   rating: number
   review?: string
+  /** Set by an admin acting on an abuse report; hidden and not averaged. */
+  removed?: boolean
+  removedReason?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -17,6 +20,8 @@ const businessReviewSchema = new Schema<IBusinessReview>(
     authorName: { type: String, required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     review: String,
+    removed: { type: Boolean, default: false },
+    removedReason: String,
   },
   { timestamps: true },
 )

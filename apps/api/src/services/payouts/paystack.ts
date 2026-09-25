@@ -24,15 +24,24 @@
 
 import { createHmac, timingSafeEqual } from 'crypto'
 import { envOr } from '../../utils/env.js'
+import { TransferRejectedError } from './types.js'
 import type {
   PayoutProvider,
   RecipientInput,
   RecipientResult,
   TransferInput,
   TransferResult,
+  TransferLookup,
   PayoutWebhookEvent,
   PayoutDestination,
 } from './types.js'
+
+/** Paystack answered, with a JSON body, and said no. */
+class PaystackHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
 
 const BASE_URL = envOr('PAYSTACK_BASE_URL', 'https://api.paystack.co')
 const REQUEST_TIMEOUT_MS = 20_000
@@ -72,10 +81,19 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
 
   // Paystack signals failure in the body as well as the status code.
   if (!res.ok || payload.status === false) {
-    throw new Error(`Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
+    throw new PaystackHttpError(res.status, `Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
   }
   return payload.data
 }
+
+/*
+ * Answers to POST /transfer that mean "no transfer was created". Anything
+ * else — a timeout, a 5xx, non-JSON, or a 4xx about a duplicate reference
+ * (which means one WAS created earlier) — leaves the outcome unknown.
+ */
+const DEFINITE_REJECTION = (err: unknown) =>
+  err instanceof PaystackHttpError && err.status >= 400 && err.status < 500
+  && !/duplicate|already|exist/i.test(err.message)
 
 /** GHS major units → pesewas, guarding against float drift on the way. */
 function toMinorUnits(amount: number): number {
@@ -162,16 +180,22 @@ export const paystackPayoutProvider: PayoutProvider = {
   },
 
   async sendTransfer(input: TransferInput): Promise<TransferResult> {
-    const data = await call<PaystackTransfer>('/transfer', {
-      method: 'POST',
-      body: {
-        source: 'balance',
-        amount: toMinorUnits(input.amount),
-        recipient: input.recipientCode,
-        reference: input.reference,
-        reason: input.reason,
-      },
-    })
+    let data: PaystackTransfer
+    try {
+      data = await call<PaystackTransfer>('/transfer', {
+        method: 'POST',
+        body: {
+          source: 'balance',
+          amount: toMinorUnits(input.amount),
+          recipient: input.recipientCode,
+          reference: input.reference,
+          reason: input.reason,
+        },
+      })
+    } catch (err) {
+      if (DEFINITE_REJECTION(err)) throw new TransferRejectedError((err as Error).message)
+      throw err
+    }
 
     return {
       providerRef: data.transfer_code,
@@ -179,6 +203,30 @@ export const paystackPayoutProvider: PayoutProvider = {
       // 'otp' means the transfer needs approval configured on the dashboard —
       // still pending from our side until a webhook says otherwise.
       status: data.status === 'success' ? 'paid' : 'pending',
+    }
+  },
+
+  /** GET /transfer/verify/:reference — the reconciliation question. */
+  async verifyTransfer(reference: string): Promise<TransferLookup> {
+    let data: PaystackTransfer & { amount?: number; reason?: string; failures?: unknown }
+    try {
+      data = await call(`/transfer/verify/${encodeURIComponent(reference)}`)
+    } catch (err) {
+      // Only an explicit "no such transfer" means none was created. Anything
+      // else (outage, 5xx) is thrown: the caller must not guess.
+      if (err instanceof PaystackHttpError && (err.status === 404 || (err.status === 400 && /not found/i.test(err.message)))) {
+        return { status: 'not_found' }
+      }
+      throw err
+    }
+    const status = data.status === 'success' ? 'paid'
+      : data.status === 'failed' || data.status === 'reversed' || data.status === 'abandoned' ? 'failed'
+        : 'pending'
+    return {
+      status,
+      providerRef: data.transfer_code,
+      amount: typeof data.amount === 'number' ? fromMinorUnits(data.amount) : undefined,
+      failureReason: status === 'failed' ? `Transfer ${data.status}` : undefined,
     }
   },
 

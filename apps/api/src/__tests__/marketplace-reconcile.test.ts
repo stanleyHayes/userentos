@@ -35,8 +35,8 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
     const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-1', reference: 'MKT-1', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 1000, fees: 15, reference: 'MKT-1', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockResolvedValue({ _id: 't1' } as never)
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', reference: 'MKT-1', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
+    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockImplementation((async () => ({ _id: 't1', reference: 'MKT-1', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 })) as never)
 
     const result = await retryUnprocessedWebhooks()
 
@@ -49,7 +49,7 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
     const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-dup', reference: 'MKT-2', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 500, reference: 'MKT-2', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't2', status: 'pending', grossAmount: 500, discountAmount: 0 } as never)
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't2', reference: 'MKT-2', currency: 'GHS', status: 'pending', grossAmount: 500, discountAmount: 0 } as never)
     vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockResolvedValue(null as never) // already claimed
 
     const result = await retryUnprocessedWebhooks()
@@ -87,12 +87,40 @@ describe('webhook dead-letter retry (spec §8.4)', () => {
     const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-5', reference: 'MKT-5', attempts: 1, save: vi.fn() }
     events([event])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 10, reference: 'MKT-5', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't5', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't5', reference: 'MKT-5', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
 
     const result = await retryUnprocessedWebhooks()
 
     expect(result.recovered).toBe(0)
     expect(event.processingError).toMatch(/amount mismatch/)
+    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
+  })
+
+  it('never recovers a failed row whose reference succeeded elsewhere on the account', async () => {
+    // The row a client-chosen reference left behind: initialization was
+    // refused (the reference was a wallet deposit's), but the provider
+    // reports that deposit's success when asked about the reference.
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-6', reference: 'DEP-6', attempts: 1, save: vi.fn() }
+    events([event])
+    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 100, reference: 'DEP-6', currency: 'GHS', raw: {} })
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't6', reference: 'DEP-6', currency: 'GHS', status: 'failed', grossAmount: 100, discountAmount: 0 } as never)
+
+    const result = await retryUnprocessedWebhooks()
+
+    expect(result.recovered).toBe(0)
+    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
+  })
+
+  it('refuses a charge that carries no binding to the pending row', async () => {
+    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-7', reference: 'MKT-7', attempts: 1, save: vi.fn() }
+    events([event])
+    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 100, reference: 'MKT-7', currency: 'GHS', metadata: {}, raw: {} })
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't7', reference: 'MKT-7', currency: 'GHS', status: 'pending', providerBound: true, grossAmount: 100, discountAmount: 0 } as never)
+
+    const result = await retryUnprocessedWebhooks()
+
+    expect(result.recovered).toBe(0)
+    expect(event.processingError).toMatch(/binding mismatch/)
     expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
   })
 })
@@ -112,8 +140,8 @@ describe('settlement reconciliation (spec §8.4)', () => {
   it('marks a transaction paid when the provider says it succeeded', async () => {
     pendingTxns([{ _id: 't1', reference: 'MKT-9', status: 'pending', grossAmount: 200, discountAmount: 0, save: vi.fn() }])
     paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 200, reference: 'MKT-9', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', status: 'pending', grossAmount: 200, discountAmount: 0 } as never)
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockResolvedValue({ _id: 't1' } as never)
+    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', reference: 'MKT-9', currency: 'GHS', status: 'pending', grossAmount: 200, discountAmount: 0 } as never)
+    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockImplementation((async () => ({ _id: 't1', reference: 'MKT-9', currency: 'GHS', status: 'pending', grossAmount: 200, discountAmount: 0 })) as never)
 
     expect((await reconcilePendingTransactions()).corrected).toBe(1)
   })
