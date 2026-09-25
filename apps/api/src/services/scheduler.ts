@@ -631,7 +631,7 @@ export function startScheduler() {
           userId: (u._id as Types.ObjectId).toString(),
           title: 'Subscription Expiring Soon',
           message: `Your subscription expires on ${new Date(u.subscriptionEndDate!).toISOString().slice(0, 10)}. Renew to keep your listing limits.`,
-          actionUrl: '/subscriptions',
+          actionUrl: '/subscription',
         }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
       }
       if (reminded) logger.info(`[Scheduler] Sent ${reminded} subscription renewal reminder(s)`)
@@ -663,7 +663,7 @@ export function startScheduler() {
             userId: uid,
             title: 'Subscription Expired',
             message: `Your ${result.downgradedFrom} subscription has expired and your account was moved to the free ${defaultPkg.name} plan. Resubscribe to restore your previous limits.`,
-            actionUrl: '/subscriptions',
+            actionUrl: '/subscription',
           }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
           logger.info(`[Scheduler] Downgraded expired subscription for user ${uid.slice(0, 8)}...`)
         } catch (err) {

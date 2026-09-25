@@ -20,6 +20,7 @@ import {
   isBiometricEnabled,
   type BiometricCapability,
 } from '../lib/biometric'
+import { PushPermissionPrompt } from '../components/PushPermissionPrompt'
 import { parseNotificationPreferences, type NotificationPreferenceKey, type NotificationPreferences } from '../../../packages/shared/notificationPreferences'
 
 const themeOptions = [
@@ -395,6 +396,8 @@ function NotificationsTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
         <Ionicons name="notifications-outline" size={20} color={c.primary} />
         <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Notification Preferences</Text>
       </View>
+      {/* Asks the OS only after the user opts in; renders nothing once granted. */}
+      <PushPermissionPrompt />
       {loadState === 'loading' && <ActivityIndicator accessibilityLabel="Loading notification preferences" color={c.primary} />}
       {loadState === 'failed' && (
         <View accessibilityRole="alert">
