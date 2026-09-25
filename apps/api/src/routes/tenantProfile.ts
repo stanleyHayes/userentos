@@ -43,8 +43,7 @@ export const profilePatchSchema = z.object({
   gender: z.string().max(30).optional(),
   maritalStatus: z.string().max(30).optional(),
   nationality: z.string().max(60).optional(),
-  religion: z.literal('').optional(),
-  ethnicGroup: z.literal('').optional(),
+  // No religion or ethnic group (Act 843 s.37): .strict() rejects them.
   hometown: z.string().max(120).optional(),
   languagesSpoken: z.array(z.string().max(40)).max(20).optional(),
   bio: z.string().max(2000).optional(),
@@ -145,8 +144,6 @@ router.patch('/me', authenticate, async (req, res) => {
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
   Object.assign(profile, parsed.data)
-  if (parsed.data.religion === '') profile.religion = undefined
-  if (parsed.data.ethnicGroup === '') profile.ethnicGroup = undefined
   await profile.save() // pre-save hook calculates score
 
   success(res, ownProfileView(profile.toObject()))
