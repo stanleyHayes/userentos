@@ -11,6 +11,8 @@ vi.mock('../utils/cloudinary.js', () => ({
   deleteFromCloudinary: vi.fn().mockResolvedValue({ result: 'ok' }),
   signedDownloadUrl: vi.fn(),
 }))
+const { detachDomain } = vi.hoisted(() => ({ detachDomain: vi.fn().mockResolvedValue({ ok: true }) }))
+vi.mock('../services/hosting/index.js', () => ({ hostingProvider: () => ({ detachDomain }) }))
 
 // The ledger lives in its own database, as ERASURE_LEDGER_MONGO_URI puts it
 // on its own cluster in production: a "restore" of the main database below
@@ -29,13 +31,22 @@ const { RefreshToken } = await import('../models/RefreshToken.js')
 const { BiometricToken } = await import('../models/BiometricToken.js')
 const { DeviceToken } = await import('../models/DeviceToken.js')
 const { AuditLog } = await import('../models/AuditLog.js')
+const { PayoutAccount } = await import('../models/PayoutAccount.js')
+const { Review } = await import('../models/Review.js')
+const { WebhookSubscription } = await import('../models/WebhookSubscription.js')
+const { BusinessListing } = await import('../models/BusinessListing.js')
+const { Storefront } = await import('../models/Storefront.js')
+const { StorefrontDomain } = await import('../models/StorefrontDomain.js')
 const { deleteFromCloudinary } = await import('../utils/cloudinary.js')
-const { erasureLedger, closeErasureLedger, warnIfErasureLedgerShared } = await import('../services/erasureLedger.js')
+const { erasureLedger, closeErasureLedger, warnIfErasureLedgerShared, recordErasure } = await import('../services/erasureLedger.js')
 const { replayErasureLedger } = await import('../services/erasureReplay.js')
 const { eraseAccountRecords } = await import('../services/accountErasure.js')
 const { closeAccount, AccountClosureIncompleteError } = await import('../services/accountClosure.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: documentsRouter } = await import('../routes/documents.js')
+const { default: payoutsRouter } = await import('../routes/payouts.js')
+const { default: reviewsRouter } = await import('../routes/reviews.js')
+const { default: webhooksRouter } = await import('../routes/webhooks.js')
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -45,6 +56,9 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
   const owner = new mongoose.Types.ObjectId()
   const partial = new mongoose.Types.ObjectId()
   const stranded = new mongoose.Types.ObjectId()
+  const hosted = new mongoose.Types.ObjectId()
+  const storefrontId = new mongoose.Types.ObjectId()
+  const domain = `ledger-${String(hosted)}.example.test`
   let server: Server
   let base = ''
 
@@ -55,13 +69,19 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
       { _id: owner, email: `ledger-owner-${String(owner)}@rentos.test`, phone: '0201112224', firstName: 'Owner', lastName: 'Ledger', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant' },
       { _id: partial, email: `ledger-partial-${String(partial)}@rentos.test`, phone: '0201112225', firstName: 'Kofi', lastName: 'Partial', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
       { _id: stranded, email: `ledger-stranded-${String(stranded)}@rentos.test`, phone: '0201112226', firstName: 'Esi', lastName: 'Stranded', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
+      { _id: hosted, email: `ledger-hosted-${String(hosted)}@rentos.test`, phone: '0201112227', firstName: 'Yaw', lastName: 'Hosted', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
     ])
+    await Storefront.collection.insertOne({ _id: storefrontId, ownerType: 'user', ownerId: String(hosted), slug: `ledger-${String(hosted)}`, name: 'Yaw Homes', status: 'active', branding: {} })
+    await StorefrontDomain.collection.insertOne({ storefrontId: String(storefrontId), domain, verificationToken: 'txt', status: 'active', tlsStatus: 'active' })
     await Worker.collection.insertOne({ userId: String(partial), name: 'Kofi', phone: '0201112225', location: 'Accra', status: 'available', approvalStatus: 'approved' })
     await TenantProfile.collection.insertOne({ userId: uid, occupation: 'Teacher' })
     await Favorite.collection.insertOne({ userId: uid, propertyId: 'ledger-property' })
     const app = express()
     app.use(express.json())
     app.use('/api/documents', documentsRouter)
+    app.use('/api/payouts', payoutsRouter)
+    app.use('/api/reviews', reviewsRouter)
+    app.use('/api/webhooks', webhooksRouter)
     app.use(errorHandler)
     server = await new Promise<Server>((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)) })
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -70,7 +90,13 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Promise.all([
-      User.collection.deleteMany({ _id: { $in: [subject, owner, partial, stranded] } }),
+      User.collection.deleteMany({ _id: { $in: [subject, owner, partial, stranded, hosted] } }),
+      PayoutAccount.collection.deleteMany({ userId: String(owner) }),
+      Review.collection.deleteMany({ userId: String(owner) }),
+      WebhookSubscription.collection.deleteMany({ userId: String(owner) }),
+      BusinessListing.collection.deleteMany({ businessId: `ledger-${String(owner)}` }),
+      Storefront.collection.deleteMany({ _id: storefrontId }),
+      StorefrontDomain.collection.deleteMany({ domain }),
       RefreshToken.collection.deleteMany({ userId: String(stranded) }),
       BiometricToken.collection.deleteMany({ userId: String(stranded) }),
       DeviceToken.collection.deleteMany({ userId: String(stranded) }),
@@ -145,6 +171,71 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
     expect(summary.recordsDeleted).toBeGreaterThanOrEqual(1)
     expect(await DocumentModel.exists({ _id: doc._id })).toBeNull()
     expect(deleteFromCloudinary).toHaveBeenCalledWith('rentos/documents/p.pdf', 'raw', 'upload')
+  })
+
+  it('records payout-account, review and webhook deletions, and deletes restored copies again', async () => {
+    const ownerId = String(owner)
+    const headers = { Authorization: `Bearer ${jwt.sign({ userId: ownerId, roles: ['tenant'], permissions: [], purpose: 'session' }, config.jwtSecret, { expiresIn: '5m' })}` }
+    const account = await PayoutAccount.create({ userId: ownerId, type: 'mobile_money', accountNumber: '0241234567', bankCode: 'MTN', bankName: 'MTN MoMo', accountName: 'Owner Ledger', recipientCode: 'RCP_ledger', verified: true })
+    const review = await Review.create({ propertyId: 'ledger-property', userId: ownerId, userName: 'Owner Ledger', rating: 4, title: 'Fine', content: 'A fine flat', verified: true })
+    const hook = await WebhookSubscription.create({ userId: ownerId, url: 'https://hooks.example.test/ledger', events: ['dispute.filed'], secret: 'whsec' })
+    const snapshots = await Promise.all([
+      PayoutAccount.collection.findOne({ _id: account._id }), Review.collection.findOne({ _id: review._id }), WebhookSubscription.collection.findOne({ _id: hook._id }),
+    ])
+
+    expect((await fetch(`${base}/api/payouts/account`, { method: 'DELETE', headers })).status).toBe(200)
+    expect((await fetch(`${base}/api/reviews/${review.id}`, { method: 'DELETE', headers })).status).toBe(200)
+    expect((await fetch(`${base}/api/webhooks/subscriptions/${hook.id}`, { method: 'DELETE', headers })).status).toBe(200)
+    for (const [scope, id] of [['payout_account', account.id], ['review', review.id], ['webhook_subscription', hook.id]] as const) {
+      const entry = await erasureLedger().findOne({ subjectId: ownerId, scope }).lean()
+      expect(entry, scope).toMatchObject({ source: 'owner', recordIds: [id], completedAt: expect.any(Date) })
+      // Ids only: never the account number, name or endpoint.
+      expect(JSON.stringify(entry)).not.toMatch(/0241234567|Owner Ledger|hooks\.example/)
+    }
+    expect(await PayoutAccount.exists({ userId: ownerId })).toBeNull()
+
+    // A restore from before the deletions brings all three back.
+    await PayoutAccount.collection.insertOne(snapshots[0]!)
+    await Review.collection.insertOne(snapshots[1]!)
+    await WebhookSubscription.collection.insertOne(snapshots[2]!)
+    const summary = await replayErasureLedger()
+    expect(summary.failed).toBe(0)
+    expect(await PayoutAccount.exists({ _id: account._id })).toBeNull()
+    expect(await Review.exists({ _id: review._id })).toBeNull()
+    expect(await WebhookSubscription.exists({ _id: hook._id })).toBeNull()
+  })
+
+  it('finishes a recorded business-listing deletion that never completed', async () => {
+    const listing = await BusinessListing.create({ businessId: `ledger-${String(owner)}`, title: 'Van hire', type: 'service' })
+    await recordErasure({ subjectId: String(owner), scope: 'business_listing', source: 'owner', recordIds: [listing.id] })
+    const summary = await replayErasureLedger()
+    expect(summary.failed).toBe(0)
+    expect(await BusinessListing.exists({ _id: listing._id })).toBeNull()
+    expect(await erasureLedger().findOne({ scope: 'business_listing', recordIds: listing.id }).lean()).toMatchObject({ completedAt: expect.any(Date) })
+  })
+
+  it('leaves the hosting provider alone when replaying onto a restored copy', async () => {
+    const hid = String(hosted)
+    const [userSnapshot, storefrontSnapshot, domainSnapshot] = await Promise.all([
+      User.collection.findOne({ _id: hosted }), Storefront.collection.findOne({ _id: storefrontId }), StorefrontDomain.collection.findOne({ domain }),
+    ])
+    expect(await closeAccount(hid, { source: 'self_service', actorId: hid })).toBe(true)
+    expect(detachDomain).toHaveBeenCalledWith(domain)
+    expect(await StorefrontDomain.countDocuments({ domain })).toBe(0)
+
+    // Restored from before the closure. The live service has already released
+    // the domain at the host — and another seller may hold it now.
+    await User.collection.replaceOne({ _id: hosted }, userSnapshot!)
+    await Storefront.collection.replaceOne({ _id: storefrontId }, storefrontSnapshot!)
+    await StorefrontDomain.collection.insertOne(domainSnapshot!)
+    detachDomain.mockClear()
+
+    const summary = await replayErasureLedger({ contactHost: false })
+    expect(summary.failed).toBe(0)
+    expect(detachDomain).not.toHaveBeenCalled()
+    expect(await StorefrontDomain.countDocuments({ domain })).toBe(0)
+    expect(await Storefront.findById(storefrontId).lean()).toMatchObject({ status: 'archived' })
+    expect(await User.findOne({ _id: hid, deletedAt: { $exists: true } }).lean()).toMatchObject({ firstName: 'Deleted' })
   })
 
   it('refuses a document deletion it cannot record, leaving the document in place', async () => {

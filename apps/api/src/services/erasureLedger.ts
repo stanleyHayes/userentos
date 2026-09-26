@@ -82,6 +82,17 @@ export async function recordErasure(entry: ErasureEntry): Promise<string> {
   return _id
 }
 
+/**
+ * Delete one record the user asked to delete, ledger first: the entry, the
+ * deletion, then completion. If the deletion fails the entry stays open and
+ * the daily replay finishes it.
+ */
+export async function recordedDeletion(entry: Omit<ErasureEntry, 'completed'>, remove: () => PromiseLike<unknown>): Promise<void> {
+  const entryId = await recordErasure(entry)
+  await remove()
+  await completeErasure(entryId)
+}
+
 /** A record deletion finished: start the entry's backup-window countdown. */
 export async function completeErasure(entryId: string, at = new Date()): Promise<void> {
   await erasureLedger().updateOne({ _id: entryId, completedAt: { $exists: false } }, { $set: { completedAt: at, expiresAt: expiryFrom(at) } })

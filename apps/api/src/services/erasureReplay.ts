@@ -2,9 +2,13 @@ import type { Model } from 'mongoose'
 import { User } from '../models/User.js'
 import { DocumentModel } from '../models/Document.js'
 import { Property } from '../models/Property.js'
-import type { IErasureLedger } from '../models/ErasureLedger.js'
+import { PayoutAccount } from '../models/PayoutAccount.js'
+import { Review } from '../models/Review.js'
+import { WebhookSubscription } from '../models/WebhookSubscription.js'
+import { BusinessListing } from '../models/BusinessListing.js'
+import type { ErasureScope, IErasureLedger } from '../models/ErasureLedger.js'
 import { erasureLedger, markAccountErasureComplete } from './erasureLedger.js'
-import { closeAccount, completeClosedAccount, unpublishAccount } from './accountClosure.js'
+import { closeAccount, completeClosedAccount, unpublishAccount, type HostOptions } from './accountClosure.js'
 import { eraseAccountRecords, ACCOUNT_ERASURE_DELAY_MS } from './accountErasure.js'
 import { eraseStoredAssets } from './propertyImages.js'
 import { erasureLedgerDays } from '../config/retentionSchedule.js'
@@ -22,9 +26,10 @@ import { logger } from '../utils/logger.js'
  *    audit entry written, if missing), then its take-down re-applied inside
  *    the grace period or its records erased after it. An account that no
  *    longer exists marks the entry complete.
- *  - document / property: records still present are deleted, after their
- *    stored files are erased again ('not found' counts as done). Entries whose
- *    request never finished are completed the same way.
+ *  - record scopes (documents, listings, reviews, payout accounts, webhook
+ *    subscriptions, business listings): records still present are deleted,
+ *    after their stored files are erased again ('not found' counts as done).
+ *    Entries whose request never finished are completed the same way.
  */
 export interface ReplaySummary {
   examined: number
@@ -39,14 +44,26 @@ export interface ReplaySummary {
 const PAGE = 200
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
-async function replayAccount(entry: IErasureLedger, now: Date, summary: ReplaySummary): Promise<void> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyModel = Model<any>
+/** The collection each record scope's recordIds point into. */
+const RECORD_MODELS: Readonly<Record<Exclude<ErasureScope, 'account'>, AnyModel>> = {
+  document: DocumentModel,
+  property: Property,
+  payout_account: PayoutAccount,
+  review: Review,
+  webhook_subscription: WebhookSubscription,
+  business_listing: BusinessListing,
+}
+
+async function replayAccount(entry: IErasureLedger, now: Date, summary: ReplaySummary, hostOptions: HostOptions): Promise<void> {
   const uid = entry.subjectId
   const cutoff = new Date(now.getTime() - ACCOUNT_ERASURE_DELAY_MS)
   if (await User.exists({ _id: uid })) {
     // Open again: a restore from before the closure, or a closure that failed part-way.
-    await closeAccount(uid, { source: 'ledger_replay', actorId: 'system', requestedAt: entry.requestedAt })
+    await closeAccount(uid, { source: 'ledger_replay', actorId: 'system', requestedAt: entry.requestedAt, ...hostOptions })
     summary.accountsClosed++
-    if (await eraseAccountRecords(uid, cutoff)) summary.accountsErased++
+    if (await eraseAccountRecords(uid, cutoff, hostOptions)) summary.accountsErased++
     return
   }
   const tombstone = await User.findOne({ _id: uid, deletedAt: { $exists: true } }).select('deletedAt').lean()
@@ -55,9 +72,9 @@ async function replayAccount(entry: IErasureLedger, now: Date, summary: ReplaySu
     // longer retry it; finish its sessions and audit entry here.
     await completeClosedAccount(uid, entry.source)
     if (tombstone.deletedAt && tombstone.deletedAt < cutoff) {
-      if (await eraseAccountRecords(uid, cutoff)) summary.accountsErased++
+      if (await eraseAccountRecords(uid, cutoff, hostOptions)) summary.accountsErased++
     } else {
-      await unpublishAccount(uid, entry.requestedAt)
+      await unpublishAccount(uid, entry.requestedAt, hostOptions)
       summary.accountsRefreshed++
     }
     return
@@ -68,8 +85,9 @@ async function replayAccount(entry: IErasureLedger, now: Date, summary: ReplaySu
   }
 }
 
-async function replayRecords(entry: IErasureLedger, now: Date, summary: ReplaySummary): Promise<void> {
-  const model: Model<unknown> = entry.scope === 'document' ? (DocumentModel as unknown as Model<unknown>) : (Property as unknown as Model<unknown>)
+async function replayRecords(entry: IErasureLedger & { scope: Exclude<ErasureScope, 'account'> }, now: Date, summary: ReplaySummary): Promise<void> {
+  const model = RECORD_MODELS[entry.scope]
+  if (!model) throw new Error(`Unknown erasure scope ${String(entry.scope)}`)
   const present = entry.recordIds.length ? await model.countDocuments({ _id: { $in: entry.recordIds } }) : 0
   if (present === 0 && entry.completedAt) return
   await eraseStoredAssets(entry.storageAssets)
@@ -83,8 +101,9 @@ async function replayRecords(entry: IErasureLedger, now: Date, summary: ReplaySu
   }
 }
 
-export async function replayErasureLedger(options: { now?: Date } = {}): Promise<ReplaySummary> {
+export async function replayErasureLedger(options: { now?: Date } & HostOptions = {}): Promise<ReplaySummary> {
   const now = options.now ?? new Date()
+  const hostOptions: HostOptions = { contactHost: options.contactHost ?? true }
   const summary: ReplaySummary = { examined: 0, accountsClosed: 0, accountsErased: 0, accountsRefreshed: 0, recordsDeleted: 0, entriesCompleted: 0, failed: 0 }
   let after: { requestedAt: Date; _id: string } | undefined
   for (;;) {
@@ -95,8 +114,8 @@ export async function replayErasureLedger(options: { now?: Date } = {}): Promise
     for (const entry of page) {
       summary.examined++
       try {
-        if (entry.scope === 'account') await replayAccount(entry, now, summary)
-        else await replayRecords(entry, now, summary)
+        if (entry.scope === 'account') await replayAccount(entry, now, summary, hostOptions)
+        else await replayRecords(entry as IErasureLedger & { scope: Exclude<ErasureScope, 'account'> }, now, summary)
       } catch {
         summary.failed++
         // Ids only — the ledger never holds anything else to log.

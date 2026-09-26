@@ -29,6 +29,7 @@ import { TransferRejectedError } from '../services/payouts/types.js'
 import { reconcilePayout, WEBHOOK_OVERDUE_MS } from '../services/payouts/reconcile.js'
 import { applyPayoutRefund } from '../services/payouts/refund.js'
 import { withMoneyTransaction } from '../services/payments/moneyTransaction.js'
+import { recordedDeletion } from '../services/erasureLedger.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -179,7 +180,16 @@ router.put('/account', authenticate, asyncHandler(async (req, res) => {
 router.delete('/account', authenticate, asyncHandler(async (req, res) => {
   // An in-flight payout still has its own snapshot of the destination, so
   // removing the account cannot strand one mid-transfer.
-  await PayoutAccount.deleteOne({ userId: req.user!.userId })
+  const account = await PayoutAccount.findOne({ userId: req.user!.userId }).select('_id').lean()
+  if (account) {
+    // It holds a full MoMo or bank account number: recorded in the erasure
+    // ledger, so a restored backup cannot bring it back.
+    const id = String(account._id)
+    await recordedDeletion(
+      { subjectId: req.user!.userId, scope: 'payout_account', source: 'owner', recordIds: [id] },
+      () => PayoutAccount.deleteOne({ _id: id }),
+    )
+  }
   success(res, null, 'Payout account removed')
 }))
 

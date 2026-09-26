@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { eraseAvatars } from './avatarStorage.js'
 import { erasePersonalDocuments } from './documentErasure.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
-import { releaseStorefrontDomains } from './accountClosure.js'
+import { releaseStorefrontDomains, type HostOptions } from './accountClosure.js'
 import { markAccountErasureComplete } from './erasureLedger.js'
 import { NEW_LEAD_TITLE, VIEWING_REQUESTED_TITLE, newLeadMessage, viewingRequestedMessage, legacyLeadMessage, legacyViewingMessage } from './enquiryNotices.js'
 import { RETENTION_DAYS } from '../config/retentionSchedule.js'
@@ -63,7 +63,9 @@ export const ERASED_CONTACT = 'removed'
 /** A payout still moving needs its destination; erasure waits for it to settle. */
 const IN_FLIGHT_PAYOUT_STATUSES: Array<'requested' | 'processing'> = ['requested', 'processing']
 /** An affiliate commission not yet settled either way. */
-const UNPAID_COMMISSION_STATUSES: Array<'pending' | 'approved' | 'payable'> = ['pending', 'approved', 'payable']
+export const UNPAID_COMMISSION_STATUSES: Array<'pending' | 'approved' | 'payable'> = ['pending', 'approved', 'payable']
+/** Why erasure suspended an affiliate profile instead of deleting it; the retention purge deletes it once nothing is owed. */
+export const AFFILIATE_CLOSED_REASON = 'Account closed'
 
 const referencedBy = async (checks: Array<() => PromiseLike<unknown>>) => {
   for (const check of checks) if (await check()) return true
@@ -102,7 +104,7 @@ async function eraseProperties(uid: string): Promise<void> {
  * Public profiles: deleted, or — where a booking, payment or coupon use
  * still points at one — kept with every contact detail removed.
  */
-async function eraseDirectoryProfiles(uid: string): Promise<void> {
+async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Promise<void> {
   for (const worker of await Worker.find({ userId: uid }).select('_id').lean()) {
     const id = String(worker._id)
     if (await ServiceBooking.exists({ workerId: id })) {
@@ -125,7 +127,11 @@ async function eraseDirectoryProfiles(uid: string): Promise<void> {
   }
 
   const storefrontIds = (await Storefront.find({ ownerId: uid }).select('_id').lean()).map((s) => String(s._id))
-  await releaseStorefrontDomains(storefrontIds)
+  // A domain the host would not release must not outlive the storefront and
+  // account it points at: nothing would retry it once they are gone.
+  if (await releaseStorefrontDomains(storefrontIds, hostOptions)) {
+    throw new Error('A custom domain was not released by the host; account retained for retry')
+  }
   for (const id of storefrontIds) {
     await BlogPost.deleteMany({ storefrontId: id })
     if (await MarketplaceTransaction.exists({ storefrontId: id })) {
@@ -147,7 +153,7 @@ async function eraseDirectoryProfiles(uid: string): Promise<void> {
 }
 
 /** Idempotent cleanup. Retain the account tombstone until every operation succeeds. */
-export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<boolean> {
+export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions: HostOptions = {}): Promise<boolean> {
   // Recheck eligibility before touching related data, including on manual/retry calls.
   if (!(await User.exists({ _id: uid, deletedAt: { $lt: cutoff } }))) return false
   // The payout record keeps its own destination snapshot, but a transfer the
@@ -158,7 +164,7 @@ export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<bo
   await eraseAvatars(uid)
   await erasePersonalDocuments(uid)
   await eraseProperties(uid)
-  await eraseDirectoryProfiles(uid)
+  await eraseDirectoryProfiles(uid, hostOptions)
   // Before the leads and viewings below lose the details it matches on.
   await scrubEnquiryNotifications(uid)
   // A per-run id, so two erased reporters' open reports on one target never
@@ -271,7 +277,7 @@ async function eraseAffiliateProfile(uid: string): Promise<void> {
   if (!profile) return
   const unpaid = await AffiliateCommission.exists({ affiliateId: String(profile._id), status: { $in: UNPAID_COMMISSION_STATUSES } })
   if (unpaid) {
-    await AffiliateProfile.updateOne({ _id: profile._id }, { $set: { status: 'suspended', suspendedReason: 'Account closed' } })
+    await AffiliateProfile.updateOne({ _id: profile._id }, { $set: { status: 'suspended', suspendedReason: AFFILIATE_CLOSED_REASON } })
     return
   }
   await AffiliateProfile.deleteOne({ _id: profile._id })

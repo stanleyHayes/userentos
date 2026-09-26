@@ -6,6 +6,7 @@ import { WebhookSubscription } from '../models/WebhookSubscription.js'
 import { success, error } from '../utils/response.js'
 import { dispatchWebhook, assertSafeWebhookUrl } from '../services/webhooks.js'
 import type { WebhookEvent } from '../services/webhooks.js'
+import { recordedDeletion } from '../services/erasureLedger.js'
 
 const router = Router()
 
@@ -100,7 +101,11 @@ async function overSubscriptionCap(userId: string): Promise<boolean> {
 router.delete('/subscriptions/:id', authenticate, async (req, res) => {
   const sub = await WebhookSubscription.findOne({ _id: req.params.id, userId: req.user!.userId })
   if (!sub) { error(res, 'Subscription not found', 404); return }
-  await WebhookSubscription.deleteOne({ _id: req.params.id })
+  // Recorded so a restored backup cannot resume deliveries to the endpoint.
+  await recordedDeletion(
+    { subjectId: req.user!.userId, scope: 'webhook_subscription', source: 'owner', recordIds: [String(sub._id)] },
+    () => WebhookSubscription.deleteOne({ _id: sub._id }),
+  )
   success(res, null, 'Subscription deleted')
 })
 

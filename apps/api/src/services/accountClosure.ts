@@ -48,6 +48,8 @@ export interface CloseAccountOptions {
   ipAddress?: string
   /** When the deletion was asked for — earlier than now when a ledger replay re-applies it. */
   requestedAt?: Date
+  /** False on a replay onto a restored copy; see HostOptions. */
+  contactHost?: boolean
 }
 
 const CLOSED_REASON = 'Account closed'
@@ -66,14 +68,32 @@ export class AccountClosureIncompleteError extends Error {
 const WITHDRAWABLE_LISTING_STATUSES = ['draft', 'pending_review', 'in_review', 'changes_requested', 'approved', 'published'] as const
 
 /**
+ * Whether erasure may call the hosting provider. False when the ledger is
+ * replayed onto a restored copy (scripts/replayErasureLedger.ts): the host is
+ * live state a database restore never rolled back. The live service already
+ * released the domain, and another seller may hold it by now, so detaching it
+ * from a scratch or restored copy could take a live storefront off the air.
+ */
+export interface HostOptions {
+  contactHost?: boolean
+}
+
+/**
  * Release custom domains at the host and drop their records, so the domain
  * stops serving and another seller can claim it. A domain the host refuses to
- * release is kept as 'removed' (not served, not polled) for the purge to retry.
+ * release is kept as 'removed' (not served, not polled) for a retry; the
+ * return value counts them. With contactHost false the records are dropped
+ * without asking the host (see HostOptions).
  */
-export async function releaseStorefrontDomains(storefrontIds: string[]): Promise<void> {
-  if (storefrontIds.length === 0) return
+export async function releaseStorefrontDomains(storefrontIds: string[], { contactHost = true }: HostOptions = {}): Promise<number> {
+  if (storefrontIds.length === 0) return 0
   const domains = await StorefrontDomain.find({ storefrontId: { $in: storefrontIds } })
+  let unreleased = 0
   for (const record of domains) {
+    if (!contactHost) {
+      await record.deleteOne()
+      continue
+    }
     const detached = await hostingProvider().detachDomain(record.domain)
       .catch((err: Error) => ({ ok: false, reason: err.message }))
     if (detached.ok) {
@@ -81,12 +101,14 @@ export async function releaseStorefrontDomains(storefrontIds: string[]): Promise
       continue
     }
     logger.warn(`[Account closure] Host did not release custom domain ${String(record._id)}; kept as removed for retry`)
+    unreleased++
     record.status = 'removed'
     record.tlsStatus = 'none'
     record.tlsChallenges = []
     record.failureReason = detached.reason
     await record.save()
   }
+  return unreleased
 }
 
 /**
@@ -94,7 +116,7 @@ export async function releaseStorefrontDomains(storefrontIds: string[]): Promise
  * Idempotent: the ledger replay re-runs it for closed accounts still inside
  * the grace period, which heals a partial failure.
  */
-export async function unpublishAccount(uid: string, now = new Date()): Promise<void> {
+export async function unpublishAccount(uid: string, now = new Date(), hostOptions: HostOptions = {}): Promise<void> {
   const [storefronts, businesses] = await Promise.all([
     Storefront.find({ ownerId: uid }).select('_id').lean(),
     Business.find({ ownerId: uid }).select('_id').lean(),
@@ -107,7 +129,7 @@ export async function unpublishAccount(uid: string, now = new Date()): Promise<v
     () => Business.updateMany({ ownerId: uid }, { $set: { approvalStatus: 'rejected', rejectionReason: CLOSED_REASON } }),
     () => BusinessListing.updateMany({ businessId: { $in: businessIds } }, { $set: { isActive: false } }),
     () => Storefront.updateMany({ ownerId: uid }, { $set: { status: 'archived' } }),
-    () => releaseStorefrontDomains(storefrontIds),
+    () => releaseStorefrontDomains(storefrontIds, hostOptions),
     () => Promotion.updateMany({ $or: [{ ownerId: uid }, { storefrontId: { $in: storefrontIds } }] }, { $set: { status: 'disabled' } }),
     () => AgencyProfile.updateMany({ ownerId: uid, hiddenAt: { $exists: false } }, { $set: { hiddenAt: now } }),
     // Both directions: landlords lose access to this tenant, and this account's
@@ -150,7 +172,7 @@ export async function closeAccount(userId: string, options: CloseAccountOptions)
 }
 
 async function finishClosure(user: InstanceType<typeof User>, userId: string, requestedAt: Date, options: CloseAccountOptions): Promise<void> {
-  await unpublishAccount(userId, requestedAt)
+  await unpublishAccount(userId, requestedAt, { contactHost: options.contactHost })
   await rememberLegacyAvatar(userId, user.profileImage)
 
   /*

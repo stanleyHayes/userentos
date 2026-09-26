@@ -16,6 +16,7 @@ import { summarizeInquiryStatuses } from '../services/businessAnalytics.js'
 import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
 import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
+import { recordedDeletion } from '../services/erasureLedger.js'
 
 const router = Router()
 
@@ -347,7 +348,11 @@ router.delete('/me/listings/:id', authenticate, requireRole('business'), require
   const listing = await BusinessListing.findById(param(req.params.id))
   if (!business || !listing || listing.businessId !== business._id.toString()) { error(res, 'Listing not found', 404); return }
 
-  await listing.deleteOne()
+  // Recorded so a restored backup cannot republish it.
+  await recordedDeletion(
+    { subjectId: req.user!.userId, scope: 'business_listing', source: 'owner', recordIds: [String(listing._id)] },
+    () => listing.deleteOne(),
+  )
   success(res, null, 'Listing deleted')
 })
 

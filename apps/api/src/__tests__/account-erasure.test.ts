@@ -63,6 +63,8 @@ const { Employment } = await import('../models/Employment.js')
 const { PropertyExpense } = await import('../models/PropertyExpense.js')
 const { Notification } = await import('../models/Notification.js')
 const { markAccountErasureComplete } = await import('../services/erasureLedger.js')
+const { releaseStorefrontDomains } = await import('../services/accountClosure.js')
+const { Storefront } = await import('../models/Storefront.js')
 const { eraseAccountRecords, purgeExpiredAccounts, ACCOUNT_ERASURE_DELAY_MS } = await import('../services/accountErasure.js')
 
 const cutoff = new Date('2026-08-14T00:00:00Z')
@@ -165,6 +167,21 @@ describe('retryable account erasure', () => {
     const scrubbed = vi.mocked(Notification.updateMany).mock.invocationCallOrder[0]
     expect(scrubbed).toBeLessThan(vi.mocked(Lead.updateMany).mock.invocationCallOrder[0])
     expect(scrubbed).toBeLessThan(vi.mocked(Viewing.updateMany).mock.invocationCallOrder[0])
+  })
+
+  it('keeps the tombstone and the storefront while the host has not released a custom domain', async () => {
+    // Nothing would retry the release once the account is gone.
+    vi.mocked(Storefront.find).mockReturnValueOnce({ select: () => ({ lean: () => Promise.resolve([{ _id: 'shop-1' }]) }) } as never)
+    vi.mocked(releaseStorefrontDomains).mockResolvedValueOnce(1)
+    await expect(eraseAccountRecords(uid, cutoff)).rejects.toThrow('custom domain was not released')
+    expect(releaseStorefrontDomains).toHaveBeenCalledWith(['shop-1'], {})
+    expect(Storefront.deleteOne).not.toHaveBeenCalled()
+    expect(User.deleteOne).not.toHaveBeenCalled()
+  })
+
+  it('passes a replay onto a restored copy through to the domain release, so the host is not called', async () => {
+    expect(await eraseAccountRecords(uid, cutoff, { contactHost: false })).toBe(true)
+    expect(releaseStorefrontDomains).toHaveBeenCalledWith([], { contactHost: false })
   })
 
   it('keeps the tombstone while a payout is still in flight, so its destination survives', async () => {

@@ -19,7 +19,8 @@ Daily jobs record their last success in the `jobruns` collection. After boot, an
 | --- | --- |
 | Closed account: identity | scrubbed at closure; tombstone deleted after 30 days |
 | Closed account: profile, preferences, photos, identity documents, payout destinations, messages sent, enquiries, unapproved applications | deleted (or anonymised where others keep the record) 30 days after closure |
-| Listings, service-provider, business, storefront and agency profiles of a closed account | taken down at closure; deleted after 30 days, or kept without photos/contact details where a tenancy, payment or booking refers to them |
+| Listings, service-provider, business, storefront and agency profiles of a closed account | taken down at closure; deleted after 30 days, or kept without photos/contact details where a tenancy, payment or booking refers to them. The account is not deleted while the host refuses to release one of its custom domains |
+| Affiliate profile of an erased account with commission still unpaid | suspended at erasure; deleted by the daily purge once none is unpaid |
 | Security and audit log, including sign-up consent with IP address and device | 2 years, also after account deletion |
 | Read notifications / all notifications | 1 year after creation / 2 years after last update |
 | Applications not approved | 12 months after last update |
