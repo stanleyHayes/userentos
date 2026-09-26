@@ -748,6 +748,13 @@ router.get('/:slug', optionalAuth, asyncHandler(async (req, res) => {
 }))
 
 /**
+ * Fields a public listing never carries, the same set publicPropertyView strips
+ * on every other public property read: the search embedding (about 30KB of
+ * floats per listing), the reviewer's id, moderation notes and quota bookkeeping.
+ */
+const PUBLIC_LISTING_PROJECTION = '-embedding -reviewedBy -quotaSlot -reviewVersion -reviewIssues -rejectionReason'
+
+/**
  * A storefront's listings.
  *
  * Scoped on the SERVER by owner — never by a frontend filter — which is the
@@ -763,7 +770,7 @@ router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
   const filter = publicStorefrontScope(storefront) as unknown as Record<string, unknown>
 
   const [items, total] = await Promise.all([
-    Property.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Property.find(filter, PUBLIC_LISTING_PROJECTION).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Property.countDocuments(filter),
   ])
 
