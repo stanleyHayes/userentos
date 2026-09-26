@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/authStore'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
 import { ReportContentButton } from '@/components/ReportContentDialog'
+import { SponsoredBadge } from '@/components/ui/SponsoredBadge'
 import { Store, MapPin, Phone, Mail, Search, ShieldCheck, Package, Truck, Percent, MessageSquare, Star, Loader2 } from 'lucide-react'
 
 const LISTING_TYPE_ICONS: Record<BusinessListing['type'], React.ReactNode> = {
@@ -43,6 +44,8 @@ function ListingRow({ listing }: { listing: BusinessListing }) {
           {LISTING_TYPE_ICONS[listing.type]}
         </span>
         <span className="text-xs font-medium text-primary-dark dark:text-white truncate">{listing.title}</span>
+        {/* Shown to everyone; RentOS no longer uses anyone's lease to decide who sees it. */}
+        {listing.newMoverOnly && <Badge variant="default" className="text-[9px]">For new movers</Badge>}
       </div>
       <span className={cn('text-xs flex-shrink-0', listing.type === 'discount' ? 'font-bold text-amber-600 dark:text-amber-400' : 'font-semibold text-muted dark:text-gray-400')}>
         {listing.type === 'discount'
@@ -57,13 +60,14 @@ function ListingRow({ listing }: { listing: BusinessListing }) {
 function BusinessCard({ item, onOpen }: { item: BusinessWithListings; onOpen: () => void }) {
   const { business, listings } = item
   return (
-    <Card className="cursor-pointer flex flex-col" onClick={onOpen}>
+    <Card className="cursor-pointer flex flex-col" onClick={onOpen} data-testid="business-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="font-semibold text-primary-dark dark:text-white flex items-center gap-1.5 truncate">
             {business.name}
             {business.isVerified && <ShieldCheck size={14} className="flex-shrink-0 text-green-500" />}
-            {business.featuredUntil && new Date(business.featuredUntil) > new Date() && <Badge variant="warning" className="text-[9px]">Featured</Badge>}
+            {/* Paid "featured" placement: the API ranks it first, so it is labelled as paid. */}
+            {item.isFeatured && <SponsoredBadge className="text-[9px]" />}
           </h3>
           <p className="text-xs text-muted dark:text-gray-500 mt-0.5 flex items-center gap-1">
             <MapPin size={10} /> {business.city}
@@ -159,6 +163,7 @@ function BusinessDetailModal({ item, onClose }: { item: BusinessWithListings; on
     <Modal open onClose={onClose} title={business.name}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
+          {item.isFeatured && <SponsoredBadge className="text-[10px]" />}
           <Badge variant="default" className="text-[10px]">{businessCategoryLabel(business.category)}</Badge>
           {/* isVerified is set when an admin approves the business profile —
               it is a moderation review, not a licence or quality check. */}
@@ -278,7 +283,8 @@ export function LocalServicesPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<BusinessWithListings | null>(null)
 
-  const { data, isLoading } = useBusinesses({ category, city, search })
+  // The one directory screen that labels paid businesses, so the one that asks for the boost.
+  const { data, isLoading } = useBusinesses({ category, city, search, placement: 'directory' })
   const items = data?.items ?? []
 
   return (

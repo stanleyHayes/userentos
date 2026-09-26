@@ -18,8 +18,9 @@ import {
   Plus, Search, MapPin, SlidersHorizontal,
   Bed, Bath, Car, Sofa, ArrowUpDown, Eye, Building2,
   Grid3X3, List, Send, Accessibility,
-  Upload, Megaphone,
+  Upload,
 } from 'lucide-react'
+import { SponsoredBadge } from '@/components/ui/SponsoredBadge'
 import toast from 'react-hot-toast'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
@@ -66,6 +67,8 @@ interface Filters {
 type PropertyCard = Property & {
   matchScore?: number
   address?: Property['address'] & { neighborhood?: string }
+  /** Set by the API only on a paid placement, and only when we ask for one. */
+  sponsored?: boolean
 }
 
 const defaultFilters: Filters = {
@@ -94,6 +97,9 @@ export function PropertiesPage() {
 
   const queryParams = new URLSearchParams()
   if (isLandlord) queryParams.set('mine', 'true')
+  // Paid placements are opt-in per request. This browse page labels them (both
+  // card layouts carry SponsoredBadge), so it is the one place that asks.
+  else queryParams.set('placement', 'search_top')
   if (debouncedSearch) queryParams.set('search', debouncedSearch)
   if (filters.type) queryParams.set('type', filters.type)
   if (filters.region) queryParams.set('region', filters.region)
@@ -112,7 +118,7 @@ export function PropertiesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['properties', qs],
-    queryFn: () => api.get<{ items: Property[] }>(`/properties${qs ? `?${qs}` : ''}`),
+    queryFn: () => api.get<{ items: PropertyCard[] }>(`/properties${qs ? `?${qs}` : ''}`),
   })
   const properties = data?.items ?? []
 
@@ -413,9 +419,7 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
               <Building2 size={40} className="text-primary/20" />
             )}
             <div className="absolute top-3 left-3 flex gap-1.5">
-              {(p as { sponsored?: boolean }).sponsored && (
-                <Badge variant="warning" className="backdrop-blur"><Megaphone size={10} /> Sponsored</Badge>
-              )}
+              {p.sponsored && <SponsoredBadge className="backdrop-blur" />}
               <Badge variant={statusVariant[p.status as PropertyStatus]} className="backdrop-blur">{p.status?.replace('_', ' ')}</Badge>
               {p.listingStatus && p.listingStatus !== 'approved' && (
                 <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'} className="backdrop-blur">{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>
@@ -498,6 +502,7 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
             <Building2 size={28} className="text-primary/20" />
           )}
           <div className="absolute top-2 left-2 flex gap-1">
+            {p.sponsored && <SponsoredBadge className="text-[10px]" />}
             <Badge variant={statusVariant[p.status as PropertyStatus]} className="text-[10px]">{p.status?.replace('_', ' ')}</Badge>
             {p.listingStatus && p.listingStatus !== 'approved' && (
               <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'} className="text-[10px]">{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>

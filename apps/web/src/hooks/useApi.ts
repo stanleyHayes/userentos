@@ -96,7 +96,15 @@ export function usePropertyPins(params?: { type?: string; city?: string; maxRent
   })
 }
 
-export function useProperties(params?: { status?: string; type?: string; city?: string; mine?: boolean }) {
+/**
+ * Property list for pickers and dashboards. Deliberately has no `placement`
+ * option: these screens don't label paid placements, so they must never ask
+ * for sponsored listings (only PropertiesPage, which labels them, does).
+ */
+export function useProperties(
+  params?: { status?: string; type?: string; city?: string; mine?: boolean },
+  options?: { enabled?: boolean },
+) {
   const query = new URLSearchParams()
   if (params?.mine) query.set('mine', 'true')
   if (params?.status) query.set('status', params.status)
@@ -106,6 +114,7 @@ export function useProperties(params?: { status?: string; type?: string; city?: 
   return useQuery({
     queryKey: ['properties', params],
     queryFn: () => api.get<PaginatedResponse<Property>>(`/properties${qs ? `?${qs}` : ''}`),
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -2484,6 +2493,7 @@ export interface BusinessListing {
   isActive: boolean
   images: string[]
   stockQuantity?: number
+  /** Tagged "For new movers". Shown to everyone; the business checks eligibility when it's redeemed. */
   newMoverOnly: boolean
   createdAt: string
 }
@@ -2505,6 +2515,8 @@ export interface BusinessWithListings {
   business: Business
   /** Active listings only, per the /businesses contract. */
   listings: BusinessListing[]
+  /** A paid placement, to be labelled Sponsored. Only sent when the request passed placement=directory. */
+  isFeatured?: boolean
 }
 
 export type BusinessInquiryStatus = 'new' | 'contacted' | 'won' | 'lost'
@@ -2545,14 +2557,20 @@ export interface BusinessAnalytics {
   inquiriesByDay: { date: string; count: number }[]
 }
 
+/**
+ * The local-services directory. `placement: 'directory'` asks the API to boost
+ * paid "featured" businesses and flag them `isFeatured`; pass it only from a
+ * screen that labels them Sponsored. Without it the order is organic.
+ */
 export function useBusinesses(
-  params?: { category?: BusinessCategory | ''; city?: string; search?: string },
+  params?: { category?: BusinessCategory | ''; city?: string; search?: string; placement?: 'directory' },
   options?: { enabled?: boolean },
 ) {
   const query = new URLSearchParams()
   if (params?.category) query.set('category', params.category)
   if (params?.city) query.set('city', params.city)
   if (params?.search) query.set('search', params.search)
+  if (params?.placement) query.set('placement', params.placement)
   const qs = query.toString()
   return useQuery({
     queryKey: ['businesses', params],
