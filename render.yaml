@@ -190,7 +190,8 @@ services:
       - key: APPLE_STORE_ROOT_CA_FILES
         sync: false
       # Comma-separated user IDs that may hold free test purchases (Apple
-      # sandbox, Google license testing): the App Review demo landlord only.
+      # sandbox, Google license testing): the App Review demo landlord, plus
+      # internal testers only while they test purchases; remove IDs afterwards.
       - key: STORE_SANDBOX_ALLOWED_USER_IDS
         sync: false
 

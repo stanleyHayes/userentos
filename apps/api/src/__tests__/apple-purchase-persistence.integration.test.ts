@@ -196,7 +196,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     const saved = await ApplePurchase.findById(first!._id).lean()
     expect(saved).toMatchObject({ revision: 2, entitlementState: 'active', recoveryAttempts: 0 })
     expect(saved?.recoveryLeaseId).toBeUndefined()
-    expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String))
+    expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String), 'production')
     expect((await resolveEntitlements(userId.toString())).features['property.limit']).toBe(8)
     expect(await recoverApplePurchases(1)).toMatchObject({ processed: 0 })
   })
@@ -204,7 +204,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
   it('reconciles signed lifecycle delivery through actual entitlements and durable deduplication', async () => {
     await completeApplePurchase(userId.toString(), '123456')
     const notificationId = randomUUID()
-    vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId, notificationType: 'REVOKE', subtype: null, applicationId: app, environment: 'production', signedAt: new Date().toISOString(), transaction: { ...facts(), transactionId: '123457' } })
+    vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId, notificationType: 'REVOKE', subtype: null, applicationId: app, environment: 'production', signedAt: new Date().toISOString(), transaction: { ...facts(), transactionId: '123457', appAccountToken: randomUUID() } })
     vi.mocked(verifyAppleSubscription).mockRejectedValueOnce(new Error('provider_unavailable'))
     await expect(processAppleNotification({ signedPayload: 'fixture' })).rejects.toThrow('provider_unavailable')
     expect(await StoreNotification.exists({ messageId: notificationId })).toBeNull()
@@ -218,7 +218,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     expect(vi.mocked(verifyAppleSubscription).mock.calls).toHaveLength(calls)
     // A later paid renewal is determined from fresh provider state, even when
     // the notification transaction itself is historical.
-    vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId: randomUUID(), notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'production', signedAt: new Date().toISOString(), transaction: facts() })
+    vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId: randomUUID(), notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'production', signedAt: new Date().toISOString(), transaction: { ...facts(), appAccountToken: randomUUID() } })
     vi.mocked(verifyAppleSubscription).mockResolvedValue({ ...observation(), transactionId: '123458' })
     await processAppleNotification({ signedPayload: 'fixture' })
     expect((await resolveEntitlements(userId.toString())).features['property.limit']).toBe(8)
@@ -234,6 +234,19 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
       await expect(completeApplePurchase(owner, '123456')).rejects.toMatchObject({ code: 'test_purchase' })
       expect(verifyAppleSubscription).not.toHaveBeenCalled()
       expect(await ApplePurchase.countDocuments({ userId: owner })).toBe(0)
+      // So Apple's sandbox notifications for that chain are acknowledged, not
+      // retried forever; a listed owner's may precede registration, so they wait.
+      const { storeAccountToken } = (await mongoose.connection.db!.collection('users').findOne({ _id: userId }))!
+      const unjournaled = () => ({ notificationId: randomUUID(), notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'test' as const, signedAt: new Date().toISOString(), transaction: { ...facts(), environment: 'test' as const, appAccountToken: storeAccountToken } })
+      const refused = unjournaled()
+      vi.mocked(verifyAppleNotification).mockResolvedValue(refused)
+      await processAppleNotification({ signedPayload: 'fixture' })
+      expect(await StoreNotification.exists({ messageId: refused.notificationId })).not.toBeNull()
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', owner)
+      const early = unjournaled()
+      vi.mocked(verifyAppleNotification).mockResolvedValue(early)
+      await expect(processAppleNotification({ signedPayload: 'fixture' })).rejects.toMatchObject({ status: 503 })
+      expect(await StoreNotification.exists({ messageId: early.notificationId })).toBeNull()
       // The review demo landlord: journaled as a test chain and activated.
       vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', `${otherId}, ${owner}`)
       expect(await completeApplePurchase(owner, '123456')).toMatchObject({ entitlementState: 'active' })
@@ -245,7 +258,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
       // Lifecycle polling keeps the demo account's chain current.
       await ApplePurchase.updateOne({ _id: row!._id }, { $set: { recoveryNextAttemptAt: new Date(0) } })
       expect(await recoverApplePurchases(1)).toMatchObject({ processed: 1, failed: 0 })
-      expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String))
+      expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String), 'test')
       // Off the list: the active test row grants nothing, is not polled, and
       // its notifications are acknowledged without being reconciled again.
       vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', otherId.toString())
@@ -256,7 +269,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
       expect(await recoverApplePurchases(1)).toMatchObject({ processed: 0 })
       const calls = vi.mocked(verifyAppleSubscription).mock.calls.length
       const notificationId = randomUUID()
-      vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId, notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'test', signedAt: new Date().toISOString(), transaction: { ...facts(), environment: 'test' } })
+      vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId, notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'test', signedAt: new Date().toISOString(), transaction: { ...facts(), environment: 'test', appAccountToken: randomUUID() } })
       await processAppleNotification({ signedPayload: 'fixture' })
       expect(vi.mocked(verifyAppleSubscription).mock.calls).toHaveLength(calls)
       expect(await StoreNotification.exists({ messageId: notificationId })).not.toBeNull()
@@ -271,7 +284,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
   it('orders signed refunds and reversals atomically and requires fresh verification after reversal', async () => {
     vi.mocked(verifyAppleSubscription).mockImplementation(async () => { await new Promise(resolve => setTimeout(resolve, 2)); return observation() })
     await completeApplePurchase(userId.toString(), '123456')
-    function event(notificationType: string, signedAt: string) { return { notificationId: randomUUID(), notificationType, subtype: null, applicationId: app, environment: 'production' as const, signedAt, transaction: { ...facts(), transactionId: '123457' } } }
+    function event(notificationType: string, signedAt: string) { return { notificationId: randomUUID(), notificationType, subtype: null, applicationId: app, environment: 'production' as const, signedAt, transaction: { ...facts(), transactionId: '123457', appAccountToken: randomUUID() } } }
     const refund = event('REFUND', '2026-09-01T00:00:00Z')
     const reversal = event('REFUND_REVERSED', '2026-09-02T00:00:00Z')
     await Promise.all([recordAppleRevocation(refund), recordAppleRevocation(reversal), recordAppleRevocation(refund)])
@@ -293,7 +306,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     await completeApplePurchase(userId.toString(), '123456')
     expect(await activeAppleSubscription(userId.toString())).not.toBeNull()
     // Refunding an older transaction does not remove the later renewal.
-    await recordAppleRevocation({ ...event('REFUND', '2026-09-04T00:00:00Z'), transaction: { ...facts(), transactionId: '123456' } })
+    await recordAppleRevocation({ ...event('REFUND', '2026-09-04T00:00:00Z'), transaction: { ...facts(), transactionId: '123456', appAccountToken: randomUUID() } })
     expect(await activeAppleSubscription(userId.toString())).not.toBeNull()
   })
 

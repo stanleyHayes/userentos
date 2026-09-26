@@ -2,16 +2,17 @@ import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vites
 import express from 'express'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), find: vi.fn(), exists: vi.fn(), create: vi.fn(), complete: vi.fn() }))
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), find: vi.fn(), exists: vi.fn(), create: vi.fn(), complete: vi.fn(), user: vi.fn() }))
 vi.mock('../services/storeBilling/appleStore.js', async original => ({ ...await original<object>(), verifyAppleNotification: mocks.verify }))
 vi.mock('../models/ApplePurchase.js', () => ({ ApplePurchase: { findOne: mocks.find } }))
 vi.mock('../models/StoreNotification.js', () => ({ StoreNotification: { exists: mocks.exists, create: mocks.create } }))
+vi.mock('../models/User.js', () => ({ User: { findOne: mocks.user } }))
 vi.mock('../services/storeBilling/completeApplePurchase.js', () => ({ completeApplePurchase: mocks.complete }))
 import router from '../routes/appleNotifications.js'
 import { StoreVerificationError } from '../services/storeBilling/googlePlay.js'
 let server: Server
 let url: string
-const event = { notificationId: 'delivery', notificationType: 'DID_RENEW', applicationId: 'gh.rentos.mobile', environment: 'production', transaction: { originalTransactionId: '123400', transactionId: '123456' } }
+const event = { notificationId: 'delivery', notificationType: 'DID_RENEW', applicationId: 'gh.rentos.mobile', environment: 'production', transaction: { originalTransactionId: '123400', transactionId: '123456', appAccountToken: '9b766a49-7806-4e84-9555-f614f53c95c1' } }
 async function send(body: unknown = { signedPayload: 'private-jws' }) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
 beforeAll(async () => {
   const app = express(); app.use(express.json()); app.use('/apple', router)
@@ -54,6 +55,35 @@ describe('Apple notification HTTP processing', () => {
     expect(result.status).toBe(503)
     expect(result.headers.get('retry-after')).toBe('30')
     expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.user).not.toHaveBeenCalled()
+  })
+  it('acknowledges an unjournaled sandbox chain unless an allowlisted owner may still register it', async () => {
+    const reviewer = '64f0000000000000000000aa'
+    const owner = (id: string | null) => mocks.user.mockReturnValue({ select: () => ({ lean: async () => id && { _id: id } }) })
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('APPLE_STORE_BUNDLE_ID', 'gh.rentos.mobile')
+    vi.stubEnv('APPLE_STORE_ENVIRONMENT', 'Production')
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', reviewer)
+    try {
+      mocks.verify.mockResolvedValue({ ...event, environment: 'test' })
+      mocks.find.mockReturnValue({ select: () => ({ lean: async () => null }) })
+      // A TestFlight tester who is not listed: the journal refused the purchase.
+      owner('64f0000000000000000000bb')
+      expect((await send()).status).toBe(204)
+      expect(mocks.user).toHaveBeenCalledWith({ storeAccountToken: event.transaction.appAccountToken, deletedAt: { $exists: false } })
+      expect(mocks.create).toHaveBeenCalledWith({ subscription: '["apple","gh.rentos.mobile","test"]', messageId: 'delivery' })
+      // No open account holds the token.
+      mocks.create.mockClear(); owner(null)
+      expect((await send()).status).toBe(204)
+      expect(mocks.create).toHaveBeenCalledOnce()
+      // The demo landlord's device may simply not have registered the row yet.
+      mocks.create.mockClear(); owner(reviewer)
+      const result = await send()
+      expect(result.status).toBe(503)
+      expect(result.headers.get('retry-after')).toBe('30')
+      expect(mocks.create).not.toHaveBeenCalled()
+      expect(mocks.complete).not.toHaveBeenCalled()
+    } finally { vi.unstubAllEnvs() }
   })
   it('does not acknowledge unsupported consumption processing', async () => {
     mocks.verify.mockResolvedValue({ ...event, notificationType: 'CONSUMPTION_REQUEST' })
