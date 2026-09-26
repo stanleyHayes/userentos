@@ -181,7 +181,7 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
 
       {/* Second KPI row */}
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Collection Rate" value={`${num(a?.collectionRate)}%`} icon={<BarChart3 size={18} />} accent="#059669" />
+        <StatCard label="Collection Rate" value={`${Math.min(100, num(a?.collectionRate))}%`} icon={<BarChart3 size={18} />} accent="#059669" />
         <StatCard label="Avg. Rent" value={formatCurrency(num(a?.avgRentAmount))} icon={<CreditCard size={18} />} accent="#059669" />
         <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />
         <StatCard label="Overdue Payments" value={String(num(a?.overduePayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.overdueAmount))} accent="#dc2626" />

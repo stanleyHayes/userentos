@@ -32,7 +32,7 @@ export function LandlordDashboard() {
   const user = useAuthStore((s) => s.user)
   const { data: analytics, isLoading } = useMyAnalytics()
   const { data: propertiesData } = useProperties({ mine: true })
-  const { data: paymentsData } = usePayments()
+  const { data: paymentsData } = usePayments({ status: 'completed' })
   const { data: notifData } = useNotifications()
   const { data: agreementsData } = useAgreements()
   const { data: disputesData } = useDisputes()
@@ -42,7 +42,8 @@ export function LandlordDashboard() {
 
   const properties = propertiesData?.items ?? []
   const payments = (paymentsData?.items ?? []).filter((p) => p.status === 'completed')
-  const recentPayments = payments.slice(-6).reverse()
+  // /payments is already newest first.
+  const recentPayments = payments.slice(0, 6)
   const notifications = (notifData?.items ?? []).filter((n) => !n.read).slice(0, 5)
   const agreements = agreementsData?.items ?? []
   const activeAgreements = agreements.filter((a) => a.status === 'active')
@@ -59,7 +60,7 @@ export function LandlordDashboard() {
   const chartData = Object.entries(monthlyIncome).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([month, amount]) => ({ month, amount }))
   const revenueChange = Number(a?.revenueChange ?? 0)
   const occupancyRate = Number(a?.occupancyRate ?? 0)
-  const collectionRate = Number(a?.collectionRate ?? 0)
+  const collectionRate = Math.min(100, Math.max(0, Number(a?.collectionRate) || 0))
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -368,7 +369,13 @@ export function LandlordDashboard() {
                     </p>
                     <p className="text-[10px] text-muted dark:text-gray-500">
                       {subscriptionData?.package
-                        ? subscriptionData.package.price === 0 ? 'Free plan' : `${formatCurrency(subscriptionData.package.price)}/${subscriptionData.package.billingCycle === 'yearly' ? 'yr' : 'mo'}`
+                        // Store-billed plans carry no price: the store sets it.
+                        ? typeof subscriptionData.package.price !== 'number'
+                          ? subscriptionData.billingSource === 'google_play' ? 'Billed via Google Play'
+                            : subscriptionData.billingSource === 'app_store' ? 'Billed via App Store'
+                            : subscriptionData.package.billingCycle === 'yearly' ? 'Yearly plan' : 'Monthly plan'
+                          : subscriptionData.package.price === 0 ? 'Free plan'
+                          : `${formatCurrency(subscriptionData.package.price)}/${subscriptionData.package.billingCycle === 'yearly' ? 'yr' : 'mo'}`
                         : 'Subscribe to add properties'}
                     </p>
                   </div>
