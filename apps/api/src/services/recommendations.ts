@@ -7,6 +7,7 @@ import { Application } from '../models/Application.js'
 import type { ITenantProfile } from '../models/TenantProfile.js'
 import type { IProperty } from '../models/Property.js'
 import { embed, embedBatch, cosineSimilarity } from './embeddings.js'
+import { closedAccountIds } from './closedAccounts.js'
 import { logger } from '../utils/logger.js'
 
 export interface ScoredProperty {
@@ -96,7 +97,8 @@ export async function getSmartRecommendations(userId: string, limit: number = 10
   const { embedding: userEmbedding } = await embed(userText)
 
   // Load candidate properties (approved listings only)
-  const filter: Record<string, unknown> = { listingStatus: 'approved' }
+  // Closed accounts' listings are withdrawn at closure; excluded here too in case that failed.
+  const filter: Record<string, unknown> = { listingStatus: 'approved', landlordId: { $nin: await closedAccountIds() } }
   const prefs = profile?.searchPreferences
 
   if (prefs && prefs.maxBudget != null && prefs.maxBudget > 0) {

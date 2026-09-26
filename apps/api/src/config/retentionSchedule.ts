@@ -368,8 +368,14 @@ export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
   {
     id: 'affiliates.profile', models: ['AffiliateProfile', 'AffiliateAttribution'], personalData: true,
     data: 'Affiliate code, and referral records naming the referred account and session.', trigger: 'accountClosed', periodDays: GRACE, action: 'delete', enforcedBy: 'accountErasure',
-    onAccountClosure: "After the grace period the referred account and session are removed from referral records, and the affiliate profile is deleted once no commission is unpaid.",
+    onAccountClosure: "After the grace period the referred account and session are removed from referral records, and the affiliate profile is deleted — or, while commission is still unpaid, suspended.",
     basis: 'Contract with the affiliate.', decision: 'engineering_default',
+  },
+  {
+    id: 'affiliates.closedProfile', models: ['AffiliateProfile'], appliesTo: 'Profiles of erased accounts, suspended while commission was unpaid', personalData: true,
+    data: 'Affiliate code and the erased account id.', trigger: 'accountClosed', periodDays: GRACE, action: 'delete', enforcedBy: 'purge',
+    onAccountClosure: 'Deleted by the daily purge once none of its commission is unpaid.',
+    basis: 'Only kept while commission owed on it is settled.', decision: 'engineering_default',
   },
 
   // ─── Analytics and content ───

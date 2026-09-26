@@ -15,10 +15,12 @@ import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { loginLimiter } from '../middleware/rateLimit.js'
+import { CREDENTIAL_LIFETIMES } from '../types/index.js'
 
 const router = Router()
 
-const REFRESH_TTL_DAYS = 90
+// The Privacy Policy quotes this lifetime.
+const REFRESH_TTL_DAYS = CREDENTIAL_LIFETIMES.biometricInactivityDays
 const TOKEN_BYTES = 48 // 64 url-safe chars after base64url
 
 function generateOpaqueToken(): string {

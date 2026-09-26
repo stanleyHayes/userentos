@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({ embed: vi.fn(), get: vi.fn(), set: vi.fn(), fi
 vi.mock('../services/embeddings.js', async original => ({ ...await original<typeof import('../services/embeddings.js')>(), embed: mocks.embed }))
 vi.mock('../services/cache.js', () => ({ cache: { get: mocks.get, set: mocks.set } }))
 vi.mock('../models/Property.js', async original => ({ ...await original<typeof import('../models/Property.js')>(), Property: { find: mocks.find } }))
+vi.mock('../services/closedAccounts.js', () => ({ closedAccountIds: vi.fn().mockResolvedValue(['closed-owner']), isClosedAccount: vi.fn().mockResolvedValue(false) }))
 import router from '../routes/properties.js'
 import { AI_SHARING_VERSION } from '../middleware/aiConsent.js'
 let server: Server
@@ -43,6 +44,7 @@ it('uses an opaque parameter-specific cache key and sends only search text to th
   expect(firstKey).toMatch(/^semantic-search:[a-f0-9]{64}$/)
   expect(firstKey).not.toContain(body.query)
   expect(mocks.set).toHaveBeenCalledWith(firstKey, expect.objectContaining({ items: [] }), 300)
+  expect(mocks.find).toHaveBeenCalledWith(expect.objectContaining({ landlordId: { $nin: ['closed-owner'] } }))
   await send({ ...body, city: 'Kumasi' })
   expect(mocks.get.mock.calls[1][0]).not.toBe(firstKey)
 })

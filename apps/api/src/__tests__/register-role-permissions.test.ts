@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import jwt from 'jsonwebtoken'
 import { AuthService } from '../services/authService.js'
-import { ROLE_DEFAULT_PERMISSIONS } from '../types/index.js'
+import { ROLE_DEFAULT_PERMISSIONS, TERMS_VERSION, PRIVACY_VERSION } from '../types/index.js'
 
 vi.mock('../models/User.js', () => ({
   User: { updateOne: vi.fn().mockResolvedValue({}) },
@@ -33,7 +33,7 @@ function makeService() {
   return { svc: new AuthService(userRepo as never, walletRepo as never, logger as never), userRepo }
 }
 
-const consent = { termsVersion: '2026-09-25', privacyVersion: '2026-09-25', ageConfirmed: true, acceptedAt: new Date() }
+const consent = { termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, ageConfirmed: true, acceptedAt: new Date() }
 const registerData = { email: 'ama@example.com', phone: '0240000000', password: 'password123', firstName: 'Ama', lastName: 'Owusu' }
 
 describe('AuthService.register — role default permissions', () => {

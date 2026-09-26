@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AuthService } from '../services/authService.js'
 import { User } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
+import { TERMS_VERSION, PRIVACY_VERSION } from '../types/index.js'
 
 vi.mock('../models/User.js', () => ({
   User: { updateOne: vi.fn().mockResolvedValue({}) },
@@ -36,7 +37,7 @@ function makeService() {
   return { svc, userRepo, walletRepo, logger }
 }
 
-const consent = { termsVersion: '2026-09-25', privacyVersion: '2026-09-25', ageConfirmed: true, acceptedAt: new Date() }
+const consent = { termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, ageConfirmed: true, acceptedAt: new Date() }
 
 const registerData = {
   email: 'kwame@example.com',

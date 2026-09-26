@@ -1,4 +1,4 @@
-import type { Model } from 'mongoose'
+import { Types, type Model } from 'mongoose'
 import { purgeRules, retentionCutoff, type RetentionKey } from '../config/retentionSchedule.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { Application } from '../models/Application.js'
@@ -6,7 +6,10 @@ import { Lead } from '../models/Lead.js'
 import { Viewing } from '../models/Viewing.js'
 import { BusinessInquiry } from '../models/BusinessInquiry.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
+import { User } from '../models/User.js'
+import { AffiliateProfile, AffiliateCommission } from '../models/Affiliate.js'
 import { purgeReplacedAvatars } from './avatarStorage.js'
+import { AFFILIATE_CLOSED_REASON, UNPAID_COMMISSION_STATUSES } from './accountErasure.js'
 import { recordAuditEntry } from '../utils/audit.js'
 import { logger } from '../utils/logger.js'
 
@@ -51,6 +54,27 @@ async function purgeInBatches(model: AnyModel, filter: Filter, { dryRun, batchSi
 }
 
 const cutoff = (key: RetentionKey, now: Date) => retentionCutoff(key, now.getTime())
+const OBJECT_ID = /^[a-f0-9]{24}$/i
+
+/**
+ * Erasure suspends, rather than deletes, an affiliate profile with commission
+ * still unpaid (services/accountErasure.ts), and never runs again for that
+ * account. Once the account is gone and nothing is owed, the profile goes.
+ */
+async function purgeClosedAffiliateProfiles({ dryRun }: { dryRun: boolean }): Promise<RuleOutcome> {
+  const suspended = await AffiliateProfile.find({ status: 'suspended', suspendedReason: AFFILIATE_CLOSED_REASON }).select('_id userId').lean()
+  if (suspended.length === 0) return { matched: 0, deleted: 0 }
+  // The raw collection: the model hides closed accounts' tombstones, which still count as present.
+  const userIds = suspended.map((profile) => profile.userId).filter((id) => OBJECT_ID.test(id))
+  const present = new Set((await User.collection.distinct('_id', { _id: { $in: userIds.map((id) => new Types.ObjectId(id)) } })).map(String))
+  const settled: string[] = []
+  for (const profile of suspended.filter((candidate) => !present.has(candidate.userId))) {
+    if (!(await AffiliateCommission.exists({ affiliateId: String(profile._id), status: { $in: UNPAID_COMMISSION_STATUSES } }))) settled.push(String(profile._id))
+  }
+  if (dryRun || settled.length === 0) return { matched: settled.length, deleted: 0 }
+  const { deletedCount } = await AffiliateProfile.deleteMany({ _id: { $in: settled }, status: 'suspended', suspendedReason: AFFILIATE_CLOSED_REASON })
+  return { matched: settled.length, deleted: deletedCount ?? 0 }
+}
 const sum = (outcomes: RuleOutcome[]): RuleOutcome => outcomes.reduce((a, b) => ({ matched: a.matched + b.matched, deleted: a.deleted + b.deleted }), { matched: 0, deleted: 0 })
 
 export const PURGE_HANDLERS: Readonly<Record<string, Handler>> = {
@@ -73,6 +97,7 @@ export const PURGE_HANDLERS: Readonly<Record<string, Handler>> = {
     }, options)
   },
   'account.avatar.replaced': (now, options) => purgeReplacedAvatars(cutoff('replacedAvatar', now), options),
+  'affiliates.closedProfile': (_now, options) => purgeClosedAffiliateProfiles(options),
 }
 
 export const retentionDryRun = () => process.env.RETENTION_PURGE_DRY_RUN === 'true'

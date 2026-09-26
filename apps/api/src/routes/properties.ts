@@ -13,6 +13,7 @@ import { embed, cosineSimilarity } from '../services/embeddings.js'
 import { getSmartRecommendations } from '../services/recommendations.js'
 import { cache } from '../services/cache.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
+import { closedAccountIds } from '../services/closedAccounts.js'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
@@ -75,7 +76,8 @@ router.post('/search/semantic', requireAiSharingConsent, asyncHandler(async (req
   const { embedding: queryEmbedding } = await embed(query)
 
   // 2. Build MongoDB filter (hybrid: semantic + structured)
-  const filter: Record<string, unknown> = { listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES }, isActive: { $ne: false } }
+  // Closed accounts' listings are withdrawn at closure; excluded here too in case that failed.
+  const filter: Record<string, unknown> = { listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES }, isActive: { $ne: false }, landlordId: { $nin: await closedAccountIds() } }
   if (city) filter['address.city'] = { $regex: escapeRegex(city), $options: 'i' }
   if (region) filter['address.region'] = { $regex: escapeRegex(region), $options: 'i' }
   if (type) filter.type = type
@@ -151,6 +153,7 @@ router.get('/nearby', asyncHandler(async (req, res) => {
 
   const filter: Record<string, unknown> = {
     listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
+    landlordId: { $nin: await closedAccountIds() },
     'coordinates.lat': { $gte: lat - latDelta, $lte: lat + latDelta },
     'coordinates.lng': { $gte: lng - lngDelta, $lte: lng + lngDelta },
   }
@@ -206,6 +209,7 @@ router.get('/map/pins', asyncHandler(async (req, res) => {
   const filter: Record<string, unknown> = {
     listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
     isActive: { $ne: false },
+    landlordId: { $nin: await closedAccountIds() },
     // A property with no coordinates cannot be drawn — exclude it here rather
     // than shipping nulls the client has to filter out.
     'coordinates.lat': { $ne: null },

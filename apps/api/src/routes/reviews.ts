@@ -10,6 +10,7 @@ import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
 import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
+import { recordedDeletion } from '../services/erasureLedger.js'
 
 const router = Router()
 
@@ -206,7 +207,11 @@ router.delete('/:id', authenticate, async (req, res) => {
   const review = await Review.findById(param(req.params.id))
   if (!review) { error(res, 'Review not found', 404); return }
   if (review.userId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
-  await review.deleteOne()
+  // Recorded so a restored backup cannot republish it.
+  await recordedDeletion(
+    { subjectId: review.userId, scope: 'review', source: 'owner', recordIds: [String(review._id)] },
+    () => review.deleteOne(),
+  )
   success(res, null, 'Review deleted')
 })
 

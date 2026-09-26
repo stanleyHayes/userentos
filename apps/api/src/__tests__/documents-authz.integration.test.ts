@@ -6,15 +6,17 @@ import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const { uploadToCloudinary } = vi.hoisted(() => ({
+const { uploadToCloudinary, deleteFromCloudinary } = vi.hoisted(() => ({
   uploadToCloudinary: vi.fn(async () => ({ url: 'https://res.cloudinary.test/doc.pdf', publicId: 'documents/doc', bytes: 5 })),
+  deleteFromCloudinary: vi.fn(async () => ({ result: 'ok' })),
 }))
-vi.mock('../utils/cloudinary.js', async (orig) => ({ ...(await orig() as Record<string, unknown>), uploadToCloudinary }))
+vi.mock('../utils/cloudinary.js', async (orig) => ({ ...(await orig() as Record<string, unknown>), uploadToCloudinary, deleteFromCloudinary }))
 
 const { config } = await import('../config/index.js')
 const { User } = await import('../models/User.js')
 const { DocumentModel } = await import('../models/Document.js')
 const { AuditLog } = await import('../models/AuditLog.js')
+const { erasureLedger } = await import('../services/erasureLedger.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: documentsRouter } = await import('../routes/documents.js')
 
@@ -50,13 +52,14 @@ describe.skipIf(!hasTestMongo)('document access and uploads', () => {
     server = await new Promise<Server>((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)) })
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   })
-  beforeEach(() => uploadToCloudinary.mockClear())
+  beforeEach(() => { uploadToCloudinary.mockClear(); deleteFromCloudinary.mockClear() })
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Promise.all([
       User.deleteMany({ _id: { $in: Object.values(ids) } }),
       DocumentModel.deleteMany({ ownerId: { $in: Object.values(ids) } }),
       AuditLog.deleteMany({ userId: { $in: Object.values(ids) } }),
+      erasureLedger().deleteMany({ subjectId: { $in: Object.values(ids) } }),
     ])
     await mongoose.disconnect()
   })
@@ -107,6 +110,55 @@ describe.skipIf(!hasTestMongo)('document access and uploads', () => {
     expect(version.accessControl).toEqual([ids.owner])
     const victimList = await get('/documents', ids.victim, ['tenant'])
     expect(victimList.body.data.items!.map((d) => d.id)).not.toContain(version.id)
+  })
+
+  describe('dispute evidence', () => {
+    const disputeId = String(new mongoose.Types.ObjectId())
+    const send = (method: string, path: string, body?: FormData) => fetch(`${base}${path}`, { method, headers: auth(ids.owner, ['tenant']), body })
+    const pdf = () => {
+      const form = new FormData()
+      form.append('file', new Blob([new TextEncoder().encode('%PDF-')], { type: 'application/pdf' }), 'file.pdf')
+      return form
+    }
+    // What POST /disputes/:id/evidence stores: owned by the party who filed it,
+    // shared with both parties, private at the file host.
+    const filedEvidence = () => DocumentModel.create({
+      ownerId: ids.owner, name: 'Leaking pipe', type: 'evidence', mimeType: 'image/png', fileUrl: `/api/disputes/${disputeId}/evidence/x`,
+      storagePublicId: 'rentos/evidence/pipe', storageResourceType: 'image', storageDeliveryType: 'authenticated', fileSize: 10,
+      linkedEntityId: disputeId, linkedEntityType: 'dispute', accessControl: [ids.owner, ids.victim],
+    })
+
+    it('cannot be deleted by the party who filed it, so the other party and the mediator keep it', async () => {
+      const evidence = await filedEvidence()
+      const response = await send('DELETE', `/documents/${evidence.id}`)
+      expect(response.status).toBe(403)
+      expect((await response.json() as { error: string }).error).toMatch(/part of the dispute record/)
+      expect(await DocumentModel.exists({ _id: evidence._id })).not.toBeNull()
+      expect(deleteFromCloudinary).not.toHaveBeenCalled()
+      expect(await erasureLedger().countDocuments({ recordIds: evidence.id })).toBe(0)
+    })
+
+    it('cannot be replaced by a new, public version', async () => {
+      const evidence = await filedEvidence()
+      const response = await send('POST', `/documents/${evidence.id}/version`, pdf())
+      expect(response.status).toBe(403)
+      expect(uploadToCloudinary).not.toHaveBeenCalled()
+      expect(await DocumentModel.countDocuments({ parentId: evidence.id })).toBe(0)
+    })
+
+    it('cannot be created through the generic upload', async () => {
+      const response = await upload({ type: 'evidence', linkedEntityType: 'dispute', linkedEntityId: disputeId })
+      expect(response.status).toBe(400)
+      expect(uploadToCloudinary).not.toHaveBeenCalled()
+      expect(await DocumentModel.countDocuments({ linkedEntityId: disputeId, ownerId: ids.owner, storageDeliveryType: { $ne: 'authenticated' } })).toBe(0)
+    })
+
+    it("leaves the owner's own 'evidence' category documents theirs to delete", async () => {
+      const created = await upload({ type: 'evidence', name: 'Move-in inspection' })
+      expect(created.status).toBe(201)
+      expect((await send('DELETE', `/documents/${created.body.data!.id}`)).status).toBe(200)
+      expect(await DocumentModel.exists({ _id: created.body.data!.id })).toBeNull()
+    })
   })
 
   it('answers a disallowed file type with a 400 and the reason', async () => {

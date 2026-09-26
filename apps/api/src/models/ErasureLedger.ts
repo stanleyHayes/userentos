@@ -12,7 +12,8 @@ import mongoose, { Schema, type Connection, type Model } from 'mongoose'
  * restore of the main cluster does not roll it back too; see
  * services/erasureLedger.ts.
  */
-export type ErasureScope = 'account' | 'document' | 'property'
+export const ERASURE_SCOPES = ['account', 'document', 'property', 'payout_account', 'review', 'webhook_subscription', 'business_listing'] as const
+export type ErasureScope = typeof ERASURE_SCOPES[number]
 
 export interface ErasedStorageAsset {
   publicId: string
@@ -26,7 +27,7 @@ export interface IErasureLedger {
   /** The account the erasure concerns (User _id). */
   subjectId: string
   scope: ErasureScope
-  /** Ids of the deleted records (Document / Property ids). */
+  /** Ids of the deleted records (of the model the scope names). */
   recordIds: string[]
   storageAssets: ErasedStorageAsset[]
   /** Who asked: self_service, admin, email_request, owner (record deletes). */
@@ -41,7 +42,7 @@ export interface IErasureLedger {
 export const erasureLedgerSchema = new Schema<IErasureLedger>({
   _id: { type: String, required: true },
   subjectId: { type: String, required: true },
-  scope: { type: String, required: true, enum: ['account', 'document', 'property'] },
+  scope: { type: String, required: true, enum: ERASURE_SCOPES },
   recordIds: { type: [String], default: [] },
   storageAssets: {
     type: [{

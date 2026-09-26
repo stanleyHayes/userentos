@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import mongoose from 'mongoose'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { RETENTION_SCHEDULE, RETENTION_DAYS } from '../config/retentionSchedule.js'
+import { RETENTION_SCHEDULE } from '../config/retentionSchedule.js'
 import { EXPORT_SOURCES, EXPORT_EXCLUSIONS } from '../services/accountExport.js'
 import { PURGE_HANDLERS } from '../services/retentionPurge.js'
 import { erasureLedgerModel } from '../models/ErasureLedger.js'
@@ -25,6 +25,35 @@ beforeAll(async () => {
   await import('../services/cronLock.js')
   erasureLedgerModel()
 })
+
+/*
+ * The published period (RETENTION_PERIOD_DAYS, which the Privacy Policy
+ * prints) each rule enforces, written out by rule id rather than read from
+ * the schedule: pointing a rule or a TTL index at a different period, or at a
+ * literal, fails below.
+ */
+const ERASED_AFTER_GRACE = [
+  'account.identity', 'account.tenantProfile', 'account.avatar.current', 'account.identityDocuments', 'account.activity', 'profileAccess.open',
+  'account.delegations', 'system.featureFlags', 'messages', 'financial.payoutDestinations', 'regulated.employment.unaccepted', 'listings.properties',
+  'listings.propertyExpenses', 'directory.profiles', 'reviews.public', 'affiliates.profile', 'affiliates.closedProfile', 'content.blog',
+]
+const PUBLISHED_PERIOD: Record<string, keyof typeof RETENTION_PERIOD_DAYS> = {
+  ...Object.fromEntries(ERASED_AFTER_GRACE.map((id) => [id, 'accountErasureGrace' as const])),
+  'account.avatar.replaced': 'replacedAvatar',
+  'notifications.read': 'readNotification',
+  'notifications.unread': 'unreadNotification',
+  'profileAccess.closed': 'closedProfileAccess',
+  'security.auditLog': 'auditLog',
+  'applications.unapproved': 'unapprovedApplication',
+  'financial.providerEvents': 'webhookEvent',
+  'financial.storeNotifications': 'storeNotification',
+  enquiries: 'enquiry',
+  'moderation.dismissed': 'dismissedContentReport',
+  'moderation.complaintLog': 'complaintLog',
+  'analytics.registry': 'registryPageView',
+  'analytics.storefront': 'storefrontEvent',
+  'analytics.valuation': 'valuationLog',
+}
 
 type IndexSpec = [Record<string, unknown>, { expireAfterSeconds?: number } | undefined]
 const modelNames = () => mongoose.modelNames().sort()
@@ -85,10 +114,26 @@ describe('every collection has a retention rule', () => {
     expect(Object.keys(PURGE_HANDLERS).sort()).toEqual(purgeIds)
   })
 
-  it('enforces exactly the periods the privacy notice publishes', () => {
-    for (const [key, days] of Object.entries(RETENTION_PERIOD_DAYS)) {
-      expect(RETENTION_DAYS[key as keyof typeof RETENTION_DAYS], key).toBe(days)
+  it('enforces, rule by rule, the period the privacy notice publishes', () => {
+    for (const rule of RETENTION_SCHEDULE) {
+      const key = PUBLISHED_PERIOD[rule.id]
+      if (rule.periodDays === null || rule.periodDays === 0) {
+        // Kept pending a decision, or expiring at a date stored on the record.
+        expect(key, `${rule.id} has no period, so it publishes none`).toBeUndefined()
+        continue
+      }
+      expect(key, `${rule.id} enforces ${rule.periodDays} days, a period the notice does not publish`).toBeDefined()
+      expect(rule.periodDays, rule.id).toBe(RETENTION_PERIOD_DAYS[key])
+      if (rule.enforcedBy !== 'ttl') continue
+      for (const name of rule.models) {
+        const index = indexesOf(name).find(([keys, options]) => Object.keys(keys)[0] === rule.ttlField && options?.expireAfterSeconds !== undefined)
+        expect(index?.[1]?.expireAfterSeconds, `${rule.id}: ${name}.${rule.ttlField}`).toBe(RETENTION_PERIOD_DAYS[key] * DAY)
+      }
     }
+  })
+
+  it('enforces every period the privacy notice publishes', () => {
+    expect([...new Set(Object.values(PUBLISHED_PERIOD))].sort()).toEqual(Object.keys(RETENTION_PERIOD_DAYS).sort())
   })
 })
 

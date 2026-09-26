@@ -14,6 +14,7 @@ const { Property } = await import('../models/Property.js')
 const { Lead } = await import('../models/Lead.js')
 const { Viewing } = await import('../models/Viewing.js')
 const { default: agentRouter } = await import('../routes/agent.js')
+const { notify } = await import('../services/notify.js')
 
 const uri = testMongoUri
 
@@ -61,5 +62,22 @@ describe.skipIf(!hasTestMongo)('viewing requests only advance the requester\'s o
   it('advances the requester\'s own lead', async () => {
     expect((await requestViewing(prospectId)).status).toBe(201)
     expect((await Lead.findById(leadId).lean())?.status).toBe('viewing')
+  })
+
+  it("tells the agent about a lead or viewing without quoting the enquirer's name or phone", async () => {
+    // Those stay on the lead, which is anonymised when the enquirer is erased;
+    // a notification is kept for up to two years and never is.
+    const res = await fetch(`${base}/agent/leads/property/${propertyId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jwt.sign({ userId: otherId, roles: ['tenant'], permissions: [], purpose: 'session' }, config.jwtSecret, { expiresIn: '10m' })}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Is it still available?' }),
+    })
+    expect(res.status).toBe(201)
+    const sent = vi.mocked(notify).mock.calls.map(([options]) => options)
+    expect(sent.map((options) => options.title)).toEqual(expect.arrayContaining(['New Lead', 'Viewing Requested']))
+    for (const options of sent) {
+      expect(options.userId).toBe(agentId)
+      expect(options.message).not.toMatch(/Lead User|02400000/)
+    }
   })
 })

@@ -12,6 +12,7 @@ const { BusinessInquiry } = await import('../models/BusinessInquiry.js')
 const { ProfileAccess } = await import('../models/ProfileAccess.js')
 const { AvatarAsset } = await import('../models/AvatarAsset.js')
 const { User } = await import('../models/User.js')
+const { AffiliateProfile, AffiliateCommission } = await import('../models/Affiliate.js')
 const { deleteFromCloudinary } = await import('../utils/cloudinary.js')
 const { runRetentionPurge } = await import('../services/retentionPurge.js')
 
@@ -30,6 +31,9 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
   const owner = new mongoose.Types.ObjectId()
   const ownerId = String(owner)
   const tag = { tag: run }
+  // Affiliate profiles erasure suspended while commission was unpaid.
+  const affiliate = (name: string, userId: string, status = 'suspended') => ({ userId, code: `${name}${run}`.toUpperCase(), status, suspendedReason: 'Account closed', tag: run })
+  const [settled, owed, activeOrphan] = [0, 1, 2].map(() => new mongoose.Types.ObjectId())
 
   const seed = async () => {
     await Promise.all([
@@ -57,6 +61,17 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
         { _id: `current-old-${run}`, ownerId, publicId: `rentos/avatars/current-old-${run}`, createdAt: ago(60) },
         { _id: `replaced-new-${run}`, ownerId, publicId: `rentos/avatars/replaced-new-${run}`, createdAt: ago(5) },
       ] as never[]),
+      AffiliateProfile.collection.insertMany([
+        { _id: settled, ...affiliate('settled', String(new mongoose.Types.ObjectId())) },
+        { _id: owed, ...affiliate('owed', String(new mongoose.Types.ObjectId())) },
+        // The account is still inside its grace period: the tombstone counts as present.
+        { ...affiliate('tombstoned', ownerId) },
+        { _id: activeOrphan, ...affiliate('active', String(new mongoose.Types.ObjectId()), 'active') },
+      ]),
+      AffiliateCommission.collection.insertMany([
+        { affiliateId: String(settled), event: 'subscription', rule: { type: 'flat', value: 5 }, amount: 5, status: 'paid', tag: run },
+        { affiliateId: String(owed), event: 'subscription', rule: { type: 'flat', value: 5 }, amount: 5, status: 'payable', tag: run },
+      ]),
     ])
   }
   const counts = async () => ({
@@ -67,6 +82,7 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
     inquiries: await BusinessInquiry.collection.countDocuments(tag),
     access: (await ProfileAccess.find({ tenantId: ownerId }).lean()).map((a) => a.requesterId).sort(),
     avatars: (await AvatarAsset.find({ ownerId }).lean()).map((a) => String(a._id)).sort(),
+    affiliates: (await AffiliateProfile.collection.find(tag).toArray()).map((a) => String(a.code).replace(run.toUpperCase(), '')).sort(),
   })
   const clean = () => Promise.all([
     AuditLog.collection.deleteMany({ userId: ownerId }),
@@ -74,6 +90,7 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
     Lead.collection.deleteMany(tag), Viewing.collection.deleteMany(tag), BusinessInquiry.collection.deleteMany(tag),
     ProfileAccess.collection.deleteMany({ tenantId: ownerId }),
     AvatarAsset.collection.deleteMany({ ownerId }),
+    AffiliateProfile.collection.deleteMany(tag), AffiliateCommission.collection.deleteMany(tag),
   ])
 
   beforeAll(async () => {
@@ -96,6 +113,7 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
     expect(summary['security.auditLog'].deleted).toBe(0)
     expect(summary['security.auditLog'].matched).toBeGreaterThanOrEqual(1)
     expect(summary['account.avatar.replaced']).toEqual({ matched: 1, deleted: 0 })
+    expect(summary['affiliates.closedProfile']).toEqual({ matched: 1, deleted: 0 })
   })
 
   it('removes expired rows in small batches and keeps everything still in its period', async () => {
@@ -108,6 +126,9 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
       inquiries: 0,
       access: [`approved-old-${run}`, `revoked-new-${run}`],
       avatars: [`current-old-${run}`, `replaced-new-${run}`],
+      // The erased account's profile goes once its commission is paid; one
+      // still owed, one whose account is only closed, and an active one stay.
+      affiliates: ['ACTIVE', 'OWED', 'TOMBSTONED'],
     })
     expect(deleteFromCloudinary).toHaveBeenCalledWith(`rentos/avatars/replaced-old-${run}`, 'image')
     expect(deleteFromCloudinary).toHaveBeenCalledTimes(1)
@@ -119,7 +140,7 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
     expect(entry).toMatchObject({ userId: 'system', entityType: 'RetentionSchedule' })
     const details = JSON.parse(entry!.details!)
     expect(details.dryRun).toBe(true)
-    expect(Object.keys(details.rules).sort()).toEqual(['account.avatar.replaced', 'applications.unapproved', 'enquiries', 'profileAccess.closed', 'security.auditLog'])
+    expect(Object.keys(details.rules).sort()).toEqual(['account.avatar.replaced', 'affiliates.closedProfile', 'applications.unapproved', 'enquiries', 'profileAccess.closed', 'security.auditLog'])
     expect(entry!.details).not.toContain(ownerId)
     expect(entry!.details).not.toContain(run)
   })
