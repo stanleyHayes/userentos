@@ -6,8 +6,7 @@ import { Property } from '../models/Property.js'
 import { attachObservedRent } from '../services/ml/valuationLog.js'
 import { TenantProfile, calcScore } from '../models/TenantProfile.js'
 import { User } from '../models/User.js'
-import { Business } from '../models/Business.js'
-import { notify, notifyAgreementSigned, notifyAgreementFullySigned } from '../services/notify.js'
+import { notifyAgreementSigned, notifyAgreementFullySigned } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
 import { dispatchWebhook } from '../services/webhooks.js'
 import { success, error } from '../utils/response.js'
@@ -56,26 +55,6 @@ function agreementView<T extends AgreementTerms & { signatureEvidence?: { userId
     signatureEvidence: evidenceForViewer(agreement.signatureEvidence, req.user!.userId, isStaff(req)),
     ...extra,
   }
-}
-
-async function notifyBusinessesOfNewMover(agreementId: string, propertyId: string) {
-  const claimed = await Agreement.findOneAndUpdate(
-    { _id: agreementId, moverBusinessesNotifiedAt: { $exists: false } },
-    { $set: { moverBusinessesNotifiedAt: new Date() } },
-    { returnDocument: 'after' },
-  ).lean()
-  if (!claimed) return
-  const property = await Property.findById(propertyId).select('address.city').lean()
-  const city = property?.address?.city
-  if (!city) return
-  const businesses = await Business.find({ city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).select('ownerId').lean()
-  await Promise.allSettled(businesses.map((business) => notify({
-    userId: business.ownerId,
-    title: `New mover in ${city}`,
-    message: 'A tenant just activated a lease nearby. Create a new-mover offer to reach them while they settle in.',
-    actionUrl: '/role-capabilities',
-    category: 'promotion',
-  })))
 }
 
 export const agreementController = {
@@ -282,7 +261,9 @@ export const agreementController = {
       error(res, 'This property is already occupied under another agreement', 409)
       return
     }
-    const activated = await Agreement.findOneAndUpdate({ _id: signed._id, status: { $in: SIGNABLE } }, { $set: { status: 'active' } }, { returnDocument: 'after' })
+    // activatedAt feeds only the weekly per-city lease count businesses get
+    // (services/newLeaseDigest.ts); nothing is sent about this lease itself.
+    const activated = await Agreement.findOneAndUpdate({ _id: signed._id, status: { $in: SIGNABLE } }, { $set: { status: 'active', activatedAt: new Date() } }, { returnDocument: 'after' })
     if (activated) {
       /*
        * The strongest ground truth the platform has for the pricing model: a
@@ -299,7 +280,6 @@ export const agreementController = {
       // Award first_lease (idempotent)
       checkAndAward(activated.tenantId, 'lease_signed', { agreementId })
         .catch((err) => console.warn('[Agreement] checkAndAward failed:', err.message))
-      void notifyBusinessesOfNewMover(agreementId, activated.propertyId)
     }
     success(res, agreementView((activated ?? signed).toObject(), req))
   },
