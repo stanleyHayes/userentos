@@ -3,8 +3,9 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
-import { renewSessionWith, useAuthStore, type SessionPair } from '@/stores/authStore'
+import { ensureLiveAccessToken, renewSessionWith, useAuthStore, type SessionPair } from '@/stores/authStore'
 import { api } from '@/lib/api'
+import toast from 'react-hot-toast'
 import { Shield, Check, Copy, ShieldCheck, LogOut } from 'lucide-react'
 import { PasswordInput } from '@/components/ui/PasswordInput'
 import { passwordRequirements, getPasswordStrength } from './passwordStrength'
@@ -40,12 +41,16 @@ export function SecurityTab() {
   async function handleLogoutAll() {
     setLogoutAllStatus('loading')
     try {
+      // With a lapsed access token this failed quietly and every other
+      // session stayed signed in.
+      await ensureLiveAccessToken()
       await api.post('/auth/logout-all', {})
       setLogoutAllStatus('success')
       // Give the user a moment to see the success message, then log them out
       setTimeout(() => logout(), 1500)
-    } catch {
+    } catch (err) {
       setLogoutAllStatus('idle')
+      toast.error(err instanceof Error ? err.message : 'Could not sign out your other sessions. Please try again.')
     }
   }
 
@@ -270,6 +275,7 @@ function MfaCard({ enabled, onChange }: { enabled: boolean; onChange: (enabled: 
     setStatus('loading')
     setErrorMsg('')
     try {
+      await ensureLiveAccessToken()
       const data = await api.post<{ secret: string; qrDataUrl: string }>('/auth/mfa/setup', {})
       setSetup(data)
       setStatus('idle')

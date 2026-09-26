@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FileCheck2, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/authStore'
+import { ensureLiveAccessToken, useAuthStore } from '@/stores/authStore'
 import { useCurrentUser } from '@/hooks/useApi'
 import { Button } from '@/components/ui/Button'
 import { ConsentCheckbox } from './ConsentCheckbox'
@@ -31,6 +31,7 @@ export function ConsentBanner() {
     setSaving(true)
     setError('')
     try {
+      await ensureLiveAccessToken()
       const result = await api.post<{ consents: UserConsents; consentRequired: boolean }>('/auth/consents', buildAcceptance())
       updateUser({ consents: result.consents, consentRequired: result.consentRequired })
       queryClient.setQueryData(['me'], (prev: typeof me) => (prev ? { ...prev, consents: result.consents, consentRequired: result.consentRequired } : prev))

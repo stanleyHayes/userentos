@@ -165,3 +165,27 @@ for (const { title, expired, refresh } of renewals) test(title, async ({ authedP
   expect(presented).toEqual([`Bearer ${expired ? 'refreshed-access' : access}`])
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state.refreshToken)).toBe('renewed-refresh')
 })
+
+test('"Log out all" with an expired access token refreshes first, then signs every session out', async ({ authedPage: page }) => {
+  await page.goto('/settings?tab=security')
+  await expect(page.getByRole('button', { name: 'Log out all' })).toBeVisible({ timeout: 20_000 })
+  const seconds = Math.floor(Date.now() / 1000)
+  const expired = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: seconds - 60 })).toString('base64url')}.fixture`
+  let refreshes = 0
+  const presented: string[] = []
+  await page.route('**/api/auth/refresh', route => { refreshes++; return route.fulfill({ json: { data: { token: 'refreshed-access', refreshToken: 'refreshed-refresh' } } }) })
+  await page.route('**/api/auth/logout-all', route => {
+    const bearer = route.request().headers().authorization ?? ''
+    presented.push(bearer)
+    // Like the server: /auth/ routes answer an expired token with a 401 and are never retried.
+    return route.fulfill(bearer === 'Bearer refreshed-access' ? { json: { data: null } } : { status: 401, json: { error: 'Invalid or expired token' } })
+  })
+  await page.evaluate(async token => {
+    const find = (pathname: string) => performance.getEntriesByType('resource').map(entry => entry.name).find(name => new URL(name).pathname === pathname)!
+    const { useAuthStore } = await import(find('/src/stores/authStore.ts'))
+    useAuthStore.setState({ token })
+  }, expired)
+  await page.getByRole('button', { name: 'Log out all' }).click()
+  await expect.poll(() => presented).toEqual(['Bearer refreshed-access'])
+  expect(refreshes).toBe(1)
+})

@@ -189,21 +189,31 @@ export function refreshCurrentSession(rejectedToken: string | null): Promise<boo
 export interface SessionPair { token: string; refreshToken: string }
 
 /**
+ * Requests to /auth/* never refresh on a 401 (on the two-factor ones a 401
+ * can mean a wrong code), so a signed-in /auth/ call made with an access token
+ * that has already expired — Settings left open for 15 minutes — failed with
+ * the server's 401. Renew it first; a rejected refresh signs out like any
+ * other request would.
+ */
+export async function ensureLiveAccessToken(): Promise<void> {
+  const token = useAuthStore.getState().token
+  if (accessTokenExpired(token) && !await refreshCurrentSession(token)) {
+    useAuthStore.getState().logout()
+    throw new Error('Session expired')
+  }
+}
+
+/**
  * A password or two-factor change signs every other session out and returns
  * a fresh pair for this device. Run it under the refresh lock so a 401 racing
  * the change waits for the new pair instead of refreshing with the revoked
  * one (which would sign this device out too), then store the pair.
  */
 export async function renewSessionWith(request: () => Promise<SessionPair | null>): Promise<void> {
+  // Before taking the lock below: a refresh started under it would wait on itself.
+  await ensureLiveAccessToken()
   const origin = useAuthStore.getState()
   const generation = sessionGeneration
-  // Auth routes never refresh on a 401 (on the two-factor ones it can mean a
-  // wrong code), and a refresh started under the lock held below would wait on
-  // itself, so an access token that has already expired is renewed first.
-  if (accessTokenExpired(origin.token) && !await refreshCurrentSession(origin.token)) {
-    useAuthStore.getState().logout()
-    throw new Error('Session expired')
-  }
   const run = async () => {
     const pair = await request()
     const current = useAuthStore.getState()

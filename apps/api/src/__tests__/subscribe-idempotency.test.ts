@@ -235,7 +235,7 @@ describe('subscriptionController.subscribe idempotency', () => {
     expect(res.body.error).toContain('Invalid phone number')
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: 'pay-new', status: { $in: ['pending', 'processing'] } },
-      { $set: { status: 'failed', providerStatus: 'failed', failureReason: 'provider_refused: Invalid phone number' }, $unset: { openCollectionKey: 1, collectionInitiationUncertainAt: 1 } },
+      { $set: { status: 'failed', providerStatus: 'failed', failureReason: 'provider_refused: Invalid phone number' }, $unset: { openCollectionKey: 1, collectionInitiationUncertainAt: 1, idempotencyKey: 1 } },
       { returnDocument: 'after' },
     )
     // Not left uncertain: nothing will ever settle it.
