@@ -12,6 +12,7 @@ import { config } from './config/index.js'
 import { UPLOADS_DIR } from './utils/uploads.js'
 import { seedDatabase } from './models/seed.js'
 import { startScheduler } from './services/scheduler.js'
+import { warnIfErasureLedgerShared } from './services/erasureLedger.js'
 import { initSocket } from './services/socket.js'
 import { rentPriceModel } from './services/ml/pricingModel.js'
 import { Property } from './models/Property.js'
@@ -474,6 +475,7 @@ async function start() {
     await mongoose.connect(config.mongoUri)
     // Never log config.mongoUri itself — it can embed user:password credentials.
     logger.info(`Connected to MongoDB: ${mongoose.connection.host}/${mongoose.connection.name}`)
+    warnIfErasureLedgerShared(config.mongoUri)
 
     // Demo seeding plants fixed-credential accounts (including super_admin /
     // admin with a well-known password). Only run it outside production, or when

@@ -5,6 +5,8 @@ import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { hasDelegatedScope } from './delegation.js'
 import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
+import { recordErasure, completeErasure } from './erasureLedger.js'
+import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
 
 interface CreatePropertyData {
   title: string
@@ -29,6 +31,8 @@ interface UpdatePropertyData {
 }
 
 interface ListFilters {
+  /** Owners whose listings must not appear (closed accounts). */
+  excludeLandlordIds?: string[]
   status?: string
   listingStatus?: string | readonly string[]
   type?: string
@@ -72,6 +76,7 @@ export class PropertyService {
     const filter: Record<string, unknown> = {}
 
     if (filters.landlordId) filter.landlordId = filters.landlordId
+    else if (filters.excludeLandlordIds?.length) filter.landlordId = { $nin: filters.excludeLandlordIds }
     if (filters.status) filter.status = filters.status
     if (filters.listingStatus) filter.listingStatus = typeof filters.listingStatus === 'string' ? filters.listingStatus : { $in: [...filters.listingStatus] }
     if (filters.type) filter.type = filters.type
@@ -242,7 +247,14 @@ export class PropertyService {
       return { error: 'Not authorized', status: 403 }
     }
 
+    // Ledger first (a restored backup must not bring the listing back), then
+    // the photos, then the record — which stays if the file host does not
+    // confirm, so a retry can finish the job.
+    const assets = propertyImageAssets(property)
+    const entryId = await recordErasure({ subjectId: userId, scope: 'property', source: 'owner', recordIds: [id], storageAssets: assets })
+    await eraseStoredAssets(assets)
     await property.deleteOne()
+    await completeErasure(entryId)
     this.logger.info(`Property deleted: ${id} by user ${userId}`)
     return { data: null, message: 'Property deleted' }
   }

@@ -11,6 +11,7 @@ import crypto from 'crypto'
 import { promises as dns } from 'dns'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
+import { isClosedAccount } from './closedAccounts.js'
 
 /**
  * Slugs that must never be assignable: platform hostnames, auth surfaces and
@@ -120,11 +121,11 @@ export async function resolveStorefrontByHost(host: string): Promise<{ slug: str
     const slug = hostname.slice(0, -platformSuffix.length)
     if (!slug || RESERVED_SLUGS.has(slug)) return null
     const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
-    return storefront ? { slug } : null
+    return storefront && !(await isClosedAccount(storefront.ownerId)) ? { slug } : null
   }
 
   const domain = await StorefrontDomain.findOne({ domain: hostname, status: 'active' }).lean()
   if (!domain) return null
   const storefront = await Storefront.findById(domain.storefrontId).lean()
-  return storefront && storefront.status === 'active' ? { slug: storefront.slug } : null
+  return storefront && storefront.status === 'active' && !(await isClosedAccount(storefront.ownerId)) ? { slug: storefront.slug } : null
 }

@@ -1,15 +1,20 @@
 import { deleteFromCloudinary } from '../utils/cloudinary.js'
 import { DocumentModel } from '../models/Document.js'
+import type { ErasedStorageAsset } from '../models/ErasureLedger.js'
 
 type ResourceType = 'image' | 'video' | 'raw'
 interface DocumentAsset {
   fileUrl: string
   storagePublicId?: string
   storageResourceType?: ResourceType
+  storageDeliveryType?: 'upload' | 'authenticated'
 }
 
+/** The storage folders under rentos/ whose files we own and erase. */
+export type StorageFolder = 'documents' | 'avatars' | 'properties' | 'evidence'
+
 /** Only our original, untransformed document URLs are eligible for legacy recovery. */
-export function legacyDocumentAsset(fileUrl: string, cloudName: string | undefined, folder: 'documents' | 'avatars' = 'documents'): { publicId: string; resourceType: ResourceType } | null {
+export function legacyDocumentAsset(fileUrl: string, cloudName: string | undefined, folder: StorageFolder = 'documents'): { publicId: string; resourceType: ResourceType } | null {
   let url: URL
   try { url = new URL(fileUrl) } catch { throw new Error('Invalid stored document URL; manual storage review required') }
   // External links do not represent files held by our storage provider.
@@ -30,11 +35,18 @@ export function legacyDocumentAsset(fileUrl: string, cloudName: string | undefin
   return { publicId, resourceType }
 }
 
+/** The stored file behind a document, or null for an external link. */
+export function documentStorageAsset(doc: DocumentAsset): ErasedStorageAsset | null {
+  if (doc.storagePublicId && doc.storageResourceType) {
+    return { publicId: doc.storagePublicId, resourceType: doc.storageResourceType, deliveryType: doc.storageDeliveryType ?? 'upload' }
+  }
+  const legacy = legacyDocumentAsset(doc.fileUrl, process.env.CLOUDINARY_CLOUD_NAME)
+  return legacy ? { ...legacy, deliveryType: 'upload' } : null
+}
+
 export async function eraseDocumentFile(doc: DocumentAsset): Promise<void> {
-  const asset = doc.storagePublicId && doc.storageResourceType
-    ? { publicId: doc.storagePublicId, resourceType: doc.storageResourceType }
-    : legacyDocumentAsset(doc.fileUrl, process.env.CLOUDINARY_CLOUD_NAME)
-  if (asset) await deleteFromCloudinary(asset.publicId, asset.resourceType)
+  const asset = documentStorageAsset(doc)
+  if (asset) await deleteFromCloudinary(asset.publicId, asset.resourceType, asset.deliveryType)
 }
 
 /** Personal identity and standalone miscellaneous files; contracts/evidence await retention review. */

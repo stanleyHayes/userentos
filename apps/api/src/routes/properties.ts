@@ -42,6 +42,7 @@ router.post('/:id/publish', authenticate, asyncHandler(propertyController.publis
 router.patch('/:id', authenticate, asyncHandler(propertyController.update))
 router.delete('/:id', authenticate, asyncHandler(propertyController.delete))
 router.post('/:id/images', authenticate, upload.array('images', 10), asyncHandler(propertyController.uploadImages))
+router.delete('/:id/images', authenticate, asyncHandler(propertyController.removeImage))
 router.post('/:id/favorite', authenticate, asyncHandler(propertyController.toggleFavorite))
 
 // ─── Semantic Search ───

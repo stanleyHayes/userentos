@@ -13,6 +13,9 @@ import { embed } from '../services/embeddings.js'
 import { cache } from '../services/cache.js'
 import { canTransition, PUBLICLY_VISIBLE_STATUSES, type ReviewStatus } from '../services/propertyReview.js'
 import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
+import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
+import { recordErasure, completeErasure } from '../services/erasureLedger.js'
+import { propertyImageAssets, eraseStoredAssets } from '../services/propertyImages.js'
 
 // With credit reporting off no tenant has a score to meet a landlord's minimum,
 // so that criterion would silently hide every listing from everyone.
@@ -188,6 +191,7 @@ export const propertyController = {
       // Tenants, other roles, and unauthenticated: hide draft/pending/rejected
       filters.listingStatus = PUBLICLY_VISIBLE_STATUSES
     }
+    if (!ownOnly && !isAdmin) filters.excludeLandlordIds = await closedAccountIds()
 
     const result = await propertyService.listProperties(filters)
     let items = result.items
@@ -295,7 +299,7 @@ export const propertyController = {
     const isAdmin = user && (user.roles.includes('admin') || user.roles.includes('super_admin'))
     const isPublic = isPubliclyVisible(property.listingStatus)
 
-    if (!isPublic && !isOwner && !isAdmin) {
+    if ((!isPublic || await isClosedAccount(property.landlordId)) && !isOwner && !isAdmin) {
       error(res, 'Property not found', 404)
       return
     }
@@ -448,14 +452,39 @@ export const propertyController = {
     const uploaded = await Promise.all(
       files.map(async (file) => {
         const result = await uploadToCloudinary(file.buffer, { folder: 'properties', resourceType: 'image' })
-        return result.url
+        return { url: result.url, publicId: result.publicId }
       }),
     )
 
-    property.images.push(...uploaded)
+    // The storage id is kept with each photo so it can be erased with the listing.
+    property.images.push(...uploaded.map((image) => image.url))
+    property.imageAssets.push(...uploaded)
     await property.save()
 
     success(res, { images: property.images }, 'Images uploaded')
+  },
+
+  /** DELETE /properties/:id/images { url } — the photo leaves the listing and the file host. */
+  removeImage: async (req: Request, res: Response) => {
+    const url = typeof req.body?.url === 'string' ? req.body.url : ''
+    if (!url) { error(res, 'Give the url of the image to remove'); return }
+
+    const property = await Property.findById(param(req.params.id))
+    if (!property) { error(res, 'Property not found', 404); return }
+    if (property.landlordId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
+    if (!property.images.includes(url)) { error(res, 'Image not found on this listing', 404); return }
+
+    const assets = propertyImageAssets({ images: [url], imageAssets: property.imageAssets.filter((asset) => asset.url === url) })
+    if (assets.length) {
+      const entryId = await recordErasure({ subjectId: req.user!.userId, scope: 'property', source: 'owner', storageAssets: assets })
+      await eraseStoredAssets(assets)
+      await completeErasure(entryId)
+    }
+    property.images = property.images.filter((image) => image !== url)
+    property.imageAssets = property.imageAssets.filter((asset) => asset.url !== url)
+    await property.save()
+
+    success(res, { images: property.images }, 'Image removed')
   },
 
   toggleFavorite: async (req: Request, res: Response) => {

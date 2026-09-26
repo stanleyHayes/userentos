@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import jwt from 'jsonwebtoken'
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
@@ -539,7 +539,7 @@ const shareHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
+  if (!payload || !(await shareStillValid(payload))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -551,7 +551,7 @@ const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
+  if (!payload || !(await shareStillValid(payload))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -569,6 +569,17 @@ const revokeShareHandler = asyncHandler(async (req: Request, res: Response) => {
   )
   success(res, null, 'All passport share links have been revoked')
 })
+
+/**
+ * A share link works only while the tenant's account is open and the link
+ * was issued after their last revocation. Closing the account revokes every
+ * link, and once the account is erased there is no profile left to check —
+ * the account check covers both.
+ */
+async function shareStillValid(payload: SharePayload): Promise<boolean> {
+  if (!Types.ObjectId.isValid(payload.userId) || !(await User.exists({ _id: payload.userId }))) return false
+  return !(await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))
+}
 
 /** Share tokens issued before the tenant's revocation timestamp are dead. */
 async function isShareRevoked(userId: string, iat?: number): Promise<boolean> {
