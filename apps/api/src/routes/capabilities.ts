@@ -16,6 +16,8 @@ import { CreditScore } from '../models/CreditScore.js'
 import { User } from '../models/User.js'
 import { Business } from '../models/Business.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { withMoneyTransaction, InsufficientFundsError } from '../services/payments/moneyTransaction.js'
+import { requireRegulatedFeature } from '../middleware/regulatedFeature.js'
 import { Employer } from '../models/Employer.js'
 import { PayrollRun } from '../models/PayrollRun.js'
 import { TenantProfile } from '../models/TenantProfile.js'
@@ -65,78 +67,62 @@ router.get('/agent/performance', authenticate, requireRole('property_manager', '
 })
 
 const workflowSchema = z.object({
-  kind: z.enum(['provider_payout', 'business_order', 'business_campaign', 'business_subscription', 'housing_benefit', 'developer_profile', 'offplan_listing']),
+  // Withdrawals are POST /api/payouts; there is no provider payout workflow.
+  kind: z.enum(['business_order', 'business_campaign', 'business_subscription', 'housing_benefit', 'developer_profile', 'offplan_listing']),
   participantId: z.string().optional(),
   status: z.string().min(1).max(40).default('active'),
   data: z.record(z.string(), z.unknown()).default({}),
 })
 
-router.post('/workflows', authenticate, async (req, res) => {
+/** Buying a featured listing debits the stored-value wallet: a regulated activity, gated like /api/savings. */
+const walletGate = requireRegulatedFeature('wallet')
+
+router.post('/workflows', authenticate, (req, res, next) => (req.body?.kind === 'business_subscription' ? walletGate(req, res, next) : next()), async (req, res) => {
   const parsed = workflowSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   if (!canCreateWorkflow(parsed.data.kind, req.user!.roles)) {
     error(res, 'This workflow is not available for your role', 403)
     return
   }
-  const requestedAmount = Number(parsed.data.data.amount ?? 0)
   parsed.data.status = initialWorkflowStatus(parsed.data.kind, parsed.data.status)
-  let refund: { amount: number; reference: string; description: string } | undefined
-  let previousBusiness: { subscriptionTier?: string; featuredUntil?: Date | null } | null = null
-  if (parsed.data.kind === 'provider_payout') {
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) { error(res, 'Enter a valid payout amount'); return }
-    const reference = `PROVIDER-PAYOUT-${Date.now()}`
-    const debited = await debitWallet(req.user!.userId, requestedAmount, { type: 'withdrawal', reference, description: 'Provider MoMo payout request' })
-    if (!debited) { error(res, 'Insufficient wallet balance', 409); return }
-    refund = { amount: requestedAmount, reference: `${reference}-REVERSAL`, description: 'Reversed provider payout request' }
-    parsed.data.status = 'queued'
+  if (parsed.data.kind !== 'business_subscription') {
+    const record = await CapabilityRecord.create({ ...parsed.data, ownerId: req.user!.userId })
+    success(res, idOf(record.toObject() as unknown as Record<string, unknown>), 'Workflow created', 201)
+    return
   }
-  if (parsed.data.kind === 'business_subscription') {
-    // The server's price, whatever the request says; the record shows what
-    // was actually charged.
-    const price = BUSINESS_FEATURED_PRICE_GHS
-    parsed.data.data = { ...parsed.data.data, amount: price, days: BUSINESS_FEATURED_DAYS }
-    const business = await Business.findOne({ ownerId: req.user!.userId }).lean()
-    if (!business) { error(res, 'Create your business profile first', 400); return }
-    previousBusiness = { subscriptionTier: business.subscriptionTier, featuredUntil: business.featuredUntil }
-    const reference = `BUSINESS-FEATURED-${Date.now()}`
-    const debited = await debitWallet(req.user!.userId, price, { type: 'subscription', reference, description: 'Business featured subscription' })
-    if (!debited) { error(res, 'Insufficient wallet balance', 409); return }
-    refund = { amount: price, reference: `${reference}-REVERSAL`, description: 'Reversed featured subscription' }
-    try {
+
+  // The server's price, whatever the request says; the record shows what
+  // was actually charged.
+  const price = BUSINESS_FEATURED_PRICE_GHS
+  parsed.data.data = { ...parsed.data.data, amount: price, days: BUSINESS_FEATURED_DAYS }
+  parsed.data.status = 'paid'
+  const business = await Business.findOne({ ownerId: req.user!.userId }).lean()
+  if (!business) { error(res, 'Create your business profile first', 400); return }
+  const previous = { subscriptionTier: business.subscriptionTier ?? 'free', featuredUntil: business.featuredUntil ?? null }
+  const reference = `BUSINESS-FEATURED-${Date.now()}`
+
+  // Debit, feature the business and record the purchase in one transaction;
+  // on a standalone Mongo each step is undone if a later one fails.
+  let record
+  try {
+    record = await withMoneyTransaction(async ({ session, onRollback }) => {
+      const debited = await debitWallet(req.user!.userId, price, { type: 'subscription', reference, description: 'Business featured subscription' }, { session })
+      if (!debited) throw new InsufficientFundsError()
+      onRollback(() => creditWallet(req.user!.userId, price, { type: 'refund', reference: `${reference}-REVERSAL`, description: 'Reversed featured subscription' }))
       const updated = await Business.findOneAndUpdate({ ownerId: req.user!.userId }, {
         subscriptionTier: 'featured',
         featuredUntil: new Date(Date.now() + BUSINESS_FEATURED_DAYS * 24 * 60 * 60 * 1000),
-      })
+      }, { session })
       if (!updated) throw new Error('Business profile disappeared while enabling subscription')
-    } catch (subscriptionError) {
-      await creditWallet(req.user!.userId, price, {
-        type: 'refund',
-        reference: refund.reference,
-        description: refund.description,
-      })
-      throw subscriptionError
-    }
-    parsed.data.status = 'paid'
+      onRollback(() => Business.findOneAndUpdate({ ownerId: req.user!.userId }, previous))
+      const doc = { ...parsed.data, ownerId: req.user!.userId }
+      return session ? (await CapabilityRecord.create([doc], { session }))[0] : await CapabilityRecord.create(doc)
+    })
+  } catch (err) {
+    if (err instanceof InsufficientFundsError) { error(res, 'Insufficient wallet balance', 409); return }
+    throw err
   }
-  try {
-    const record = await CapabilityRecord.create({ ...parsed.data, ownerId: req.user!.userId })
-    success(res, idOf(record.toObject() as unknown as Record<string, unknown>), 'Workflow created', 201)
-  } catch (workflowError) {
-    if (previousBusiness) {
-      await Business.findOneAndUpdate({ ownerId: req.user!.userId }, {
-        subscriptionTier: previousBusiness.subscriptionTier ?? 'free',
-        featuredUntil: previousBusiness.featuredUntil ?? null,
-      })
-    }
-    if (refund) {
-      await creditWallet(req.user!.userId, refund.amount, {
-        type: 'refund',
-        reference: refund.reference,
-        description: refund.description,
-      })
-    }
-    throw workflowError
-  }
+  success(res, idOf(record.toObject() as unknown as Record<string, unknown>), 'Workflow created', 201)
 })
 
 router.get('/workflows', authenticate, async (req, res) => {
