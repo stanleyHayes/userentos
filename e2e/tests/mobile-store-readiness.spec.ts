@@ -11,6 +11,41 @@ test('the Android build blocks the advertising-ID permission', () => {
   expect(appJson.expo.android.blockedPermissions).toContain('com.google.android.gms.permission.AD_ID')
 })
 
+// Android masks a coloured icon to a solid white square in the status bar;
+// the notification icon must be white on transparent.
+test('Android notifications use a 96x96 white-on-transparent icon', () => {
+  const mobile = resolve(__dirname, '../../apps/mobile')
+  const appJson = JSON.parse(readFileSync(resolve(mobile, 'app.json'), 'utf8'))
+  const [, options] = appJson.expo.plugins.find((plugin: unknown) => Array.isArray(plugin) && plugin[0] === 'expo-notifications')
+  expect(options.icon).toBe('./assets/notification-icon.png')
+  const png = readFileSync(resolve(mobile, options.icon))
+  expect(png.subarray(1, 4).toString()).toBe('PNG')
+  // IHDR: width, height, bit depth 8, colour type 6 (RGBA, so it has transparency).
+  expect([png.readUInt32BE(16), png.readUInt32BE(20), png[24], png[25]]).toEqual([96, 96, 8, 6])
+})
+
+// google-services.json is never committed; EAS supplies its path as the file
+// environment variable GOOGLE_SERVICES_JSON (DEPLOYMENT.md, "Android push").
+test('the Android build takes Firebase config from GOOGLE_SERVICES_JSON when set', async () => {
+  const mobile = resolve(__dirname, '../../apps/mobile')
+  const { default: appConfig } = await import('../../apps/mobile/app.config')
+  const appJson = JSON.parse(readFileSync(resolve(mobile, 'app.json'), 'utf8'))
+  const context = { config: appJson.expo, projectRoot: mobile, staticConfigPath: resolve(mobile, 'app.json'), packageJsonPath: resolve(mobile, 'package.json') }
+  const previous = process.env.GOOGLE_SERVICES_JSON
+  try {
+    process.env.GOOGLE_SERVICES_JSON = '/eas/build/google-services.json'
+    const withFirebase = appConfig(context)
+    expect(withFirebase.android?.googleServicesFile).toBe('/eas/build/google-services.json')
+    expect(withFirebase.android?.package).toBe('gh.rentos.mobile')
+    expect(withFirebase.android?.blockedPermissions).toContain('com.google.android.gms.permission.AD_ID')
+    delete process.env.GOOGLE_SERVICES_JSON
+    expect(appConfig(context).android?.googleServicesFile).toBeUndefined()
+  } finally {
+    if (previous === undefined) delete process.env.GOOGLE_SERVICES_JSON
+    else process.env.GOOGLE_SERVICES_JSON = previous
+  }
+})
+
 const mobileUrl = process.env.MOBILE_WEB_URL
 const user = { id: '507f1f77bcf86cd799439061', email: 'store@rentos.test', firstName: 'Store', lastName: 'Fixture', phone: '0241234567', roles: ['tenant'], activeRole: 'tenant', isVerified: true }
 

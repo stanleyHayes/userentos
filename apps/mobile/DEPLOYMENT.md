@@ -17,15 +17,23 @@ npm run dev:mobile
 npx expo start
 ```
 
-Press `a` for Android emulator, `i` for iOS simulator, or scan QR with Expo Go.
+Press `a` for Android emulator, `i` for iOS simulator, or scan the QR code with Expo Go.
+
+Expo Go is fine for screens and API work, but it cannot exercise the native-only
+paths: in-app purchases (expo-iap is not in Expo Go) and Android remote push.
+Test those on a development build or a `preview`/`production` build (see
+[Development builds](#development-builds)).
 
 ## Environment Variables
 
 | Variable | Description | Dev | Production |
 |---|---|---|---|
-| `EXPO_PUBLIC_API_URL` | Backend API URL | `http://localhost:3002/api` | `https://api.userentos.com` |
+| `EXPO_PUBLIC_API_URL` | Backend origin; the app appends `/api` | unset, or `http://<your computer's LAN IP>:3002` | `https://api.userentos.com` |
+| `GOOGLE_SERVICES_JSON` | Path to Firebase `google-services.json` (Android push); an EAS **file** variable | not needed | required for Android push, see [Android push](#android-push-firebase) |
 
-Set in `eas.json` per build profile, or in a `.env` file for local dev.
+`EXPO_PUBLIC_API_URL` is set per build profile in `eas.json`, or in a `.env` file
+for local dev. Do not include `/api`. Left unset in development, the app uses the
+Expo dev server's host on port 3002, so a physical phone reaches your computer.
 
 ## Prerequisites
 
@@ -142,19 +150,89 @@ Defined in `eas.json`:
 | `preview` | Internal testing/sharing | `.apk` | Direct install |
 | `production` | Store release | `.aab` | Google Play / App Store |
 
-## Updating the App
+Both profiles point at the production API (`https://api.userentos.com`).
 
-### OTA Updates (No Rebuild)
+### Development builds
+
+A development build is the app with the Expo dev menu, so native modules
+(purchases, push, Face ID) run while JS reloads from `npx expo start`. It needs
+`expo-dev-client`, which is not installed yet:
 
 ```bash
-eas update --branch production --message "Bug fix"
+npx expo install expo-dev-client
 ```
 
-Pushes JS bundle updates without requiring a new store submission.
+Then add a profile to `eas.json`:
 
-### Full Rebuild
+```json
+"development": {
+  "developmentClient": true,
+  "distribution": "internal"
+}
+```
 
-Required when native dependencies change (new Expo SDK, new native modules, etc.).
+and build it with `eas build --profile development --platform ios|android`.
+
+### Preview against a staging API
+
+There is no staging API yet, so `eas.json` has no staging profile. Once one
+exists, add a profile that extends `preview` and overrides only the URL:
+
+```json
+"preview-staging": {
+  "extends": "preview",
+  "env": { "EXPO_PUBLIC_API_URL": "https://<staging API host>" }
+}
+```
+
+Use it for device testing that must not touch production data, including
+App Store sandbox and Play test purchases.
+
+### Local native folders
+
+`ios/` and `android/` are generated (continuous native generation) and
+gitignored, so EAS cloud builds regenerate them. `npx expo run:*` and
+`eas build --local` use whatever folders already exist, so an old folder builds
+an old manifest. Always run `npx expo prebuild --clean` first.
+
+## Android push (Firebase)
+
+Android push tokens come from Firebase Cloud Messaging, so an Android build
+without Firebase configuration cannot register for push (iOS is unaffected).
+
+1. In the Firebase console, create a project and add an Android app with the
+   package name `gh.rentos.mobile`. Download `google-services.json`.
+2. Upload it as an EAS file environment variable:
+
+   ```bash
+   eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json
+   ```
+
+   When prompted, pick the environments the builds use (`preview` for the
+   internal-distribution profile, `production` for store builds) and the
+   `secret` visibility.
+
+   `app.config.ts` passes its path to `android.googleServicesFile`. For a local
+   build, putting the file at `apps/mobile/google-services.json` also works; it is
+   gitignored.
+3. Upload the FCM V1 service-account key so Expo's push service can send to
+   Android: `eas credentials` > Android > production > Google Service Account >
+   FCM V1.
+4. Build, sign in on a phone, allow notifications and check the API logs
+   `POST /api/push/register 200`.
+
+The notification icon is `assets/notification-icon.png` (white on
+transparent, set on the `expo-notifications` plugin).
+
+## Updating the App
+
+Every change ships as a new build. Over-the-air updates (`eas update`) are not
+set up: the app does not include `expo-updates`, so an `eas update` would never
+reach installed apps.
+
+To add them later, deliberately: `npx expo install expo-updates`, choose a
+`runtimeVersion` policy in `app.json`, run `eas update:configure`, then ship a
+new store build. Only builds made after that can receive updates.
 
 ---
 
@@ -169,4 +247,3 @@ Required when native dependencies change (new Expo SDK, new native modules, etc.
 | Build iOS (device, cloud) | `eas build -p ios --profile preview` |
 | Submit to Play Store | `eas submit -p android` |
 | Submit to App Store | `eas submit -p ios` |
-| OTA update | `eas update --branch production` |
