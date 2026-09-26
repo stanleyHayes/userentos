@@ -109,7 +109,7 @@ describe.skipIf(!hasTestMongo)('dispute evidence is stored privately and served 
   it('serves the file to the parties and mediators through a signed, expiring link, and to no one else', async () => {
     const [doc] = await DocumentModel.find({ linkedEntityId: disputeId }).lean()
     const documentId = String(doc._id)
-    const fileUrl = (userId: string) => `${base}/disputes/${disputeId}/evidence/${documentId}?token=${encodeURIComponent(signDownloadToken(userId, 0))}`
+    const fileUrl = (userId: string) => `${base}/disputes/${disputeId}/evidence/${documentId}?token=${encodeURIComponent(signDownloadToken('dispute-evidence', userId, 0))}`
 
     for (const party of [filerId, againstId, mediatorId]) {
       const res = await fetch(fileUrl(party), { redirect: 'manual' })
@@ -119,8 +119,12 @@ describe.skipIf(!hasTestMongo)('dispute evidence is stored privately and served 
     expect(signedDownloadUrl).toHaveBeenCalledWith(doc.storagePublicId, 'png', 'image')
     expect((await fetch(fileUrl(strangerId), { redirect: 'manual' })).status).toBe(403)
     expect((await fetch(`${base}/disputes/${disputeId}/evidence/${documentId}`, { redirect: 'manual' })).status).toBe(401)
-    // A session token is not a download token.
+    // A session token is not a download token, and a link minted for another
+    // download (the personal-data export, an agreement PDF) is not an evidence link.
     expect((await fetch(`${base}/disputes/${disputeId}/evidence/${documentId}?token=${session(filerId)}`, { redirect: 'manual' })).status).toBe(401)
+    for (const scope of ['account-export', 'agreement-document'] as const) {
+      expect((await fetch(`${base}/disputes/${disputeId}/evidence/${documentId}?token=${signDownloadToken(scope, filerId, 0)}`, { redirect: 'manual' })).status).toBe(401)
+    }
 
     const link = await fetch(`${base}/disputes/${disputeId}/evidence/${documentId}/link`, { method: 'POST', headers: { Authorization: `Bearer ${session(againstId)}` } })
     expect(link.status).toBe(200)

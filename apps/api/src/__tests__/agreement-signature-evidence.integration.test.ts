@@ -149,7 +149,7 @@ describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
 
   it('embeds the terms fingerprint and signature evidence in the agreement PDF', async () => {
     const { data } = await call(`/${agreementId}`, asTenant)
-    const token = jwt.sign({ userId: tenantId, purpose: 'download' }, config.jwtSecret, { expiresIn: '5m' })
+    const token = jwt.sign({ userId: tenantId, purpose: 'download', scope: 'agreement-document' }, config.jwtSecret, { expiresIn: '5m' })
     const pdf = Buffer.from(await (await fetch(`${base}/agreements/${agreementId}/document.pdf?token=${token}`)).arrayBuffer()).toString('latin1')
     expect(pdf).toContain(data.termsHash)
     expect(pdf).toContain('Signature Evidence')

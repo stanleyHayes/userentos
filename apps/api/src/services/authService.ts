@@ -45,10 +45,15 @@ function expiresIn(seconds: number) {
  * full-power session JWT into URLs (which end up in logs/history). */
 const DOWNLOAD_TOKEN_TTL_SECONDS = 5 * 60
 
+/** What a download token opens. Each download route accepts only its own
+ * scope, so a copied agreement-PDF link cannot also fetch the personal-data
+ * export, and the export link opens nothing else. */
+export type DownloadScope = 'agreement-document' | 'passport-pdf' | 'dispute-evidence' | 'account-export'
+
 /** Bound to the session that minted it: logout-all, a password change or
  * that device signing out also ends its download links. */
-export function signDownloadToken(userId: string, sessionVersion: number | undefined, sid?: string): string {
-  return jwt.sign({ userId, purpose: 'download', sessionVersion: sessionVersion ?? 0, sid }, config.jwtSecret, {
+export function signDownloadToken(scope: DownloadScope, userId: string, sessionVersion: number | undefined, sid?: string): string {
+  return jwt.sign({ userId, purpose: 'download', scope, sessionVersion: sessionVersion ?? 0, sid }, config.jwtSecret, {
     expiresIn: DOWNLOAD_TOKEN_TTL_SECONDS,
   })
 }
