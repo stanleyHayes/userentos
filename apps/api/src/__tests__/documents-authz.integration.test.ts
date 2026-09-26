@@ -95,4 +95,11 @@ describe.skipIf(!hasTestMongo)('document access and uploads', () => {
     const victimList = await get('/documents', ids.victim, ['tenant'])
     expect(victimList.body.data.items!.map((d) => d.id)).not.toContain(response.body.data!.id)
   })
+
+  it('answers a disallowed file type with a 400 and the reason', async () => {
+    const response = await upload({ type: 'other' }, 'text/html')
+    expect(response.status).toBe(400)
+    expect(response.body.error).toMatch(/Only images, PDF, text and Office documents/)
+    expect(uploadToCloudinary).not.toHaveBeenCalled()
+  })
 })

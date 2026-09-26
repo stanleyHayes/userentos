@@ -37,7 +37,8 @@ const upload = multer({
     if (ALLOWED_MIMES.has(file.mimetype)) {
       cb(null, true)
     } else {
-      cb(new Error('Only images, PDF, text and Office documents are allowed'))
+      // Tagged 400 so the error handler reports the reason, not a 500.
+      cb(Object.assign(new Error('Only images, PDF, text and Office documents are allowed'), { status: 400 }))
     }
   },
 })
