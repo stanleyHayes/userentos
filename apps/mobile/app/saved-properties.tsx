@@ -23,13 +23,9 @@ export default function SavedPropertiesScreen() {
 
   async function load() {
     try {
-      const favData = await api.get<{ propertyIds: string[] }>('/properties/favorites/me')
-      const ids = favData.propertyIds ?? []
-      if (ids.length === 0) { setProperties([]); return }
-      const results = await Promise.all(
-        ids.map((id) => api.get<Property>(`/properties/${id}`).catch(() => null))
-      )
-      setProperties(results.filter(Boolean) as Property[])
+      // Still-public saved listings, most recently saved first.
+      const favData = await api.get<{ items?: Property[] }>('/properties/favorites/me')
+      setProperties(favData.items ?? [])
     } catch { /* no-op */ } finally { setLoading(false) }
   }
 

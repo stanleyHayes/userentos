@@ -35,7 +35,7 @@ async function signIn(page: Page) {
     else if (url.pathname === '/api/users/me') data = tenant
     else if (url.pathname === '/api/platform/features') data = allRegulatedFeatures
     else if (url.pathname === '/api/chat/unread-count') data = { count: 0 }
-    else if (url.pathname === '/api/properties/favorites/me') data = { propertyIds: [organic.id] }
+    else if (url.pathname === '/api/properties/favorites/me') data = { propertyIds: [organic.id], items: [organic], total: 1 }
     else if (url.pathname === `/api/properties/${organic.id}`) data = organic
     else if (url.pathname === '/api/properties') data = { items: [paid, organic], total: 2 }
     else if (url.pathname === '/api/businesses') data = directory

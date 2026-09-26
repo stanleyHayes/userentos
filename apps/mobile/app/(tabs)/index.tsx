@@ -46,13 +46,12 @@ export default function HomeScreen() {
 
   async function load() {
     try {
-      // Saved properties are loaded by id (as saved-properties.tsx does), not
-      // by filtering the whole public listing: that pulled every listing just
-      // to find a handful, and missed saved ones beyond the first page.
-      const saved = api.get<{ propertyIds: string[] }>('/properties/favorites/me')
-        .then((favs) => Promise.all((favs.propertyIds ?? []).slice(0, 5).map((id) =>
-          api.get<PropertyItem>(`/properties/${id}`).catch(() => null))))
-        .then((rows) => rows.filter((p): p is PropertyItem => p !== null))
+      // Saved properties come from the favourites endpoint (still-public
+      // listings, most recently saved first), not from filtering the whole
+      // public listing: that pulled every listing to find a handful, and
+      // missed saved ones beyond the first page.
+      const saved = api.get<{ items?: PropertyItem[] }>('/properties/favorites/me')
+        .then((favs) => (favs.items ?? []).slice(0, 5))
         .catch(() => [] as PropertyItem[])
       const [data, savedItems, recs, agreementsRes] = await Promise.all([
         api.get<Record<string, number>>('/analytics/me'),
