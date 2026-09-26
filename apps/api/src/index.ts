@@ -34,6 +34,7 @@ import { sanitizeRequest } from './middleware/sanitize.js'
 
 import authRoutes from './routes/auth.js'
 import userRoutes from './routes/users.js'
+import accountExportDownloadRoutes from './routes/accountExportDownload.js'
 import propertyRoutes from './routes/properties.js'
 import propertyModerationRoutes from './routes/propertyModeration.js'
 import entitlementRoutes from './routes/entitlements.js'
@@ -320,6 +321,7 @@ app.use(
 // Routes
 app.use('/api/platform', platformRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/users', accountExportDownloadRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/entitlements', entitlementRoutes)
 app.use('/api/storefronts', storefrontHost, storefrontRoutes)

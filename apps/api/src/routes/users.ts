@@ -68,7 +68,12 @@ router.get('/me', authenticate, async (req, res) => {
 // Export the supported personal-data groups.
 router.get('/me/export', authenticate, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
-  const userId = req.user!.userId
+  success(res, await buildAccountExport(req.user!.userId))
+})
+
+/** Every supported personal-data group for one account. Also served as a
+ * file download (routes/accountExportDownload.ts). */
+export async function buildAccountExport(userId: string) {
   const [
     user,
     tenantProfile,
@@ -128,7 +133,7 @@ router.get('/me/export', authenticate, async (req, res) => {
     PaymentStreak.findOne({ userId }).select('-__v').lean(),
   ])
 
-  success(res, {
+  return {
     exportedAt: new Date().toISOString(),
     walletCredits,
     financingApplications,
@@ -157,8 +162,8 @@ router.get('/me/export', authenticate, async (req, res) => {
     savingsPlans,
     auditLogs,
     blockedUsers,
-  })
-})
+  }
+}
 
 // Erase core identity now; scheduled cleanup removes related personal records after 30 days.
 router.delete('/me', authenticate, async (req, res) => {
