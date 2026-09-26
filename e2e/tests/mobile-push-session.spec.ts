@@ -52,6 +52,35 @@ for (const stop of ['logout', 'effect cleanup']) test(`push token acquisition fi
   expect(registered).toEqual([])
 })
 
+test('a sign-out while the register request is in flight still carries the push token', async () => {
+  takeRegisteredPushToken()
+  let answer!: () => void
+  const registering = new Promise<void>(resolve => { answer = resolve })
+  let sent!: () => void
+  const requestSent = new Promise<void>(resolve => { sent = resolve })
+  let active = true
+  const result = registerSessionPush(() => active, async () => 'ExponentPushToken[phone]', () => { sent(); return registering }, rememberRegisteredPushToken)
+  await requestSent
+  // The user taps Logout before /push/register has answered.
+  const bodies: Record<string, string>[] = []
+  signOutDevice({ refreshToken: 'refresh-1', takePushToken: takeRegisteredPushToken, post: async (_path, body) => { bodies.push(body) }, clearSession: () => { active = false } })
+  answer()
+  expect(await result).toBeNull()
+  expect(bodies).toEqual([{ refreshToken: 'refresh-1', pushToken: 'ExponentPushToken[phone]' }])
+})
+
+test('a token the OS returns after sign-out is never remembered', async () => {
+  takeRegisteredPushToken()
+  let active = true
+  let release!: (token: string) => void
+  const acquiring = new Promise<string>(resolve => { release = resolve })
+  const result = registerSessionPush(() => active, () => acquiring, async () => {}, rememberRegisteredPushToken)
+  active = false
+  release('ExponentPushToken[late]')
+  expect(await result).toBeNull()
+  expect(takeRegisteredPushToken()).toBeNull()
+})
+
 test('push registration errors are contained and not reported as successful enrollment', async () => {
   expect(await registerSessionPush(() => true, async () => { throw new Error('OS unavailable') }, async () => {})).toBeNull()
   expect(await registerSessionPush(() => true, async () => 'fixture-token', async () => { throw new Error('Server unavailable') })).toBeNull()

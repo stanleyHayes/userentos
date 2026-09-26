@@ -43,19 +43,22 @@ async function getProjectId(): Promise<string | undefined> {
 export async function registerForPushNotifications(isActive: () => boolean = () => true): Promise<string | null> {
   const origin = useAuthStore.getState()
   const isCurrent = () => isActive() && origin.isAuthenticated && useAuthStore.getState().isAuthenticated && useAuthStore.getState().sessionVersion === origin.sessionVersion && useAuthStore.getState().user?.id === origin.user?.id
-  const token = await registerSessionPush(isCurrent, async () => {
-    if (!Device.isDevice) return null
-    await ensureAndroidChannel()
-    if (!isCurrent()) return null
-    if (!await resolvePushPermission(isCurrent, () => Notifications.getPermissionsAsync())) return null
-    const projectId = await getProjectId()
-    if (!isCurrent()) return null
-    const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
-    return tokenData.data || null
-  }, token => api.post('/push/register', { token, platform: 'expo' }))
-  // Sent with the sign-out request, which removes this registration.
-  if (token) rememberRegisteredPushToken(token)
-  return token
+  return registerSessionPush(
+    isCurrent,
+    async () => {
+      if (!Device.isDevice) return null
+      await ensureAndroidChannel()
+      if (!isCurrent()) return null
+      if (!await resolvePushPermission(isCurrent, () => Notifications.getPermissionsAsync())) return null
+      const projectId = await getProjectId()
+      if (!isCurrent()) return null
+      const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+      return tokenData.data || null
+    },
+    token => api.post('/push/register', { token, platform: 'expo' }),
+    // Sent with the sign-out request, which removes this registration.
+    rememberRegisteredPushToken,
+  )
 }
 
 export type PushPermissionState = 'unsupported' | 'granted' | 'undetermined' | 'blocked'
