@@ -27,7 +27,7 @@ import { hostingProvider } from '../services/hosting/index.js'
 import { requireEntitlement, getFeature, EntitlementError } from '../services/entitlements.js'
 import {
   validateSlug, validateDomain, newVerificationToken, checkDomainOwnership,
-  publicStorefrontScope, storefrontScope,
+  publicStorefrontScope, storefrontScope, resolveStorefrontByHost,
 } from '../services/storefront.js'
 
 const router = Router()
@@ -640,9 +640,17 @@ router.get('/me/analytics', authenticate, asyncHandler(async (req, res) => {
  *
  * Returns null for the platform's own hostnames, so the web app can call this
  * unconditionally on boot and render either the storefront or the normal app.
+ *
+ * The browser names its host in ?host=. On a split deployment the SPA calls
+ * api.userentos.com, so this request's own Host is always the API's and a
+ * custom domain never resolved. Taking the host from the caller is safe: only
+ * active domains of active storefronts map to anything, and those are public.
  */
 router.get('/resolve/host', asyncHandler(async (req, res) => {
-  const slug = req.storefrontSlug
+  const queryHost = typeof req.query.host === 'string' ? req.query.host.trim().toLowerCase() : ''
+  let slug = req.storefrontSlug
+  // 253 characters is the longest a DNS name can be.
+  if (queryHost) slug = queryHost.length <= 253 ? (await resolveStorefrontByHost(queryHost))?.slug : undefined
   if (!slug) { success(res, null); return }
 
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
@@ -740,6 +748,13 @@ router.get('/:slug', optionalAuth, asyncHandler(async (req, res) => {
 }))
 
 /**
+ * Fields a public listing never carries, the same set publicPropertyView strips
+ * on every other public property read: the search embedding (about 30KB of
+ * floats per listing), the reviewer's id, moderation notes and quota bookkeeping.
+ */
+const PUBLIC_LISTING_PROJECTION = '-embedding -reviewedBy -quotaSlot -reviewVersion -reviewIssues -rejectionReason'
+
+/**
  * A storefront's listings.
  *
  * Scoped on the SERVER by owner — never by a frontend filter — which is the
@@ -755,7 +770,7 @@ router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
   const filter = publicStorefrontScope(storefront) as unknown as Record<string, unknown>
 
   const [items, total] = await Promise.all([
-    Property.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Property.find(filter, PUBLIC_LISTING_PROJECTION).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Property.countDocuments(filter),
   ])
 

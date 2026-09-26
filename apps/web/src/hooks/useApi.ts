@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useToastStore } from '@/stores/toastStore'
 import { parseRegulatedFeatureStatus, type RegulatedFeatureKey } from '../../../../packages/shared/regulatedFeatures'
@@ -435,10 +435,19 @@ export function useStorefront(slug: string | undefined) {
   })
 }
 
+/**
+ * A storefront's listings, a page at a time. It used to ask for one page with
+ * the API's default size, so a seller with more than 12 listings showed only
+ * the first 12, with no way to reach the rest.
+ */
 export function useStorefrontProperties(slug: string | undefined) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['storefront-properties', slug],
-    queryFn: () => api.get<{ items: Property[]; total: number }>(`/storefronts/${slug}/properties`),
+    queryFn: ({ pageParam }) => api.get<{ items: Property[]; total: number; page: number; totalPages: number }>(
+      `/storefronts/${slug}/properties?page=${pageParam}&limit=24`,
+    ),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
     enabled: Boolean(slug),
     retry: retryUnlessMissing,
     refetchOnWindowFocus: refetchUnlessMissing,
