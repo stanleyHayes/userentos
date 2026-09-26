@@ -31,6 +31,7 @@ interface AuthState {
   logout: () => void
   switchRole: (role: string) => void
   updateTokens: (token: string, refreshToken: string | null) => void
+  renewSession: (token: string, refreshToken: string) => void
   updateUser: (updates: Partial<User>) => void
   hydrate: () => Promise<void>
 }
@@ -89,6 +90,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         biometricSession: state.biometricSession,
       })).catch(() => {})
       return { token, refreshToken }
+    }),
+
+  // A password change signs every other session out and returns a fresh
+  // ordinary pair for this device, replacing a biometric session too (its
+  // biometric tokens were revoked with the rest).
+  renewSession: (token, refreshToken) =>
+    set((state) => {
+      SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({
+        user: state.user,
+        token,
+        refreshToken,
+        biometricSession: false,
+      })).catch(() => {})
+      return { token, refreshToken, biometricSession: false }
     }),
 
   updateUser: (updates) =>

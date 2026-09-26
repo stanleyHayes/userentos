@@ -47,6 +47,13 @@ export function useAppSocket() {
     socket.on('session:expired', handleExpiry)
     const suspended = guard.wrap((data: { suspendedAt: string }) => useAuthStore.getState().updateUser(data))
     socket.on('account:suspended', suspended)
+    // The server revoked the session this socket authenticated with (signed
+    // out from another device, password reset, account closed). A newer token
+    // already stored here, like the pair a password change returns, stays.
+    const revoked = guard.wrap(() => {
+      if (useAuthStore.getState().token === token) useAuthStore.getState().logout()
+    })
+    socket.on('session:revoked', revoked)
 
     const handleUnreadUpdate = guard.wrap((data: {
       conversationId: string
@@ -103,6 +110,7 @@ export function useAppSocket() {
       socket.off('session:expired', handleExpiry)
       socket.off('unread:update', handleUnreadUpdate)
       socket.off('account:suspended', suspended)
+      socket.off('session:revoked', revoked)
       socket.off('notification:new', handleNotification)
       subscription.remove()
     }

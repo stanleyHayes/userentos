@@ -36,7 +36,7 @@ export default function ResetPasswordScreen() {
         <View style={s.centered}>
           <Ionicons name="checkmark-circle" size={48} color={c.accent} />
           <Text style={[s.successTitle, { color: c.primaryDark }]}>Password Reset!</Text>
-          <Text style={[s.successDesc, { color: c.muted }]}>Your password has been updated. You can now sign in with your new password.</Text>
+          <Text style={[s.successDesc, { color: c.muted }]}>Your password has been updated, and every device signed in to your account has been signed out. Sign in with your new password.</Text>
           <TouchableOpacity style={[s.button, { backgroundColor: c.primary }]} onPress={() => router.replace('/auth/login')}>
             <Text style={s.buttonText}>Sign In</Text>
           </TouchableOpacity>

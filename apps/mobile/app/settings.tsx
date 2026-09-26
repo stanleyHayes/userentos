@@ -308,9 +308,11 @@ function SecurityTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
     if (newPassword !== confirmPassword) { Alert.alert('Error', 'Passwords do not match'); return }
     setChanging(true)
     try {
-      await api.post('/auth/change-password', { currentPassword, newPassword })
+      // Every other session is signed out; this device gets a fresh pair.
+      const renewed = await api.post<{ token: string; refreshToken: string } | null>('/auth/change-password', { currentPassword, newPassword })
+      if (renewed?.token && renewed.refreshToken) useAuthStore.getState().renewSession(renewed.token, renewed.refreshToken)
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
-      Alert.alert('Success', 'Password changed successfully')
+      Alert.alert('Password changed', 'Your other devices have been signed out. You are still signed in here.')
     } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to change password')
