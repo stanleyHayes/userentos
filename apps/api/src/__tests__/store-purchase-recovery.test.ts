@@ -25,7 +25,9 @@ describe('Google purchase background recovery', () => {
   it('claims due unlocked production rows, completes them, and fences lease release', async () => {
     expect(await recoverGooglePurchases()).toEqual({ processed: 1, failed: 0, skipped: false })
     const [filter, update] = mocks.claim.mock.calls[0]
-    expect(filter).toMatchObject({ platform: 'google', applicationId: 'gh.rentos.mobile', environment: { $in: ['production'] } })
+    // The developer switch never opens test rows in production.
+    expect(filter).toMatchObject({ platform: 'google', applicationId: 'gh.rentos.mobile', $or: [{ environment: 'production' }, { environment: 'test', userId: { $in: [] } }] })
+    expect(filter).not.toHaveProperty('environment')
     expect(filter.$and).toHaveLength(3)
     expect(filter.$and[0].$or[1].providerState.$in).toEqual(expect.arrayContaining(['SUBSCRIPTION_STATE_PENDING', 'SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_ON_HOLD', 'SUBSCRIPTION_STATE_PAUSED']))
     expect(filter.$and[0].$or[1].providerState.$in).not.toContain('SUBSCRIPTION_STATE_EXPIRED')
@@ -34,6 +36,15 @@ describe('Google purchase background recovery', () => {
     expect(mocks.complete).toHaveBeenCalledWith('owner', 'private-token')
     expect(mocks.update.mock.calls[0][0]).toEqual({ _id: 'purchase', recoveryLeaseId: update.$set.recoveryLeaseId })
     expect(mocks.update.mock.calls[0][1].$unset).toMatchObject({ recoveryLastError: 1, recoveryLeaseId: 1, recoveryLeaseUntil: 1 })
+  })
+  it('polls license-test rows only for allowlisted owners in production, and all of them behind the developer switch', async () => {
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '64f0000000000000000000aa')
+    await recoverGooglePurchases(1)
+    expect(mocks.claim.mock.calls[0][0].$or).toEqual([{ environment: 'production' }, { environment: 'test', userId: { $in: ['64f0000000000000000000aa'] } }])
+    vi.stubEnv('NODE_ENV', 'development')
+    mocks.lean.mockResolvedValueOnce(null)
+    await recoverGooglePurchases(1)
+    expect(mocks.claim.mock.calls[1][0].$or).toEqual([{ environment: 'production' }, { environment: 'test' }])
   })
   it('backs off provider failures without persisting raw secrets and continues the batch', async () => {
     mocks.complete.mockRejectedValueOnce(new StoreVerificationError('provider_unavailable'))

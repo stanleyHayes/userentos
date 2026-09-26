@@ -61,7 +61,8 @@ describe('verified purchase journal', () => {
     expect(data).toMatchObject({ ...identity, userId: 'user', revision: 1, providerState: 'SUBSCRIPTION_STATE_ACTIVE', acknowledged: false })
     expect(decryptStoreToken(data.tokenCiphertext as string, storeTokenContext(applicationId, identity.tokenHash, 'user'))).toBe(token)
     expect(result).not.toHaveProperty('tokenCiphertext')
-    expect(verifyGoogleSubscription).toHaveBeenCalledWith(token, expect.stringMatching(/^[a-f\d]{64}$/))
+    // The owner decides whether a license-test purchase may be accepted.
+    expect(verifyGoogleSubscription).toHaveBeenCalledWith(token, expect.stringMatching(/^[a-f\d]{64}$/), 'user')
   })
   it('cannot claim another account’s purchase', async () => {
     vi.mocked(StorePurchase.findOne).mockReturnValue(lean({ userId: 'other', revision: 1 }) as never)

@@ -2,16 +2,15 @@ import { appleTransactionBlocked } from './appleRevocations.js'
 import { ApplePurchase } from '../../models/ApplePurchase.js'
 import { StoreProduct } from '../../models/StoreProduct.js'
 import { User } from '../../models/User.js'
-import { envOptional } from '../../utils/env.js'
 import { FEATURE_REGISTRY, isFeatureKey, type StoreEntitlementSnapshot } from '../entitlements.js'
 import { snapshotSchema } from './prepareEntitlements.js'
 import { StorePurchaseConflict } from './purchaseJournal.js'
+import { appleEnvironmentsFor, appleStoreMode } from './storeEnvironments.js'
 
-function applicationContext() {
-  const applicationId = envOptional('APPLE_STORE_BUNDLE_ID')
-  const mode = envOptional('APPLE_STORE_ENVIRONMENT')
-  if (!applicationId || !['Production', 'Sandbox'].includes(mode ?? '') || (mode === 'Sandbox' && process.env.NODE_ENV === 'production')) return null
-  return { applicationId, environment: mode === 'Sandbox' ? 'test' as const : 'production' as const }
+// Sandbox rows grant access only while their owner may hold test purchases.
+function applicationContext(userId: string) {
+  const mode = appleStoreMode()
+  return mode ? { applicationId: mode.applicationId, environments: appleEnvironmentsFor(userId) } : null
 }
 function eligible(purchase: { providerStatus: number; accessEligible: boolean; revokedAt?: Date | null; upgraded: boolean; purchasedAt: Date; accessExpiresAt?: Date | null }, now: Date) {
   return [1, 4].includes(purchase.providerStatus) && purchase.accessEligible && !purchase.revokedAt && !purchase.upgraded
@@ -20,15 +19,15 @@ function eligible(purchase: { providerStatus: number; accessEligible: boolean; r
 async function requireAccount(userId: string) {
   if (!await User.exists({ _id: userId, deletedAt: { $exists: false }, suspendedAt: { $exists: false }, roles: { $in: ['landlord', 'property_manager'] } })) throw new Error('Account is not eligible for activation')
 }
-function requireContext(applicationId: string, environment: string, revision: number, now: Date) {
-  const context = applicationContext()
-  if (!context || context.applicationId !== applicationId || context.environment !== environment) throw new Error('Purchase application or environment is not eligible')
+function requireContext(userId: string, applicationId: string, environment: 'production' | 'test', revision: number, now: Date) {
+  const context = applicationContext(userId)
+  if (!context || context.applicationId !== applicationId || !context.environments.includes(environment)) throw new Error('Purchase application or environment is not eligible')
   if (!Number.isInteger(revision) || revision < 1 || !Number.isFinite(now.getTime())) throw new Error('Invalid activation context')
 }
 export async function prepareAppleEntitlements(userId: string, purchaseId: string, revision: number, now = new Date()) {
   const purchase = await ApplePurchase.findOne({ _id: purchaseId, userId, revision }).lean()
   if (!purchase) throw new StorePurchaseConflict()
-  requireContext(purchase.applicationId, purchase.environment, revision, now)
+  requireContext(userId, purchase.applicationId, purchase.environment, revision, now)
   await requireAccount(userId)
   let preparedGrant = null
   if (eligible(purchase, now) && !await appleTransactionBlocked(purchase)) {
@@ -50,7 +49,7 @@ export async function activateAppleEntitlements(userId: string, purchaseId: stri
   const filter = { _id: purchaseId, userId, revision, preparedRevision: revision, entitlementState: { $in: ['prepared', 'active', 'revoked'] as const } }
   const purchase = await ApplePurchase.findOne(filter).lean()
   if (!purchase) throw new StorePurchaseConflict()
-  requireContext(purchase.applicationId, purchase.environment, revision, now)
+  requireContext(userId, purchase.applicationId, purchase.environment, revision, now)
   await requireAccount(userId)
   const grant = purchase.preparedGrant
   const active = eligible(purchase, now) && !await appleTransactionBlocked(purchase) && grant && grant.productId === purchase.productId && grant.expiresAt.getTime() > now.getTime()
@@ -59,9 +58,9 @@ export async function activateAppleEntitlements(userId: string, purchaseId: stri
   return updated
 }
 export async function activeAppleSubscription(userId: string, now = new Date()) {
-  const context = applicationContext()
+  const context = applicationContext(userId)
   if (!context || !Number.isFinite(now.getTime())) return null
-  const purchases = await ApplePurchase.find({ ...context, userId, entitlementState: 'active' }).lean()
+  const purchases = await ApplePurchase.find({ applicationId: context.applicationId, environment: { $in: context.environments }, userId, entitlementState: 'active' }).lean()
   const allowed = []
   for (const purchase of purchases) { if (!await appleTransactionBlocked(purchase)) allowed.push(purchase) }
   const candidates = allowed.flatMap(purchase => {

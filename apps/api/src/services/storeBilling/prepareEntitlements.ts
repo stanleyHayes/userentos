@@ -6,6 +6,7 @@ import { StoreProduct } from '../../models/StoreProduct.js'
 import { User } from '../../models/User.js'
 import { FEATURE_REGISTRY, isFeatureKey } from '../entitlements.js'
 import { StorePurchaseConflict } from './purchaseJournal.js'
+import { googleEnvironmentsFor } from './storeEnvironments.js'
 
 export const snapshotSchema = z.object({
   planId: z.string().min(1), planName: z.string().min(1), planVersion: z.number().int().positive(),
@@ -19,7 +20,7 @@ export async function prepareGoogleEntitlements(userId: string, purchaseId: stri
   const purchase = await StorePurchase.findOne({ _id: purchaseId, userId, platform: 'google', revision: expectedRevision }).lean()
   if (!purchase) throw new StorePurchaseConflict()
   if (purchase.applicationId !== envOptional('GOOGLE_PLAY_PACKAGE_NAME')) throw new Error('Purchase belongs to a different application')
-  if (purchase.environment === 'test' && (process.env.NODE_ENV === 'production' || envOptional('GOOGLE_PLAY_ALLOW_TEST_PURCHASES') !== 'true')) throw new Error('Test purchase cannot prepare live entitlements')
+  if (!googleEnvironmentsFor(userId).includes(purchase.environment)) throw new Error('Test purchase cannot prepare live entitlements')
   const eligibleUser = await User.exists({ _id: userId, deletedAt: { $exists: false }, suspendedAt: { $exists: false }, roles: { $in: ['landlord', 'property_manager'] } })
   if (!eligibleUser) throw new Error('Account is not eligible for a property subscription')
   const allowState = ['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD', 'SUBSCRIPTION_STATE_CANCELED'].includes(purchase.providerState)

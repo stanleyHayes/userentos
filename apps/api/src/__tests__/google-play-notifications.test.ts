@@ -109,6 +109,19 @@ describe('authenticated Google notification endpoint', () => {
     expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(mocks.complete.mock.invocationCallOrder[0])
     expect(mocks.create).not.toHaveBeenCalled()
   })
+  it('reconciles a license-test token only while its owner is allowlisted, and otherwise acknowledges it', async () => {
+    const reviewer = '64f0000000000000000000aa'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', reviewer)
+    mocks.find.mockReturnValue({ select: () => ({ lean: async () => ({ userId: reviewer, environment: 'test' }) }) })
+    expect((await send()).status).toBe(204)
+    expect(mocks.complete).toHaveBeenCalledWith(reviewer, 'private-token')
+    mocks.complete.mockClear(); mocks.create.mockClear()
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '')
+    expect((await send()).status).toBe(204)
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.create).toHaveBeenCalledWith({ subscription, messageId: 'delivery-1' })
+  })
   it('does not acknowledge unsupported refund notifications as completed', async () => {
     expect((await send(envelope({ voidedPurchaseNotification: { purchaseToken: 'token', orderId: 'order', productType: 2, refundType: 1 } }))).status).toBe(503)
     expect(mocks.complete).not.toHaveBeenCalled()

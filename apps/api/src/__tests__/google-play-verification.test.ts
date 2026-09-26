@@ -8,6 +8,8 @@ vi.mock('google-auth-library', () => ({ GoogleAuth: class {
 } }))
 const now = new Date('2026-09-13T12:00:00Z')
 const accountId = 'account-binding'
+const landlord = '64f000000000000000000001'
+const reviewer = '64f0000000000000000000aa'
 function fixture(state = 'SUBSCRIPTION_STATE_ACTIVE') {
   return {
     kind: 'androidpublisher#subscriptionPurchaseV2', subscriptionState: state,
@@ -22,6 +24,7 @@ beforeEach(() => {
   vi.stubEnv('GOOGLE_PLAY_PACKAGE_NAME', 'gh.rentos.mobile')
   vi.stubEnv('GOOGLE_PLAY_SERVICE_ACCOUNT_FILE', '/fixture/play.json')
   vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', 'false')
+  vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '')
   getClient.mockResolvedValue({ request })
   request.mockResolvedValue({ data: fixture() })
 })
@@ -72,7 +75,7 @@ describe('Google subscription eligibility', () => {
 
 describe('Google authenticated transport', () => {
   it('uses a fixed publisher endpoint, application binding, encoded token and scoped credential', async () => {
-    const result = await verifyGoogleSubscription('token/with?characters', accountId)
+    const result = await verifyGoogleSubscription('token/with?characters', accountId, landlord)
     expect(authOptions).toHaveBeenCalledWith({ keyFilename: '/fixture/play.json', scopes: ['https://www.googleapis.com/auth/androidpublisher'] })
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'GET', url: 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/gh.rentos.mobile/purchases/subscriptionsv2/tokens/token%2Fwith%3Fcharacters', timeout: 10000, retry: false }))
     expect(result.purchaseTokenHash).toBe(purchaseTokenHash('token/with?characters'))
@@ -80,25 +83,36 @@ describe('Google authenticated transport', () => {
   })
   it('fails before a network call when configuration is absent or token is invalid', async () => {
     vi.stubEnv('GOOGLE_PLAY_PACKAGE_NAME', '')
-    await expect(verifyGoogleSubscription('token', accountId)).rejects.toThrow('configuration')
-    await expect(verifyGoogleSubscription(' ', accountId)).rejects.toThrow('invalid_purchase')
+    await expect(verifyGoogleSubscription('token', accountId, landlord)).rejects.toThrow('configuration')
+    await expect(verifyGoogleSubscription(' ', accountId, landlord)).rejects.toThrow('invalid_purchase')
     expect(getClient).not.toHaveBeenCalled()
   })
   it.each([false, true])('rejects test purchases in production even with allow-test=%s', async allow => {
     vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', String(allow))
     request.mockResolvedValue({ data: { ...fixture(), testPurchase: {} } })
-    await expect(verifyGoogleSubscription('token', accountId)).rejects.toThrow('test_purchase')
+    await expect(verifyGoogleSubscription('token', accountId, landlord)).rejects.toThrow('test_purchase')
+  })
+  it('accepts a production test purchase only for an allowlisted review account', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', ` ${reviewer.toUpperCase()} ,not-an-id`)
+    request.mockResolvedValue({ data: { ...fixture(), testPurchase: {} } })
+    expect((await verifyGoogleSubscription('token', accountId, reviewer)).environment).toBe('test')
+    await expect(verifyGoogleSubscription('token', accountId, landlord)).rejects.toThrow('test_purchase')
+    await expect(verifyGoogleSubscription('token', accountId, 'not-an-id')).rejects.toThrow('test_purchase')
+    // The allowlist never changes what a real purchase is.
+    request.mockResolvedValue({ data: fixture() })
+    expect((await verifyGoogleSubscription('token', accountId, landlord)).environment).toBe('production')
   })
   it('requires explicit opt-in for test purchases outside production', async () => {
     request.mockResolvedValue({ data: { ...fixture(), testPurchase: {} } })
-    await expect(verifyGoogleSubscription('token', accountId)).rejects.toThrow('test_purchase')
+    await expect(verifyGoogleSubscription('token', accountId, landlord)).rejects.toThrow('test_purchase')
     vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', 'true')
-    expect((await verifyGoogleSubscription('token', accountId)).environment).toBe('test')
+    expect((await verifyGoogleSubscription('token', accountId, landlord)).environment).toBe('test')
   })
   it.each([401, 403, 429, 500, 404, 410])('sanitizes provider error %s without leaking tokens or credentials', async status => {
     request.mockRejectedValue({ message: 'secret token + credential', response: { status }, config: { headers: { Authorization: 'secret' } } })
-    await expect(verifyGoogleSubscription('sensitive-token', accountId)).rejects.toThrow(status === 404 || status === 410 ? 'invalid_purchase' : 'provider_unavailable')
-    try { await verifyGoogleSubscription('sensitive-token', accountId) } catch (error) { expect(JSON.stringify(error)).not.toContain('secret') }
+    await expect(verifyGoogleSubscription('sensitive-token', accountId, landlord)).rejects.toThrow(status === 404 || status === 410 ? 'invalid_purchase' : 'provider_unavailable')
+    try { await verifyGoogleSubscription('sensitive-token', accountId, landlord) } catch (error) { expect(JSON.stringify(error)).not.toContain('secret') }
   })
 })
 

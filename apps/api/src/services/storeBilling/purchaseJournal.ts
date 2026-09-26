@@ -29,7 +29,7 @@ export async function recordGooglePurchase(userId: string, purchaseToken: string
   const previous = await StorePurchase.findOne(identity).lean()
   if (previous && previous.userId !== userId) throw new StorePurchaseAccessError('ownership')
   const tokenCiphertext = encryptStoreToken(purchaseToken, storeTokenContext(applicationId, tokenHash, userId))
-  const verified = await verifyGoogleSubscription(purchaseToken, purchaseAccountIdentifiers(user.storeAccountToken).obfuscatedAccountId)
+  const verified = await verifyGoogleSubscription(purchaseToken, purchaseAccountIdentifiers(user.storeAccountToken).obfuscatedAccountId, userId)
   if (verified.packageName !== applicationId || verified.purchaseTokenHash !== tokenHash) throw new Error('Purchase identity changed during verification')
   const observation = {
     tokenCiphertext,

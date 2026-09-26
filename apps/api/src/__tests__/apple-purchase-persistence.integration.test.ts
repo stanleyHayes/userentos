@@ -61,7 +61,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     await mongoose.connection.db!.collection('users').deleteMany({ _id: { $in: [userId, otherId] } })
     await AppleTransactionRevocation.deleteMany({ applicationId: app })
     await StoreProduct.deleteOne({ _id: mappingId })
-    await StoreNotification.deleteMany({ subscription: JSON.stringify(['apple', app, 'production']) })
+    await StoreNotification.deleteMany({ subscription: { $in: ['production', 'test'].map(environment => JSON.stringify(['apple', app, environment])) } })
     await mongoose.disconnect(); vi.unstubAllEnvs()
   })
   it('encrypts the recovery identifier and restores renewals into one original-chain record', async () => {
@@ -222,6 +222,50 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     vi.mocked(verifyAppleSubscription).mockResolvedValue({ ...observation(), transactionId: '123458' })
     await processAppleNotification({ signedPayload: 'fixture' })
     expect((await resolveEntitlements(userId.toString())).features['property.limit']).toBe(8)
+  })
+
+  it('journals and grants a sandbox (App Review) chain only for an allowlisted account', async () => {
+    const owner = userId.toString()
+    vi.mocked(verifyAppleTransaction).mockResolvedValue({ ...facts(), environment: 'test' })
+    vi.mocked(verifyAppleSubscription).mockResolvedValue({ ...observation(), environment: 'test' })
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      // Everyone else: refused before any status request or journal write.
+      await expect(completeApplePurchase(owner, '123456')).rejects.toMatchObject({ code: 'test_purchase' })
+      expect(verifyAppleSubscription).not.toHaveBeenCalled()
+      expect(await ApplePurchase.countDocuments({ userId: owner })).toBe(0)
+      // The review demo landlord: journaled as a test chain and activated.
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', `${otherId}, ${owner}`)
+      expect(await completeApplePurchase(owner, '123456')).toMatchObject({ entitlementState: 'active' })
+      const row = await ApplePurchase.findOne({ userId: owner }).select('+originalTransactionCiphertext').lean()
+      expect(row).toMatchObject({ environment: 'test', entitlementState: 'active' })
+      expect(decryptStoreToken(row!.originalTransactionCiphertext, appleTokenContext(app, 'test', appleTransactionHash(originalId), owner))).toBe(originalId)
+      expect(await activeAppleSubscription(owner)).toMatchObject({ billingSource: 'app_store' })
+      expect((await resolveEntitlements(owner)).features['property.limit']).toBe(8)
+      // Lifecycle polling keeps the demo account's chain current.
+      await ApplePurchase.updateOne({ _id: row!._id }, { $set: { recoveryNextAttemptAt: new Date(0) } })
+      expect(await recoverApplePurchases(1)).toMatchObject({ processed: 1, failed: 0 })
+      expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String))
+      // Off the list: the active test row grants nothing, is not polled, and
+      // its notifications are acknowledged without being reconciled again.
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', otherId.toString())
+      expect(await activeAppleSubscription(owner)).toBeNull()
+      expect(await effectiveStoreSubscription(owner, {})).toBeNull()
+      await expect(activateAppleEntitlements(owner, row!._id.toString(), (await ApplePurchase.findById(row!._id).lean())!.revision)).rejects.toThrow('environment is not eligible')
+      await ApplePurchase.updateOne({ _id: row!._id }, { $set: { recoveryNextAttemptAt: new Date(0) } })
+      expect(await recoverApplePurchases(1)).toMatchObject({ processed: 0 })
+      const calls = vi.mocked(verifyAppleSubscription).mock.calls.length
+      const notificationId = randomUUID()
+      vi.mocked(verifyAppleNotification).mockResolvedValue({ notificationId, notificationType: 'DID_RENEW', subtype: null, applicationId: app, environment: 'test', signedAt: new Date().toISOString(), transaction: { ...facts(), environment: 'test' } })
+      await processAppleNotification({ signedPayload: 'fixture' })
+      expect(vi.mocked(verifyAppleSubscription).mock.calls).toHaveLength(calls)
+      expect(await StoreNotification.exists({ messageId: notificationId })).not.toBeNull()
+      // A live purchase by the same account is unaffected by the list.
+      vi.mocked(verifyAppleTransaction).mockResolvedValue(facts())
+      vi.mocked(verifyAppleSubscription).mockResolvedValue(observation())
+      expect(await completeApplePurchase(owner, '123456')).toMatchObject({ entitlementState: 'active' })
+      expect(await activeAppleSubscription(owner)).not.toBeNull()
+    } finally { vi.stubEnv('NODE_ENV', 'test'); vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '') }
   })
 
   it('orders signed refunds and reversals atomically and requires fresh verification after reversal', async () => {

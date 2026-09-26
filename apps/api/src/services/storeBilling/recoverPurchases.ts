@@ -4,25 +4,27 @@ import { envOptional } from '../../utils/env.js'
 import { completeGooglePurchase } from './completePurchase.js'
 import { googlePlayApplicationId, purchaseTokenHash, StoreVerificationError } from './googlePlay.js'
 import { storeTokenContext, StorePurchaseConflict } from './purchaseJournal.js'
+import { googleRecoveryScope } from './storeEnvironments.js'
 import { decryptStoreToken } from './tokenVault.js'
 
 const MINUTE = 60_000
 /** Bounded recovery and lifecycle polling. Each row has an expiring fenced lease,
  * so overlapping workers do not own the same attempt and a crash can recover.
  * Polling is a fallback; real-time notifications still need to trigger immediate verification.
+ * License-test rows are polled only for accounts still allowed to hold them.
  */
 export async function recoverGooglePurchases(limit = 20) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid recovery batch size')
   if (!envOptional('GOOGLE_PLAY_SERVICE_ACCOUNT_FILE') || !envOptional('GOOGLE_PLAY_PACKAGE_NAME') || !envOptional('STORE_BILLING_ENCRYPTION_KEY')) return { processed: 0, failed: 0, skipped: true }
   const applicationId = googlePlayApplicationId()
-  const environments: Array<'production' | 'test'> = process.env.NODE_ENV !== 'production' && envOptional('GOOGLE_PLAY_ALLOW_TEST_PURCHASES') === 'true' ? ['production', 'test'] : ['production']
+  const scope = googleRecoveryScope()
   let processed = 0
   let failed = 0
   for (let index = 0; index < limit; index++) {
     const now = new Date()
     const leaseId = randomUUID()
     const purchase = await StorePurchase.findOneAndUpdate({
-      platform: 'google', applicationId, environment: { $in: environments },
+      platform: 'google', applicationId, ...scope,
       $and: [
         { $or: [{ entitlementState: { $in: ['pending', 'prepared'] } }, { providerState: { $in: ['SUBSCRIPTION_STATE_PENDING', 'SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD', 'SUBSCRIPTION_STATE_CANCELED', 'SUBSCRIPTION_STATE_ON_HOLD', 'SUBSCRIPTION_STATE_PAUSED'] } }] },
         { $or: [{ recoveryNextAttemptAt: { $exists: false } }, { recoveryNextAttemptAt: { $lte: now } }] },

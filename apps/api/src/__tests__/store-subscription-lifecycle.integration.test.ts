@@ -99,4 +99,50 @@ describe.skipIf(!hasTestMongo)('store subscription lifecycle through real Mongo'
   // This scenario performs multiple renewal, hold, refund and recovery cycles
   // through real MongoDB; allow its sequential I/O to finish under suite load.
   }, 20_000)
+
+  it('grants a license-test purchase only while its owner is allowlisted in production', async () => {
+    const reviewer = new mongoose.Types.ObjectId()
+    const owner = reviewer.toString()
+    const testToken = `license-test-${reviewer}`
+    const tokenHash = purchaseTokenHash(testToken)
+    const users = mongoose.connection.db!.collection('users')
+    await users.insertOne({ _id: reviewer, email: `${reviewer}@rentos.test`, storeAccountToken: randomUUID(), roles: ['landlord'] })
+    // Keep the first scenario's purchase out of this one's polling.
+    await StorePurchase.updateMany({ applicationId: app }, { $set: { recoveryNextAttemptAt: new Date(Date.now() + 3_600_000) } })
+    const testState = { ...structuredClone(state), purchaseTokenHash: tokenHash, environment: 'test' as const, state: 'SUBSCRIPTION_STATE_ACTIVE' as const, acknowledged: false,
+      items: [{ ...state.items[0], latestOrderId: 'GPA.license-test', accessEligible: true, expiresAt: new Date(Date.now() + 86400000).toISOString() }] }
+    vi.mocked(verifyGoogleSubscription).mockImplementation(async () => structuredClone(testState))
+    const acknowledgements = vi.mocked(acknowledgeGoogleSubscription).mock.calls.length
+    const due = () => StorePurchase.updateOne({ applicationId: app, tokenHash }, { $set: { recoveryNextAttemptAt: new Date(0) } })
+    // The developer switch never applies in production.
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', 'true')
+    try {
+      // Verification is mocked here, so this proves the grant path refuses a
+      // test row for a non-allowlisted account on its own.
+      await expect(completeGooglePurchase(owner, testToken)).rejects.toThrow('Test purchase cannot prepare live entitlements')
+      expect(await activeStoreSubscription(owner)).toBeNull()
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', owner)
+      expect(await completeGooglePurchase(owner, testToken)).toMatchObject({ entitlementState: 'active', acknowledged: true })
+      expect(acknowledgeGoogleSubscription).toHaveBeenCalledTimes(acknowledgements + 1)
+      expect(await activeStoreSubscription(owner)).not.toBeNull()
+      await due()
+      expect(await recoverGooglePurchases(1)).toMatchObject({ processed: 1, failed: 0 })
+      // Off the list: the still-active test row grants nothing, is not polled,
+      // and a renewal notification is acknowledged without reconciliation.
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '')
+      expect(await activeStoreSubscription(owner)).toBeNull()
+      expect((await StorePurchase.findOne({ applicationId: app, tokenHash }).lean())?.entitlementState).toBe('active')
+      await due()
+      expect(await recoverGooglePurchases(1)).toMatchObject({ processed: 0 })
+      const verifications = vi.mocked(verifyGoogleSubscription).mock.calls.length
+      await processGoogleNotification({ subscription: app, message: { messageId: `renewal-${reviewer}`, data: Buffer.from(JSON.stringify({ version: '1.0', packageName: app, eventTimeMillis: String(Date.now()), subscriptionNotification: { version: '1.0', notificationType: 2, purchaseToken: testToken } })).toString('base64') } })
+      expect(vi.mocked(verifyGoogleSubscription).mock.calls).toHaveLength(verifications)
+      expect(await StoreNotification.exists({ subscription: app, messageId: `renewal-${reviewer}` })).not.toBeNull()
+    } finally {
+      vi.stubEnv('NODE_ENV', 'test'); vi.stubEnv('GOOGLE_PLAY_ALLOW_TEST_PURCHASES', ''); vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '')
+      vi.mocked(verifyGoogleSubscription).mockImplementation(async () => structuredClone(state))
+      await users.deleteOne({ _id: reviewer })
+    }
+  }, 20_000)
 })

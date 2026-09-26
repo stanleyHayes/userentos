@@ -32,7 +32,11 @@ router.post('/google/complete', requireRole('landlord', 'property_manager'), wri
     if (err instanceof StorePurchaseAccessError || (err instanceof StoreVerificationError && err.code === 'account_mismatch')) {
       error(res, 'This purchase cannot be linked to your account. Use the account that made the purchase or contact support.', 403); return
     }
-    if (err instanceof StoreVerificationError && ['invalid_purchase', 'test_purchase'].includes(err.code)) {
+    // License-test purchases are free, so only allowlisted review accounts hold them.
+    if (err instanceof StoreVerificationError && err.code === 'test_purchase') {
+      error(res, 'This is a Google Play test purchase, and test purchases are not accepted for this account.', 403); return
+    }
+    if (err instanceof StoreVerificationError && err.code === 'invalid_purchase') {
       error(res, 'Google could not verify this purchase for this app.', 422); return
     }
     if (err instanceof StorePurchaseConflict) {
@@ -57,7 +61,11 @@ router.post('/apple/complete', requireRole('landlord', 'property_manager'), writ
     if (err instanceof StorePurchaseAccessError || (err instanceof StoreVerificationError && err.code === 'account_mismatch')) {
       error(res, 'This purchase cannot be linked to your account. Use the account that made the purchase or contact support.', 403); return
     }
-    if (err instanceof StoreVerificationError && ['invalid_purchase', 'test_purchase'].includes(err.code)) {
+    // Sandbox purchases (App Review, TestFlight) are free, so only allowlisted review accounts hold them.
+    if (err instanceof StoreVerificationError && err.code === 'test_purchase') {
+      error(res, 'This is an App Store sandbox purchase, and sandbox purchases are not accepted for this account.', 403); return
+    }
+    if (err instanceof StoreVerificationError && err.code === 'invalid_purchase') {
       error(res, 'Apple could not verify this purchase for this app.', 422); return
     }
     if (err instanceof StorePurchaseConflict) {

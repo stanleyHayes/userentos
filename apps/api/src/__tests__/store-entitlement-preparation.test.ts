@@ -40,6 +40,17 @@ describe('preparing store entitlement grants', () => {
     await expect(prepareGoogleEntitlements('user', 'purchase', 2, now)).rejects.toThrow('Test purchase')
     expect(StorePurchase.findOneAndUpdate).not.toHaveBeenCalled()
   })
+  it('prepares a production test journal only for an allowlisted review account', async () => {
+    const reviewer = '64f0000000000000000000aa'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', reviewer)
+    vi.mocked(StorePurchase.findOne).mockReturnValue(lean({ ...purchase, userId: reviewer, environment: 'test' }) as never)
+    await prepareGoogleEntitlements(reviewer, 'purchase', 2, now)
+    expect(StorePurchase.findOneAndUpdate).toHaveBeenCalledWith({ _id: 'purchase', userId: reviewer, revision: 2 }, expect.objectContaining({ $set: expect.objectContaining({ entitlementState: 'prepared' }) }), expect.any(Object))
+    vi.mocked(StorePurchase.findOneAndUpdate).mockClear()
+    await expect(prepareGoogleEntitlements('user', 'purchase', 2, now)).rejects.toThrow('Test purchase')
+    expect(StorePurchase.findOneAndUpdate).not.toHaveBeenCalled()
+  })
   it('refuses missing mappings without storing a partial entitlement set', async () => {
     vi.mocked(StoreProduct.findOne).mockReturnValue(lean(null) as never)
     await expect(prepareGoogleEntitlements('user', 'purchase', 2, now)).rejects.toThrow('no RentOS entitlement mapping')

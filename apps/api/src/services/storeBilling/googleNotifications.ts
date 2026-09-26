@@ -5,6 +5,7 @@ import { StorePurchase } from '../../models/StorePurchase.js'
 import { StoreNotification } from '../../models/StoreNotification.js'
 import { googlePurchaseTokenInput, purchaseTokenHash } from './googlePlay.js'
 import { completeGooglePurchase } from './completePurchase.js'
+import { googleEnvironmentsFor } from './storeEnvironments.js'
 
 export class GoogleNotificationError extends Error {
   constructor(public readonly status: number) { super('Google notification could not be processed') }
@@ -52,7 +53,7 @@ export async function processGoogleNotification(body: unknown) {
   const delivery = { subscription, messageId: parsed.data.message.messageId }
   if (await StoreNotification.exists(delivery)) return
   const token = notification.data.subscriptionNotification?.purchaseToken ?? voided!.purchaseToken
-  const purchase = await StorePurchase.findOne({ platform: 'google', applicationId, tokenHash: purchaseTokenHash(token) }).select('userId').lean()
+  const purchase = await StorePurchase.findOne({ platform: 'google', applicationId, tokenHash: purchaseTokenHash(token) }).select('userId environment').lean()
   // An event can precede device registration. Ask Pub/Sub to retry rather than
   // inventing an owner or accepting a purchase without its account binding.
   if (!purchase) throw new GoogleNotificationError(503)
@@ -62,7 +63,10 @@ export async function processGoogleNotification(body: unknown) {
     const saved = await StorePurchase.updateOne({ platform: 'google', applicationId, tokenHash: purchaseTokenHash(token), userId: purchase.userId }, { $addToSet: { voidedOrderIds: voided.orderId }, $set: { recoveryNextAttemptAt: new Date(0) } })
     if (!saved.matchedCount) throw new GoogleNotificationError(503)
   }
-  await completeGooglePurchase(purchase.userId, token)
+  // A license-test token whose owner may no longer hold test purchases grants
+  // nothing (every reader skips it), so acknowledge instead of reconciling.
+  const retired = purchase.environment === 'test' && !googleEnvironmentsFor(purchase.userId).includes('test')
+  if (!retired) await completeGooglePurchase(purchase.userId, token)
   try { await StoreNotification.create(delivery) } catch (error) {
     if ((error as { code?: number }).code !== 11000) throw error
   }

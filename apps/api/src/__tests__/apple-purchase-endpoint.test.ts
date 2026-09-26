@@ -68,9 +68,15 @@ describe('authenticated Apple purchase and restore completion API', () => {
     expect(response.status).toBe(403)
     expect(await response.text()).not.toContain('signed-in-owner')
   })
-  it.each(['invalid_purchase', 'test_purchase'] as const)('returns a verification rejection for %s', async code => {
-    mocks.complete.mockRejectedValue(new StoreVerificationError(code))
+  it('returns a verification rejection for an unverifiable purchase', async () => {
+    mocks.complete.mockRejectedValue(new StoreVerificationError('invalid_purchase'))
     expect((await send()).status).toBe(422)
+  })
+  it('refuses a sandbox purchase for an account that is not allowlisted', async () => {
+    mocks.complete.mockRejectedValue(new StoreVerificationError('test_purchase'))
+    const response = await send()
+    expect(response.status).toBe(403)
+    expect((await response.json()).error).toContain('sandbox purchases are not accepted for this account')
   })
   it('returns a short retry for concurrent observations', async () => {
     mocks.complete.mockRejectedValue(new StorePurchaseConflict())

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { GoogleAuth } from 'google-auth-library'
 import { z } from 'zod'
 import { envOptional } from '../../utils/env.js'
+import { googleEnvironmentsFor } from './storeEnvironments.js'
 
 export class StoreVerificationError extends Error {
   constructor(public readonly code: 'configuration' | 'provider_unavailable' | 'invalid_purchase' | 'account_mismatch' | 'test_purchase') {
@@ -76,18 +77,20 @@ function settings() {
   const packageName = envOptional('GOOGLE_PLAY_PACKAGE_NAME')
   const keyFilename = envOptional('GOOGLE_PLAY_SERVICE_ACCOUNT_FILE')
   if (!packageName || !/^[A-Za-z]\w*(\.[A-Za-z]\w*)+$/.test(packageName) || !keyFilename) throw new StoreVerificationError('configuration')
-  return { packageName, keyFilename, allowTest: process.env.NODE_ENV !== 'production' && envOptional('GOOGLE_PLAY_ALLOW_TEST_PURCHASES') === 'true' }
+  return { packageName, keyFilename }
 }
 
 export function googlePlayApplicationId() { return settings().packageName }
 
 /** Fetch current subscription state; never accept a client-supplied receipt JSON.
  * This verifies only. Entitlement persistence, linked-token revocation and
- * acknowledgement must follow as a separate durable workflow.
+ * acknowledgement must follow as a separate durable workflow. A license-test
+ * purchase is accepted only for an account allowed to hold one (storeEnvironments.ts).
  */
-export async function verifyGoogleSubscription(purchaseToken: string, expectedAccountId: string) {
+export async function verifyGoogleSubscription(purchaseToken: string, expectedAccountId: string, userId: string) {
   if (!googlePurchaseTokenInput.safeParse(purchaseToken).success) throw new StoreVerificationError('invalid_purchase')
-  const { packageName, keyFilename, allowTest } = settings()
+  const { packageName, keyFilename } = settings()
+  const allowTest = googleEnvironmentsFor(userId).includes('test')
   let data: unknown
   try {
     const auth = new GoogleAuth({ keyFilename, scopes: ['https://www.googleapis.com/auth/androidpublisher'] })
