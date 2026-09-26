@@ -75,8 +75,12 @@ export class PropertyService {
   async listProperties(filters: ListFilters) {
     const filter: Record<string, unknown> = {}
 
-    if (filters.landlordId) filter.landlordId = filters.landlordId
-    else if (filters.excludeLandlordIds?.length) filter.landlordId = { $nin: filters.excludeLandlordIds }
+    // Both at once: asking for one owner's listings must not bring back a
+    // closed account's (it simply matches nothing).
+    const landlord: Record<string, unknown> = {}
+    if (filters.landlordId) landlord.$eq = filters.landlordId
+    if (filters.excludeLandlordIds?.length) landlord.$nin = filters.excludeLandlordIds
+    if (Object.keys(landlord).length) filter.landlordId = landlord
     if (filters.status) filter.status = filters.status
     if (filters.listingStatus) filter.listingStatus = typeof filters.listingStatus === 'string' ? filters.listingStatus : { $in: [...filters.listingStatus] }
     if (filters.type) filter.type = filters.type

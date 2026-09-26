@@ -589,7 +589,7 @@ export const propertyController = {
     const profile = await TenantProfile.findOne({ userId: req.user!.userId }).lean()
     const credit = await CreditScore.findOne({ userId: req.user!.userId }).lean()
 
-    const filter: Record<string, unknown> = { status: 'available', listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }
+    const filter: Record<string, unknown> = { status: 'available', listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES }, landlordId: { $nin: await closedAccountIds() } }
     const prefs = (profile as LeanTenantProfile)?.searchPreferences
 
     if (prefs) {
