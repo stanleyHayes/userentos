@@ -406,9 +406,13 @@ router.get('/portfolio', authenticate, requireRole('financier'), async (req, res
     FinancingContract.find({ financierId }).lean(),
     FinancingApplication.find({ financierId }).lean(),
   ])
-  const total = contracts.reduce((sum, c) => sum + c.principal, 0)
+  // A contract starts as 'pending_disbursement' when the application is
+  // approved: nothing has been paid out and nothing is owed yet.
+  const total = contracts.filter((c) => c.status !== 'pending_disbursement').reduce((sum, c) => sum + c.principal, 0)
   const repaid = contracts.reduce((sum, c) => sum + c.amountRepaid, 0)
-  const outstanding = contracts.reduce((sum, c) => sum + (c.totalRepayable - c.amountRepaid), 0)
+  const outstanding = contracts
+    .filter((c) => ['active', 'in_grace', 'in_arrears', 'defaulted'].includes(c.status))
+    .reduce((sum, c) => sum + Math.max(0, c.totalRepayable - c.amountRepaid), 0)
   const active = contracts.filter((c) => c.status === 'active').length
   const settled = contracts.filter((c) => c.status === 'settled').length
   const defaults = contracts.filter((c) => c.status === 'defaulted').length

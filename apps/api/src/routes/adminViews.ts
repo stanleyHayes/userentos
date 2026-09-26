@@ -11,6 +11,7 @@ import { InsuranceProduct } from '../models/InsuranceProduct.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
+import { escapeRegex } from '../utils/params.js'
 
 const router = Router()
 
@@ -125,10 +126,20 @@ router.get('/employers', adminAuth, adminRole, adminPerm, async (req, res) => {
   const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
   const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
   const skip = (page - 1) * pageSize
+  // Search runs here, not over the one page the client holds.
+  const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : ''
+  const pattern = q ? { $regex: escapeRegex(q), $options: 'i' } : null
+  const filter = pattern ? { $or: [{ legalName: pattern }, { tradingName: pattern }, { tin: pattern }, { contactEmail: pattern }] } : {}
 
-  const [total, employers] = await Promise.all([
-    Employer.countDocuments({}),
-    Employer.find({}).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+  const [total, employers, allEmployers, verified, needsReview, activeEmployees, activeMandates] = await Promise.all([
+    Employer.countDocuments(filter),
+    Employer.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+    // Platform-wide KPIs: independent of the page and the search.
+    q ? Employer.countDocuments({}) : null,
+    Employer.countDocuments({ verificationStatus: 'verified' }),
+    Employer.countDocuments({ verificationStatus: { $in: ['pending', 'rejected'] } }),
+    Employment.countDocuments({ status: 'active' }),
+    DeductionMandate.countDocuments({ status: 'active' }),
   ])
 
   const employerIds = employers.map((e) => (e._id as Types.ObjectId).toString())
@@ -159,7 +170,10 @@ router.get('/employers', adminAuth, adminRole, adminPerm, async (req, res) => {
     }
   })
 
-  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
+  success(res, {
+    items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    summary: { employers: allEmployers ?? total, verified, needsReview, activeEmployees, activeMandates },
+  })
 })
 
 // ────────────────────────────────────────
