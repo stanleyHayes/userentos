@@ -4,6 +4,7 @@ import { authService } from '../container.js'
 import { success, error } from '../utils/response.js'
 import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
 import { isRoleOffered } from '../config/regulatedFeatures.js'
+import { pushTokenSchema } from '../services/push/input.js'
 
 /** Password policy — same rules the client checklist enforces (8+, upper,
  * lower, digit, special). Applied to register/change/reset. */
@@ -93,7 +94,10 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    await authService.logout(parsed.data.refreshToken)
+    // The phone's push token, so it stops receiving this account's
+    // notifications. An unusable one must not stop the sign-out itself.
+    const pushToken = pushTokenSchema.safeParse(req.body?.pushToken)
+    await authService.logout(parsed.data.refreshToken, pushToken.success ? pushToken.data : undefined)
     success(res, null, 'Logged out successfully')
   },
 

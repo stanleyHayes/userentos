@@ -1,50 +1,62 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Notifications from 'expo-notifications'
-import { useRouter } from 'expo-router'
+import { useRouter, useSegments } from 'expo-router'
 import { useAuthStore } from '../stores/authStore'
-import { registerForPushNotifications, unregisterPushToken } from '../lib/push'
-import { safeAppRoute } from '../lib/safeRoute'
-import { createSessionCallbackGuard } from '../lib/sessionCallbacks'
+import { registerForPushNotifications } from '../lib/push'
+import { createNotificationTaps } from '../lib/notificationTaps'
 import { onPushOptIn } from '../lib/pushSession'
 
 export function usePushNotifications() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const hydrated = useAuthStore((s) => s.hydrated)
   const userId = useAuthStore((s) => s.user?.id)
   const sessionVersion = useAuthStore((s) => s.sessionVersion)
   const router = useRouter()
-  const tokenRef = useRef<string | null>(null)
+  const segments = useSegments()
   // Bumped when the user grants permission from the in-context pre-prompt, so
   // this session registers its token then (sign-in itself never prompts).
   const [optInCount, setOptInCount] = useState(0)
 
+  // Signed in and past the auth screens: the auth guard's redirect away from
+  // the login screen would otherwise replace the screen a tap opened.
+  const canOpen = hydrated && isAuthenticated && segments[0] !== 'auth'
+  const canOpenRef = useRef(canOpen)
+  canOpenRef.current = canOpen
+  const routerRef = useRef(router)
+  routerRef.current = router
+  const taps = useRef<ReturnType<typeof createNotificationTaps> | null>(null)
+  if (!taps.current) {
+    taps.current = createNotificationTaps({
+      navigate: (route) => routerRef.current.push(route as never),
+      readLast: () => Notifications.getLastNotificationResponse(),
+      clearLast: () => Notifications.clearLastNotificationResponse(),
+    })
+  }
+
   useEffect(() => onPushOptIn(() => setOptInCount((n) => n + 1)), [])
 
+  // The registered token is remembered for the sign-out request, which
+  // removes it on the server (lib/signOut.ts). An effect cleanup cannot do
+  // that: by then the session and its access token are already gone.
   useEffect(() => {
     if (!isAuthenticated || !userId) return
     let cancelled = false
-    registerForPushNotifications(() => !cancelled && useAuthStore.getState().sessionVersion === sessionVersion).then((token) => {
-      if (!cancelled) tokenRef.current = token
-    })
-    return () => {
-      cancelled = true
-      const t = tokenRef.current
-      if (t) {
-        void unregisterPushToken(t, sessionVersion)
-        tokenRef.current = null
-      }
-    }
+    void registerForPushNotifications(() => !cancelled && useAuthStore.getState().sessionVersion === sessionVersion)
+    return () => { cancelled = true }
   }, [isAuthenticated, userId, sessionVersion, optInCount])
 
+  // Listen from the first render, signed in or not: a tap is never dropped,
+  // only held until it can be opened.
   useEffect(() => {
-    if (!isAuthenticated || !userId) return
-    const guard = createSessionCallbackGuard(() => useAuthStore.getState().sessionVersion)
-    const sub = Notifications.addNotificationResponseReceivedListener(guard.wrap((response) => {
-      const url = response.notification.request.content.data?.url
-      const route = safeAppRoute(url)
-      if (route) {
-        router.push(route as never)
-      }
-    }))
-    return () => { guard.dispose(); sub.remove() }
-  }, [router, isAuthenticated, userId, sessionVersion])
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => taps.current!.receive(response, canOpenRef.current))
+    return () => sub.remove()
+  }, [])
+
+  useEffect(() => {
+    if (hydrated) taps.current!.readLaunchTap()
+  }, [hydrated])
+
+  useEffect(() => {
+    if (canOpen) taps.current!.openWaiting()
+  }, [canOpen, sessionVersion])
 }

@@ -1,17 +1,20 @@
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
-import { Platform } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import Constants from 'expo-constants'
 import { api } from './api'
+import { getSocket } from './socket'
 import { useAuthStore } from '../stores/authStore'
-import { notifyPushOptIn, registerSessionPush, resolvePushPermission } from './pushSession'
+import { notifyPushOptIn, registerSessionPush, rememberRegisteredPushToken, resolvePushPermission } from './pushSession'
+import { foregroundPresentation } from './notificationPresentation'
 
+// In the foreground, a notice the socket already showed as a toast is not
+// bannered a second time (see foregroundPresentation).
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
+  handleNotification: async (notification) => foregroundPresentation({
+    appState: AppState.currentState,
+    socketConnected: getSocket()?.connected === true,
+    data: notification.request.content.data,
   }),
 })
 
@@ -40,7 +43,7 @@ async function getProjectId(): Promise<string | undefined> {
 export async function registerForPushNotifications(isActive: () => boolean = () => true): Promise<string | null> {
   const origin = useAuthStore.getState()
   const isCurrent = () => isActive() && origin.isAuthenticated && useAuthStore.getState().isAuthenticated && useAuthStore.getState().sessionVersion === origin.sessionVersion && useAuthStore.getState().user?.id === origin.user?.id
-  return registerSessionPush(isCurrent, async () => {
+  const token = await registerSessionPush(isCurrent, async () => {
     if (!Device.isDevice) return null
     await ensureAndroidChannel()
     if (!isCurrent()) return null
@@ -50,6 +53,9 @@ export async function registerForPushNotifications(isActive: () => boolean = () 
     const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
     return tokenData.data || null
   }, token => api.post('/push/register', { token, platform: 'expo' }))
+  // Sent with the sign-out request, which removes this registration.
+  if (token) rememberRegisteredPushToken(token)
+  return token
 }
 
 export type PushPermissionState = 'unsupported' | 'granted' | 'undetermined' | 'blocked'
@@ -82,9 +88,4 @@ export async function requestPushPermissionInContext(): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-export async function unregisterPushToken(token: string, sessionVersion: number): Promise<void> {
-  if (!useAuthStore.getState().isAuthenticated || useAuthStore.getState().sessionVersion !== sessionVersion) return
-  try { await api.post('/push/unregister', { token }) } catch { /* best effort */ }
 }

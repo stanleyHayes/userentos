@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Alert, ActivityIndicator, Switch, Image,
@@ -10,6 +10,7 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
+import { photoPart, submitListing } from '../lib/propertyPhotos'
 
 const REGIONS = ['Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central', 'Northern', 'Volta', 'Upper East', 'Upper West', 'Bono', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North']
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
@@ -19,7 +20,12 @@ export default function AddPropertyScreen() {
   const c = useThemeColors()
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState('')
   const [images, setImages] = useState<string[]>([])
+  // The listing exists but some photos did not upload: submitting again only
+  // retries those photos (a ref, so an alert button never sees a stale value).
+  const savedRef = useRef<{ id: string; failed: string[] } | null>(null)
+  const [saved, setSaved] = useState<{ id: string; failed: string[] } | null>(null)
 
   const [form, setForm] = useState({
     title: '', description: '', type: 'apartment',
@@ -50,49 +56,77 @@ export default function AddPropertyScreen() {
     }
   }
 
+  function rememberSaved(value: { id: string; failed: string[] } | null) {
+    savedRef.current = value
+    setSaved(value)
+  }
+
   async function handleSubmit() {
+    const retry = savedRef.current
+    if (retry) { await submit(retry.id, retry.failed.filter((uri) => images.includes(uri))); return }
     if (!form.title.trim()) { Alert.alert('Error', 'Please enter a title'); return }
     if (!form.description.trim()) { Alert.alert('Error', 'Please enter a description'); return }
     if (!form.street.trim() || !form.city.trim()) { Alert.alert('Error', 'Street and city are required'); return }
     if (!form.rentAmount || Number(form.rentAmount) <= 0) { Alert.alert('Error', 'Please enter a valid rent amount'); return }
 
-    setSubmitting(true)
+    await submit(null, images)
+  }
+
+  async function submit(savedId: string | null, photos: string[]) {
+    setSubmitting(true); setProgress('')
+    let result: { propertyId: string; failed: string[] }
     try {
-      const property = await api.post<Record<string, unknown>>('/properties', {
-        title: form.title, description: form.description, type: form.type,
-        address: { street: form.street, city: form.city, region: form.region, neighborhood: form.neighborhood || undefined, digitalAddress: form.digitalAddress || undefined },
-        rentAmount: Number(form.rentAmount),
-        rentDurationMonths: Number(form.rentDurationMonths),
-        advanceMonths: Number(form.advanceMonths),
-        bedrooms: Number(form.bedrooms), bathrooms: Number(form.bathrooms),
-        furnished: form.furnished, parkingSpaces: Number(form.parkingSpaces),
-        floorArea: form.floorArea ? Number(form.floorArea) : undefined,
-        amenities: form.amenities,
-        rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
+      result = await submitListing({
+        savedId,
+        photos,
+        create: () => api.post<Record<string, unknown>>('/properties', {
+          title: form.title, description: form.description, type: form.type,
+          address: { street: form.street, city: form.city, region: form.region, neighborhood: form.neighborhood || undefined, digitalAddress: form.digitalAddress || undefined },
+          rentAmount: Number(form.rentAmount),
+          rentDurationMonths: Number(form.rentDurationMonths),
+          advanceMonths: Number(form.advanceMonths),
+          bedrooms: Number(form.bedrooms), bathrooms: Number(form.bathrooms),
+          furnished: form.furnished, parkingSpaces: Number(form.parkingSpaces),
+          floorArea: form.floorArea ? Number(form.floorArea) : undefined,
+          amenities: form.amenities,
+          rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
+        }),
+        // One photo per request through the api client (base URL, 401
+        // refresh, errors), each with a time limit (lib/propertyPhotos.ts).
+        uploadPhoto: (propertyId, uri, signal) => {
+          const formData = new FormData()
+          formData.append('images', photoPart(uri) as unknown as Blob)
+          return api.upload<{ images: string[] }>(`/properties/${propertyId}/images`, formData, { signal })
+        },
+        onProgress: (done, total) => setProgress(done < total ? `Uploading photo ${done + 1} of ${total}…` : ''),
       })
-
-      // Upload images via the api client (handles base URL, 401-refresh, and
-      // error reporting — the raw fetch here swallowed failures and hardcoded
-      // localhost + image/jpeg for everything).
-      if (images.length > 0 && property?.id) {
-        const formData = new FormData()
-        for (const uri of images) {
-          const filename = uri.split('/').pop() ?? 'photo.jpg'
-          const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg'
-          const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
-          formData.append('images', { uri, name: filename, type: mime } as unknown as Blob)
-        }
-        await api.upload<{ images: string[] }>(`/properties/${property.id}/images`, formData)
-      }
-
-      Alert.alert('Success', 'Property listed successfully!', [
-        { text: 'View', onPress: () => router.replace(`/property/${property.id}`) },
-        { text: 'OK', onPress: () => router.back() },
-      ])
     } catch (e) {
+      // Nothing was saved: only now is "failed to create" true.
       const _err = e as { message?: string }
       Alert.alert('Error', _err.message || 'Failed to create property')
-    } finally { setSubmitting(false) }
+      setSubmitting(false); setProgress('')
+      return
+    }
+    setSubmitting(false); setProgress('')
+    const { propertyId, failed } = result
+    const view = () => router.replace(`/property/${propertyId}`)
+    if (failed.length === 0) {
+      rememberSaved(null)
+      Alert.alert('Success', !savedId ? 'Property listed successfully!' : photos.length ? 'Photos uploaded.' : 'Your listing is saved.', [
+        { text: 'View', onPress: view },
+        { text: 'OK', onPress: () => router.back() },
+      ])
+      return
+    }
+    rememberSaved({ id: propertyId, failed })
+    Alert.alert(
+      'Listing saved, photos missing',
+      `Your listing was saved, but ${failed.length} of ${photos.length} photo${photos.length === 1 ? '' : 's'} did not upload. Retry now, or view the listing and add photos later.`,
+      [
+        { text: 'View listing', onPress: view },
+        { text: 'Retry photos', onPress: () => { void handleSubmit() } },
+      ],
+    )
   }
 
   return (
@@ -193,19 +227,36 @@ export default function AddPropertyScreen() {
         <AITextInput label="Rules (one per line)" aiContext="house rules for a rental property" value={form.rules} onChangeText={(v) => u('rules', v)} placeholder={"No loud music after 10pm\nNo smoking indoors"} numberOfLines={6} />
       </Section>
 
+      {/* Saved without some photos: the button below retries only those. */}
+      {saved && (
+        <View style={[s.section, neuCard(c)]} accessibilityLiveRegion="polite">
+          <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Listing saved</Text>
+          <Text style={[s.noticeText, { color: c.text }]}>
+            {saved.failed.length} photo{saved.failed.length === 1 ? '' : 's'} did not upload. Retry them below, or open the listing now. Changes to the details above are not sent again.
+          </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.replace(`/property/${saved.id}`)}>
+            <Text style={[s.noticeLink, { color: c.primary }]}>View listing</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Submit */}
       <TouchableOpacity
         style={[s.submitBtn, { backgroundColor: c.primary }, submitting && { opacity: 0.6 }]}
         onPress={handleSubmit}
         disabled={submitting}
         activeOpacity={0.85}
+        accessibilityRole="button"
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <>
+            <ActivityIndicator color="#fff" />
+            {!!progress && <Text style={s.submitBtnText}>{progress}</Text>}
+          </>
         ) : (
           <>
-            <Ionicons name="add-circle" size={20} color="#fff" />
-            <Text style={s.submitBtnText}>List Property</Text>
+            <Ionicons name={saved ? 'refresh' : 'add-circle'} size={20} color="#fff" />
+            <Text style={s.submitBtnText}>{saved ? 'Retry photos' : 'List Property'}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -266,4 +317,6 @@ const s = StyleSheet.create({
   previewRemove: { position: 'absolute', top: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 18 },
   submitBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Outfit_700Bold' },
+  noticeText: { fontSize: 14, fontFamily: 'Outfit_500Medium', marginTop: spacing.sm },
+  noticeLink: { fontSize: 14, fontFamily: 'Outfit_700Bold', paddingVertical: spacing.sm },
 })

@@ -18,6 +18,10 @@ apps/web/src/types/shared.ts
 apps/api/src/types/shared.ts
 apps/mobile/types/shared.ts
 
+# Firebase config for Android push: supplied by the EAS file env var
+# GOOGLE_SERVICES_JSON (apps/mobile/app.config.ts), never committed.
+apps/mobile/google-services.json
+
 # Build outputs
 *.apk
 *.aab

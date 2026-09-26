@@ -6,9 +6,10 @@ import * as Application from 'expo-application'
 import { Platform } from 'react-native'
 import { api } from './api'
 
-const BIOMETRIC_ENABLED_KEY = 'rentos_biometric_enabled'
-const BIOMETRIC_REFRESH_KEY = 'rentos_biometric_refresh_v2'
-const DEVICE_ID_KEY = 'rentos_device_id'
+// Keys, keychain classes and their migration: lib/credentialOperations.ts.
+const BIOMETRIC_ENABLED_KEY = 'biometricEnabled'
+const BIOMETRIC_REFRESH_KEY = 'biometricRefresh'
+const DEVICE_ID_KEY = 'deviceId'
 
 export type BiometricType = 'fingerprint' | 'face' | 'iris' | 'none'
 

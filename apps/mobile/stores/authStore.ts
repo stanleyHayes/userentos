@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { useNotificationStore } from './notificationStore'
-import { credentialStorage as SecureStore } from '../lib/credentialStorage'
-
-const AUTH_KEY = 'rentos_auth'
+import { credentialStorage } from '../lib/credentialStorage'
+import { parseSession, serializeSession, type StoredSession } from '../lib/sessionRecord'
+import { restoreProfile } from '../lib/sessionRestore'
+import { suppressBiometricAutoPrompt } from '../lib/biometricAutoPrompt'
 
 export interface User {
   suspendedAt?: string
@@ -19,6 +20,8 @@ export interface User {
 
 interface AuthState {
   sessionVersion: number
+  /** The signed-in account, known before its profile has loaded. */
+  userId: string | null
   user: User | null
   token: string | null
   refreshToken: string | null
@@ -33,11 +36,23 @@ interface AuthState {
   updateTokens: (token: string, refreshToken: string | null) => void
   renewSession: (token: string, refreshToken: string) => void
   updateUser: (updates: Partial<User>) => void
-  hydrate: () => Promise<void>
+  /** Restore the stored session; `loadUser` fetches its profile (GET /users/me). */
+  hydrate: (loadUser: () => Promise<User>) => Promise<void>
+}
+
+/** Only the account id and credentials are persisted (lib/sessionRecord.ts). */
+function persist(session: StoredSession) {
+  credentialStorage.setItemAsync('session', serializeSession(session)).catch(() => {})
+}
+
+/** Stands in for the profile when a restored session opens offline, until it loads. */
+function pendingProfile(id: string): User {
+  return { id, email: '', phone: '', firstName: '', lastName: '', roles: [], activeRole: '', isVerified: false }
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   sessionVersion: 0,
+  userId: null,
   user: null,
   token: null,
   refreshToken: null,
@@ -51,31 +66,26 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     // Refuse it before touching the current session.
     if (!user?.id || typeof token !== 'string' || !token) throw new Error('Sign-in did not return a valid session. Please try again.')
     useNotificationStore.getState().reset()
+    // A session was active in this process: a later login screen is not a cold start.
+    suppressBiometricAutoPrompt()
     const biometricSession = opts?.biometricSession ?? false
-    set({ user, token, refreshToken: refreshToken ?? null, biometricSession, isAuthenticated: true, sessionVersion: get().sessionVersion + 1 })
-    SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({ user, token, refreshToken, biometricSession })).catch(() => {})
+    set({ userId: user.id, user, token, refreshToken: refreshToken ?? null, biometricSession, isAuthenticated: true, sessionVersion: get().sessionVersion + 1 })
+    persist({ userId: user.id, token, refreshToken: refreshToken ?? null, biometricSession })
   },
 
   logout: () => {
     useNotificationStore.getState().reset()
-    set({ user: null, token: null, refreshToken: null, biometricSession: false, isAuthenticated: false, sessionVersion: get().sessionVersion + 1 })
-    SecureStore.deleteItemAsync(AUTH_KEY).catch(() => {})
+    set({ userId: null, user: null, token: null, refreshToken: null, biometricSession: false, isAuthenticated: false, sessionVersion: get().sessionVersion + 1 })
+    credentialStorage.deleteItemAsync('session').catch(() => {})
   },
 
+  // The profile is not persisted, so a role switch lasts until the next
+  // profile refresh, as it did before.
   switchRole: (role) =>
     set((state) => {
       // Only roles the user actually holds
       if (!state.user || !state.user.roles.includes(role)) return {}
-      const updated = { ...state.user, activeRole: role }
-      if (state.token) {
-        SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({
-          user: updated,
-          token: state.token,
-          refreshToken: state.refreshToken,
-          biometricSession: state.biometricSession,
-        })).catch(() => {})
-      }
-      return { user: updated }
+      return { user: { ...state.user, activeRole: role } }
     }),
 
   // Token rotation MUST go through here — a bare setState() never reaches
@@ -83,12 +93,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   // gets force-logged-out (this was the main mobile session bug).
   updateTokens: (token, refreshToken) =>
     set((state) => {
-      SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({
-        user: state.user,
-        token,
-        refreshToken,
-        biometricSession: state.biometricSession,
-      })).catch(() => {})
+      if (state.userId) persist({ userId: state.userId, token, refreshToken, biometricSession: state.biometricSession })
       return { token, refreshToken }
     }),
 
@@ -97,42 +102,38 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   // biometric tokens were revoked with the rest).
   renewSession: (token, refreshToken) =>
     set((state) => {
-      SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({
-        user: state.user,
-        token,
-        refreshToken,
-        biometricSession: false,
-      })).catch(() => {})
+      if (state.userId) persist({ userId: state.userId, token, refreshToken, biometricSession: false })
       return { token, refreshToken, biometricSession: false }
     }),
 
   updateUser: (updates) =>
     set((state) => {
       if (!state.user) return {}
-      const updated = { ...state.user, ...updates }
-      if (state.token) {
-        SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({
-          user: updated,
-          token: state.token,
-          refreshToken: state.refreshToken,
-          biometricSession: state.biometricSession,
-        })).catch(() => {})
-      }
-      return { user: updated }
+      return { user: { ...state.user, ...updates } }
     }),
 
-  hydrate: async () => {
+  hydrate: async (loadUser) => {
     const version = get().sessionVersion
     try {
-      const raw = await SecureStore.getItemAsync(AUTH_KEY)
+      const session = parseSession(await credentialStorage.getItemAsync('session'))
       if (get().sessionVersion !== version) { set({ hydrated: true }); return }
-      if (raw) {
-        const { user, token, refreshToken, biometricSession } = JSON.parse(raw)
-        if (user && token) {
-          useNotificationStore.getState().reset()
-          set({ user, token, refreshToken: refreshToken ?? null, biometricSession: !!biometricSession, isAuthenticated: true, hydrated: true, sessionVersion: version + 1 })
-          return
-        }
+      if (session) {
+        useNotificationStore.getState().reset()
+        const restored = version + 1
+        // Credentials first, so the profile request (and a refresh it
+        // triggers) runs in this session; still signed out until it answers.
+        set({ userId: session.userId, user: null, token: session.token, refreshToken: session.refreshToken, biometricSession: session.biometricSession, sessionVersion: restored })
+        const placeholder = pendingProfile(session.userId)
+        const outcome = await restoreProfile({
+          userId: session.userId,
+          load: loadUser,
+          current: () => get().sessionVersion === restored && (get().user === null || get().user === placeholder),
+          apply: (user) => set({ user }),
+        })
+        if (outcome === 'ended' || get().sessionVersion !== restored) { set({ hydrated: true }); return }
+        suppressBiometricAutoPrompt()
+        set({ user: get().user ?? placeholder, isAuthenticated: true, hydrated: true })
+        return
       }
     } catch { /* no-op */ }
     set({ hydrated: true })

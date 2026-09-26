@@ -478,11 +478,21 @@ export class AuthService {
   /**
    * Sign this device out: its whole session family, not only the token
    * presented (a concurrent refresh may already have rotated it), plus its
-   * access tokens and sockets. Other devices stay signed in.
+   * access tokens and sockets. Other devices stay signed in. `pushToken` is
+   * this device's push registration, removed with the session.
    */
-  async logout(plainRefreshToken: string) {
+  async logout(plainRefreshToken: string, pushToken?: string) {
     const tokenHash = hashRefreshToken(plainRefreshToken)
     const record = await RefreshToken.findOne({ tokenHash })
+    if (pushToken) {
+      // Nothing else removes it: once signed out the phone has no session to
+      // unregister with, and until the next sign-in reassigns the token it
+      // would keep receiving this account's notifications. A biometric
+      // session signs out with its biometric token, which logout leaves
+      // valid. Only the token holder's own registration is deleted.
+      const owner = record?.userId ?? (await BiometricToken.findOne({ tokenHash }).select('userId').lean())?.userId
+      if (owner) await DeviceToken.deleteOne({ token: pushToken, userId: owner })
+    }
     if (record?.familyId) {
       // Only the device itself holds this token, and it is signing itself out:
       // close its sockets quietly, or the web client shows a 'signed out' warning.

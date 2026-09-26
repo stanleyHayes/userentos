@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { ScrollView, Text, TextInput, TouchableOpacity, View, Linking, Share, Platform } from 'react-native'
+import { ScrollView, Text, TextInput, TouchableOpacity, View, Linking, Platform } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
+import { api, apiUrl } from '../lib/api'
+import { EXPORT_LINK_PATH, exportDownloadPath } from '../lib/exportDownload'
+import { takeRegisteredPushToken } from '../lib/pushSession'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { clearBiometricCredential } from '../lib/credentialStorage'
@@ -32,8 +34,11 @@ export default function PrivacyScreen() {
   async function exportData() {
     setBusy(true); setMessage('')
     try {
-      const data = await api.get('/users/me/export')
-      await Share.share({ title: 'RentOS personal data', message: JSON.stringify(data, null, 2) })
+      // A file downloaded in the browser (lib/exportDownload.ts), not the
+      // whole export pushed through the share sheet as text.
+      const { token } = await api.post<{ token: string }>(EXPORT_LINK_PATH, {})
+      await Linking.openURL(apiUrl(exportDownloadPath(token)))
+      setMessage('Your export is downloading in your browser as a JSON file. Save it somewhere private.')
     } catch (err) { setMessage(err instanceof Error ? err.message : 'Unable to export data. Please try again.') }
     finally { setBusy(false) }
   }
@@ -45,6 +50,8 @@ export default function PrivacyScreen() {
       await api.delete('/users/me')
       setClosed(true)
       cache.clear()
+      // Closure removed this phone's push registration with the account.
+      takeRegisteredPushToken()
       useAuthStore.getState().logout()
       const closedSession = useAuthStore.getState().sessionVersion
       useNotificationStore.getState().pushToast({ title: 'Your account is closed', body: 'Listings and profiles taken down, core profile erased. See the privacy policy for retained records and deletion timelines.', type: 'system', persistent: true })
