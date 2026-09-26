@@ -4,13 +4,14 @@ import {
   Alert, ActivityIndicator, Switch, Image,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import * as Crypto from 'expo-crypto'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
-import { photoPart, submitListing } from '../lib/propertyPhotos'
+import { createPhotoUploadKeys, photoPart, photosToUpload, submitListing } from '../lib/propertyPhotos'
 
 const REGIONS = ['Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central', 'Northern', 'Volta', 'Upper East', 'Upper West', 'Bono', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North']
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
@@ -22,10 +23,12 @@ export default function AddPropertyScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState('')
   const [images, setImages] = useState<string[]>([])
-  // The listing exists but some photos did not upload: submitting again only
-  // retries those photos (a ref, so an alert button never sees a stale value).
-  const savedRef = useRef<{ id: string; failed: string[] } | null>(null)
-  const [saved, setSaved] = useState<{ id: string; failed: string[] } | null>(null)
+  // The listing exists but some photos did not upload: submitting again sends
+  // every photo not uploaded yet, including ones added since (a ref, so an
+  // alert button never sees a stale value).
+  const savedRef = useRef<{ id: string; uploaded: string[] } | null>(null)
+  const [saved, setSaved] = useState<{ id: string; uploaded: string[] } | null>(null)
+  const uploadKey = useRef(createPhotoUploadKeys(() => Crypto.randomUUID())).current
 
   const [form, setForm] = useState({
     title: '', description: '', type: 'apartment',
@@ -56,14 +59,14 @@ export default function AddPropertyScreen() {
     }
   }
 
-  function rememberSaved(value: { id: string; failed: string[] } | null) {
+  function rememberSaved(value: { id: string; uploaded: string[] } | null) {
     savedRef.current = value
     setSaved(value)
   }
 
   async function handleSubmit() {
     const retry = savedRef.current
-    if (retry) { await submit(retry.id, retry.failed.filter((uri) => images.includes(uri))); return }
+    if (retry) { await submit(retry.id, photosToUpload(images, new Set(retry.uploaded))); return }
     if (!form.title.trim()) { Alert.alert('Error', 'Please enter a title'); return }
     if (!form.description.trim()) { Alert.alert('Error', 'Please enter a description'); return }
     if (!form.street.trim() || !form.city.trim()) { Alert.alert('Error', 'Street and city are required'); return }
@@ -96,6 +99,7 @@ export default function AddPropertyScreen() {
         uploadPhoto: (propertyId, uri, signal) => {
           const formData = new FormData()
           formData.append('images', photoPart(uri) as unknown as Blob)
+          formData.append('uploadKey', uploadKey(uri))
           return api.upload<{ images: string[] }>(`/properties/${propertyId}/images`, formData, { signal })
         },
         onProgress: (done, total) => setProgress(done < total ? `Uploading photo ${done + 1} of ${total}…` : ''),
@@ -110,6 +114,7 @@ export default function AddPropertyScreen() {
     setSubmitting(false); setProgress('')
     const { propertyId, failed } = result
     const view = () => router.replace(`/property/${propertyId}`)
+    const uploaded = [...(savedRef.current?.uploaded ?? []), ...photos.filter((uri) => !failed.includes(uri))]
     if (failed.length === 0) {
       rememberSaved(null)
       Alert.alert('Success', !savedId ? 'Property listed successfully!' : photos.length ? 'Photos uploaded.' : 'Your listing is saved.', [
@@ -118,7 +123,7 @@ export default function AddPropertyScreen() {
       ])
       return
     }
-    rememberSaved({ id: propertyId, failed })
+    rememberSaved({ id: propertyId, uploaded })
     Alert.alert(
       'Listing saved, photos missing',
       `Your listing was saved, but ${failed.length} of ${photos.length} photo${photos.length === 1 ? '' : 's'} did not upload. Retry now, or view the listing and add photos later.`,
@@ -128,6 +133,8 @@ export default function AddPropertyScreen() {
       ],
     )
   }
+
+  const missing = saved ? photosToUpload(images, new Set(saved.uploaded)).length : 0
 
   return (
     <ScrollView style={[s.container, { backgroundColor: c.surface }]} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -232,7 +239,7 @@ export default function AddPropertyScreen() {
         <View style={[s.section, neuCard(c)]} accessibilityLiveRegion="polite">
           <Text style={[s.sectionTitle, { color: c.primaryDark }]}>Listing saved</Text>
           <Text style={[s.noticeText, { color: c.text }]}>
-            {saved.failed.length} photo{saved.failed.length === 1 ? '' : 's'} did not upload. Retry them below, or open the listing now. Changes to the details above are not sent again.
+            {missing} photo{missing === 1 ? '' : 's'} not uploaded yet. The button below uploads {missing === 1 ? 'it' : 'them'}, and any photos you add now; or open the listing now. Changes to the details above are not sent again.
           </Text>
           <TouchableOpacity accessibilityRole="button" onPress={() => router.replace(`/property/${saved.id}`)}>
             <Text style={[s.noticeLink, { color: c.primary }]}>View listing</Text>
