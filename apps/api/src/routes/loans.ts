@@ -11,6 +11,8 @@ import { Wallet } from '../models/Wallet.js'
 import { notify } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { withMoneyTransaction, InsufficientFundsError } from '../services/payments/moneyTransaction.js'
+import { round2 } from '../utils/money.js'
 import { buildCreditQuote } from '../services/financing.js'
 import { recordAudit } from '../utils/audit.js'
 import { success, error } from '../utils/response.js'
@@ -285,42 +287,48 @@ router.post('/:id/repay', authenticate, async (req, res) => {
   const amount = Number(req.body.amount)
   if (!Number.isFinite(amount) || amount <= 0) { error(res, 'Invalid amount'); return }
 
-  const outstanding = loan.totalRepayment - loan.amountPaid
+  const outstanding = round2(loan.totalRepayment - loan.amountPaid)
   if (outstanding <= 0) { error(res, 'Loan is already fully repaid'); return }
-  const payAmount = Math.min(amount, outstanding)
-
-  // Atomic conditional debit — single op that only succeeds when the balance
-  // covers the payment, preventing concurrent double-spend / lost updates.
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: req.user!.userId, balance: { $gte: payAmount } },
-    { $inc: { balance: -payAmount } },
-    { returnDocument: 'after' },
-  )
-  if (!wallet) { error(res, 'Insufficient wallet balance'); return }
-
-  // Apply the loan progress atomically too, so concurrent repayments don't lose
-  // an amountPaid increment via a read-modify-write on the loan document.
-  const updatedLoan = await Loan.findByIdAndUpdate(loan._id, { $inc: { amountPaid: payAmount } }, { returnDocument: 'after' }) ?? loan
-
+  const payAmount = round2(Math.min(amount, outstanding))
   const reference = `LOANPAY-${Date.now()}`
-  await Wallet.updateOne(
-    { userId: req.user!.userId },
-    { $push: { transactions: {
-      type: 'withdrawal',
-      amount: payAmount,
-      balanceAfter: wallet.balance,
-      reference,
-      description: 'Loan repayment',
-      createdAt: new Date().toISOString(),
-    } } },
-  )
 
-  // A lender who funded from its wallet is repaid into it; externally settled
-  // loans are remitted to the lender off-platform.
-  if (loan.fundingSource === 'lender_wallet' && loan.lenderId) {
-    await creditWallet(loan.lenderId, payAmount, { type: 'loan_repayment_received', reference, description: `Loan repayment ${loan._id.toString().slice(-6)}` })
-      .catch((err) => console.error(`[loans/repay] CRITICAL: repayment ${reference} not credited to lender ${loan.lenderId}: ${(err as Error).message}`))
+  /*
+   * Reserve on the loan FIRST, conditional on the payment still fitting what
+   * is owed. Two parallel full-balance repayments used to both pass a check
+   * against the same snapshot, both debit, and both credit the lender. Now
+   * only one reservation fits; the other is refused before any money moves.
+   * The reservation, the borrower's debit and the lender's credit are one
+   * transaction, each through the wallet ledger (balance and entry in one
+   * write); on a standalone Mongo each step is compensated instead.
+   */
+  let updatedLoan
+  try {
+    updatedLoan = await withMoneyTransaction(async ({ session, onRollback }) => {
+      const reserved = await Loan.findOneAndUpdate(
+        { _id: loan._id, userId: req.user!.userId, status: 'active', $expr: { $lte: [{ $add: ['$amountPaid', payAmount] }, { $add: ['$totalRepayment', 0.005] }] } },
+        [{ $set: { amountPaid: { $round: [{ $add: [{ $ifNull: ['$amountPaid', 0] }, payAmount] }, 2] } } }],
+        { session, returnDocument: 'after', updatePipeline: true },
+      )
+      if (!reserved) return null
+      onRollback(() => Loan.updateOne({ _id: loan._id }, [{ $set: { amountPaid: { $round: [{ $subtract: ['$amountPaid', payAmount] }, 2] } } }], { updatePipeline: true }))
+
+      const debited = await debitWallet(req.user!.userId, payAmount, { type: 'withdrawal', reference, description: 'Loan repayment' }, { session })
+      if (!debited) throw new InsufficientFundsError()
+      onRollback(() => creditWallet(req.user!.userId, payAmount, { type: 'refund', reference: `${reference}-REV`, description: 'Reversal of failed loan repayment' }))
+
+      // A lender who funded from its wallet is repaid into it; externally
+      // settled loans are remitted to the lender off-platform.
+      if (loan.fundingSource === 'lender_wallet' && loan.lenderId) {
+        await creditWallet(loan.lenderId, payAmount, { type: 'loan_repayment_received', reference, description: `Loan repayment ${loan._id.toString().slice(-6)}` }, { session })
+      }
+      return reserved as unknown as typeof loan
+    })
+  } catch (err) {
+    if (err instanceof InsufficientFundsError) { error(res, 'Insufficient wallet balance'); return }
+    throw err
   }
+  if (!updatedLoan) { error(res, 'This loan changed while you were paying. Refresh and try again.', 409); return }
+  const wallet = await Wallet.findOne({ userId: req.user!.userId }).select('balance').lean()
 
   if (updatedLoan.amountPaid >= updatedLoan.totalRepayment && updatedLoan.status !== 'repaid') {
     await Loan.updateOne({ _id: loan._id, status: { $ne: 'repaid' } }, { $set: { status: 'repaid' } })
@@ -337,8 +345,8 @@ router.post('/:id/repay', authenticate, async (req, res) => {
 
   success(res, {
     loan: { ...updatedLoan.toObject(), id: updatedLoan._id.toString() },
-    wallet: { balance: wallet.balance },
-    remaining: Math.round((updatedLoan.totalRepayment - updatedLoan.amountPaid) * 100) / 100,
+    wallet: { balance: wallet?.balance ?? 0 },
+    remaining: round2(updatedLoan.totalRepayment - updatedLoan.amountPaid),
   })
 })
 
