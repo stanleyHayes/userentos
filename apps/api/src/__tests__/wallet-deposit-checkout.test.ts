@@ -6,10 +6,10 @@ import { recordCollectionInitiation, recordUncertainCollection } from '../servic
 
 const { initiate } = vi.hoisted(() => ({ initiate: vi.fn() }))
 vi.mock('../models/Payment.js', () => ({ Payment: { findOne: vi.fn(), create: vi.fn() } }))
-vi.mock('../services/payments/index.js', () => ({ isMethodAvailable: vi.fn(), getProvider: () => ({ source: 'bank_transfer', initiateCollection: initiate }) }))
+vi.mock('../services/payments/index.js', () => ({ isMethodAvailable: vi.fn(), getProvider: () => ({ source: 'bank_transfer', initiateCollection: initiate }), collectionCorrelator: () => 'BNK-correlator' }))
 vi.mock('../services/payments/collectionInitiation.js', () => ({ recordCollectionInitiation: vi.fn(), recordUncertainCollection: vi.fn() }))
 const original = { _id: 'original-payment', purpose: 'wallet_deposit', method: 'bank_transfer', amount: 100, providerInstructions: 'Use original reference' }
-const request = (body: object = {}) => ({ body: { amount: 100, method: 'bank_transfer', ...body }, headers: { 'idempotency-key': 'original-key' }, user: { userId: 'owner', email: 'owner@rentos.test' } })
+const request = (body: object = {}, headers: Record<string, string> = { 'idempotency-key': 'original-key' }) => ({ body: { amount: 100, method: 'bank_transfer', ...body }, headers, user: { userId: 'owner', email: 'owner@rentos.test' } })
 const response = () => ({ status: vi.fn().mockReturnThis(), json: vi.fn() })
 beforeEach(() => {
   vi.clearAllMocks()
@@ -23,8 +23,10 @@ beforeEach(() => {
 it('persists the key and source before initiation and records the returned instructions', async () => {
   const res = response()
   await savingsController.deposit(request() as never, res as never)
-  expect(Payment.create).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'original-key', collectionSource: 'bank_transfer', purpose: 'wallet_deposit', tenantId: 'owner', amount: 100 }))
+  expect(Payment.create).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'original-key', collectionSource: 'bank_transfer', providerRef: 'BNK-correlator', purpose: 'wallet_deposit', tenantId: 'owner', amount: 100 }))
   expect(vi.mocked(Payment.create).mock.invocationCallOrder[0]).toBeLessThan(initiate.mock.invocationCallOrder[0])
+  // The adapter sends the correlator that was saved first.
+  expect(initiate).toHaveBeenCalledWith(expect.objectContaining({ providerRef: 'BNK-correlator' }))
   expect(recordCollectionInitiation).toHaveBeenCalledWith('new-payment', expect.objectContaining({ instructions: 'Transfer once' }))
   expect(res.status).toHaveBeenCalledWith(201)
 })
@@ -51,6 +53,13 @@ it('resolves a duplicate-key creation race without another provider call', async
   const res = response()
   await savingsController.deposit(request() as never, res as never)
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ payment: expect.objectContaining({ id: 'original-payment' }) }) }))
+  expect(initiate).not.toHaveBeenCalled()
+})
+it('refuses a deposit without an Idempotency-Key before anything is written', async () => {
+  const res = response()
+  await savingsController.deposit(request({}, {}) as never, res as never)
+  expect(res.status).toHaveBeenCalledWith(428)
+  expect(Payment.create).not.toHaveBeenCalled()
   expect(initiate).not.toHaveBeenCalled()
 })
 it('rejects an unavailable rail before creating a record', async () => {

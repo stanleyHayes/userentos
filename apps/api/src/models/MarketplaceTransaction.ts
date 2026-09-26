@@ -61,6 +61,29 @@ export interface IMarketplaceTransaction extends Document {
   /** Provider event ids already applied — the idempotency guard. */
   processedEventIds: string[]
   settlementStatus: 'pending' | 'settled' | 'unknown'
+  /**
+   * `booking:<id>` or `sponsorship:<id>` while this checkout is open. Unique,
+   * so one order has one open checkout; cleared when the checkout is paid,
+   * fails or is abandoned.
+   */
+  openOrderKey?: string
+  /** Why a checkout was closed without payment (provider failure, abandoned, expired). */
+  failureReason?: string
+  /** Reconciliation backoff for the settlement sweep. */
+  reconcileAttempts?: number
+  lastReconcileAt?: Date
+  nextReconcileAt?: Date
+  /** Cumulative GHS refunded by the provider, and the refund events already applied. */
+  refundedAmount?: number
+  refundEventIds?: string[]
+  /** The buyer is owed a refund (e.g. a second charge for an order already paid). Admin-issued. */
+  refundStatus?: 'required' | 'refunded' | 'waived'
+  refundReason?: string
+  /** The reference of the transaction that had already paid this order. */
+  duplicateOf?: string
+  /** Status to restore when a chargeback is resolved in the platform's favour. */
+  preDisputeStatus?: MarketplaceTransactionStatus
+  disputedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -102,6 +125,18 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   verifiedAt: Date,
   processedEventIds: { type: [String], default: [] },
   settlementStatus: { type: String, enum: ['pending', 'settled', 'unknown'], default: 'pending' },
+  openOrderKey: String,
+  failureReason: String,
+  reconcileAttempts: Number,
+  lastReconcileAt: Date,
+  nextReconcileAt: Date,
+  refundedAmount: Number,
+  refundEventIds: { type: [String], default: undefined },
+  refundStatus: { type: String, enum: ['required', 'refunded', 'waived'] },
+  refundReason: String,
+  duplicateOf: String,
+  preDisputeStatus: { type: String, enum: ['initialized', 'pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'disputed'] },
+  disputedAt: Date,
 }, { timestamps: true })
 
 // A replayed key returns the buyer's original transaction; another buyer's
@@ -110,5 +145,13 @@ marketplaceTransactionSchema.index(
   { buyerId: 1, idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } },
 )
+
+// One open checkout per booking or sponsorship (see openOrderKey).
+marketplaceTransactionSchema.index(
+  { openOrderKey: 1 },
+  { name: 'marketplace_one_open_order', unique: true, partialFilterExpression: { openOrderKey: { $type: 'string' } } },
+)
+// The settlement sweep: open checkouts, earliest due check first.
+marketplaceTransactionSchema.index({ status: 1, nextReconcileAt: 1, createdAt: 1 })
 
 export const MarketplaceTransaction = mongoose.model<IMarketplaceTransaction>('MarketplaceTransaction', marketplaceTransactionSchema)

@@ -21,12 +21,14 @@
  * charge was taken in GHS against this exact reference, and it carries this
  * transaction's id in the metadata the server sent when it initialized it.
  */
+import type { Types } from 'mongoose'
 import { Sponsorship } from '../../models/Sponsorship.js'
 import { ServiceBooking } from '../../models/ServiceBooking.js'
 import { MarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
 import { redeemForTransaction } from './coupons.js'
+import { financialAlert } from '../payments/alerts.js'
 import { logger } from '../../utils/logger.js'
-import type { IMarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
+import type { IMarketplaceTransaction, MarketplaceTransactionStatus } from '../../models/MarketplaceTransaction.js'
 
 /** What the provider told us, after a server-side verification. */
 export interface VerifiedCharge {
@@ -48,6 +50,9 @@ export type SettleOutcome =
 
 /** Only a row still waiting on the provider can be paid. A failed row stays failed. */
 export const SETTLEABLE_STATUSES = ['initialized', 'pending'] as const
+
+/** Statuses in which a transaction has taken the buyer's money for its order. */
+const PAID_STATUSES: MarketplaceTransactionStatus[] = ['paid', 'partially_refunded', 'disputed']
 
 /** Metadata key carrying our transaction id through the provider and back. */
 export const BINDING_KEY = 'rentosTransactionId'
@@ -101,10 +106,11 @@ export async function applySuccessfulCharge(
   }
 
   // Conditional on the status the checks above saw, so a webhook and a /verify
-  // poll racing each other settle the order exactly once.
+  // poll racing each other settle the order exactly once. The checkout is
+  // closed in the same write, freeing the order's open-checkout slot.
   const settled = await MarketplaceTransaction.findOneAndUpdate(
     { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES } },
-    { $set: { status: 'paid', verifiedAt: new Date(), processorFeeAmount: verified.fees, settlementStatus: 'pending' } },
+    { $set: { status: 'paid', verifiedAt: new Date(), processorFeeAmount: verified.fees, settlementStatus: 'pending' }, $unset: { openOrderKey: 1 } },
     { returnDocument: 'after' },
   )
   if (!settled) return { applied: false, reason: 'already_paid' }
@@ -125,6 +131,7 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (activated) logger.info(`[${source}] sponsorship ${transaction.sponsorshipId} activated by ${transaction.reference}`)
+    else await flagIfDuplicate(transaction, { sponsorshipId: transaction.sponsorshipId }, source)
   }
 
   /*
@@ -142,6 +149,7 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (settledBooking) logger.info(`[${source}] booking ${transaction.bookingId} marked paid by ${transaction.reference}`)
+    else await flagIfDuplicate(transaction, { bookingId: transaction.bookingId }, source)
   }
 
   // The coupon's use is recorded here and nowhere else — once, because only
@@ -158,4 +166,31 @@ export async function applySuccessfulCharge(
 
   logger.info(`[${source}] ${transaction.reference} paid — platform fee ${transaction.platformFeeAmount}`)
   return { applied: true }
+}
+
+/**
+ * A verified charge for an order another transaction had already paid: the
+ * buyer paid twice. The money is real, so this transaction stays paid, but it
+ * is flagged refundStatus 'required' for an admin to refund through the
+ * provider — never automatically — and the order itself is left as the first
+ * payment set it. Best-effort, like the coupon count: the payment is final.
+ */
+async function flagIfDuplicate(transaction: IMarketplaceTransaction, order: { bookingId?: string; sponsorshipId?: string }, source: string): Promise<void> {
+  try {
+    const earlier = await MarketplaceTransaction.findOne(
+      { ...order, _id: { $ne: transaction._id as Types.ObjectId }, status: { $in: PAID_STATUSES } },
+      { reference: 1 },
+      { sort: { verifiedAt: 1 } },
+    ).lean()
+    if (!earlier) return
+    const flagged = await MarketplaceTransaction.updateOne(
+      { _id: transaction._id, refundStatus: { $exists: false } },
+      { $set: { refundStatus: 'required', duplicateOf: earlier.reference, refundReason: `Order already paid by ${earlier.reference}` } },
+    )
+    if (flagged.modifiedCount) {
+      financialAlert('marketplace_duplicate_charge', { type: 'MarketplaceTransaction', id: String(transaction._id) }, { reference: transaction.reference, duplicateOf: earlier.reference, ...order, source })
+    }
+  } catch (err) {
+    logger.error(`[${source}] duplicate-charge check failed for ${transaction.reference}: ${(err as Error).message}`)
+  }
 }

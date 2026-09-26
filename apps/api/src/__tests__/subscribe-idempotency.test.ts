@@ -24,6 +24,7 @@ const initiateCollection = vi.fn().mockResolvedValue({ providerRef: 'prov-1', st
 vi.mock('../services/payments/index.js', () => ({
   isMethodAvailable: vi.fn(() => true),
   getProvider: vi.fn(() => ({ initiateCollection, source: 'bank_transfer' })),
+  collectionCorrelator: vi.fn(() => 'BNK-correlator'),
 }))
 
 interface MockResponse {
@@ -87,10 +88,32 @@ describe('subscriptionController.subscribe idempotency', () => {
     vi.mocked(User.findById).mockResolvedValue({ _id: 'u1' } as never)
   })
 
-  it('rejects an unavailable rail before creating a payment or contacting the provider', async () => {
-    vi.mocked(isMethodAvailable).mockReturnValue(false)
+  it('refuses a paid checkout without an Idempotency-Key', async () => {
+    vi.mocked(Payment.findOne).mockReturnValue({ lean: async () => null } as never)
     const res = makeRes()
     await subscriptionController.subscribe(makeReq(), res as unknown as Response)
+    expect(res.statusCode).toBe(428)
+    expect(Payment.create).not.toHaveBeenCalled()
+    expect(initiateCollection).not.toHaveBeenCalled()
+  })
+
+  it('returns the paid checkout already in flight instead of opening a second one', async () => {
+    const open = { ...existingPayment, _id: { toString: () => 'pay-open' }, idempotencyKey: 'other-device-key', openCollectionKey: 'sub:u1' }
+    vi.mocked(Payment.findOne).mockImplementation(((filter: Record<string, unknown>) => ({ lean: async () => ('openCollectionKey' in filter ? open : null) })) as never)
+    const res = makeRes()
+    await subscriptionController.subscribe(makeReq('key-second-device'), res as unknown as Response)
+    expect(res.statusCode).toBe(409)
+    expect((res.body as unknown as { code: string }).code).toBe('PAYMENT_IN_PROGRESS')
+    expect(vi.mocked(Payment.findOne)).toHaveBeenCalledWith({ openCollectionKey: 'sub:u1', tenantId: 'u1' })
+    expect(Payment.create).not.toHaveBeenCalled()
+    expect(initiateCollection).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unavailable rail before creating a payment or contacting the provider', async () => {
+    vi.mocked(isMethodAvailable).mockReturnValue(false)
+    vi.mocked(Payment.findOne).mockReturnValue({ lean: async () => null } as never)
+    const res = makeRes()
+    await subscriptionController.subscribe(makeReq('key-rail'), res as unknown as Response)
     expect(res.statusCode).toBe(422)
     expect(Payment.create).not.toHaveBeenCalled()
     expect(initiateCollection).not.toHaveBeenCalled()
@@ -169,7 +192,7 @@ describe('subscriptionController.subscribe idempotency', () => {
 
     expect(res.statusCode).toBe(201)
     expect(vi.mocked(Payment.create)).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: 'key-2', purpose: 'subscription', collectionSource: 'bank_transfer', subscriptionTerms: expect.objectContaining({ amount: 99, packageId: 'pkg-paid', billingCycle: 'monthly' }) }),
+      expect.objectContaining({ idempotencyKey: 'key-2', purpose: 'subscription', collectionSource: 'bank_transfer', providerRef: 'BNK-correlator', openCollectionKey: 'sub:u1', subscriptionTerms: expect.objectContaining({ amount: 99, packageId: 'pkg-paid', billingCycle: 'monthly' }) }),
     )
     expect(initiateCollection).toHaveBeenCalledOnce()
   })
@@ -177,6 +200,7 @@ describe('subscriptionController.subscribe idempotency', () => {
   it('resolves the idempotency race (duplicate key error) to the existing payment', async () => {
     const lean = vi.fn()
       .mockResolvedValueOnce(null) // pre-check: nothing there yet
+      .mockResolvedValueOnce(null) // no other checkout in flight
       .mockResolvedValueOnce(existingPayment) // after the 11000: the winner's row
     vi.mocked(Payment.findOne).mockReturnValue({ lean } as never)
     vi.mocked(Payment.create).mockRejectedValue(Object.assign(new Error('duplicate key'), { code: 11000 }))
@@ -197,7 +221,7 @@ describe('subscriptionController.subscribe idempotency', () => {
     expect(Payment.create).not.toHaveBeenCalled()
   })
   it('rejects a different-package winner of a duplicate-key race', async () => {
-    const lean = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ ...existingPayment, purposeMeta: { packageId: 'other' } })
+    const lean = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce({ ...existingPayment, purposeMeta: { packageId: 'other' } })
     vi.mocked(Payment.findOne).mockReturnValue({ lean } as never)
     vi.mocked(Payment.create).mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { code: 11000 }))
     const res = makeRes()

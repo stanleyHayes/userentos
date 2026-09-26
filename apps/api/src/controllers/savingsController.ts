@@ -8,7 +8,9 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAndAward } from '../services/achievements.js'
-import { getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { isDuplicateKey, requireIdempotencyKey } from '../services/payments/checkout.js'
+import { withMoneyTransaction } from '../services/payments/moneyTransaction.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { round2 } from '../utils/money.js'
@@ -67,10 +69,11 @@ export const savingsController = {
     if (roundedAmount <= 0 || !Number.isSafeInteger(Math.round(roundedAmount * 100))) {
       error(res, 'Enter a valid amount of at least GHS 0.01'); return
     }
-    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
+    // Required: a retry after a lost response must find this deposit, not start another.
+    const idempotencyKey = requireIdempotencyKey(req, res)
+    if (!idempotencyKey) return
     const matches = (existing: { purpose: string; method: string; amount: number }) => existing.purpose === 'wallet_deposit' && existing.method === method && existing.amount === roundedAmount
     const existingResult = async () => {
-      if (!idempotencyKey) return false
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
       if (!existing) return false
       if (!matches(existing)) { error(res, 'Idempotency-Key was already used for a different payment', 409); return true }
@@ -83,19 +86,20 @@ export const savingsController = {
     }
     const reference = `DEP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
     const provider = getProvider(method as ProviderId)
+    // Saved before the provider is called, so an interrupted initiation is still reconcilable.
+    const providerRef = collectionCorrelator(provider, reference)
     let payment: IPayment | undefined
     try {
       payment = await Payment.create({
-        collectionSource: provider.source, tenantId: req.user!.userId, amount: roundedAmount,
-        method, status: 'pending', reference, purpose: 'wallet_deposit',
-        ...(idempotencyKey ? { idempotencyKey } : {}),
+        collectionSource: provider.source, providerRef, tenantId: req.user!.userId, amount: roundedAmount,
+        method, status: 'pending', reference, purpose: 'wallet_deposit', idempotencyKey,
       })
-      const result = await provider.initiateCollection({ amount: roundedAmount, phone: phone ?? '', reference, narration: 'RentOS wallet deposit', payerEmail: req.user!.email })
+      const result = await provider.initiateCollection({ amount: roundedAmount, phone: phone ?? '', reference, providerRef, narration: 'RentOS wallet deposit', payerEmail: req.user!.email })
       const recorded = await recordCollectionInitiation(payment._id.toString(), result)
       if (!recorded) throw new Error('Payment record unavailable after initiation')
       success(res, { payment: { ...recorded, id: recorded._id.toString() }, instructions: result.instructions }, 'Deposit initiated — your wallet is credited after confirmation', 201)
     } catch (failure) {
-      if (!payment && (failure as { code?: number }).code === 11000 && await existingResult()) return
+      if (!payment && isDuplicateKey(failure) && await existingResult()) return
       if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw failure
     }
@@ -145,26 +149,27 @@ export const savingsController = {
     const amount = Number(req.body.amount)
     if (!Number.isFinite(amount) || amount <= 0) { error(res, 'Invalid amount'); return }
 
-    // Debit first; if the plan update fails the debit is compensated below.
-    const debited = await debitWallet(req.user!.userId, amount, {
-      type: 'rent_payment',
-      reference: `SAV-${Date.now()}`,
-      description: 'Savings contribution to plan',
+    // The debit and the plan credit are one transaction: neither lands alone.
+    // (On a standalone Mongo the debit is compensated instead.)
+    const value = round2(amount)
+    const reference = `SAV-${Date.now()}`
+    const updatedPlan = await withMoneyTransaction(async ({ session, onRollback }) => {
+      const debited = await debitWallet(req.user!.userId, value, {
+        type: 'rent_payment',
+        reference,
+        description: 'Savings contribution to plan',
+      }, { session })
+      if (!debited) return null
+      onRollback(() => creditWallet(req.user!.userId, value, { type: 'refund', reference: `SAV-REV-${Date.now()}`, description: 'Reversal of failed savings contribution' }))
+      const credited = await SavingsPlan.findOneAndUpdate(
+        { _id: plan._id },
+        [{ $set: { currentAmount: { $round: [{ $add: [{ $ifNull: ['$currentAmount', 0] }, value] }, 2] } } }],
+        { session, returnDocument: 'after', updatePipeline: true },
+      ) as unknown as typeof plan | null
+      if (!credited) throw new Error('Savings plan disappeared during the contribution')
+      return credited
     })
-    if (!debited) { error(res, 'Insufficient wallet balance'); return }
-
-    let updatedPlan
-    try {
-      updatedPlan = await SavingsPlan.findByIdAndUpdate(plan._id, { $inc: { currentAmount: round2(amount) } }, { returnDocument: 'after' }) ?? plan
-    } catch (err) {
-      // Plan write failed — refund the debit so the user's money isn't burned.
-      await creditWallet(req.user!.userId, amount, {
-        type: 'refund',
-        reference: `SAV-REV-${Date.now()}`,
-        description: 'Reversal of failed savings contribution',
-      })
-      throw err
-    }
+    if (!updatedPlan) { error(res, 'Insufficient wallet balance'); return }
     const justCompleted = updatedPlan.status !== 'completed' && updatedPlan.currentAmount >= updatedPlan.targetAmount
     if (justCompleted) {
       await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })

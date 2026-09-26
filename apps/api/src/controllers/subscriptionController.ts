@@ -13,7 +13,8 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
-import { getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress } from '../services/payments/checkout.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
 import { currentPaidSubscription } from '../services/payments/paidSubscription.js'
@@ -172,16 +173,18 @@ export const subscriptionController = {
 
     // Resolve retries before reading today's package; saved purchases survive
     // catalogue changes and remain scoped to the original payer and method.
-    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
+    const header = req.headers['idempotency-key']
+    const idempotencyKey = typeof header === 'string' && header.trim() ? header.trim() : undefined
     const matchesRetry = (payment: { purpose: string; purposeMeta?: Record<string, unknown>; method: string; subscriptionTerms?: { packageId: string } }) => payment.purpose === 'subscription' && (payment.subscriptionTerms?.packageId ?? payment.purposeMeta?.packageId) === packageId && (!method || payment.method === method)
-    if (idempotencyKey) {
+    const replayed = async () => {
+      if (!idempotencyKey) return false
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
-      if (existing) {
-        if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return }
-        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-        return
-      }
+      if (!existing) return false
+      if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return true }
+      success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
+      return true
     }
+    if (await replayed()) return
 
     const pkg = await SubscriptionPackage.findById(packageId)
     if (!pkg || !pkg.isActive) { error(res, 'Package not found or inactive', 404); return }
@@ -207,18 +210,34 @@ export const subscriptionController = {
     // Paid package — collect payment first.
     if (!method) { error(res, 'method is required for paid packages'); return }
     if (method !== 'bank_transfer' && !phone) { error(res, 'phone is required for mobile money payments'); return }
+    // A paid checkout starts a real collection, so its retry key is required.
+    if (!requireIdempotencyKey(req, res)) return
 
     if (!isMethodAvailable(method as ProviderId)) {
       error(res, 'That payment method is not available right now. Please choose another.', 422); return
     }
+
+    // One in-flight paid checkout per subscriber; the next is allowed once it settles or fails.
+    const openCollectionKey = `sub:${req.user!.userId}`
+    const inFlight = async () => {
+      const open = await Payment.findOne({ openCollectionKey, tenantId: req.user!.userId }).lean()
+      if (!open) return false
+      respondCollectionInProgress(res, open)
+      return true
+    }
+    if (await inFlight()) return
 
     const reference = `SUB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
     const subscriptionTerms = await captureSubscriptionTerms(pkg)
     let payment: IPayment | undefined
     try {
       const provider = getProvider(method as ProviderId)
+      // Saved before the provider is called, so an interrupted initiation is still reconcilable.
+      const providerRef = collectionCorrelator(provider, reference)
       payment = await Payment.create({
         collectionSource: provider.source,
+        providerRef,
+        openCollectionKey,
         tenantId: req.user!.userId,
         amount: subscriptionTerms.amount,
         method,
@@ -227,13 +246,14 @@ export const subscriptionController = {
         purpose: 'subscription',
         purposeMeta: { packageId: pkg._id.toString() },
         subscriptionTerms,
-        ...(idempotencyKey ? { idempotencyKey } : {}),
+        idempotencyKey,
       })
 
       const result = await provider.initiateCollection({
         amount: subscriptionTerms.amount,
         phone: phone ?? '',
         reference,
+        providerRef,
         narration: `RentOS subscription: ${pkg.name}`,
         payerEmail: req.user!.email,
       })
@@ -251,14 +271,11 @@ export const subscriptionController = {
         201,
       )
     } catch (err) {
-      // Lost the idempotency race — another request created it first.
-      if (idempotencyKey && (err as { code?: number }).code === 11000) {
-        const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
-        if (existing) {
-          if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return }
-          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-          return
-        }
+      // Lost a race: the same retry, or another paid checkout for this
+      // subscriber, created its payment first. The replay is checked first.
+      if (!payment && isDuplicateKey(err)) {
+        if (await replayed()) return
+        if (isDuplicateKey(err, 'openCollectionKey') && await inFlight()) return
       }
       // A timeout may follow provider acceptance. Keep the original key and
       // payment available for reconciliation; never downgrade a raced webhook.

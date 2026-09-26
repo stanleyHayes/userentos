@@ -60,6 +60,7 @@ test('owners and endpoints cannot inherit each other’s attempts', async () => 
 test('only provider checkout receives payment retry handling', () => {
   expect(isProviderCheckout('/payments', {})).toBe(true)
   expect(isProviderCheckout('/savings/wallet/deposit', {})).toBe(true)
+  expect(isProviderCheckout('/marketplace/payments/initialize', {})).toBe(true)
   expect(isProviderCheckout('/savings/wallet/withdraw', {})).toBe(false)
   expect(isProviderCheckout('/subscriptions/subscribe', { packageId: 'free' })).toBe(false)
   expect(isProviderCheckout('/subscriptions/subscribe', { packageId: 'paid', method: 'mtn_momo' })).toBe(true)
