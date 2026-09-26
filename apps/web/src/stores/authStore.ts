@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import toast from 'react-hot-toast'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { useState, useEffect } from 'react'
 import type { User, UserRole } from '@/types'
 import { portal } from '@/hooks/usePortal'
 import { getBestRoleForPortal } from '@/lib/subdomain'
+import { AUTH_KEY, PROFILE_KEY, createAuthStorage } from '@/stores/authStorage'
 
 let sessionGeneration = 0
 export const getSessionGeneration = () => sessionGeneration
@@ -68,8 +69,9 @@ export const useAuthStore = create<AuthState>()(
         })),
     }),
     {
-      name: 'rentos-auth',
-      storage: createJSONStorage(() => localStorage),
+      name: AUTH_KEY,
+      // Credentials and profile under separate keys: see authStorage.ts.
+      storage: createAuthStorage<AuthState>(() => localStorage),
       partialize: (state) => ({
         user: state.user,
         token: state.token,
@@ -87,9 +89,9 @@ const unsubscribeNotificationSession = useAuthStore.subscribe((state, previous) 
   if (state.user?.id !== previous.user?.id || state.isAuthenticated !== previous.isAuthenticated || state.sessionId !== previous.sessionId) { sessionGeneration++; toast.remove() }
 })
 function syncAuthStorage(event: StorageEvent) {
-  if (event.storageArea !== localStorage || (event.key !== 'rentos-auth' && event.key !== null)) return
+  if (event.storageArea !== localStorage || (event.key !== AUTH_KEY && event.key !== PROFILE_KEY && event.key !== null)) return
   // Re-read current storage rather than replaying an event that may already be stale.
-  if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+  if (localStorage.getItem(AUTH_KEY) === null) useAuthStore.getState().logout()
   else void useAuthStore.persist.rehydrate()
 }
 window.addEventListener('storage', syncAuthStorage)
@@ -146,7 +148,7 @@ export function refreshCurrentSession(rejectedToken: string | null): Promise<boo
   if (refreshAttempt?.generation === generation) return refreshAttempt.promise
   const performRefresh = async () => {
     // Storage events may still be queued when this tab acquires the origin lock.
-    if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+    if (localStorage.getItem(AUTH_KEY) === null) useAuthStore.getState().logout()
     else await useAuthStore.persist.rehydrate()
     const latest = useAuthStore.getState()
     if (generation !== sessionGeneration || latest.user?.id !== origin.user?.id || latest.sessionId !== origin.sessionId || latest.isAuthenticated !== origin.isAuthenticated) throw new Error('Account session changed. Please try again.')
@@ -156,7 +158,7 @@ export function refreshCurrentSession(rejectedToken: string | null): Promise<boo
       return generation === sessionGeneration && current.user?.id === latest.user?.id && current.sessionId === latest.sessionId && current.token === latest.token && current.refreshToken === latest.refreshToken && current.isAuthenticated === latest.isAuthenticated
     }
     const rotated = await tryRefreshSession(latest.refreshToken, isCurrent)
-    if (localStorage.getItem('rentos-auth') === null) useAuthStore.getState().logout()
+    if (localStorage.getItem(AUTH_KEY) === null) useAuthStore.getState().logout()
     else await useAuthStore.persist.rehydrate()
     if (!isCurrent()) throw new Error('Account session changed. Please try again.')
     if (!rotated) return false
@@ -195,7 +197,7 @@ export async function renewSessionWith(request: () => Promise<SessionPair | null
 /** Storage events can lag behind another tab's login/logout or token rotation. */
 function matchesStoredSession(origin: AuthState): boolean {
   try {
-    const raw = localStorage.getItem('rentos-auth')
+    const raw = localStorage.getItem(AUTH_KEY)
     if (raw === null) { useAuthStore.getState().logout(); return false }
     const saved = JSON.parse(raw)?.state
     const matches = saved && saved.token === origin.token && saved.refreshToken === origin.refreshToken && saved.user?.id === origin.user?.id && saved.isAuthenticated === origin.isAuthenticated && (saved.sessionId ?? null) === (origin.sessionId ?? null)
@@ -254,7 +256,8 @@ export function useAuthRehydrate(): boolean {
         const bestRole = getBestRoleForPortal(fetchedUser.roles, portal)
         if (bestRole) fetchedUser.activeRole = bestRole
       }
-      useAuthStore.setState({ user: fetchedUser, isAuthenticated: true })
+      // Profile only: isCurrent() already established this session is signed in.
+      useAuthStore.setState({ user: fetchedUser })
       setReady(true)
     })().catch(() => {
       // Outages and malformed responses are not proof that credentials were revoked.
