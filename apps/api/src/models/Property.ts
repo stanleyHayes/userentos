@@ -23,8 +23,9 @@ export interface IProperty extends Document {
   rentDurationMonths: number
   advanceMonths: number
   images: string[]
-  /** Storage id of each uploaded photo, so the file can be erased with the listing. */
-  imageAssets: { url: string; publicId: string }[]
+  /** Storage id of each uploaded photo, so the file can be erased with the listing.
+   * `uploadKey`: the app's key for that photo, so a retried upload is stored once. */
+  imageAssets: { url: string; publicId: string; uploadKey?: string }[]
   videos: string[]
   rules: string[]
   amenities: string[]
@@ -110,7 +111,7 @@ const propertySchema = new Schema<IProperty>({
   rentDurationMonths: { type: Number, required: true },
   advanceMonths: { type: Number, required: true },
   images: [String],
-  imageAssets: { type: [{ _id: false, url: { type: String, required: true }, publicId: { type: String, required: true } }], default: [] },
+  imageAssets: { type: [{ _id: false, url: { type: String, required: true }, publicId: { type: String, required: true }, uploadKey: String }], default: [] },
   videos: [String],
   rules: [String],
   amenities: [String],
