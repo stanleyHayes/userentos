@@ -288,7 +288,7 @@ router.post(
           userId: (a._id as Types.ObjectId).toString(),
           title: 'Move-out Dispute',
           message: `A move-out dispute has been raised for agreement ${mo.agreementId.slice(-6)}.`,
-          actionUrl: `/admin/move-outs`,
+          actionUrl: `/agreements/${mo.agreementId}`,
         })
       }
     } catch { /* admins notification is best-effort */ }

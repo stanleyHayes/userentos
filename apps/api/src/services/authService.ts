@@ -19,6 +19,7 @@ import { disconnectUser, disconnectSession } from './socket.js'
 import { ROTATION_GRACE_MS, revokeDeviceSession } from './sessionRevocation.js'
 import { isSessionRevoked } from '../models/RevokedSession.js'
 import { recordAuditEntry } from '../utils/audit.js'
+import { ROLE_DEFAULT_PERMISSIONS } from '../types/index.js'
 
 /** The device making an authenticated request: its session family (the
  * access token's `sid`) and label, for a replacement token pair. */
@@ -138,6 +139,10 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, config.bcryptRounds)
+    // Employer and financier routes are permission-gated; without their role
+    // defaults a self-registered account could do nothing until an admin
+    // granted permissions by hand. Other self-service roles need none.
+    const permissions = role === 'employer' || role === 'financier' ? [...(ROLE_DEFAULT_PERMISSIONS[role] ?? [])] : []
     const user = await this.userRepo.create({
       email,
       phone,
@@ -146,6 +151,7 @@ export class AuthService {
       passwordHash,
       roles: [role],
       activeRole: role,
+      permissions,
       consents: consent,
     })
     this.auditConsent(user._id.toString(), consent, 'register')
@@ -171,7 +177,7 @@ export class AuthService {
     }
 
     const sid = crypto.randomUUID()
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId: user._id.toString(), email, roles: [role], permissions, activeRole: role }
     const token = this.signAccessToken(payload)
     const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, sid, deviceLabel, ipAddress)
 

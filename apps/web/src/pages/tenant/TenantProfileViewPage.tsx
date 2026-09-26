@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { FormSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatCurrency } from '@/lib/utils'
 import {
   User, Briefcase, GraduationCap, Heart, Users, Shield, Phone, Home,
   Mail, MapPin, Globe, CheckCircle, XCircle, Calendar, Building2,
@@ -255,7 +255,14 @@ export function TenantProfileViewPage() {
                     <p className="text-sm font-semibold text-primary-dark dark:text-white">{r.address}, {r.city}</p>
                     <span className="text-[10px] text-muted dark:text-gray-500">{r.duration}</span>
                   </div>
-                  <p className="text-xs text-muted dark:text-gray-500 mt-1">Rent: GHS {r.monthlyRent} · Landlord: {r.landlordName}</p>
+                  {(() => {
+                    // Both are optional in the profile form: show only what was given.
+                    const parts = [
+                      r.monthlyRent != null ? `Rent: ${formatCurrency(r.monthlyRent)}` : null,
+                      r.landlordName?.trim() ? `Landlord: ${r.landlordName}` : null,
+                    ].filter(Boolean)
+                    return parts.length > 0 ? <p className="text-xs text-muted dark:text-gray-500 mt-1">{parts.join(' · ')}</p> : null
+                  })()}
                   {r.reasonForLeaving && <p className="text-xs text-muted dark:text-gray-500 mt-0.5">Left: {r.reasonForLeaving}</p>}
                 </div>
               ))}

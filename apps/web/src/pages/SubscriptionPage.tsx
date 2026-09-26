@@ -70,6 +70,11 @@ export function SubscriptionPage() {
   if (pkgLoading || subLoading) return <TableSkeleton />
 
   const currentPkgId = sub?.package?.id
+  // A downgrade keeps existing listings ("degrade, never delete"), so usage can
+  // exceed the limit, and an admin may set a limit of 0: never show >100%,
+  // Infinity% or NaN%.
+  const usedPct = sub && sub.maxProperties > 0 ? Math.min(100, Math.round((sub.propertyCount / sub.maxProperties) * 100)) : 100
+  const overBy = sub && sub.maxProperties >= 0 ? Math.max(0, sub.propertyCount - sub.maxProperties) : 0
 
   return (
     <div className="space-y-6">
@@ -102,10 +107,10 @@ export function SubscriptionPage() {
                   <div className="w-32 h-2 rounded-full bg-white/50 dark:bg-[#0c0e1a] overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all bg-primary dark:bg-blue-400"
-                      style={{ width: `${Math.min(100, (sub.propertyCount / sub.maxProperties) * 100)}%` }}
+                      style={{ width: `${usedPct}%` }}
                     />
                   </div>
-                  <span className="text-xs font-bold text-primary-dark dark:text-white">{Math.round((sub.propertyCount / sub.maxProperties) * 100)}%</span>
+                  <span className="text-xs font-bold text-primary-dark dark:text-white">{overBy > 0 ? `${overBy} over limit` : `${usedPct}%`}</span>
                 </div>
               )}
             </div>

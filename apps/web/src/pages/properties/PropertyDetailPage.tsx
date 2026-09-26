@@ -76,6 +76,7 @@ export function PropertyDetailPage() {
   const [publishErrors, setPublishErrors] = useState<{ field: string; message: string }[]>([])
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [rejectReasonCode, setRejectReasonCode] = useState('')
   const [messagingReviewer, setMessagingReviewer] = useState(false)
 
   const { data: property, isLoading } = useQuery({ queryKey: ['property', id], queryFn: () => api.get<PropertyDetail>(`/properties/${id}`), enabled: !!id })
@@ -114,14 +115,19 @@ export function PropertyDetailPage() {
     },
   })
   const reviewMutation = useMutation({
-    // Server expects { status: 'approved' | 'rejected', rejectionReason } (matches the
-    // listingStatus enum); the UI speaks in approve/reject actions, so map here.
-    mutationFn: (body: { action: 'approve' | 'reject'; reason?: string }) =>
+    // POST /properties/:id/review (propertyModeration.ts) takes { action,
+    // reasonCode, note }; a rejection without a reasonCode is refused.
+    mutationFn: (body: { action: 'approve' | 'reject'; reasonCode?: string; reason?: string }) =>
       api.post(`/properties/${id}/review`, {
-        status: body.action === 'approve' ? 'approved' : 'rejected',
-        rejectionReason: body.reason,
+        action: body.action,
+        ...(body.reasonCode ? { reasonCode: body.reasonCode } : {}),
+        ...(body.reason?.trim() ? { note: body.reason.trim() } : {}),
       }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['property', id] }); setShowRejectModal(false); setRejectReason('') },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['property', id] })
+      qc.invalidateQueries({ queryKey: ['review-queue'] })
+      setShowRejectModal(false); setRejectReason(''); setRejectReasonCode('')
+    },
   })
   const applyMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.post('/applications', body),
@@ -284,6 +290,7 @@ export function PropertyDetailPage() {
                   listingStatus={p.listingStatus}
                   coordinates={p.coordinates}
                   rejectionReason={p.rejectionReason}
+                  reviewIssues={p.reviewIssues}
                   publishErrors={publishErrors}
                   onPublish={() => publishMutation.mutate()}
                   isPublishing={publishMutation.isPending}
@@ -467,9 +474,11 @@ export function PropertyDetailPage() {
         open={showRejectModal}
         onClose={() => setShowRejectModal(false)}
         title={p.title}
+        reasonCode={rejectReasonCode}
+        setReasonCode={setRejectReasonCode}
         reason={rejectReason}
         setReason={setRejectReason}
-        onReject={() => reviewMutation.mutate({ action: 'reject', reason: rejectReason })}
+        onReject={() => reviewMutation.mutate({ action: 'reject', reasonCode: rejectReasonCode, reason: rejectReason })}
         isPending={reviewMutation.isPending}
         isError={reviewMutation.isError}
         errorMessage={reviewMutation.error ? (reviewMutation.error as Error).message : undefined}

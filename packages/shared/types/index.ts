@@ -138,7 +138,10 @@ export interface Invitation {
 
 export type PropertyStatus = 'available' | 'occupied' | 'under_dispute' | 'maintenance_required'
 
-export type ListingStatus = 'draft' | 'pending_review' | 'approved' | 'rejected'
+// The API's full review state machine (apps/api/src/services/propertyReview.ts).
+export type ListingStatus =
+  | 'draft' | 'pending_review' | 'in_review' | 'changes_requested'
+  | 'approved' | 'rejected' | 'published' | 'suspended' | 'archived' | 'withdrawn'
 
 export type PropertyType = 'apartment' | 'house' | 'room' | 'commercial' | 'warehouse' | 'studio' | 'townhouse' | 'hostel' | 'shared_room'
 
@@ -254,6 +257,8 @@ export interface Property {
   status: PropertyStatus
   listingStatus: ListingStatus
   rejectionReason?: string
+  /** Set with 'changes_requested': what the reviewer asked the owner to fix. */
+  reviewIssues?: string[]
   reviewedBy?: string
   reviewedAt?: string
   publishedAt?: string

@@ -39,38 +39,79 @@ function dateFilter(start: Date, end: Date, field = 'createdAt'): Record<string,
   return { [field]: { $gte: start.toISOString(), $lte: end.toISOString() } }
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** A pending payment falls due 7 days after it is raised (the scheduler's
+ * reminder rule), so one older than that is overdue. The Payment model has no
+ * 'overdue' status to query. */
+const OVERDUE_AFTER_MS = 7 * DAY_MS
+
+/** Start of the month five months back: the six calendar months the
+ * "(last 6 months)" charts plot, whatever window the KPIs use. */
+function sixMonthsStart(now: Date): string {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
+}
+
+function monthlyTotals(payments: { paidAt?: string; amount: number }[]): Record<string, number> {
+  const totals: Record<string, number> = {}
+  for (const p of payments) {
+    const month = (p.paidAt ?? (p as { createdAt?: Date }).createdAt?.toISOString?.() ?? '').slice(0, 7)
+    if (month) totals[month] = (totals[month] ?? 0) + p.amount
+  }
+  return totals
+}
+
+const createdAtMs = (doc: unknown) => new Date((doc as { createdAt?: Date | string }).createdAt ?? 0).getTime()
+
+/** Overdue is rent only (a stale wallet top-up is not late rent). Legacy
+ * payments predate the purpose field; they were all rent. */
+const isOverdueRent = (p: { purpose?: string }, cutoffMs: number) =>
+  (p.purpose ?? 'rent') === 'rent' && createdAtMs(p) < cutoffMs
+
 export const analyticsController = {
+  // Point-in-time figures (leases, tenants, savings, pending and overdue
+  // payments, pending applications, open disputes) come from current state.
+  // Only period totals (revenue, payments made, applications and reviews
+  // received) use the date window, which defaults to the last 90 days.
   me: async (req: Request, res: Response) => {
     const userId = req.user!.userId
     const roles = req.user!.roles
     const { start, end } = parseDateRange(req)
+    const now = new Date()
+    const overdueCutoff = now.getTime() - OVERDUE_AFTER_MS
+    const inWindow = (doc: unknown) => createdAtMs(doc) >= start.getTime() && createdAtMs(doc) <= end.getTime()
 
-    if (roles.includes('landlord') || roles.includes('property_manager')) {
-      const [properties, agreements, payments, disputes, allPayments, applications, reviews] = await Promise.all([
+    // A user holding both roles picks the view with ?as= (the web sends its
+    // active role); without it the landlord view wins, as before.
+    const as = typeof req.query.as === 'string' && roles.includes(req.query.as) ? req.query.as : undefined
+    const landlordView = as
+      ? as === 'landlord' || as === 'property_manager'
+      : roles.includes('landlord') || roles.includes('property_manager')
+
+    if (landlordView) {
+      const [properties, agreements, payments, recentPayments, pendingPayments, allDisputes, applications, pendingApplications, reviews] = await Promise.all([
         Property.find({ landlordId: userId }).lean(),
-        Agreement.find({ landlordId: userId, ...dateFilter(start, end, 'startDate') }).lean(),
+        Agreement.find({ landlordId: userId }).lean(),
         Payment.find({ landlordId: userId, status: 'completed', ...dateFilter(start, end, 'paidAt') }).lean(),
-        Dispute.find({ $or: [{ filedBy: userId }, { filedAgainst: userId }], ...dateFilter(start, end) }).lean(),
-        Payment.find({ landlordId: userId, ...dateFilter(start, end, 'paidAt') }).lean(),
+        Payment.find({ landlordId: userId, status: 'completed', paidAt: { $gte: sixMonthsStart(now) } }).lean(),
+        // Pending payments have no paidAt, so the old paidAt window never matched them.
+        Payment.find({ landlordId: userId, status: 'pending' }).lean(),
+        Dispute.find({ $or: [{ filedBy: userId }, { filedAgainst: userId }] }).lean(),
         Application.find({ landlordId: userId, ...dateFilter(start, end) }).lean(),
+        Application.countDocuments({ landlordId: userId, status: 'pending' }),
         Review.find({ landlordId: userId, ...dateFilter(start, end) }).lean(),
       ])
+      const disputes = allDisputes.filter(inWindow)
 
-      const monthlyIncome: Record<string, number> = {}
-      for (const p of payments) {
-        const month = (p.paidAt ?? (p as { createdAt?: Date }).createdAt?.toISOString?.() ?? '').slice(0, 7)
-        if (month) monthlyIncome[month] = (monthlyIncome[month] ?? 0) + p.amount
-      }
+      const monthlyIncome = monthlyTotals(recentPayments)
 
       const activeAgreements = agreements.filter((a) => a.status === 'active')
-      const pendingPayments = allPayments.filter((p) => p.status === 'pending')
-      const overduePayments = allPayments.filter((p) => p.status === 'overdue')
+      const overduePayments = pendingPayments.filter((p) => isOverdueRent(p, overdueCutoff))
 
       const occupiedCount = properties.filter((p) => p.status === 'occupied').length
       const occupancyRate = properties.length > 0 ? Math.round((occupiedCount / properties.length) * 100) : 0
       const maintenanceCount = properties.filter((p) => p.status === 'maintenance_required').length
 
-      const now = new Date()
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
       const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const lastMonth = `${lastDate.getFullYear()}-${String(lastDate.getMonth() + 1).padStart(2, '0')}`
@@ -84,6 +125,20 @@ export const analyticsController = {
       const expiringLeases = activeAgreements.filter(
         (a) => a.endDate <= sixtyDaysOut && a.endDate >= now.toISOString()
       ).length
+
+      // Rent expected in the window: one payment per month of each lease that
+      // was in force during it. Capped, so early or split payments can't read
+      // as more than 100%.
+      const monthsInWindow = (a: { startDate: string; endDate: string }) => {
+        const from = Math.max(Date.parse(a.startDate), start.getTime())
+        const to = Math.min(Date.parse(a.endDate), end.getTime())
+        if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 0
+        return Math.max(1, Math.round((to - from) / (30 * DAY_MS)))
+      }
+      const expectedRent = agreements
+        .filter((a) => ['active', 'expired', 'terminated'].includes(a.status))
+        .reduce((n, a) => n + monthsInWindow(a), 0)
+      const rentPaid = payments.filter((p) => (p.purpose ?? 'rent') === 'rent').length
 
       const propertyTypes: Record<string, number> = {}
       for (const p of properties) {
@@ -128,10 +183,10 @@ export const analyticsController = {
         pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0),
         overduePayments: overduePayments.length,
         overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
-        openDisputes: disputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved').length,
+        openDisputes: allDisputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved').length,
         totalDisputes: disputes.length,
         disputesByStatus,
-        collectionRate: agreements.length > 0 ? Math.round((payments.length / Math.max(agreements.length * 6, 1)) * 100) : 0,
+        collectionRate: expectedRent > 0 ? Math.min(100, Math.round((rentPaid / expectedRent) * 100)) : 0,
         expiringLeases,
         propertyTypes,
         avgRentAmount,
@@ -139,38 +194,35 @@ export const analyticsController = {
         // Applications
         totalApplications: applications.length,
         applicationsByStatus,
-        pendingApplications: applicationsByStatus.pending ?? 0,
+        pendingApplications,
         // Reviews
         totalReviews: reviews.length,
         avgRating,
       })
     } else {
-      const [agreements, payments, plans, wallet, allPayments, disputes, applications] = await Promise.all([
-        Agreement.find({ tenantId: userId, ...dateFilter(start, end, 'startDate') }).lean(),
+      const [agreements, payments, recentPayments, pendingPayments, plans, wallet, allDisputes, applications, pendingApplications] = await Promise.all([
+        Agreement.find({ tenantId: userId }).lean(),
         Payment.find({ tenantId: userId, status: 'completed', ...dateFilter(start, end, 'paidAt') }).lean(),
-        SavingsPlan.find({ userId, ...dateFilter(start, end) }).lean(),
+        Payment.find({ tenantId: userId, status: 'completed', paidAt: { $gte: sixMonthsStart(now) } }).lean(),
+        Payment.find({ tenantId: userId, status: 'pending' }).lean(),
+        SavingsPlan.find({ userId }).lean(),
         Wallet.findOne({ userId }).lean(),
-        Payment.find({ tenantId: userId, ...dateFilter(start, end, 'paidAt') }).lean(),
-        Dispute.find({ filedBy: userId, ...dateFilter(start, end) }).lean(),
+        Dispute.find({ filedBy: userId }).lean(),
         Application.find({ tenantId: userId, ...dateFilter(start, end) }).lean(),
+        Application.countDocuments({ tenantId: userId, status: 'pending' }),
       ])
 
       const totalSaved = plans.reduce((s, p) => s + p.currentAmount, 0)
       const savingsTarget = plans.reduce((s, p) => s + p.targetAmount, 0)
 
       // Monthly payment history
-      const monthlyPayments: Record<string, number> = {}
-      for (const p of payments) {
-        const month = (p.paidAt ?? (p as { createdAt?: Date }).createdAt?.toISOString?.() ?? '').slice(0, 7)
-        if (month) monthlyPayments[month] = (monthlyPayments[month] ?? 0) + p.amount
-      }
+      const monthlyPayments = monthlyTotals(recentPayments)
 
-      // Pending/overdue payments
-      const pendingPayments = allPayments.filter((p) => p.status === 'pending')
-      const overduePayments = allPayments.filter((p) => p.status === 'overdue')
+      const overduePayments = pendingPayments.filter((p) => isOverdueRent(p, overdueCutoff))
 
       // Disputes
-      const openDisputes = disputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved')
+      const disputes = allDisputes.filter(inWindow)
+      const openDisputes = allDisputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved')
 
       // Applications
       const applicationsByStatus: Record<string, number> = {}
@@ -204,7 +256,7 @@ export const analyticsController = {
         // Applications
         totalApplications: applications.length,
         applicationsByStatus,
-        pendingApplications: applicationsByStatus.pending ?? 0,
+        pendingApplications,
       })
     }
   },
@@ -362,9 +414,11 @@ export const analyticsController = {
           totals: [{ $group: {
             _id: null,
             total: { $sum: 1 },
-            totalAmount: { $sum: '$amount' },
+            // Only loans a lender has paid out: pending, pre-qualified,
+            // approved-but-undisbursed and rejected applications lent nothing.
+            totalAmount: { $sum: { $cond: [{ $in: ['$status', ['active', 'repaid', 'defaulted']] }, '$amount', 0] } },
             totalRepaid: { $sum: '$amountPaid' },
-            totalOutstanding: { $sum: { $cond: [{ $in: ['$status', ['active', 'approved']] }, { $subtract: ['$totalRepayment', '$amountPaid'] }, 0] } },
+            totalOutstanding: { $sum: { $cond: [{ $in: ['$status', ['active', 'defaulted']] }, { $subtract: ['$totalRepayment', '$amountPaid'] }, 0] } },
           } }],
           byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
         }},

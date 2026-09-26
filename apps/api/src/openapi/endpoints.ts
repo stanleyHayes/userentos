@@ -403,10 +403,11 @@ registry.registerPath({
     query: z.object({
       startDate: z.string().optional().openapi({ example: '2026-01-01' }),
       endDate: z.string().optional().openapi({ example: '2026-03-31' }),
+      as: z.string().optional().openapi({ example: 'tenant', description: 'One of the caller\'s roles; picks the landlord or tenant view for a user who holds both' }),
     }),
   },
   responses: {
-    200: { description: 'Analytics data' },
+    200: { description: 'Analytics data. Current-state figures (leases, savings, pending and overdue payments, pending applications, open disputes) ignore the date window; period totals use it (default: the last 90 days).' },
   },
 })
 

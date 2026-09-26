@@ -76,7 +76,9 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
       { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
-      { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin', 'financier'] },
+      // Not financier: /analytics renders the tenant view for them; their
+      // portfolio KPIs are on the financier dashboard.
+      { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin'] },
     ],
   },
   { label: 'Rentals', icon: <Building2 size={15} />, labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,

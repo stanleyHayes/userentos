@@ -20,7 +20,8 @@ export default function AnalyticsScreen() {
 
   async function load() {
     try {
-      const data = await api.get<Record<string, unknown>>('/analytics/me')
+      // The payload is shaped for one role: ask for the one this screen shows.
+      const data = await api.get<Record<string, unknown>>(`/analytics/me${user?.activeRole ? `?as=${encodeURIComponent(user.activeRole)}` : ''}`)
       setAnalytics(data)
     } catch { /* no-op */ } finally { setLoading(false) }
   }
@@ -65,7 +66,7 @@ export default function AnalyticsScreen() {
           <KPICard icon="business" label="Properties" value={String(a.totalProperties ?? 0)} color={c.primary} c={c} />
           <KPICard icon="people" label="Tenants" value={String(a.activeTenants ?? 0)} color={c.accent} c={c} />
           <KPICard icon="cash" label="Revenue" value={formatCompact(Number(a.totalRevenue ?? 0))} color={c.secondary} c={c} />
-          <KPICard icon="trending-up" label="Collection" value={`${a.collectionRate ?? 0}%`} color="#8b5cf6" c={c} />
+          <KPICard icon="trending-up" label="Collection" value={`${Math.min(100, Number(a.collectionRate ?? 0))}%`} color="#8b5cf6" c={c} />
         </ScrollView>
 
         {/* Monthly Revenue */}

@@ -27,7 +27,8 @@ import { TenantRentalHistoryCard } from './components/TenantRentalHistoryCard'
 export function TenantDashboard() {
   const user = useAuthStore((s) => s.user)
   const { data: analytics, isLoading } = useMyAnalytics()
-  const { data: paymentsData } = usePayments()
+  // Completed only, so pending/failed rows don't use up the page the chart plots.
+  const { data: paymentsData } = usePayments({ status: 'completed', pageSize: 100 })
   const { data: plansData } = useSavingsPlans()
   const { data: agreementsData } = useAgreements()
   const { data: notifData } = useNotifications()
@@ -63,7 +64,10 @@ export function TenantDashboard() {
   const disputes = disputesData?.items ?? []
   const completedPayments = payments.filter((p) => p.status === 'completed')
   const myMaintenance = (maintenanceData?.items ?? []).slice(0, 3)
-  const recentPayments = completedPayments.slice(-8).reverse()
+  // /payments is already newest first.
+  const recentPayments = completedPayments.slice(0, 8)
+  // The page holds at most 100 rows; the summary covers every completed payment.
+  const totalPaid = paymentsData?.summary?.totalPaid ?? completedPayments.reduce((s, p) => s + p.amount, 0)
   const activePlan = plans.find((p) => p.status === 'active')
   const activeAgreement = agreements.find((a) => a.status === 'active')
   const openDisputes = disputes.filter((d) => d.status !== 'resolved' && d.status !== 'closed')
@@ -110,7 +114,7 @@ export function TenantDashboard() {
 
         {/* Left: Chart + Activity (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
-          <TenantPaymentsChart completedPayments={completedPayments} recentPayments={recentPayments} />
+          <TenantPaymentsChart completedPayments={completedPayments} recentPayments={recentPayments} totalPaid={totalPaid} />
           <TenantActivityTimeline recentPayments={recentPayments} openDisputes={openDisputes} notifications={notifications} />
         </div>
 

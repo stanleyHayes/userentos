@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useToastStore } from '@/stores/toastStore'
+import { useAuthStore } from '@/stores/authStore'
 import { parseRegulatedFeatureStatus, type RegulatedFeatureKey } from '../../../../packages/shared/regulatedFeatures'
 import type {
   PaginatedResponse,
@@ -919,9 +920,12 @@ export function useMarkAllNotificationsRead() {
 
 // Analytics
 export function useMyAnalytics() {
+  // The API shapes the payload for one role; a user holding both tenant and
+  // landlord must get the one their role switcher shows.
+  const activeRole = useAuthStore((s) => s.user?.activeRole)
   return useQuery({
-    queryKey: ['analytics', 'me'],
-    queryFn: () => api.get<Record<string, unknown>>('/analytics/me'),
+    queryKey: ['analytics', 'me', activeRole],
+    queryFn: () => api.get<Record<string, unknown>>(`/analytics/me${activeRole ? `?as=${encodeURIComponent(activeRole)}` : ''}`),
   })
 }
 
@@ -1488,7 +1492,9 @@ export function useMySubscription() {
   return useQuery({
     queryKey: ['my-subscription'],
     queryFn: () => api.get<{
-      package: SubscriptionPackage | null
+      // Plans bought through Google Play or the App Store carry no price.
+      package: (Omit<SubscriptionPackage, 'price'> & { price?: number }) | null
+      billingSource?: 'provider' | 'free' | 'google_play' | 'app_store'
       subscriptionStartDate: string | null
       subscriptionEndDate: string | null
       propertyCount: number
@@ -2431,10 +2437,19 @@ export function useAdminFinancingContracts(params?: { status?: string; page?: nu
   })
 }
 
-export function useAdminEmployers() {
+export function useAdminEmployers(params: { page?: number; q?: string } = {}) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: '50' })
+  if (params.q) query.set('q', params.q)
   return useQuery({
-    queryKey: ['admin-employers'],
-    queryFn: () => api.get<{ items: AdminEmployerRow[]; total: number }>('/admin/employers'),
+    queryKey: ['admin-employers', params],
+    queryFn: () => api.get<{
+      items: AdminEmployerRow[]
+      total: number
+      totalPages: number
+      /** Platform-wide, whatever page or search is showing. */
+      summary?: { employers: number; verified: number; needsReview: number; activeEmployees: number; activeMandates: number }
+    }>(`/admin/employers?${query}`),
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -10,9 +10,11 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 interface TenantPaymentsChartProps {
   completedPayments: Payment[]
   recentPayments: Payment[]
+  /** Lifetime total from the payments summary, not just the loaded page. */
+  totalPaid: number
 }
 
-export function TenantPaymentsChart({ completedPayments, recentPayments }: TenantPaymentsChartProps) {
+export function TenantPaymentsChart({ completedPayments, recentPayments, totalPaid }: TenantPaymentsChartProps) {
   // Payment chart
   const monthMap: Record<string, number> = {}
   for (const p of completedPayments) {
@@ -32,7 +34,7 @@ export function TenantPaymentsChart({ completedPayments, recentPayments }: Tenan
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <div className="text-right hidden sm:block">
-              <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{formatCurrency(completedPayments.reduce((s, p) => s + p.amount, 0))}</p>
+              <p className="text-lg font-extrabold font-display text-primary-dark dark:text-white">{formatCurrency(totalPaid)}</p>
               <p className="text-[10px] text-muted dark:text-gray-500">Total paid</p>
             </div>
             <Link to="/payments">
