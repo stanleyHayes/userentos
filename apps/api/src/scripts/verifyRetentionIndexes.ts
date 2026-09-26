@@ -12,6 +12,7 @@ import mongoose from 'mongoose'
 import { readdirSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { config } from '../config/index.js'
+import { restoreTarget } from './restoreTarget.js'
 import { verifyTtlIndexes } from '../services/retentionIndexes.js'
 import { erasureLedger, closeErasureLedger } from '../services/erasureLedger.js'
 
@@ -24,13 +25,16 @@ export async function loadAllModels(): Promise<void> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await mongoose.connect(config.mongoUri)
+  // During a restore (docs/compliance/backup-restore.md step 7) this must check
+  // the restored copy, not the live database it would otherwise connect to.
+  const restored = restoreTarget()
+  await mongoose.connect(restored ?? config.mongoUri)
   try {
     await loadAllModels()
     const ledger = erasureLedger()
     const models = [...Object.values(mongoose.models).filter((model) => model.modelName !== 'ErasureLedger' || model === ledger), ledger]
     const issues = await verifyTtlIndexes(new Set(models))
-    console.log(JSON.stringify({ checkedAt: new Date().toISOString(), issues }, null, 2))
+    console.log(JSON.stringify({ checkedAt: new Date().toISOString(), target: restored ? 'restored copy (RESTORE_MONGO_URI / --mongo-uri)' : 'MONGO_URI', issues }, null, 2))
     process.exitCode = issues.length === 0 ? 0 : 1
   } finally {
     await closeErasureLedger()

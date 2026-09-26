@@ -174,6 +174,13 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'rent_payment' | 'inves
 
 export const TERMS_VERSION = '2026-09-25'
 export const PRIVACY_VERSION = '2026-09-26'
+/**
+ * The privacy version before the current one. Account creation also accepts
+ * it for a while after a bump, because store builds of the app (no over-the-
+ * air updates) and web tabs loaded before the deploy still send it; the
+ * account is then asked to accept the current version straight away.
+ */
+export const PREVIOUS_PRIVACY_VERSION = '2026-09-25'
 
 /** Evidence of a user's acceptance (Act 843 s.20; store terms). */
 export interface UserConsents {

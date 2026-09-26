@@ -311,10 +311,18 @@ describe.skipIf(!hasTestMongo)('the one Paystack webhook', () => {
       const booking = await ServiceBooking.create({ requesterId: buyer, requesterRole: 'tenant', workerId: `worker-${tag}`, description: 'Fix the roof', status: 'completed', paymentStatus: 'paid', paymentAmount: 100 })
       // The admin refunded the first charge instead of the flagged second one.
       const first = await order({ status: 'paid', bookingId: String(booking._id), verifiedAt: new Date() })
-      await order({ status: 'paid', bookingId: String(booking._id), refundStatus: 'required', duplicateOf: first.reference })
+      const second = await order({ status: 'paid', bookingId: String(booking._id), refundStatus: 'required', duplicateOf: first.reference })
       await deliver(refund(first.reference, 10000, `${first.reference}-r`))
       expect((await MarketplaceTransaction.findById(first._id).lean())?.status).toBe('refunded')
       expect(await ServiceBooking.findById(booking._id).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 100 })
+      // The flagged charge is now what pays for the order...
+      const promoted = await MarketplaceTransaction.findById(second._id).lean()
+      expect(promoted?.refundStatus).toBeUndefined()
+      expect(promoted?.duplicateOf).toBeUndefined()
+      // ...so refunding it too unwinds the order: no money is left behind it.
+      await deliver(refund(second.reference, 10000, `${second.reference}-r`))
+      expect((await MarketplaceTransaction.findById(second._id).lean())?.status).toBe('refunded')
+      expect((await ServiceBooking.findById(booking._id).lean())?.paymentStatus).toBe('refunded')
     })
 
     it('two partial refunds of one charge that carry no refund id are both applied', async () => {

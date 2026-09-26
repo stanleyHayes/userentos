@@ -41,7 +41,7 @@ When `ERASURE_LEDGER_MONGO_URI` is unset, the ledger is stored in the main datab
 
 5. **Replay the ledger and the retention purge against the restored copy** before it takes any traffic. Name the copy with `RESTORE_MONGO_URI`; never repoint the live service's `MONGO_URI` for this, because that would move production onto the copy before the replay has run.
 
-   - **On Render:** add `RESTORE_MONGO_URI` (the restored copy's connection string) to the API service's environment. Render redeploys the service, still on its own `MONGO_URI`; the API itself ignores this variable. Then run a one-off job on the API service with the command below, and delete `RESTORE_MONGO_URI` once step 6 is done. The job inherits `ERASURE_LEDGER_MONGO_URI`, so a separate ledger is read where production writes it.
+   - **On Render:** add `RESTORE_MONGO_URI` (the restored copy's connection string) to the API service's environment. Render redeploys the service, still on its own `MONGO_URI`; the API itself ignores this variable. Then run a one-off job on the API service with the command below, and delete `RESTORE_MONGO_URI` once step 7 is done. The job inherits `ERASURE_LEDGER_MONGO_URI`, so a separate ledger is read where production writes it.
 
      ```sh
      node dist/scripts/replayErasureLedger.js
@@ -60,7 +60,7 @@ When `ERASURE_LEDGER_MONGO_URI` is unset, the ledger is stored in the main datab
 
 6. **Repeat step 5 until it exits 0** (`"failed": 0` in the replay and `"failed": false` in the purge). A failure is usually a payout still in flight (the account is kept until it settles) or Cloudinary not confirming a deletion.
 
-7. **Check the TTL indexes** on the restored copy: `node dist/scripts/verifyRetentionIndexes.js` (exits non-zero and lists any missing index or wrong period).
+7. **Check the TTL indexes** on the restored copy, with `RESTORE_MONGO_URI` still set: `node dist/scripts/verifyRetentionIndexes.js` (exits non-zero and lists any missing index or wrong period; its `target` field says which database it checked, and must name the restored copy). Then delete `RESTORE_MONGO_URI`.
 
 8. **Cut over** by pointing `MONGO_URI` at the restored cluster and taking the app out of maintenance mode. Keep the old cluster until you have confirmed the restore, then delete it.
 

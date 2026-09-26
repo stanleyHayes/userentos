@@ -30,6 +30,9 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
   const run = new mongoose.Types.ObjectId().toHexString()
   const owner = new mongoose.Types.ObjectId()
   const ownerId = String(owner)
+  // An account closed but still inside its grace period: the User model's
+  // find hook hides it, so the purge must read the raw collection to see it.
+  const tombstone = new mongoose.Types.ObjectId()
   const tag = { tag: run }
   // Affiliate profiles erasure suspended while commission was unpaid.
   const affiliate = (name: string, userId: string, status = 'suspended') => ({ userId, code: `${name}${run}`.toUpperCase(), status, suspendedReason: 'Account closed', tag: run })
@@ -65,7 +68,7 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
         { _id: settled, ...affiliate('settled', String(new mongoose.Types.ObjectId())) },
         { _id: owed, ...affiliate('owed', String(new mongoose.Types.ObjectId())) },
         // The account is still inside its grace period: the tombstone counts as present.
-        { ...affiliate('tombstoned', ownerId) },
+        { ...affiliate('tombstoned', String(tombstone)) },
         { _id: activeOrphan, ...affiliate('active', String(new mongoose.Types.ObjectId()), 'active') },
       ]),
       AffiliateCommission.collection.insertMany([
@@ -96,12 +99,13 @@ describe.skipIf(!hasTestMongo)('the daily retention purge', () => {
   beforeAll(async () => {
     await mongoose.connect(testMongoUri)
     await User.collection.insertOne({ _id: owner, email: `purge-${ownerId}@rentos.test`, roles: ['tenant'], passwordHash: 'x', profileImage: `https://res.cloudinary.com/c/image/upload/v1/rentos/avatars/current-old-${run}.jpg` })
+    await User.collection.insertOne({ _id: tombstone, email: `purge-tombstone-${ownerId}@rentos.test`, roles: ['tenant'], passwordHash: 'x', deletedAt: new Date() })
   })
   beforeEach(async () => { await clean(); await seed(); vi.mocked(deleteFromCloudinary).mockClear() })
   afterAll(async () => {
     await clean()
     await AuditLog.collection.deleteMany({ action: 'retention.purge', entityId: '2001-01-01' })
-    await User.collection.deleteOne({ _id: owner })
+    await User.collection.deleteMany({ _id: { $in: [owner, tombstone] } })
     await mongoose.disconnect()
   })
 

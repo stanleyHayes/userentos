@@ -13,7 +13,7 @@ import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { buildInviteUrl, sendInvitationEmail } from '../services/email.js'
 import { USER_ROLES, PERMISSIONS, SUPER_ADMIN_ONLY_ROLES } from '../utils/accessControl.js'
-import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
+import { signupAcceptanceSchema, buildConsentRecord } from '../utils/consent.js'
 import { recordAuditEntry } from '../utils/audit.js'
 
 const router = Router()
@@ -201,7 +201,7 @@ router.post('/accept', async (req, res) => {
 
   // Invited accounts accept the same Terms/Privacy + 18+ statement as
   // self-registration — an invitation is not consent.
-  const acceptance = acceptanceSchema.safeParse(req.body.acceptance)
+  const acceptance = signupAcceptanceSchema.safeParse(req.body.acceptance)
   if (!acceptance.success) {
     error(res, acceptance.error.issues[0].message)
     return

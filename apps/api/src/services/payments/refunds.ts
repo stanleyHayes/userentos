@@ -119,14 +119,22 @@ function accumulate(amount: number, key: string) {
   }
 }
 
-/** Another transaction still holds the buyer's money for this order, so the order stays paid. */
-async function orderPaidElsewhere(transaction: Pick<IMarketplaceTransaction, 'bookingId' | 'sponsorshipId'> & { _id: Types.ObjectId }): Promise<boolean> {
+/**
+ * The other transactions still holding the buyer's money for this order:
+ * whether any is an ordinary payment, and which are charges flagged for
+ * refund (duplicates that were never meant to pay for it).
+ */
+async function otherOrderHolders(transaction: Pick<IMarketplaceTransaction, 'bookingId' | 'sponsorshipId'> & { _id: Types.ObjectId }) {
   const orders = [
     ...(transaction.bookingId ? [{ bookingId: transaction.bookingId }] : []),
     ...(transaction.sponsorshipId ? [{ sponsorshipId: transaction.sponsorshipId }] : []),
   ]
-  if (!orders.length) return false
-  return !!await MarketplaceTransaction.exists({ $or: orders, _id: { $ne: transaction._id }, status: { $in: REFUNDABLE_ORDER } })
+  if (!orders.length) return { paid: false, flagged: [] as Types.ObjectId[] }
+  const holders = await MarketplaceTransaction.find({ $or: orders, _id: { $ne: transaction._id }, status: { $in: REFUNDABLE_ORDER } }).select('_id refundStatus duplicateOf').lean()
+  return {
+    paid: holders.some((h) => !h.refundStatus && !h.duplicateOf),
+    flagged: holders.filter((h) => h.refundStatus === 'required').map((h) => h._id as Types.ObjectId),
+  }
 }
 
 async function applyOrderRefund(transaction: Pick<IMarketplaceTransaction, 'reference' | 'grossAmount' | 'discountAmount' | 'bookingId' | 'sponsorshipId' | 'buyerId'> & { _id: Types.ObjectId }, amount: number, key: string): Promise<RefundOutcome> {
@@ -155,7 +163,23 @@ async function applyOrderRefund(transaction: Pick<IMarketplaceTransaction, 'refe
   // transaction still pays for stays paid: refunding either leaves the order
   // as its real payment set it. Otherwise the order is no longer paid for:
   // the worker must not treat it as settled and the campaign must stop serving.
-  const orderUntouched = !!updated.refundStatus || !!updated.duplicateOf || await orderPaidElsewhere(transaction)
+  let orderUntouched = !!updated.refundStatus || !!updated.duplicateOf
+  if (!orderUntouched) {
+    const others = await otherOrderHolders(transaction)
+    if (others.paid) orderUntouched = true
+    else if (others.flagged.length) {
+      // The real payment went back but a charge flagged as its duplicate still
+      // holds the buyer's money: that charge now pays for the order. Unflag it
+      // so a later refund of it unwinds the order, instead of both refunds
+      // leaving the order marked paid with no money behind it.
+      orderUntouched = true
+      const promoted = await MarketplaceTransaction.findOneAndUpdate(
+        { _id: others.flagged[0], refundStatus: 'required' },
+        { $unset: { refundStatus: 1, duplicateOf: 1, refundReason: 1 } },
+      ).lean()
+      if (promoted) financialAlert('marketplace_duplicate_now_pays_order', { type: 'MarketplaceTransaction', id: String(promoted._id) }, { reference: promoted.reference, refunded: transaction.reference })
+    }
+  }
   if (!orderUntouched && transaction.bookingId) {
     // The amount goes too, or the worker's earnings still count the job as paid.
     await ServiceBooking.updateOne({ _id: transaction.bookingId, paymentStatus: 'paid' }, { $set: { paymentStatus: 'refunded' }, $unset: { paymentAmount: 1 } })

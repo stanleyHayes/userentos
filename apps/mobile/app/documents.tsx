@@ -10,7 +10,7 @@ import { ListSkeleton } from '../components/Skeleton'
 
 // Field names follow the Document model: ownerId and fileSize (userId and
 // size were never sent, giving 'NaN MB' and hiding the owner's delete button).
-interface Document { id: string; ownerId: string; name: string; type: string; mimeType: string; fileSize?: number; fileUrl: string; category?: string; createdAt: string }
+interface Document { id: string; ownerId: string; name: string; type: string; mimeType: string; fileSize?: number; fileUrl: string; category?: string; linkedEntityType?: string; createdAt: string }
 interface DocumentsResponse { items: Document[]; total: number }
 
 function formatFileSize(bytes: number | undefined): string {
@@ -96,7 +96,8 @@ export default function DocumentsScreen() {
         <View style={s.docList}>
           {documents.map((doc) => {
             const icon = getFileIcon(doc.mimeType)
-            const isOwn = doc.ownerId === user?.id
+            // Dispute evidence is part of the dispute record: the server refuses to delete it.
+            const isOwn = doc.ownerId === user?.id && doc.linkedEntityType !== 'dispute'
             return (
               <View key={doc.id} style={[s.docCard, neuCard(c)]}>
                 <View style={s.docRow}>

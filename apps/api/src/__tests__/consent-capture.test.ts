@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { config } from '../config/index.js'
-import { TERMS_VERSION, PRIVACY_VERSION, isConsentRequired } from '../types/index.js'
+import { TERMS_VERSION, PRIVACY_VERSION, PREVIOUS_PRIVACY_VERSION, isConsentRequired } from '../types/index.js'
 
 /*
  * Consent capture (Act 843 s.20; App Store / Play terms). Registration and
@@ -84,6 +84,16 @@ describe('registration and renewed acceptance — HTTP contract', () => {
       expect((await res.json()).error).toMatch(/has been updated/)
     }
     expect(authService.register).not.toHaveBeenCalled()
+  })
+
+  it('lets an app built before a privacy update still sign up, recording the older version so it is asked again', async () => {
+    const res = await post('/register', { ...registration, acceptance: { ...acceptance, privacyVersion: PREVIOUS_PRIVACY_VERSION } })
+    expect(res.status).toBe(201)
+    const consents = authService.register.mock.calls[0][3]
+    expect(consents.privacyVersion).toBe(PREVIOUS_PRIVACY_VERSION)
+    expect(isConsentRequired({ ...consents, ageConfirmed: true })).toBe(true)
+    // Renewing consent needs the current version exactly.
+    expect((await post('/consents', { ...acceptance, privacyVersion: PREVIOUS_PRIVACY_VERSION }, sessionHeaders())).status).toBe(400)
   })
 
   it('refuses registration without the 18+ confirmation', async () => {

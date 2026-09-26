@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { authService } from '../container.js'
 import { success, error } from '../utils/response.js'
-import { acceptanceSchema, buildConsentRecord } from '../utils/consent.js'
+import { acceptanceSchema, signupAcceptanceSchema, buildConsentRecord } from '../utils/consent.js'
 import { isRoleOffered } from '../config/regulatedFeatures.js'
 import { pushTokenSchema } from '../services/push/input.js'
 
@@ -24,7 +24,7 @@ const registerSchema = z.object({
   lastName: z.string().min(1),
   role: z.enum(['tenant', 'landlord', 'property_manager', 'financier', 'employer', 'service_provider', 'business', 'developer']),
   // Terms/Privacy acceptance + 18+ confirmation. No account without it.
-  acceptance: acceptanceSchema,
+  acceptance: signupAcceptanceSchema,
 })
 
 const loginSchema = z.object({

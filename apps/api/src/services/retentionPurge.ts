@@ -1,5 +1,6 @@
 import { Types, type Model } from 'mongoose'
 import { purgeRules, retentionCutoff, type RetentionKey } from '../config/retentionSchedule.js'
+import { rewriteLegacyEnquiryNotices } from './enquiryNotices.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { Application } from '../models/Application.js'
 import { Lead } from '../models/Lead.js'
@@ -107,6 +108,11 @@ export async function runRetentionPurge(options: PurgeOptions = {}): Promise<Rec
   const dryRun = options.dryRun ?? retentionDryRun()
   const batchSize = options.batchSize ?? 500
   const summary: Record<string, RuleOutcome & { error?: true }> = {}
+  // Not a deletion rule: scrub enquirers' names and phones from agents'
+  // notifications written in the old wording (see enquiryNotices.ts).
+  if (!dryRun) {
+    try { await rewriteLegacyEnquiryNotices() } catch (err) { logger.error(`[Retention] Enquiry notice rewrite failed: ${(err as Error).message}`) }
+  }
   for (const rule of purgeRules()) {
     const handler = PURGE_HANDLERS[rule.id]
     if (!handler) throw new Error(`Retention rule ${rule.id} has no purge handler`)

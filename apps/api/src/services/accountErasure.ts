@@ -3,6 +3,7 @@ import { eraseAvatars } from './avatarStorage.js'
 import { erasePersonalDocuments } from './documentErasure.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
 import { releaseStorefrontDomains, type HostOptions } from './accountClosure.js'
+import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { markAccountErasureComplete } from './erasureLedger.js'
 import { NEW_LEAD_TITLE, VIEWING_REQUESTED_TITLE, newLeadMessage, viewingRequestedMessage, legacyLeadMessage, legacyViewingMessage } from './enquiryNotices.js'
 import { RETENTION_DAYS } from '../config/retentionSchedule.js'
@@ -104,7 +105,7 @@ async function eraseProperties(uid: string): Promise<void> {
  * Public profiles: deleted, or — where a booking, payment or coupon use
  * still points at one — kept with every contact detail removed.
  */
-async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Promise<void> {
+async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Promise<number> {
   for (const worker of await Worker.find({ userId: uid }).select('_id').lean()) {
     const id = String(worker._id)
     if (await ServiceBooking.exists({ workerId: id })) {
@@ -128,11 +129,13 @@ async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Pr
 
   const storefrontIds = (await Storefront.find({ ownerId: uid }).select('_id').lean()).map((s) => String(s._id))
   // A domain the host would not release must not outlive the storefront and
-  // account it points at: nothing would retry it once they are gone.
-  if (await releaseStorefrontDomains(storefrontIds, hostOptions)) {
-    throw new Error('A custom domain was not released by the host; account retained for retry')
-  }
+  // account it points at: nothing would retry it once they are gone. So the
+  // storefront behind it stays, and the account is kept (see the caller) —
+  // but the rest of the erasure still runs rather than waiting on the host.
+  const domainsPending = await releaseStorefrontDomains(storefrontIds, hostOptions)
+  const heldByDomain = new Set((await StorefrontDomain.find({ storefrontId: { $in: storefrontIds } }).select('storefrontId').lean()).map((d) => String(d.storefrontId)))
   for (const id of storefrontIds) {
+    if (heldByDomain.has(id)) continue
     await BlogPost.deleteMany({ storefrontId: id })
     if (await MarketplaceTransaction.exists({ storefrontId: id })) {
       await Storefront.updateOne({ _id: id }, {
@@ -150,6 +153,7 @@ async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Pr
   }
 
   await AgencyProfile.deleteMany({ ownerId: uid })
+  return domainsPending
 }
 
 /** Idempotent cleanup. Retain the account tombstone until every operation succeeds. */
@@ -164,7 +168,7 @@ export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions
   await eraseAvatars(uid)
   await erasePersonalDocuments(uid)
   await eraseProperties(uid)
-  await eraseDirectoryProfiles(uid, hostOptions)
+  const domainsPending = await eraseDirectoryProfiles(uid, hostOptions)
   // Before the leads and viewings below lose the details it matches on.
   await scrubEnquiryNotifications(uid)
   // A per-run id, so two erased reporters' open reports on one target never
@@ -231,6 +235,9 @@ export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions
   if (results.some(result => result.status === 'rejected')) {
     throw new Error('Account cleanup incomplete; account retained for retry')
   }
+  // Everything else is erased; only the account (and the storefront behind
+  // an unreleased domain) waits for the host, so the next run retries it.
+  if (domainsPending > 0) throw new Error('A custom domain was not released by the host; account retained for retry')
   // Financial and contract records remain identifiable personal data; deleting
   // the User does NOT make signed names, payment metadata or contracts anonymous.
   // WalletCredit journals also remain: their immutable keys prevent a replayed

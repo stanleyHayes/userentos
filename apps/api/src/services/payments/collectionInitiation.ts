@@ -25,7 +25,10 @@ export async function recordUncertainCollection(paymentId: string) {
 export async function recordRefusedCollection(paymentId: string, reason: string | undefined) {
   return Payment.findOneAndUpdate({ _id: paymentId, status: { $in: ['pending', 'processing'] } }, {
     $set: { status: 'failed', providerStatus: 'failed', failureReason: `provider_refused${reason ? `: ${reason}` : ''}` },
-    $unset: { openCollectionKey: 1, collectionInitiationUncertainAt: 1 },
+    // The provider refused, so no charge exists: free the idempotency key as
+    // well, or a retry with the same details replays this failed row as
+    // "Payment initiated" (clients keep the key after an error response).
+    $unset: { openCollectionKey: 1, collectionInitiationUncertainAt: 1, idempotencyKey: 1 },
   }, { returnDocument: 'after' }).lean()
 }
 

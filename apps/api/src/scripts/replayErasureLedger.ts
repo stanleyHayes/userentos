@@ -18,15 +18,12 @@
 import mongoose from 'mongoose'
 import { pathToFileURL } from 'node:url'
 import { config } from '../config/index.js'
+import { restoreTarget } from './restoreTarget.js'
 import { replayErasureLedger } from '../services/erasureReplay.js'
 import { runRetentionPurge } from '../services/retentionPurge.js'
 import { closeErasureLedger, warnIfErasureLedgerShared } from '../services/erasureLedger.js'
 
-/** The restored copy to replay onto, if one was named. */
-export function restoreTarget(argv: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): string | null {
-  const flag = argv.find((arg) => arg.startsWith('--mongo-uri='))
-  return flag?.slice('--mongo-uri='.length) || env.RESTORE_MONGO_URI || null
-}
+export { restoreTarget }
 
 /** The replay, then the retention purge, on the connected database. */
 export async function replayOntoConnectedDatabase(restored: boolean) {

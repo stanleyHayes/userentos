@@ -39,7 +39,7 @@ for (const name of [
   'Review', 'Achievement', 'PaymentStreak', 'Payout', 'PayoutAccount', 'PaymentAccount', 'WebhookSubscription', 'BusinessReview', 'BusinessInquiry',
   'Lead', 'Viewing', 'Application', 'Delegation', 'FeatureFlag', 'ContentReport', 'Employment', 'PropertyExpense', 'BlogPost', 'Property', 'Agreement',
   'Payment', 'MarketplaceTransaction', 'Dispute', 'MoveOut', 'MaintenanceRequest', 'Sponsorship', 'Worker', 'ServiceBooking', 'Business',
-  'BusinessListing', 'Storefront', 'AgencyProfile',
+  'BusinessListing', 'Storefront', 'AgencyProfile', 'StorefrontDomain',
 ]) vi.doMock(`../models/${name}.js`, () => ({ [name]: modelMock() }))
 
 const { User } = await import('../models/User.js')
@@ -64,6 +64,7 @@ const { PropertyExpense } = await import('../models/PropertyExpense.js')
 const { Notification } = await import('../models/Notification.js')
 const { markAccountErasureComplete } = await import('../services/erasureLedger.js')
 const { releaseStorefrontDomains } = await import('../services/accountClosure.js')
+const { StorefrontDomain } = await import('../models/StorefrontDomain.js')
 const { Storefront } = await import('../models/Storefront.js')
 const { eraseAccountRecords, purgeExpiredAccounts, ACCOUNT_ERASURE_DELAY_MS } = await import('../services/accountErasure.js')
 
@@ -169,14 +170,18 @@ describe('retryable account erasure', () => {
     expect(scrubbed).toBeLessThan(vi.mocked(Viewing.updateMany).mock.invocationCallOrder[0])
   })
 
-  it('keeps the tombstone and the storefront while the host has not released a custom domain', async () => {
+  it('keeps the tombstone and the storefront while the host has not released a custom domain, but erases everything else', async () => {
     // Nothing would retry the release once the account is gone.
     vi.mocked(Storefront.find).mockReturnValueOnce({ select: () => ({ lean: () => Promise.resolve([{ _id: 'shop-1' }]) }) } as never)
+    vi.mocked(StorefrontDomain.find).mockReturnValueOnce({ select: () => ({ lean: () => Promise.resolve([{ storefrontId: 'shop-1' }]) }) } as never)
     vi.mocked(releaseStorefrontDomains).mockResolvedValueOnce(1)
     await expect(eraseAccountRecords(uid, cutoff)).rejects.toThrow('custom domain was not released')
     expect(releaseStorefrontDomains).toHaveBeenCalledWith(['shop-1'], {})
     expect(Storefront.deleteOne).not.toHaveBeenCalled()
     expect(User.deleteOne).not.toHaveBeenCalled()
+    // A host that keeps refusing must not hold back the rest of the erasure.
+    expect(PayoutAccount.deleteMany).toHaveBeenCalledWith({ userId: uid })
+    expect(Message.deleteMany).toHaveBeenCalled()
   })
 
   it('passes a replay onto a restored copy through to the domain release, so the host is not called', async () => {

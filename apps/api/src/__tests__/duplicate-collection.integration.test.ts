@@ -159,8 +159,11 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
       expect(saved).toMatchObject({ status: 'failed', failureReason: 'provider_refused: Invalid phone number' })
       expect(saved?.openCollectionKey).toBeUndefined()
       expect(saved?.collectionInitiationUncertainAt).toBeUndefined()
-      // The payer fixes the number: a new payload, so a new key, and no 409.
-      expect((await pay(`corrected-${tag}`, november)).status).toBe(201)
+      // Retrying with the very same details (after a top-up, say) starts a new
+      // attempt rather than replaying the refused one as "Payment initiated".
+      const again = await pay(`refused-${tag}`, november, { phone: '0200000000' })
+      expect(again.status).toBe(201)
+      expect((await again.json()).data.payment.id).not.toBe(body.data.payment.id)
     })
 
     it('the payer can cancel their own bank transfer and switch to mobile money, but not a collection still being confirmed', async () => {
