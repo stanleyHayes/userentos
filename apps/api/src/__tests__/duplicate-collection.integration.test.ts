@@ -11,16 +11,25 @@ vi.mock('../services/achievements.js', () => ({ checkAndAward: vi.fn().mockResol
 vi.mock('../services/webhooks.js', () => ({ dispatchWebhook: vi.fn() }))
 const audit = vi.hoisted(() => ({ create: vi.fn().mockResolvedValue({}) }))
 vi.mock('../models/AuditLog.js', () => ({ AuditLog: audit }))
-// Count provider initiations without replacing the simulated rail.
-const calls = vi.hoisted(() => ({ collections: [] as unknown[] }))
+// Count provider initiations without replacing the simulated rail; `refuse`
+// makes the next one answer the way Paystack refuses an invalid number.
+const calls = vi.hoisted(() => ({ collections: [] as unknown[], refuse: '' }))
 vi.mock('../services/payments/index.js', async (orig) => {
   const actual = await orig() as typeof import('../services/payments/index.js')
+  const { CollectionRefusedError } = await import('../services/payments/types.js')
   return {
     ...actual,
     getProvider: (...args: Parameters<typeof actual.getProvider>) => {
       const real = actual.getProvider(...args)
       return Object.assign(Object.create(Object.getPrototypeOf(real)), real, {
-        initiateCollection: (input: Parameters<typeof real.initiateCollection>[0]) => { calls.collections.push(input); return real.initiateCollection(input) },
+        initiateCollection: (input: Parameters<typeof real.initiateCollection>[0]) => {
+          calls.collections.push(input)
+          if (calls.refuse) {
+            const reason = calls.refuse; calls.refuse = ''
+            return Promise.reject(new CollectionRefusedError(reason, `Paystack /charge failed (400): ${reason}`))
+          }
+          return real.initiateCollection(input)
+        },
       })
     },
   }
@@ -57,11 +66,12 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
   const tag = String(tenant).slice(-8)
   let server: Server, base = '', agreementId = ''
   const auth = (id: mongoose.Types.ObjectId, roles: string[]) => `Bearer ${jwt.sign({ userId: String(id), email: `dup-${id}@rentos.test`, roles, permissions: [], purpose: 'session' }, config.jwtSecret, { expiresIn: '10m' })}`
-  const pay = (key: string | undefined, period = { startDate: '2026-09-01', endDate: '2026-09-30' }) => fetch(`${base}/payments`, {
+  const pay = (key: string | undefined, period = { startDate: '2026-09-01', endDate: '2026-09-30' }, overrides: Record<string, unknown> = {}) => fetch(`${base}/payments`, {
     method: 'POST',
     headers: { Authorization: auth(tenant, ['tenant']), 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
-    body: JSON.stringify({ agreementId, rentPeriod: period, method: 'mtn_momo', phone: '0241234567' }),
+    body: JSON.stringify({ agreementId, rentPeriod: period, method: 'mtn_momo', phone: '0241234567', ...overrides }),
   })
+  const cancel = (paymentId: string, as: mongoose.Types.ObjectId, roles = ['tenant']) => fetch(`${base}/payments/${paymentId}/cancel`, { method: 'POST', headers: { Authorization: auth(as, roles) } })
   const alerts = (code: string) => audit.create.mock.calls.filter(([entry]) => (entry as { action: string }).action === `alert.${code}`)
 
   beforeAll(async () => {
@@ -83,7 +93,7 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
     server = await new Promise<Server>((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)) })
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   })
-  beforeEach(() => { calls.collections = []; provider.initialized = []; provider.verifyTransaction.mockReset(); audit.create.mockClear() })
+  beforeEach(() => { calls.collections = []; calls.refuse = ''; provider.initialized = []; provider.verifyTransaction.mockReset(); audit.create.mockClear() })
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Payment.deleteMany({ tenantId: String(tenant) })
@@ -136,6 +146,54 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
 
     it('another rent period is a separate obligation', async () => {
       expect((await pay(`device-${tag}-october`, { startDate: '2026-10-01', endDate: '2026-10-31' })).status).toBe(201)
+    })
+
+    it('a checkout the provider refused fails at once, so the corrected retry is not locked out', async () => {
+      const november = { startDate: '2026-11-01', endDate: '2026-11-30' }
+      calls.refuse = 'Invalid phone number'
+      const refused = await pay(`refused-${tag}`, november, { phone: '0200000000' })
+      expect(refused.status).toBe(422)
+      const body = await refused.json()
+      expect(body).toMatchObject({ code: 'PAYMENT_REFUSED', error: expect.stringContaining('Invalid phone number') })
+      const saved = await Payment.findById(body.data.payment.id).lean()
+      expect(saved).toMatchObject({ status: 'failed', failureReason: 'provider_refused: Invalid phone number' })
+      expect(saved?.openCollectionKey).toBeUndefined()
+      expect(saved?.collectionInitiationUncertainAt).toBeUndefined()
+      // The payer fixes the number: a new payload, so a new key, and no 409.
+      expect((await pay(`corrected-${tag}`, november)).status).toBe(201)
+    })
+
+    it('the payer can cancel their own bank transfer and switch to mobile money, but not a collection still being confirmed', async () => {
+      const december = { startDate: '2026-12-01', endDate: '2026-12-31' }
+      const transfer = await pay(`transfer-${tag}`, december, { method: 'bank_transfer', phone: undefined })
+      expect(transfer.status).toBe(201)
+      const transferId = (await transfer.json()).data.payment.id as string
+      // The transfer holds the rent period.
+      expect((await pay(`momo-blocked-${tag}`, december)).status).toBe(409)
+      const detail = await (await fetch(`${base}/payments/${transferId}`, { headers: { Authorization: auth(tenant, ['tenant']) } })).json()
+      expect(detail.data.payerCancellable).toBe(true)
+
+      // Only the payer may cancel it.
+      expect((await cancel(transferId, landlord, ['landlord'])).status).toBe(404)
+      const cancelled = await cancel(transferId, tenant)
+      expect(cancelled.status).toBe(200)
+      const saved = await Payment.findById(transferId).lean()
+      expect(saved).toMatchObject({ status: 'failed', failureReason: 'cancelled_by_payer' })
+      expect(saved?.openCollectionKey).toBeUndefined()
+      expect((await cancel(transferId, tenant)).status).toBe(409)
+
+      const momo = await pay(`momo-after-${tag}`, december)
+      expect(momo.status).toBe(201)
+      const momoId = (await momo.json()).data.payment.id as string
+      // A mobile-money collection its rail can confirm resolves on its own.
+      expect((await cancel(momoId, tenant)).status).toBe(409)
+      expect((await Payment.findById(momoId).lean())?.status).toBe('pending')
+    })
+
+    it('a payment held for an amount mismatch is not the payer\'s to cancel', async () => {
+      const held = await Payment.create({ tenantId: String(tenant), landlordId: String(landlord), agreementId, purpose: 'rent', amount: 1000, method: 'bank_transfer', reference: `PAY-${tag}-HELD`, collectionSource: 'bank_transfer', status: 'processing', failureReason: 'amount_mismatch: provider reported 500, expected 1000', openCollectionKey: `rent:held-${tag}` })
+      expect((await cancel(String(held._id), tenant)).status).toBe(409)
+      expect((await Payment.findById(held._id).lean())?.openCollectionKey).toBe(`rent:held-${tag}`)
     })
   })
 

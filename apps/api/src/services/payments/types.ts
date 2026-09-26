@@ -69,13 +69,30 @@ export interface WebhookEvent {
   raw: unknown
 }
 
+/**
+ * The provider answered, and its answer was no: nothing was charged and
+ * nothing will be (a Paystack 4xx such as an invalid phone number, or a
+ * charge it failed on the spot). Unlike a timeout or an outage, this is
+ * certain, so the payment fails at once and the obligation is freed for the
+ * payer's corrected retry. `reason` is the provider's own words, safe to show
+ * the payer; absent when they are not (a platform credential problem).
+ */
+export class CollectionRefusedError extends Error {
+  constructor(readonly reason: string | undefined, message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'CollectionRefusedError'
+  }
+}
+
 export interface PaymentProvider {
   source: CollectionSource
   id: ProviderId
   /**
    * Begin a collection / pull request from the payer's mobile-money wallet
-   * (or bank rail). Throws on transport / auth errors. A returned `pending`
-   * status is normal and means the user must approve on their device.
+   * (or bank rail). Throws on transport / auth errors, and
+   * CollectionRefusedError when the provider definitively refused. A
+   * returned `pending` status is normal and means the user must approve on
+   * their device.
    */
   initiateCollection(input: CollectionInput): Promise<InitiateResult>
   /**

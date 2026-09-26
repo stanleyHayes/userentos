@@ -1,4 +1,4 @@
-import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { recordCollectionInitiation, recordRefusedCollection, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
 import { Request, Response } from 'express'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
@@ -9,9 +9,9 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAndAward } from '../services/achievements.js'
 import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
-import { isDuplicateKey, requireIdempotencyKey } from '../services/payments/checkout.js'
+import { isDuplicateKey, requireIdempotencyKey, respondCollectionRefused } from '../services/payments/checkout.js'
 import { withMoneyTransaction } from '../services/payments/moneyTransaction.js'
-import type { ProviderId } from '../services/payments/types.js'
+import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { round2 } from '../utils/money.js'
 
@@ -100,6 +100,10 @@ export const savingsController = {
       success(res, { payment: { ...recorded, id: recorded._id.toString() }, instructions: result.instructions }, 'Deposit initiated — your wallet is credited after confirmation', 201)
     } catch (failure) {
       if (!payment && isDuplicateKey(failure) && await existingResult()) return
+      if (payment && failure instanceof CollectionRefusedError) {
+        const refused = await recordRefusedCollection(payment._id.toString(), failure.reason).catch(() => null)
+        if (refused) { respondCollectionRefused(res, refused, failure.reason); return }
+      }
       if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw failure
     }
