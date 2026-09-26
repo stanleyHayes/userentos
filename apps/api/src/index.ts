@@ -6,10 +6,8 @@ import cors from 'cors'
 import { createCorsOrigin } from './middleware/corsPolicy.js'
 import { StorefrontDomain } from './models/StorefrontDomain.js'
 import mongoose from 'mongoose'
-import path from 'path'
 import http from 'http'
 import { config } from './config/index.js'
-import { UPLOADS_DIR } from './utils/uploads.js'
 import { seedDatabase } from './models/seed.js'
 import { startScheduler } from './services/scheduler.js'
 import { warnIfErasureLedgerShared } from './services/erasureLedger.js'
@@ -54,7 +52,6 @@ import disputeRoutes from './routes/disputes.js'
 import legalRoutes from './routes/legal.js'
 import notificationRoutes from './routes/notifications.js'
 import analyticsRoutes from './routes/analytics.js'
-import uploadRoutes from './routes/upload.js'
 import documentRoutes from './routes/documents.js'
 import blogRoutes from './routes/blog.js'
 import creditRoutes from './routes/credit.js'
@@ -299,23 +296,8 @@ app.use((req, res, next) => {
   next()
 })
 
-// Serve uploaded files. Files are user-supplied, so:
-// - nosniff always, to stop MIME confusion.
-// - only known-safe inline types (images/pdf) may render in the browser;
-//   everything else is forced to download, which kills stored-XSS via .html/.svg.
-const INLINE_SAFE_UPLOADS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf'])
-app.use(
-  '/uploads',
-  express.static(UPLOADS_DIR, {
-    setHeaders: (res, filePath) => {
-      res.setHeader('X-Content-Type-Options', 'nosniff')
-      const ext = path.extname(filePath).toLowerCase()
-      if (!INLINE_SAFE_UPLOADS.has(ext)) {
-        res.setHeader('Content-Disposition', 'attachment')
-      }
-    },
-  }),
-)
+// No local /uploads folder is served: dispute evidence is stored privately
+// with the file host and downloaded through GET /api/disputes/:id/evidence/:documentId.
 
 // Routes
 app.use('/api/platform', platformRoutes)
@@ -345,7 +327,6 @@ app.use('/api/disputes', disputeRoutes)
 app.use('/api/legal', legalRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
-app.use('/api/upload', uploadRoutes)
 app.use('/api/documents', documentRoutes)
 app.use('/api/blog', blogRoutes)
 app.use('/api/credit', requireRegulatedFeature('credit_reporting'), creditRoutes)

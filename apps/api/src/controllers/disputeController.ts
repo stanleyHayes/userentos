@@ -10,6 +10,8 @@ import { notifyDisputeFiled, notifyDisputeUpdate } from '../services/notify.js'
 import { dispatchWebhook } from '../services/webhooks.js'
 import { param } from '../utils/params.js'
 import { signedTenancyFilter } from '../services/tenancyRelationship.js'
+import { DocumentModel } from '../models/Document.js'
+import { uploadToCloudinary, deleteFromCloudinary, type UploadResult } from '../utils/cloudinary.js'
 
 const createDisputeSchema = z.object({
   filedAgainst: z.string(),
@@ -39,6 +41,13 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 const MEDIATOR_ROLES = ['government', 'admin', 'super_admin', 'legal_officer']
 
+/** Only the parties, the assigned mediator, or government/legal staff may read a dispute. */
+export function canReadDispute(dispute: { filedBy: string; filedAgainst: string; assignedTo?: string }, userId: string, roles: readonly string[]): boolean {
+  return roles.some((r) => MEDIATOR_ROLES.includes(r)) || dispute.filedBy === userId || dispute.filedAgainst === userId || dispute.assignedTo === userId
+}
+
+type StoredEvidence = UploadResult & { resourceType: 'image' | 'video'; mimeType: string; originalName: string }
+
 export const disputeController = {
   list: async (req: Request, res: Response) => {
     const userId = req.user!.userId
@@ -62,11 +71,7 @@ export const disputeController = {
     const dispute = await Dispute.findById(param(req.params.id)).lean()
     if (!dispute) { error(res, 'Dispute not found', 404); return }
 
-    // Only the parties, the assigned mediator, or government/legal staff may read a dispute.
-    const userId = req.user!.userId
-    const roles = req.user!.roles
-    const isGov = roles.includes('government') || roles.includes('admin') || roles.includes('super_admin') || roles.includes('legal_officer')
-    if (!isGov && dispute.filedBy !== userId && dispute.filedAgainst !== userId && dispute.assignedTo !== userId) {
+    if (!canReadDispute(dispute, req.user!.userId, req.user!.roles)) {
       error(res, 'Not authorized to view this dispute', 403); return
     }
     success(res, { ...dispute, id: (dispute._id as Types.ObjectId).toString() })
@@ -191,19 +196,60 @@ export const disputeController = {
     const files = req.files as Express.Multer.File[]
     if (!files?.length) { error(res, 'No files uploaded'); return }
 
-    const newEvidence = files.map((f) => {
-      const isImage = f.mimetype.startsWith('image/')
-      const isVideo = f.mimetype.startsWith('video/')
-      return {
-        type: isImage ? 'image' : isVideo ? 'video' : 'document',
-        url: `/uploads/${f.filename}`,
-        description: (req.body.description as string) || f.originalname,
-        uploadedAt: new Date().toISOString(),
+    /*
+     * Evidence is private: stored as 'authenticated' (no public URL), with a
+     * Document record so it is tracked, exported and retained under the
+     * tenancy rule, and served only through the authorised download route.
+     * Nothing touches the container's disk, which does not survive a deploy.
+     */
+    const disputeId = String(dispute._id)
+    const stored: StoredEvidence[] = []
+    const documentIds: string[] = []
+    try {
+      for (const f of files) {
+        const resourceType = f.mimetype.startsWith('video/') ? 'video' as const : 'image' as const
+        const result = await uploadToCloudinary(f.buffer, { folder: 'evidence', resourceType, deliveryType: 'authenticated' })
+        stored.push({ ...result, resourceType, mimeType: f.mimetype, originalName: f.originalname })
       }
-    })
-
-    dispute.evidence.push(...newEvidence)
-    await dispute.save()
+      const description = typeof req.body.description === 'string' ? req.body.description : undefined
+      const uploadedAt = new Date().toISOString()
+      const newEvidence = []
+      for (const file of stored) {
+        const doc = new DocumentModel({
+          ownerId: userId,
+          name: description || file.originalName,
+          type: 'evidence',
+          mimeType: file.mimeType,
+          storagePublicId: file.publicId,
+          storageResourceType: file.resourceType,
+          storageDeliveryType: 'authenticated',
+          storageFormat: file.format,
+          fileSize: file.bytes,
+          linkedEntityId: disputeId,
+          linkedEntityType: 'dispute',
+          accessControl: [dispute.filedBy, dispute.filedAgainst],
+        })
+        // The provider's own URL for an authenticated file is a permanent
+        // signed link; only our authorised route is stored.
+        doc.fileUrl = `/api/disputes/${disputeId}/evidence/${String(doc._id)}`
+        await doc.save()
+        documentIds.push(String(doc._id))
+        newEvidence.push({
+          type: file.mimeType.startsWith('image/') ? 'image' : file.resourceType === 'video' ? 'video' : 'document',
+          url: doc.fileUrl,
+          documentId: String(doc._id),
+          description: description || file.originalName,
+          uploadedAt,
+        })
+      }
+      dispute.evidence.push(...newEvidence)
+      await dispute.save()
+    } catch (err) {
+      // Nothing may be left behind that no dispute refers to.
+      await Promise.allSettled(stored.map((file) => deleteFromCloudinary(file.publicId, file.resourceType, 'authenticated')))
+      await DocumentModel.deleteMany({ _id: { $in: documentIds } }).catch(() => undefined)
+      throw err
+    }
 
     success(res, { evidence: dispute.evidence }, `${files.length} evidence files uploaded`)
   },

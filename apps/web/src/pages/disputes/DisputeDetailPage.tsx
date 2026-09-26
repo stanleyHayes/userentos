@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import toast from 'react-hot-toast'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -8,6 +9,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useDispute, useUpdateDisputeStatus, useUploadDisputeEvidence } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
+import { api } from '@/lib/api'
 import { cn, formatDate } from '@/lib/utils'
 import {
   AlertTriangle, Calendar, Tag, Building2, User,
@@ -116,6 +118,23 @@ export function DisputeDetailPage() {
   const isParty = user?.id === dispute.filedBy || user?.id === dispute.filedAgainst
   const categoryLabel = categoryOptions.find((c) => c.value === dispute.category)?.label ?? dispute.category
   const catEmoji = categoryIcon[dispute.category] ?? '\u{1F4CB}'
+
+  // Evidence is private: mint a short-lived download-only token and open the
+  // file with it — the session token never goes into a URL.
+  async function openEvidence(item: Evidence) {
+    if (!item.documentId) {
+      window.open(item.url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || '/api'
+      const path = `/disputes/${dispute!.id}/evidence/${item.documentId}`
+      const { token } = await api.post<{ token: string }>(`${path}/link`, {})
+      window.open(`${apiBase}${path}?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open this file')
+    }
+  }
 
   async function handleUpdate() {
     if (!status) return
@@ -304,12 +323,11 @@ export function DisputeDetailPage() {
             {dispute.evidence.map((e) => {
               const EvidenceIcon = evidenceIcon[e.type] ?? FileText
               return (
-                <a
+                <button
+                  type="button"
                   key={e.id}
-                  href={e.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group/ev flex items-center gap-3 rounded-xl bg-surface/50 dark:bg-[#0c0e1a]/40 border border-border/30 dark:border-[#252a3a]/30 px-3 py-2.5 hover:border-primary/30 dark:hover:border-primary/30 transition-colors"
+                  onClick={() => { void openEvidence(e) }}
+                  className="group/ev flex w-full items-center gap-3 text-left rounded-xl bg-surface/50 dark:bg-[#0c0e1a]/40 border border-border/30 dark:border-[#252a3a]/30 px-3 py-2.5 hover:border-primary/30 dark:hover:border-primary/30 transition-colors"
                 >
                   <div className={cn(
                     'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
@@ -332,7 +350,7 @@ export function DisputeDetailPage() {
                     </p>
                   </div>
                   <ArrowUpRight size={14} className="text-muted dark:text-[#64748b] shrink-0 opacity-0 group-hover/ev:opacity-100 transition-opacity" />
-                </a>
+                </button>
               )
             })}
           </div>
