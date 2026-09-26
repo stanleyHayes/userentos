@@ -8,6 +8,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { eraseDocumentFile } from '../services/documentErasure.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
+import { isAdminStaff } from '../utils/accessControl.js'
 
 const router = Router()
 
@@ -36,8 +37,9 @@ const upload = multer({
 
 // List documents for current user
 router.get('/', authenticate, async (req, res) => {
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  // Administrators only. Government used to get every user's documents here,
+  // Ghana Card scans included — Act 843 keeps national IDs from regulators.
+  const isAdmin = isAdminStaff(req.user!.roles)
   const filter: Record<string, unknown> = isAdmin ? {} : {
     $or: [{ ownerId: req.user!.userId }, { accessControl: req.user!.userId }],
   }
@@ -53,16 +55,7 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, upload.single('file'), async (req, res) => {
   if (!req.file) { error(res, 'No file uploaded'); return }
 
-  const { name, type, linkedEntityId, linkedEntityType, accessControl } = req.body
-
-  let parsedAccessControl: string[]
-  try {
-    parsedAccessControl = accessControl ? JSON.parse(accessControl) : [req.user!.userId]
-    if (!Array.isArray(parsedAccessControl)) parsedAccessControl = [req.user!.userId]
-  } catch {
-    error(res, 'Invalid accessControl JSON', 400)
-    return
-  }
+  const { name, type, linkedEntityId, linkedEntityType } = req.body
 
   const resourceType = req.file.mimetype.startsWith('image/') ? 'image' as const
     : req.file.mimetype.startsWith('video/') ? 'video' as const
@@ -85,7 +78,10 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
     version: 1,
     linkedEntityId,
     linkedEntityType,
-    accessControl: parsedAccessControl,
+    // Never taken from the request: a client-supplied list let anyone drop a
+    // file into any other user's Documents page. No client sends it; sharing
+    // needs its own endpoint that checks who the counterparties are.
+    accessControl: [req.user!.userId],
   })
 
   await AuditLog.create({
@@ -148,8 +144,7 @@ router.get('/:id/versions', authenticate, async (req, res) => {
   const doc = await DocumentModel.findById(param(req.params.id)).lean()
   if (!doc) { error(res, 'Document not found', 404); return }
 
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  const isAdmin = isAdminStaff(req.user!.roles)
   const userId = req.user!.userId
   if (!isAdmin && doc.ownerId !== userId && !(doc.accessControl ?? []).includes(userId)) {
     error(res, 'Not authorized to view this document', 403); return
@@ -187,8 +182,7 @@ router.get('/:id/audit', authenticate, async (req, res) => {
   const doc = await DocumentModel.findById(param(req.params.id)).lean()
   if (!doc) { error(res, 'Document not found', 404); return }
 
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  const isAdmin = isAdminStaff(req.user!.roles)
   const userId = req.user!.userId
   if (!isAdmin && doc.ownerId !== userId && !(doc.accessControl ?? []).includes(userId)) {
     error(res, 'Not authorized to view this document', 403); return
