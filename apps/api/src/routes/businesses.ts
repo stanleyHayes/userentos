@@ -6,8 +6,6 @@ import { Business, BUSINESS_CATEGORIES, type BusinessCategory } from '../models/
 import { BusinessListing } from '../models/BusinessListing.js'
 import { BusinessInquiry } from '../models/BusinessInquiry.js'
 import { BusinessReview } from '../models/BusinessReview.js'
-import { Agreement } from '../models/Agreement.js'
-import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { escapeRegex, param } from '../utils/params.js'
@@ -29,17 +27,34 @@ const idOf = <T extends { _id: unknown }>(doc: T) => ({
    GET /api/businesses — public-ish directory (any signed-in user)
    Filters: category, city, search (name/description). Each item
    carries the business plus its ACTIVE listings.
+
+   Paid "featured" businesses are a paid placement, so they are
+   boosted to the top — and flagged `isFeatured` for the client to
+   label "Sponsored" — only when the screen asks with
+   ?placement=directory. Everyone else (the agreement page's move-in
+   widget, which is chosen by the tenant's lease city; the mobile
+   apps, which declare no ads) gets organic order: reviewed first,
+   then newest.
+
+   The response is the same for every caller. New-mover offers used
+   to be hidden unless the caller had signed a lease in the business's
+   city in the last 30 days — using tenancy data to pick promotions,
+   which the privacy policy rules out and the store forms would have
+   to declare as advertising. They are now shown to everyone, tagged
+   for new movers, and the business checks eligibility on redemption.
    ================================================================ */
 const listSchema = z.object({
   category: z.enum(BUSINESS_CATEGORIES as [BusinessCategory, ...BusinessCategory[]]).optional(),
   city: z.string().optional(),
   search: z.string().optional(),
+  placement: z.enum(['directory']).optional(),
 })
 
 router.get('/', authenticate, async (req, res) => {
   const parsed = listSchema.safeParse(req.query)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-  const { category, city, search } = parsed.data
+  const { category, city, search, placement } = parsed.data
+  const boostFeatured = placement === 'directory'
 
   // Public directory lists admin-approved businesses only (KYC gate).
   const filter: Record<string, unknown> = { approvalStatus: 'approved' }
@@ -50,17 +65,14 @@ router.get('/', authenticate, async (req, res) => {
     filter.$or = [{ name: rx }, { description: rx }]
   }
 
-  await Business.updateMany({ featuredUntil: { $lte: new Date() } }, { $set: { subscriptionTier: 'free' }, $unset: { featuredUntil: 1 } })
-  const businesses = await Business.find(filter).sort({ featuredUntil: -1, isVerified: -1, createdAt: -1 }).limit(60).lean()
+  const now = new Date()
+  await Business.updateMany({ featuredUntil: { $lte: now } }, { $set: { subscriptionTier: 'free' }, $unset: { featuredUntil: 1 } })
+  const sort: Record<string, 1 | -1> = boostFeatured
+    ? { featuredUntil: -1, isVerified: -1, createdAt: -1 }
+    : { isVerified: -1, createdAt: -1 }
+  const businesses = await Business.find(filter).sort(sort).limit(60).lean()
   const ids = businesses.map((b) => (b._id as Types.ObjectId).toString())
   const listings = await BusinessListing.find({ businessId: { $in: ids }, isActive: true }).sort({ createdAt: -1 }).lean()
-  const recentAgreements = await Agreement.find({
-    tenantId: req.user!.userId,
-    status: 'active',
-    createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-  }).select('propertyId').lean()
-  const recentProperties = await Property.find({ _id: { $in: recentAgreements.map((item) => item.propertyId) } }).select('address.city').lean()
-  const newMoverCities = new Set(recentProperties.map((item) => item.address.city.toLowerCase()))
 
   const byBusiness = new Map<string, typeof listings>()
   for (const l of listings) {
@@ -72,9 +84,8 @@ router.get('/', authenticate, async (req, res) => {
   success(res, {
     items: businesses.map((b) => ({
       business: idOf(b),
-      listings: (byBusiness.get((b._id as Types.ObjectId).toString()) ?? [])
-        .filter((listing) => !listing.newMoverOnly || newMoverCities.has(b.city.toLowerCase()))
-        .map(idOf),
+      listings: (byBusiness.get((b._id as Types.ObjectId).toString()) ?? []).map(idOf),
+      ...(boostFeatured ? { isFeatured: !!b.featuredUntil && b.featuredUntil > now } : {}),
     })),
   })
 })
