@@ -403,12 +403,20 @@ export function useRemoveStorefrontDomain() {
   })
 }
 
+/**
+ * A storefront that isn't there (404) stays missing, so retrying only delays
+ * the "no storefront here" page. Other failures keep the default single retry.
+ */
+const retryUnlessMissing = (failureCount: number, error: unknown) =>
+  (error as { status?: number } | null)?.status !== 404 && failureCount < 1
+
 /** Public storefront, by slug. */
 export function useStorefront(slug: string | undefined) {
   return useQuery({
     queryKey: ['storefront', slug],
     queryFn: () => api.get<StorefrontRecord & { canonicalUrl: string }>(`/storefronts/${slug}`),
     enabled: Boolean(slug),
+    retry: retryUnlessMissing,
   })
 }
 
@@ -417,6 +425,7 @@ export function useStorefrontProperties(slug: string | undefined) {
     queryKey: ['storefront-properties', slug],
     queryFn: () => api.get<{ items: Property[]; total: number }>(`/storefronts/${slug}/properties`),
     enabled: Boolean(slug),
+    retry: retryUnlessMissing,
   })
 }
 
