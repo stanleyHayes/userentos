@@ -2,7 +2,7 @@ import { Router } from 'express'
 import type { Types } from 'mongoose'
 import multer from 'multer'
 import { authenticate } from '../middleware/auth.js'
-import { DocumentModel } from '../models/Document.js'
+import { DocumentModel, type IDocument } from '../models/Document.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -22,6 +22,13 @@ const ALLOWED_MIMES = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ])
+
+// The model's type enum. A Record over the union, so a type added to the model
+// without being listed here is a compile error rather than a rejected upload.
+const DOCUMENT_TYPES: Record<IDocument['type'], true> = {
+  rental_agreement: true, receipt: true, legal_notice: true, evidence: true, identity: true, other: true,
+}
+const isDocumentType = (value: unknown): value is IDocument['type'] => typeof value === 'string' && Object.hasOwn(DOCUMENT_TYPES, value)
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -57,6 +64,11 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
 
   const { name, type, linkedEntityId, linkedEntityType } = req.body
 
+  // Check the type before the file goes to Cloudinary: a Mongoose enum failure
+  // after the upload left an orphaned file with no record pointing at it.
+  const docType: unknown = type || 'other'
+  if (!isDocumentType(docType)) { error(res, 'Invalid document type', 400); return }
+
   const resourceType = req.file.mimetype.startsWith('image/') ? 'image' as const
     : req.file.mimetype.startsWith('video/') ? 'video' as const
     : 'raw' as const
@@ -69,7 +81,7 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   const doc = await DocumentModel.create({
     ownerId: req.user!.userId,
     name: name || req.file.originalname,
-    type: type || 'other',
+    type: docType,
     mimeType: req.file.mimetype,
     fileUrl: uploaded.url,
     storagePublicId: uploaded.publicId,

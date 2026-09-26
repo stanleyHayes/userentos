@@ -75,6 +75,19 @@ describe.skipIf(!hasTestMongo)('document access and uploads', () => {
     expect((await get('/documents', ids.victim, ['tenant'])).body.data.items!.map((d) => d.id)).toEqual([identityDocId])
   })
 
+  it('rejects a type outside the model enum before anything is uploaded', async () => {
+    const response = await upload({ type: 'lease' })
+    expect(response.status).toBe(400)
+    expect(response.body.error).toBe('Invalid document type')
+    expect(uploadToCloudinary).not.toHaveBeenCalled()
+  })
+
+  it('stores an enum type the web now sends', async () => {
+    const response = await upload({ type: 'rental_agreement', name: 'Lease' })
+    expect(response.status).toBe(201)
+    expect(response.body.data!.type).toBe('rental_agreement')
+  })
+
   it("ignores a client accessControl list, so nobody can push files into another user's Documents", async () => {
     const response = await upload({ type: 'rental_agreement', name: 'Lease renewal – sign now', accessControl: JSON.stringify([ids.victim]) })
     expect(response.status).toBe(201)

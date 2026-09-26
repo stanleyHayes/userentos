@@ -1,12 +1,15 @@
+// Mirrors what GET /documents returns. This used to declare userId, url and
+// category, none of which the server sends — so search crashed on
+// undefined.toLowerCase(), and Download and Delete never showed.
 export interface Document {
   id: string
-  userId: string
+  ownerId: string
   name: string
+  /** One of the server enum values in categoryOptions. */
   type: string
   mimeType: string
   fileSize: number
-  url: string
-  category: string
+  fileUrl: string
   createdAt: string
 }
 
