@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image, type ViewStyle,
+  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image, Platform, type ViewStyle,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -14,6 +14,7 @@ import { DetailSkeleton } from '../../components/Skeleton'
 import { AITextInput } from '../../components/AITextInput'
 import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
+import { listingShareContent } from '../../lib/listingShare'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -416,10 +417,14 @@ export default function PropertyDetailScreen() {
   async function handleShare() {
     if (!property) return
     try {
-      await Share.share({
+      // Links the public listing page when the listing is publicly visible.
+      await Share.share(listingShareContent({
+        id: property.id ?? property._id ?? String(id),
         title: property.title,
-        message: `Check out "${property.title}" on RentOS Ghana - ${formatCurrency(property.rentAmount)}/mo in ${property.address.city}`,
-      })
+        rent: formatCurrency(property.rentAmount),
+        city: property.address.city,
+        listingStatus: property.listingStatus,
+      }, Platform.OS))
     } catch { /* no-op */ }
   }
 
