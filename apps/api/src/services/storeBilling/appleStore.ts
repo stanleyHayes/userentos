@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { Environment, SignedDataVerifier, Type, Status, VerificationException, VerificationStatus } from '@apple/app-store-server-library'
 import { envOptional } from '../../utils/env.js'
 import { StoreVerificationError } from './googlePlay.js'
-import { appleStoreMode } from './storeEnvironments.js'
+import { appleStoreMode, type StoreEnvironment } from './storeEnvironments.js'
 
 export const appleTransactionIdInput = z.string().regex(/^\d{1,32}$/)
 const epoch = z.number().int().nonnegative().max(8_640_000_000_000_000)
@@ -47,8 +47,9 @@ type AppleContext = { bundleId: string; environment: Environment; appId: number;
 /** Production mode holds a production and a sandbox context, in that order:
  * App Review and TestFlight purchases exist only in Apple's sandbox. Whether a
  * sandbox purchase may grant access is decided per account (storeEnvironments.ts).
+ * `only` keeps just the context for an environment the caller already located.
  */
-async function clients(): Promise<AppleContext[]> {
+async function clients(only?: StoreEnvironment): Promise<AppleContext[]> {
   const mode = appleStoreMode()
   const keyId = envOptional('APPLE_STORE_KEY_ID')
   const issuerId = envOptional('APPLE_STORE_ISSUER_ID')
@@ -59,7 +60,9 @@ async function clients(): Promise<AppleContext[]> {
   try {
     const paths = z.array(z.string().min(1)).min(1).max(8).parse(JSON.parse(envOptional('APPLE_STORE_ROOT_CA_FILES') ?? '[]'))
     const [key, roots] = await Promise.all([readFile(privateKeyFile, 'utf8'), Promise.all(paths.map(path => readFile(path)))])
-    return (mode.sandboxOnly ? [Environment.SANDBOX] : [Environment.PRODUCTION, Environment.SANDBOX]).map(environment => ({
+    const environments = (mode.sandboxOnly ? [Environment.SANDBOX] : [Environment.PRODUCTION, Environment.SANDBOX])
+      .filter(environment => !only || environment === (only === 'production' ? Environment.PRODUCTION : Environment.SANDBOX))
+    return environments.map(environment => ({
       bundleId, environment, appId,
       client: new BoundedAppleClient(key, keyId, issuerId, bundleId, environment),
       verifier: new SignedDataVerifier(roots, true, environment, bundleId, appId),
@@ -102,8 +105,8 @@ async function verifyTransactionWithClients(transactionId: string, expectedAccou
 }
 // Only a 404 (TransactionIdNotFound) moves on to the next environment. An
 // outage or a bad signature stops here, so it never becomes a sandbox lookup.
-async function locateTransaction(transactionId: string, expectedAccountToken: string) {
-  for (const context of await clients()) {
+async function locateTransaction(transactionId: string, expectedAccountToken: string, only?: StoreEnvironment) {
+  for (const context of await clients(only)) {
     try { return { context, anchor: await verifyTransactionWithClients(transactionId, expectedAccountToken, context) } } catch (error) {
       if (!(error instanceof AppleTransactionNotFound)) throw error
     }
@@ -143,11 +146,13 @@ export function normalizeAppleSubscription(transaction: ReturnType<typeof normal
 
 /** Follow an owned transaction to its current original-transaction chain. Older
  * signed purchase data cannot extend access when the current chain is revoked.
+ * Pass the environment verifyAppleTransaction reported to ask only that one:
+ * another production lookup for a sandbox chain can only 404, or fail on an outage.
  */
-export async function verifyAppleSubscription(transactionId: string, expectedAccountToken: string) {
+export async function verifyAppleSubscription(transactionId: string, expectedAccountToken: string, environment?: StoreEnvironment) {
   if (!appleTransactionIdInput.safeParse(transactionId).success || !z.uuid().safeParse(expectedAccountToken).success) throw new StoreVerificationError('invalid_purchase')
   // The chain's status lives in the environment that holds its transaction.
-  const { context, anchor } = await locateTransaction(transactionId, expectedAccountToken)
+  const { context, anchor } = await locateTransaction(transactionId, expectedAccountToken, environment)
   let raw: unknown
   try { raw = await context.client.getAllSubscriptionStatuses(transactionId) } catch (error) {
     throw new StoreVerificationError((error as { httpStatusCode?: number }).httpStatusCode === 404 ? 'invalid_purchase' : 'provider_unavailable')

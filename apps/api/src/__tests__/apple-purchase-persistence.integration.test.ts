@@ -196,7 +196,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
     const saved = await ApplePurchase.findById(first!._id).lean()
     expect(saved).toMatchObject({ revision: 2, entitlementState: 'active', recoveryAttempts: 0 })
     expect(saved?.recoveryLeaseId).toBeUndefined()
-    expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String))
+    expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String), 'production')
     expect((await resolveEntitlements(userId.toString())).features['property.limit']).toBe(8)
     expect(await recoverApplePurchases(1)).toMatchObject({ processed: 0 })
   })
@@ -245,7 +245,7 @@ describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurren
       // Lifecycle polling keeps the demo account's chain current.
       await ApplePurchase.updateOne({ _id: row!._id }, { $set: { recoveryNextAttemptAt: new Date(0) } })
       expect(await recoverApplePurchases(1)).toMatchObject({ processed: 1, failed: 0 })
-      expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String))
+      expect(verifyAppleSubscription).toHaveBeenLastCalledWith(originalId, expect.any(String), 'test')
       // Off the list: the active test row grants nothing, is not polled, and
       // its notifications are acknowledged without being reconciled again.
       vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', otherId.toString())

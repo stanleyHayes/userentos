@@ -31,7 +31,8 @@ export async function recordApplePurchase(userId: string, transactionId: string)
   const previous = await ApplePurchase.findOne(identity).lean()
   if (previous && previous.userId !== userId) throw new StorePurchaseAccessError('ownership')
   const originalTransactionCiphertext = encryptStoreToken(anchor.originalTransactionId, appleTokenContext(identity.applicationId, identity.environment, identity.originalTransactionHash, userId))
-  const verified = await verifyAppleSubscription(transactionId, user.storeAccountToken)
+  // The anchor already found the chain's environment; ask Apple only there.
+  const verified = await verifyAppleSubscription(transactionId, user.storeAccountToken, anchor.environment)
   if (verified.applicationId !== anchor.applicationId || verified.environment !== anchor.environment || verified.originalTransactionId !== anchor.originalTransactionId || verified.subscriptionGroupId !== anchor.subscriptionGroupId) throw new Error('Purchase identity changed during verification')
   // Closure/suspension or a changed binding during slow provider calls must not
   // produce a new successful observation. Activation must check again itself.

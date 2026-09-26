@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Environment, Status, Type, VerificationException, VerificationStatus } from '@apple/app-store-server-library'
 import { verifyAppleNotification, normalizeAppleSubscription, verifyAppleSubscription, normalizeAppleTransaction, verifyAppleTransaction } from '../services/storeBilling/appleStore.js'
-const mocks = vi.hoisted(() => ({ read: vi.fn(), client: vi.fn(), verifier: vi.fn(), get: vi.fn(), decode: vi.fn(), statuses: vi.fn(), renewal: vi.fn(), notification: vi.fn() }))
+import { appleTransactionHash, recordApplePurchase } from '../services/storeBilling/applePurchaseJournal.js'
+const mocks = vi.hoisted(() => ({ read: vi.fn(), client: vi.fn(), verifier: vi.fn(), get: vi.fn(), decode: vi.fn(), statuses: vi.fn(), renewal: vi.fn(), notification: vi.fn(),
+  findUser: vi.fn(), userExists: vi.fn(), findPurchase: vi.fn(), createPurchase: vi.fn(), purchaseById: vi.fn() }))
 vi.mock('node:fs/promises', () => ({ readFile: mocks.read }))
+vi.mock('../models/User.js', () => ({ User: { findOne: mocks.findUser, exists: mocks.userExists } }))
+vi.mock('../models/ApplePurchase.js', () => ({ ApplePurchase: { findOne: mocks.findPurchase, create: mocks.createPurchase, findById: mocks.purchaseById } }))
 // Each instance keeps its environment, so a mock implementation written as a
 // `function` can answer per environment through `this`.
 vi.mock('@apple/app-store-server-library', async original => ({ ...await original<object>(),
@@ -215,6 +219,43 @@ describe('Apple current chain verification boundary', () => {
   it.each([404, 429, 500])('sanitizes status endpoint failure %s', async status => {
     mocks.statuses.mockRejectedValue({ httpStatusCode: status, message: 'private provider payload' })
     await expect(verifyAppleSubscription('123456', accountToken)).rejects.toThrow(status === 404 ? 'invalid_purchase' : 'provider_unavailable')
+  })
+  it('asks only the environment the caller already located', async () => {
+    mocks.decode.mockImplementation(async (signed: string) => ({ ...fixture(), environment: Environment.SANDBOX, transactionId: signed === 'latest-jws' ? '123457' : '123456' }))
+    mocks.statuses.mockResolvedValue({ ...statusFixture(), environment: Environment.SANDBOX, appAppleId: undefined })
+    mocks.renewal.mockResolvedValue({ ...renewalFixture(), environment: Environment.SANDBOX })
+    expect(await verifyAppleSubscription('123456', accountToken, 'test')).toMatchObject({ environment: 'test', transactionId: '123457' })
+    expect(mocks.client.mock.calls.map(args => args[4])).toEqual([Environment.SANDBOX])
+    expect(mocks.get.mock.contexts.map(client => (client as InEnvironment).environment)).toEqual([Environment.SANDBOX])
+  })
+})
+describe('Apple journal verification of a sandbox chain', () => {
+  const reviewer = '64f0000000000000000000aa'
+  beforeEach(() => {
+    vi.useFakeTimers(); vi.setSystemTime(now)
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', reviewer)
+    vi.stubEnv('STORE_BILLING_ENCRYPTION_KEY', 'a'.repeat(64))
+    mocks.findUser.mockReturnValue({ select: () => ({ lean: async () => ({ storeAccountToken: accountToken }) }) })
+    mocks.userExists.mockResolvedValue({ _id: reviewer })
+    mocks.findPurchase.mockReturnValue({ lean: async () => null })
+    mocks.createPurchase.mockImplementation(async (row: object) => ({ ...row, _id: 'journal' }))
+    mocks.purchaseById.mockImplementation(() => ({ lean: async () => mocks.createPurchase.mock.calls[0][0] }))
+    mocks.decode.mockImplementation(async (signed: string) => ({ ...fixture(), environment: Environment.SANDBOX, transactionId: signed === 'latest-jws' ? '123457' : '123456' }))
+    mocks.statuses.mockResolvedValue({ ...statusFixture(), environment: Environment.SANDBOX, appAppleId: undefined })
+    mocks.renewal.mockResolvedValue({ ...renewalFixture(), environment: Environment.SANDBOX })
+  })
+  afterEach(() => vi.useRealTimers())
+  it('asks Apple production once, so a later production outage cannot fail the verified purchase', async () => {
+    let productionCalls = 0
+    mocks.get.mockImplementation(async function (this: InEnvironment) {
+      if (this.environment !== Environment.PRODUCTION) return { signedTransactionInfo: 'sandbox-jws' }
+      throw ++productionCalls === 1 ? { httpStatusCode: 404 } : { httpStatusCode: 503 }
+    })
+    expect(await recordApplePurchase(reviewer, '123456')).toMatchObject({ userId: reviewer, environment: 'test', accessEligible: true })
+    expect(productionCalls).toBe(1)
+    expect(mocks.get.mock.contexts.map(client => (client as InEnvironment).environment)).toEqual([Environment.PRODUCTION, Environment.SANDBOX, Environment.SANDBOX])
+    expect((mocks.statuses.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+    expect(mocks.createPurchase).toHaveBeenCalledWith(expect.objectContaining({ transactionHash: appleTransactionHash('123457') }))
   })
 })
 
