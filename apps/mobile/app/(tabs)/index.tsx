@@ -125,9 +125,12 @@ export default function HomeScreen() {
           {/* Greeting */}
           <Text style={s.greeting}>Welcome back,</Text>
           <Text style={s.name}>{user?.firstName} {user?.lastName}</Text>
-          <View style={s.roleBadge}>
-            <Text style={s.roleText}>{user?.activeRole?.replace('_', ' ')}</Text>
-          </View>
+          {/* No badge until a profile still loading names the role. */}
+          {!!user?.activeRole && (
+            <View style={s.roleBadge}>
+              <Text style={s.roleText}>{user.activeRole.replace('_', ' ')}</Text>
+            </View>
+          )}
         </View>
 
         {/* Stats — overlapping the header */}
