@@ -88,9 +88,17 @@ export interface IMarketplaceTransaction extends Document {
   duplicateOf?: string
   /** A verified success that arrived after this checkout had been closed as failed. */
   lateSuccessAt?: Date
+  /** An admin reviewed the late success (routes/adminPayments.ts). */
+  lateSuccessAcknowledgedAt?: Date
   /** Status to restore when a chargeback is resolved in the platform's favour. */
   preDisputeStatus?: MarketplaceTransactionStatus
   disputedAt?: Date
+  /** An admin reviewed the open chargeback; cleared when a new one opens. */
+  disputeAcknowledgedAt?: Date
+  /** Last manual resolution by an admin (routes/adminPayments.ts). */
+  resolvedBy?: string
+  resolvedAt?: Date
+  resolutionNote?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -143,8 +151,13 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   refundReason: String,
   duplicateOf: String,
   lateSuccessAt: Date,
+  lateSuccessAcknowledgedAt: Date,
   preDisputeStatus: { type: String, enum: ['initialized', 'pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'disputed'] },
   disputedAt: Date,
+  disputeAcknowledgedAt: Date,
+  resolvedBy: String,
+  resolvedAt: Date,
+  resolutionNote: String,
 }, { timestamps: true })
 
 // A replayed key returns the buyer's original transaction; another buyer's

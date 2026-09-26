@@ -222,7 +222,7 @@ export async function applyDisputeEvent(body: PaystackEventBody): Promise<Disput
     const moved = opening
       ? await MarketplaceTransaction.updateOne(
         { _id: transaction._id, status: { $in: ['paid', 'partially_refunded'] } },
-        [{ $set: { preDisputeStatus: '$status', status: 'disputed', disputedAt: '$$NOW' } }],
+        [{ $set: { preDisputeStatus: '$status', status: 'disputed', disputedAt: '$$NOW' } }, { $unset: 'disputeAcknowledgedAt' }],
         { updatePipeline: true },
       )
       : await MarketplaceTransaction.updateOne(
@@ -238,7 +238,7 @@ export async function applyDisputeEvent(body: PaystackEventBody): Promise<Disput
   const payment = await Payment.findOne({ reference }).select('_id reference tenantId').lean()
   if (!payment) return 'unmatched'
   const moved = opening
-    ? await Payment.updateOne({ _id: payment._id, status: { $in: ['completed', 'refunded'] }, disputeStatus: { $ne: 'open' } }, { $set: { disputeStatus: 'open', disputedAt: new Date() }, $unset: { disputeResolvedAt: 1, disputeResolution: 1 } })
+    ? await Payment.updateOne({ _id: payment._id, status: { $in: ['completed', 'refunded'] }, disputeStatus: { $ne: 'open' } }, { $set: { disputeStatus: 'open', disputedAt: new Date() }, $unset: { disputeResolvedAt: 1, disputeResolution: 1, disputeAcknowledgedAt: 1 } })
     : await Payment.updateOne({ _id: payment._id, disputeStatus: 'open' }, { $set: { disputeStatus: 'resolved', disputeResolvedAt: new Date(), ...(resolution ? { disputeResolution: resolution } : {}) } })
   if (moved.modifiedCount && opening) financialAlert('payment_dispute_opened', { type: 'Payment', id: String(payment._id) }, { reference })
   if (moved.modifiedCount && closing) audit('payment.dispute_resolved', 'Payment', String(payment._id), payment.tenantId, { reference, resolution })

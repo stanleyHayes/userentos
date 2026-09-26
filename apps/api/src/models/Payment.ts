@@ -68,6 +68,8 @@ export interface IPayment extends Document {
   nextProviderCheckAt?: Date
   /** A verified success that arrived after the payment had been marked failed. */
   lateSuccessAt?: Date
+  /** An admin reviewed the late success (routes/adminPayments.ts). */
+  lateSuccessAcknowledgedAt?: Date
   /** Cumulative GHS the provider has refunded to the payer, and the refund events already applied. */
   refundedAmount?: number
   refundEventIds?: string[]
@@ -85,6 +87,8 @@ export interface IPayment extends Document {
   /** Chargeback state reported by the provider. */
   disputeStatus?: 'open' | 'resolved'
   disputedAt?: Date
+  /** An admin reviewed the open chargeback; cleared when a new one opens. */
+  disputeAcknowledgedAt?: Date
   disputeResolvedAt?: Date
   disputeResolution?: string
   /** Last manual resolution by an admin (routes/adminPayments.ts). */
@@ -178,6 +182,7 @@ const paymentSchema = new Schema<IPayment>({
   providerCheckAttempts: Number,
   nextProviderCheckAt: Date,
   lateSuccessAt: Date,
+  lateSuccessAcknowledgedAt: Date,
   refundedAmount: Number,
   refundEventIds: { type: [String], default: undefined },
   refundedAt: Date,
@@ -187,6 +192,7 @@ const paymentSchema = new Schema<IPayment>({
   refundReason: String,
   disputeStatus: { type: String, enum: ['open', 'resolved'] },
   disputedAt: Date,
+  disputeAcknowledgedAt: Date,
   disputeResolvedAt: Date,
   disputeResolution: String,
   resolvedBy: String,
