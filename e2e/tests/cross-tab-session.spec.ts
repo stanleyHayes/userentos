@@ -117,7 +117,13 @@ for (const change of ['profile edit', 'role switch']) test(`a ${change} from a t
   await other.close()
 })
 
-test('two tabs recover expired API requests with one refresh rotation', async ({ authedPage: page, context }) => {
+const pendingRefreshLocks = (page: Page) => page.evaluate(async () => (await navigator.locks.query()).pending?.filter(lock => lock.name?.startsWith('rentos-auth-refresh:')).length ?? 0)
+
+const handoffs = [
+  { title: 'two tabs recovering expired API requests converge on one pair (at most one extra refresh)', holdHandoff: false },
+  { title: "a tab queued behind another tab's refresh adopts its rotated pair without refreshing again", holdHandoff: true },
+]
+for (const { title, holdHandoff } of handoffs) test(title, async ({ authedPage: page, context }) => {
   await openSettings(page)
   const other = await context.newPage()
   await openSettings(other)
@@ -144,20 +150,37 @@ test('two tabs recover expired API requests with one refresh rotation', async ({
   }, apiUrl)
   const first = request(page)
   await expect.poll(() => presented.length).toBe(1)
+  // A test-held lock queued in the waiting tab ahead of its refresh. The queue is
+  // FIFO, so that refresh takes the lock only once the test lets go, which it
+  // does after the rotated pair is visible in the waiting tab's own storage.
+  type Hold = { releaseRefreshHold?: () => void }
+  if (holdHandoff) await other.evaluate(name => {
+    void navigator.locks.request(name, () => new Promise<void>(resolve => { (window as Hold).releaseRefreshHold = resolve }))
+  }, `rentos-auth-refresh:${initial.sessionId}`)
   const second = request(other)
   await expect.poll(() => requests).toBe(2)
   // While the first tab's rotation is in flight the second waits on the shared lock.
-  await expect.poll(() => page.evaluate(async () => (await navigator.locks.query()).pending?.filter(lock => lock.name?.startsWith('rentos-auth-refresh:')).length ?? 0)).toBe(1)
+  await expect.poll(() => pendingRefreshLocks(page)).toBe(holdHandoff ? 2 : 1)
   expect(presented).toHaveLength(1)
   release()
   expect(await first).toBe('recovered')
+  if (holdHandoff) {
+    await expect.poll(() => storedRefreshToken(other)).toBe('shared-rotated-refresh')
+    await other.evaluate(() => (window as Hold).releaseRefreshHold!())
+  }
   expect(await second).toBe('recovered')
   expect(requests).toBe(4)
-  // After the lock passes on, the second tab normally finds the rotated pair in
-  // storage. If its read beats the first tab's write reaching it, it refreshes
-  // with the original token once more, which the server's rotation grace answers.
-  expect(presented.length).toBeLessThanOrEqual(2)
-  expect(presented.every(token => token === initial.refreshToken)).toBe(true)
+  if (holdHandoff) {
+    // A waiting tab that refreshed again would spend the server's one grace
+    // re-issue, and a third tab would then sign every device out.
+    expect(presented).toEqual([initial.refreshToken])
+  } else {
+    // After the lock passes on, the second tab normally finds the rotated pair in
+    // storage. If its read beats the first tab's write reaching it, it refreshes
+    // with the original token once more, which the server's rotation grace answers.
+    expect(presented.length).toBeLessThanOrEqual(2)
+    expect(presented.every(token => token === initial.refreshToken)).toBe(true)
+  }
   for (const tab of [page, other]) await expect.poll(() => refreshTokenIn(tab)).toEqual({ memory: 'shared-rotated-refresh', stored: 'shared-rotated-refresh' })
   await other.close()
 })
@@ -209,7 +232,11 @@ test('two tabs whose access token expired together end on one live refresh token
   const other = await context.newPage()
   await openSettings(other)
   const initial = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state)
-  // Hold the real refresh endpoint until both tabs have failed with the expired token.
+  // Hold the real refresh endpoint until the second tab is queued on the refresh
+  // lock behind the first. Whether it then reads the first tab's stored pair or
+  // refreshes with the original token into the server's grace re-issue is down
+  // to timing here; the mocked "a refresh answered with a fresh pair / a
+  // rejection" tests above cover that path deterministically.
   let refreshes = 0
   let release!: () => void
   const gate = new Promise<void>(resolve => { release = resolve })
@@ -226,6 +253,7 @@ test('two tabs whose access token expired together end on one live refresh token
   }, apiUrl)
   const results = Promise.all([request(page), request(other)])
   await expect.poll(() => refreshes).toBeGreaterThan(0)
+  await expect.poll(() => pendingRefreshLocks(page)).toBe(1)
   release()
   expect(await results).toEqual([initial.user.id, initial.user.id])
   await expect.poll(async () => {
