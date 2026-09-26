@@ -19,7 +19,7 @@ import { disconnectUser, disconnectSession } from './socket.js'
 import { ROTATION_GRACE_MS, revokeDeviceSession } from './sessionRevocation.js'
 import { isSessionRevoked } from '../models/RevokedSession.js'
 import { recordAuditEntry } from '../utils/audit.js'
-import { ROLE_DEFAULT_PERMISSIONS } from '../types/index.js'
+import { ROLE_DEFAULT_PERMISSIONS, CREDENTIAL_LIFETIMES } from '../types/index.js'
 
 /** The device making an authenticated request: its session family (the
  * access token's `sid`) and label, for a replacement token pair. */
@@ -551,7 +551,7 @@ export class AuthService {
     const resetToken = jwt.sign(
       { userId: user._id.toString(), purpose: 'reset' },
       config.jwtSecret,
-      { expiresIn: 3600 },
+      { expiresIn: CREDENTIAL_LIFETIMES.passwordResetMinutes * 60 },
     )
 
     this.logger.info(`Password reset token generated for: ${email}`)

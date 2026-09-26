@@ -17,6 +17,7 @@ const SURFACES = [
   'apps/web/index.html',
   'apps/web/src/pages/legal/PrivacyPage.tsx',
   'apps/web/src/pages/legal/DataProtectionPage.tsx',
+  'apps/web/src/pages/legal/DeleteAccountPage.tsx',
   'apps/web/src/pages/legal/TermsPage.tsx',
   'apps/web/src/pages/PublicRegistryPage.tsx',
   'apps/web/src/pages/PublicRegistryDetailPage.tsx',
@@ -39,6 +40,9 @@ const BANNED: [RegExp, string][] = [
   [/BoG securitized|our legal partners|licensed partner banks|partner bank virtual accounts/i, 'no such regulator approval or partners'],
   [/legally binding when signed|tamper-proof/i, 'enforceability is not guaranteed'],
   [/RentOS Ghana Limited/, 'controller name must come from LEGAL_ENTITY'],
+  [/every deletion is recorded|record of every deletion/i, 'only the deletions services/erasureLedger.ts records are re-applied after a restore'],
+  [/every kind of personal data linked/i, 'the export leaves out messages others sent and documents others shared'],
+  [/each kind of personal data has a set retention period/i, 'tenancy, financial, regulated and moderation records have no period yet'],
 ]
 
 describe('public surfaces make no unverifiable claims', () => {
@@ -50,6 +54,10 @@ describe('public surfaces make no unverifiable claims', () => {
       }
     })
   }
+
+  it('the store disclosure notes claim no more deletion replay than the ledger does', () => {
+    expect(read('docs/compliance/mobile-data-disclosures.md')).not.toMatch(/every deletion is recorded|record of every deletion/i)
+  })
 
   it('the notices are version-stamped from the shared constants', () => {
     expect(read('apps/web/src/pages/legal/PrivacyPage.tsx')).toContain('versionLabel(PRIVACY_VERSION)')

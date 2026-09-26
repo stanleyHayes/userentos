@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
 import { DoodleStars } from '@/components/ui/Doodles'
 import { LEGAL_ENTITY, PRIVACY_VERSION, DPC, legalEntityName, versionLabel } from './legalMeta'
-import { RETENTION_PERIOD_DAYS as P, describeRetentionDays as days } from '../../../../../packages/shared/retentionPeriods'
+import { RETENTION_PERIOD_DAYS as P, CREDENTIAL_LIFETIMES as C, describeRetentionDays as days } from '../../../../../packages/shared/retentionPeriods'
 
 /**
  * Privacy Policy. Every processor, retention period and automated decision
@@ -167,11 +167,11 @@ export function PrivacyPage() {
                 `Profile photos you have replaced: deleted within ${days(P.replacedAvatar)}.`,
                 `Reports we dismiss: ${days(P.dismissedContentReport)} after review (reports we act on are kept with the moderation record, as above).`,
                 `Rent price estimate logs: ${days(P.valuationLog)}. Redacted complaint records: ${days(P.complaintLog)}. Payment-provider notifications: ${days(P.webhookEvent)}. App-store notifications: ${days(P.storeNotification)} after processing. Public registry page views (hashed IP address, browser and referring page): ${days(P.registryPageView)}. Storefront visit statistics: ${days(P.storefrontEvent)}.`,
-                'Sign-in sessions expire after 7 days of inactivity; biometric sign-in on a device after 90 days; password-reset links after 1 hour.',
+                `Sign-in sessions expire after ${days(C.sessionInactivityDays)} of inactivity; biometric sign-in on a device after ${days(C.biometricInactivityDays)}; password-reset links after ${C.passwordResetMinutes === 60 ? '1 hour' : `${C.passwordResetMinutes} minutes`}.`,
                 'AI requests are not stored by RentOS; the AI provider handles them under its own retention terms.',
               ])}
               <p><strong>Files.</strong> Photos and documents are stored with Cloudinary. When we delete one, we ask Cloudinary to delete it and to clear the copies held in its content-delivery network. Dispute evidence is stored privately and can only be opened by the parties to the dispute and the officials handling it.</p>
-              <p><strong>Backups.</strong> Deleted data can remain in our encrypted database backups until those backups expire. Backups are used only to recover from failures. We keep a record of every deletion, holding only an account or record number and never your name or contact details, until the last backup that could contain the data has expired; before any restored copy goes live, we apply those deletions to it again.</p>
+              <p><strong>Backups.</strong> Deleted data can remain in our encrypted database backups until those backups expire. Backups are used only to recover from failures. We keep a record of each account closure, and of each document, listing, listing photo, review, business listing, payout account and webhook you delete, holding only an account or record number and never your name or contact details, until the last backup that could contain the data has expired. Before any restored copy goes live, we apply those deletions to it again and re-run our scheduled retention deletions.</p>
             </div>
           ),
         },
@@ -198,7 +198,7 @@ export function PrivacyPage() {
             <>
               <p>Under the Data Protection Act, 2012 (Act 843) you can:</p>
               {list([
-                <><strong>Access and export</strong> your data — use the export option in Settings → Privacy on the website or in the app, or email us. The export includes every kind of personal data linked to your account.</>,
+                <><strong>Access and export</strong> your data — use the export option in Settings → Privacy on the website or in the app, or email us. The export includes the personal data you gave us and the records about you linked to your account. Messages other people sent you and documents they shared with you are not included; you can see them in the app, or ask us for them by email.</>,
                 <><strong>Correct</strong> inaccurate data — edit your profile, or email us for anything you cannot edit.</>,
                 <><strong>Delete</strong> your account and data — Settings → Privacy, or <a className="underline" href="/delete-account">/delete-account</a> (subject to the records we must keep, above).</>,
                 <><strong>Object to direct marketing.</strong> We do not send marketing messages today; if we ever do, you will be able to opt out in every message and in Settings.</>,

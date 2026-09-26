@@ -173,7 +173,7 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'rent_payment' | 'inves
 // stored acceptance is older is then asked to accept again.
 
 export const TERMS_VERSION = '2026-09-25'
-export const PRIVACY_VERSION = '2026-09-25'
+export const PRIVACY_VERSION = '2026-09-26'
 
 /** Evidence of a user's acceptance (Act 843 s.20; store terms). */
 export interface UserConsents {
@@ -259,6 +259,20 @@ export const RETENTION_PERIOD_DAYS = {
   storefrontEvent: 400,
   /** Rent valuation requests and outcomes. */
   valuationLog: 730,
+} as const
+
+/**
+ * How long sign-in credentials last, as the Privacy Policy quotes them. The
+ * API issues its credentials with these values (config/index.ts, biometric
+ * sign-in, password reset), so the notice and what is enforced cannot drift.
+ */
+export const CREDENTIAL_LIFETIMES = {
+  /** A sign-in session: renewed on use, so it ends after this many days unused. */
+  sessionInactivityDays: 7,
+  /** Biometric sign-in on a device: renewed on use, like a session. */
+  biometricInactivityDays: 90,
+  /** A password-reset link. */
+  passwordResetMinutes: 60,
 } as const
 
 // --- Core Models ---

@@ -6,7 +6,7 @@
  * schedule enforces the same values the notice prints, and its coverage test
  * fails if they ever differ.
  */
-export { RETENTION_PERIOD_DAYS } from './types/index'
+export { RETENTION_PERIOD_DAYS, CREDENTIAL_LIFETIMES } from './types/index'
 
 /** "30 days", "1 year", "2 years", "13 months" — how the notice words a period. */
 export function describeRetentionDays(days: number): string {

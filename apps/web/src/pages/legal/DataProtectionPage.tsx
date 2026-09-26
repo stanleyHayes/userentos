@@ -84,10 +84,10 @@ export function DataProtectionPage() {
           title: 'Retention and Deletion',
           content: (
             <ul className="list-disc pl-5 space-y-2">
-              <li>Each kind of personal data has a set retention period; the <a className="underline" href="/privacy#retention">Privacy Policy</a> lists them.</li>
+              <li>The <a className="underline" href="/privacy#retention">Privacy Policy</a> lists how long each kind of personal data is kept, including the records kept while the legal period is confirmed.</li>
               <li>Closing your account takes your listings and public profiles down at once and erases your core identity; the rest of your personal records are deleted {describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)} later.</li>
               <li>Tenancy, payment and moderation records are kept while RentOS confirms how long the law requires them to be kept, and are not used for anything else in the meantime.</li>
-              <li>Deleted data can remain in our encrypted database backups until those backups expire. Every deletion is recorded, and applied again before any restored copy goes live.</li>
+              <li>Deleted data can remain in our encrypted database backups until those backups expire. Account closures, and the documents, listings, listing photos, reviews, business listings, payout accounts and webhooks you delete, are recorded and applied again before any restored copy goes live, together with our scheduled retention deletions.</li>
               <li>Deleted files are removed from our file-storage provider, Cloudinary, together with the copies in its content-delivery network.</li>
             </ul>
           ),
