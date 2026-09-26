@@ -82,8 +82,9 @@ class MtnMomoProvider implements PaymentProvider {
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     const token = await getAccessToken()
-    // X-Reference-Id is the provider-side correlator. We MUST keep it for status lookups.
-    const xReferenceId = randomUUID()
+    // X-Reference-Id is the provider-side correlator. We MUST keep it for status
+    // lookups, so the caller generates and saves it before this request.
+    const xReferenceId = input.providerRef ?? randomUUID()
 
     const body = {
       amount: input.amount.toFixed(2),

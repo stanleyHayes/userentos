@@ -1,162 +1,173 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import mongoose from 'mongoose'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined), notifyPaymentConfirmed: vi.fn(), notifyPaymentReceived: vi.fn() }))
+vi.mock('../models/AuditLog.js', () => ({ AuditLog: { create: vi.fn().mockResolvedValue({}) } }))
+const paystack = vi.hoisted(() => ({ verifyTransaction: vi.fn() }))
+vi.mock('../services/marketplace/paystack.js', async (orig) => ({ ...(await orig() as Record<string, unknown>), verifyTransaction: paystack.verifyTransaction }))
 import { WebhookEvent } from '../models/WebhookEvent.js'
 import { MarketplaceTransaction } from '../models/MarketplaceTransaction.js'
-import {
-  retryUnprocessedWebhooks, reconcilePendingTransactions, MAX_WEBHOOK_ATTEMPTS,
-} from '../services/marketplace/reconcile.js'
+import { TransactionNotFoundError } from '../services/marketplace/paystack.js'
+import { retryUnprocessedWebhooks, reconcilePendingTransactions, MAX_WEBHOOK_ATTEMPTS, ABANDONED_AFTER_MS } from '../services/marketplace/reconcile.js'
+import { BINDING_KEY } from '../services/marketplace/settle.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const paystack = vi.hoisted(() => ({ verifyTransaction: vi.fn() }))
-vi.mock('../services/marketplace/paystack.js', () => ({ verifyTransaction: paystack.verifyTransaction }))
-vi.mock('../models/WebhookEvent.js', () => ({ WebhookEvent: { find: vi.fn(), updateOne: vi.fn() } }))
-vi.mock('../models/MarketplaceTransaction.js', () => ({
-  MarketplaceTransaction: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() },
-}))
+/*
+ * The dead-letter sweep re-dispatches stored Paystack events through the one
+ * dispatcher, and the settlement sweep asks the provider about open checkouts
+ * on a backoff. Both against a real database: the guarantees are conditional
+ * updates, which mocks cannot exercise.
+ */
+describe.skipIf(!hasTestMongo)('marketplace dead-letter retry and settlement reconciliation (spec §8.4)', () => {
+  const buyer = `mkt-reconcile-${new mongoose.Types.ObjectId()}`
+  const tag = buyer.slice(-8)
+  let n = 0
+  const mine = () => ({ reference: { $regex: `^MKT-${tag}-` } })
 
-const events = (rows: unknown[]) =>
-  vi.mocked(WebhookEvent.find).mockReturnValue({ sort: () => ({ limit: () => rows }) } as never)
-const pendingTxns = (rows: unknown[]) =>
-  vi.mocked(MarketplaceTransaction.find).mockReturnValue({ sort: () => ({ limit: () => rows }) } as never)
+  async function txn(fields: Record<string, unknown> = {}) {
+    const _id = new mongoose.Types.ObjectId()
+    const doc = {
+      _id, reference: `MKT-${tag}-${++n}`, buyerId: buyer, buyerEmail: 'buyer@rentos.test', sellerId: `seller-${tag}`, purpose: 'service_booking',
+      grossAmount: 100, discountAmount: 0, platformFeePercent: 5, platformFeeAmount: 5, sellerExpectedAmount: 95,
+      status: 'pending', providerBound: true, processedEventIds: [], currency: 'GHS', createdAt: new Date(Date.now() - 60 * 60_000), updatedAt: new Date(),
+      ...fields,
+    }
+    // Raw insert so createdAt can be set in the past.
+    await MarketplaceTransaction.collection.insertOne(doc as never)
+    return doc
+  }
+  const success = (t: { _id: unknown; reference: string }, amount = 100) => ({ status: 'success', amount, currency: 'GHS', reference: t.reference, fees: 1.5, metadata: { [BINDING_KEY]: String(t._id) }, raw: {} })
+  async function storedCharge(t: { reference: string }, attempts = 1) {
+    const eventId = `charge.success:evt-${t.reference}`
+    await WebhookEvent.create({ provider: 'paystack', eventId, eventType: 'charge.success', reference: t.reference, payload: JSON.stringify({ event: 'charge.success', data: { id: `evt-${t.reference}`, reference: t.reference, amount: 10000, currency: 'GHS' } }), attempts })
+    return eventId
+  }
 
-describe('webhook dead-letter retry (spec §8.4)', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('only picks up events that were never applied and still have attempts left', async () => {
-    events([])
-    await retryUnprocessedWebhooks()
-
-    const filter = vi.mocked(WebhookEvent.find).mock.calls[0][0] as unknown as Record<string, unknown>
-    // Selection is on "no processedAt", so an event that died BEFORE any
-    // bookkeeping ran is still caught — a status column would miss that.
-    expect(filter.processedAt).toEqual({ $exists: false })
-    expect(filter.attempts).toEqual({ $lt: MAX_WEBHOOK_ATTEMPTS })
+  beforeAll(async () => { await mongoose.connect(testMongoUri); await Promise.all([MarketplaceTransaction.init(), WebhookEvent.init()]) })
+  beforeEach(() => { paystack.verifyTransaction.mockReset() })
+  afterAll(async () => {
+    await WebhookEvent.deleteMany({ reference: { $regex: `^MKT-${tag}-` } })
+    await MarketplaceTransaction.deleteMany({ buyerId: buyer })
+    await mongoose.disconnect()
   })
 
-  it('recovers a payment whose webhook processing had failed', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-1', reference: 'MKT-1', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 1000, fees: 15, reference: 'MKT-1', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', reference: 'MKT-1', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockImplementation((async () => ({ _id: 't1', reference: 'MKT-1', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 })) as never)
+  describe('webhook dead-letter retry', () => {
+    it('recovers a payment whose webhook processing had failed, once', async () => {
+      const t = await txn()
+      const eventId = await storedCharge(t)
+      paystack.verifyTransaction.mockResolvedValue(success(t))
+      // Two overlapping sweeps: the lease lets one process the event.
+      const [a, b] = await Promise.all([retryUnprocessedWebhooks(50, mine()), retryUnprocessedWebhooks(50, mine())])
+      expect(a.recovered + b.recovered).toBe(1)
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'paid', processedEventIds: [eventId] })
+      expect((await WebhookEvent.findOne({ eventId }).lean())?.processedAt).toBeInstanceOf(Date)
+      expect((await retryUnprocessedWebhooks(50, mine())).recovered).toBe(0)
+    })
 
-    const result = await retryUnprocessedWebhooks()
+    it('does not mark paid when the provider still says the payment failed', async () => {
+      const t = await txn()
+      const eventId = await storedCharge(t)
+      paystack.verifyTransaction.mockResolvedValue({ ...success(t), status: 'failed' })
+      await retryUnprocessedWebhooks(50, mine())
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('pending')
+      // A definitive answer, not a failure to retry.
+      expect((await WebhookEvent.findOne({ eventId }).lean())?.processedAt).toBeInstanceOf(Date)
+    })
 
-    expect(result.recovered).toBe(1)
-    expect(event.attempts).toBe(2)
-    expect(event.processedAt).toBeInstanceOf(Date)
+    it.each([
+      ['an amount the provider disagrees on', (t: { _id: unknown; reference: string }) => success(t, 10)],
+      ['a charge carrying no binding to the row', (t: { _id: unknown; reference: string }) => ({ ...success(t), metadata: {} })],
+    ])('refuses to settle %s', async (_label, verified) => {
+      const t = await txn()
+      await storedCharge(t)
+      paystack.verifyTransaction.mockResolvedValue(verified(t))
+      await retryUnprocessedWebhooks(50, mine())
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('pending')
+    })
+
+    it('never recovers a failed row whose reference succeeded elsewhere on the account', async () => {
+      const t = await txn({ status: 'failed' })
+      await storedCharge(t)
+      paystack.verifyTransaction.mockResolvedValue(success(t))
+      await retryUnprocessedWebhooks(50, mine())
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('failed')
+    })
+
+    it('records the error, hands the claim back, and gives up after the attempt ceiling', async () => {
+      const t = await txn()
+      const eventId = await storedCharge(t, MAX_WEBHOOK_ATTEMPTS - 1)
+      paystack.verifyTransaction.mockRejectedValue(new Error('provider timeout'))
+      expect((await retryUnprocessedWebhooks(50, mine())).exhausted).toBe(1)
+      const row = await WebhookEvent.findOne({ eventId }).lean()
+      expect(row).toMatchObject({ attempts: MAX_WEBHOOK_ATTEMPTS, processingError: expect.stringMatching(/provider timeout/) })
+      expect(row?.processedAt).toBeUndefined()
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.processedEventIds).toEqual([])
+      // Kept for a human, never picked up again.
+      await retryUnprocessedWebhooks(50, mine())
+      expect((await WebhookEvent.findOne({ eventId }).lean())?.attempts).toBe(MAX_WEBHOOK_ATTEMPTS)
+    })
   })
 
-  it('claims the event id so a retry cannot apply the same payment twice', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-dup', reference: 'MKT-2', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 500, reference: 'MKT-2', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't2', reference: 'MKT-2', currency: 'GHS', status: 'pending', grossAmount: 500, discountAmount: 0 } as never)
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockResolvedValue(null as never) // already claimed
+  describe('settlement reconciliation', () => {
+    const scope = { buyerId: buyer }
+    beforeEach(async () => { await MarketplaceTransaction.deleteMany({ buyerId: buyer }) })
 
-    const result = await retryUnprocessedWebhooks()
+    it('only examines checkouts old enough that a webhook should have arrived', async () => {
+      await txn({ createdAt: new Date() })
+      expect((await reconcilePendingTransactions(30, 50, { scope })).examined).toBe(0)
+      expect(paystack.verifyTransaction).not.toHaveBeenCalled()
+    })
 
-    expect(result.recovered).toBe(0)
-    const guard = vi.mocked(MarketplaceTransaction.findOneAndUpdate).mock.calls[0][0] as unknown as Record<string, unknown>
-    expect(guard.processedEventIds).toEqual({ $ne: 'evt-dup' })
-  })
+    it('abandoned checkouts no longer starve a paid one, and are closed once a day old', async () => {
+      const old = new Date(Date.now() - ABANDONED_AFTER_MS - 60_000)
+      const abandoned = await Promise.all(Array.from({ length: 60 }, () => txn({ createdAt: old, openOrderKey: `booking:abandoned-${tag}-${++n}` })))
+      const paid = await txn({ createdAt: new Date(Date.now() - 60 * 60_000), openOrderKey: `booking:paid-${tag}` })
+      paystack.verifyTransaction.mockImplementation(async (reference: string) => reference === paid.reference ? success(paid) : { status: 'abandoned', reference, amount: 100, currency: 'GHS', raw: {} })
 
-  it('does not mark paid when the provider still says the payment failed', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-3', reference: 'MKT-3', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'failed', amount: 0, reference: 'MKT-3', currency: 'GHS', raw: {} })
+      await reconcilePendingTransactions(30, 50, { scope })
+      await reconcilePendingTransactions(30, 50, { scope })
 
-    const result = await retryUnprocessedWebhooks()
+      const settled = await MarketplaceTransaction.findById(paid._id).lean()
+      expect(settled).toMatchObject({ status: 'paid' })
+      expect(settled?.openOrderKey).toBeUndefined()
+      expect(await MarketplaceTransaction.countDocuments({ _id: { $in: abandoned.map((a) => a._id) }, status: 'failed', failureReason: 'abandoned', openOrderKey: { $exists: false } })).toBe(60)
+      // Settled exactly once, and nothing is asked about again.
+      paystack.verifyTransaction.mockClear()
+      expect((await reconcilePendingTransactions(30, 50, { scope })).examined).toBe(0)
+    })
 
-    expect(result.recovered).toBe(0)
-    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
-  })
+    it('leaves a young abandoned checkout open, and backs off before asking again', async () => {
+      const t = await txn({ createdAt: new Date(Date.now() - 60 * 60_000) })
+      paystack.verifyTransaction.mockResolvedValue({ status: 'abandoned', reference: t.reference, amount: 100, currency: 'GHS', raw: {} })
+      expect(await reconcilePendingTransactions(30, 50, { scope })).toEqual({ examined: 1, corrected: 0 })
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'pending', reconcileAttempts: 1 })
+      expect((await reconcilePendingTransactions(30, 50, { scope })).examined).toBe(0)
+      expect(paystack.verifyTransaction).toHaveBeenCalledTimes(1)
+    })
 
-  it('records the error and gives up after the attempt ceiling', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-4', reference: 'MKT-4', attempts: MAX_WEBHOOK_ATTEMPTS - 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockRejectedValue(new Error('provider timeout'))
+    it('closes a day-old checkout Paystack has no record of, but never on an outage', async () => {
+      const old = new Date(Date.now() - ABANDONED_AFTER_MS - 60_000)
+      const unknown = await txn({ createdAt: old })
+      const unreachable = await txn({ createdAt: old })
+      paystack.verifyTransaction.mockImplementation(async (reference: string) => {
+        if (reference === unknown.reference) throw new TransactionNotFoundError('Paystack /transaction/verify failed (400): Transaction reference not found')
+        throw new Error('Paystack /transaction/verify failed (502): Bad gateway')
+      })
+      const result = await reconcilePendingTransactions(30, 50, { scope })
+      // The outage did not abort the sweep; the other checkout was still handled.
+      expect(result).toEqual({ examined: 2, corrected: 1 })
+      expect(await MarketplaceTransaction.findById(unknown._id).lean()).toMatchObject({ status: 'failed', failureReason: 'expired' })
+      expect((await MarketplaceTransaction.findById(unreachable._id).lean())?.status).toBe('pending')
+    })
 
-    const result = await retryUnprocessedWebhooks()
-
-    expect(result.exhausted).toBe(1)
-    expect(event.processingError).toMatch(/provider timeout/)
-    // The row is kept, not deleted — a human can still inspect it.
-    expect(event.save).toHaveBeenCalled()
-  })
-
-  it('refuses to reconcile when the provider amount disagrees', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-5', reference: 'MKT-5', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 10, reference: 'MKT-5', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't5', reference: 'MKT-5', currency: 'GHS', status: 'pending', grossAmount: 1000, discountAmount: 0 } as never)
-
-    const result = await retryUnprocessedWebhooks()
-
-    expect(result.recovered).toBe(0)
-    expect(event.processingError).toMatch(/amount mismatch/)
-    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
-  })
-
-  it('never recovers a failed row whose reference succeeded elsewhere on the account', async () => {
-    // The row a client-chosen reference left behind: initialization was
-    // refused (the reference was a wallet deposit's), but the provider
-    // reports that deposit's success when asked about the reference.
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-6', reference: 'DEP-6', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 100, reference: 'DEP-6', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't6', reference: 'DEP-6', currency: 'GHS', status: 'failed', grossAmount: 100, discountAmount: 0 } as never)
-
-    const result = await retryUnprocessedWebhooks()
-
-    expect(result.recovered).toBe(0)
-    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
-  })
-
-  it('refuses a charge that carries no binding to the pending row', async () => {
-    const event: Record<string, unknown> & { attempts: number; save: ReturnType<typeof vi.fn> } = { eventId: 'evt-7', reference: 'MKT-7', attempts: 1, save: vi.fn() }
-    events([event])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 100, reference: 'MKT-7', currency: 'GHS', metadata: {}, raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't7', reference: 'MKT-7', currency: 'GHS', status: 'pending', providerBound: true, grossAmount: 100, discountAmount: 0 } as never)
-
-    const result = await retryUnprocessedWebhooks()
-
-    expect(result.recovered).toBe(0)
-    expect(event.processingError).toMatch(/binding mismatch/)
-    expect(MarketplaceTransaction.findOneAndUpdate).not.toHaveBeenCalled()
-  })
-})
-
-describe('settlement reconciliation (spec §8.4)', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('only examines transactions old enough that a webhook should have arrived', async () => {
-    pendingTxns([])
-    await reconcilePendingTransactions(30)
-
-    const filter = vi.mocked(MarketplaceTransaction.find).mock.calls[0][0] as unknown as Record<string, unknown>
-    expect(filter.status).toEqual({ $in: ['initialized', 'pending'] })
-    expect(filter).toHaveProperty('createdAt')
-  })
-
-  it('marks a transaction paid when the provider says it succeeded', async () => {
-    pendingTxns([{ _id: 't1', reference: 'MKT-9', status: 'pending', grossAmount: 200, discountAmount: 0, save: vi.fn() }])
-    paystack.verifyTransaction.mockResolvedValue({ status: 'success', amount: 200, reference: 'MKT-9', currency: 'GHS', raw: {} })
-    vi.mocked(MarketplaceTransaction.findOne).mockResolvedValue({ _id: 't1', reference: 'MKT-9', currency: 'GHS', status: 'pending', grossAmount: 200, discountAmount: 0 } as never)
-    vi.mocked(MarketplaceTransaction.findOneAndUpdate).mockImplementation((async () => ({ _id: 't1', reference: 'MKT-9', currency: 'GHS', status: 'pending', grossAmount: 200, discountAmount: 0 })) as never)
-
-    expect((await reconcilePendingTransactions()).corrected).toBe(1)
-  })
-
-  it('keeps sweeping when one transaction cannot be verified', async () => {
-    const ok = { _id: 't2', reference: 'MKT-OK', status: 'pending', grossAmount: 100, discountAmount: 0, save: vi.fn() }
-    pendingTxns([{ _id: 't1', reference: 'MKT-BAD', status: 'pending', save: vi.fn() }, ok])
-    paystack.verifyTransaction
-      .mockRejectedValueOnce(new Error('provider outage'))
-      .mockResolvedValueOnce({ status: 'failed', amount: 0, reference: 'MKT-OK', currency: 'GHS', raw: {} })
-
-    const result = await reconcilePendingTransactions()
-
-    // The outage did not abort the sweep; the second transaction was still handled.
-    expect(result.examined).toBe(2)
-    expect(ok.save).toHaveBeenCalled()
+    it('closes a checkout the provider failed with a conditional update, never over a settled row', async () => {
+      const t = await txn()
+      paystack.verifyTransaction.mockImplementation(async () => {
+        // A webhook settles it while the sweep is asking.
+        await MarketplaceTransaction.updateOne({ _id: t._id }, { $set: { status: 'paid' } })
+        return { status: 'failed', reference: t.reference, amount: 100, currency: 'GHS', raw: {} }
+      })
+      await reconcilePendingTransactions(30, 50, { scope })
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('paid')
+    })
   })
 })

@@ -23,7 +23,7 @@ export interface BookingMoney {
   quoteAccepted: boolean
   finalCost?: number
   proposedFinalCost?: number
-  paymentStatus: 'pending' | 'partial' | 'paid'
+  paymentStatus: 'pending' | 'partial' | 'paid' | 'refunded'
   paymentAmount?: number
 }
 

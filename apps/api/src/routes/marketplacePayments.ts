@@ -3,6 +3,7 @@
  * verification (spec §8).
  */
 import { Router } from 'express'
+import type { Types } from 'mongoose'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { authenticate, requireRole } from '../middleware/auth.js'
@@ -24,6 +25,8 @@ import {
 import { logger } from '../utils/logger.js'
 import { applySuccessfulCharge, BINDING_KEY, SETTLEABLE_STATUSES } from '../services/marketplace/settle.js'
 import { resolveQuote } from '../services/marketplace/pricing.js'
+import { reconcileCheckout } from '../services/marketplace/reconcile.js'
+import { isDuplicateKey as duplicateOn, requireIdempotencyKey } from '../services/payments/checkout.js'
 
 const router = Router()
 
@@ -164,7 +167,7 @@ const initSchema = z.object({
   // No discountAmount either — the discount is derived from couponCode below.
   couponCode: z.string().max(40).optional(),
   /** Client-supplied idempotency key (spec §15). Scoped to the buyer; never
-   *  the provider reference. */
+   *  the provider reference. Required — here or as the Idempotency-Key header. */
   idempotencyKey: z.string().min(8).max(80).optional(),
 })
 
@@ -187,8 +190,6 @@ async function replayed(buyerId: string, idempotencyKey: string) {
     ? { reference: existing.reference, accessCode: existing.providerAccessCode, alreadyInitialized: true }
     : null
 }
-
-const isDuplicateKey = (err: unknown) => (err as { code?: number }).code === 11000
 
 /** How long an unfinished checkout holds one of its coupon's uses. */
 const COUPON_HOLD_MS = 30 * 60_000
@@ -216,26 +217,64 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
   const buyerId = req.user!.userId
 
   // Idempotency: this buyer replaying the same key gets the original
-  // transaction back rather than a second charge.
-  if (input.idempotencyKey) {
-    const replay = await replayed(buyerId, input.idempotencyKey)
+  // transaction back rather than a second charge. Required (428 without one),
+  // from the body as before or the Idempotency-Key header.
+  const idempotencyKey = requireIdempotencyKey(req, res, input.idempotencyKey)
+  if (!idempotencyKey) return
+  {
+    const replay = await replayed(buyerId, idempotencyKey)
     if (replay) { success(res, replay, 'Payment already initialized'); return }
   }
 
-  /** Create the row; a concurrent request with the same key loses to the first. */
+  /*
+   * One open checkout per order. A second initialize for the same booking or
+   * sponsorship — another tab, another device, a new key — resumes the
+   * checkout already under way instead of opening a second charge that could
+   * also settle. Enforced by a unique index on openOrderKey, cleared when the
+   * checkout is paid, fails or is abandoned. A checkout older than the coupon
+   * hold is asked about first: if the provider says it will never be paid, it
+   * is closed and a fresh one is opened.
+   */
+  let openOrderKey = ''
+  const openCheckout = async (): Promise<boolean> => {
+    const open = await MarketplaceTransaction.findOne({ openOrderKey })
+    if (!open) return false
+    if (Date.now() - new Date(open.createdAt).getTime() > COUPON_HOLD_MS) {
+      const outcome = await reconcileCheckout(open, { abandonAfterMs: COUPON_HOLD_MS }).catch(() => 'open' as const)
+      if (outcome === 'closed') return false
+      if (outcome === 'paid') { error(res, 'This order has already been paid.', 409); return true }
+    }
+    res.status(409).json({
+      success: false,
+      error: 'A checkout for this order is already in progress. Complete it before starting another.',
+      code: 'PAYMENT_IN_PROGRESS',
+      // Only the buyer who opened it may resume it.
+      ...(open.buyerId === buyerId ? { data: { reference: open.reference, accessCode: open.providerAccessCode, status: open.status, alreadyInitialized: true } } : {}),
+    })
+    return true
+  }
+
+  /** Create the row; a concurrent request with the same key, or for the same order, loses to the first. */
   const createTransaction = async (fields: Record<string, unknown>) => {
     try {
       return await MarketplaceTransaction.create({
-        ...fields, buyerId, idempotencyKey: input.idempotencyKey, providerBound: true,
+        ...fields, buyerId, idempotencyKey, providerBound: true, openOrderKey,
       })
     } catch (err) {
-      if (input.idempotencyKey && isDuplicateKey(err)) {
-        const replay = await replayed(buyerId, input.idempotencyKey)
+      if (duplicateOn(err)) {
+        const replay = await replayed(buyerId, idempotencyKey)
         if (replay) { success(res, replay, 'Payment already initialized'); return null }
+        if (duplicateOn(err, 'openOrderKey') && await openCheckout()) return null
       }
       throw err
     }
   }
+
+  /** A checkout the provider refused to open is closed, freeing its order. */
+  const failCheckout = (transaction: { _id: Types.ObjectId }) => MarketplaceTransaction.updateOne(
+    { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES } },
+    { $set: { status: 'failed', failureReason: 'initialization_failed' }, $unset: { openOrderKey: 1 } },
+  )
 
   // Price and payee, both from the server's own records.
   const quote = await resolveQuote({
@@ -245,6 +284,9 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     sponsorshipId: input.sponsorshipId,
   })
   if (!quote.ok) { error(res, quote.reason, quote.status); return }
+
+  openOrderKey = quote.payee === 'platform' ? `sponsorship:${quote.sponsorshipId}` : `booking:${quote.bookingId}`
+  if (await openCheckout()) return
 
   /*
    * A platform charge has no seller, no subaccount and no split: the buyer is
@@ -291,10 +333,11 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
         },
       })
 
-      transaction.providerAccessCode = init.accessCode
-      transaction.providerReference = init.reference
-      transaction.status = 'pending'
-      await transaction.save()
+      // Conditional: a webhook or sweep may already have moved this row.
+      await MarketplaceTransaction.updateOne(
+        { _id: transaction._id, status: 'initialized' },
+        { $set: { providerAccessCode: init.accessCode, providerReference: init.reference, status: 'pending' } },
+      )
 
       success(res, {
         reference,
@@ -305,8 +348,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
         sellerExpectedAmount: 0,
       }, 'Payment initialized', 201)
     } catch (err) {
-      transaction.status = 'failed'
-      await transaction.save()
+      await failCheckout(transaction)
       error(res, `Could not start the payment: ${(err as Error).message}`, 502)
     }
     return
@@ -407,10 +449,11 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       },
     })
 
-    transaction.providerAccessCode = init.accessCode
-    transaction.providerReference = init.reference
-    transaction.status = 'pending'
-    await transaction.save()
+    // Conditional: a webhook or sweep may already have moved this row.
+    await MarketplaceTransaction.updateOne(
+      { _id: transaction._id, status: 'initialized' },
+      { $set: { providerAccessCode: init.accessCode, providerReference: init.reference, status: 'pending' } },
+    )
 
     success(res, {
       reference,
@@ -421,8 +464,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       sellerExpectedAmount: split.sellerExpectedAmount,
     }, 'Payment initialized', 201)
   } catch (err) {
-    transaction.status = 'failed'
-    await transaction.save()
+    await failCheckout(transaction)
     error(res, `Could not start the payment: ${(err as Error).message}`, 502)
   }
 }))

@@ -23,6 +23,13 @@ export interface CollectionInput {
   phone: string
   /** Server-side reference (PAY-XXXX-XXXX). Echoed by the provider so we can correlate webhooks. */
   reference: string
+  /**
+   * The provider-side correlator, generated and SAVED before the provider is
+   * called (see collectionCorrelator). Adapters send this rather than minting
+   * their own, so a timeout or crash mid-initiation still leaves something the
+   * reconciliation sweep can ask the provider about.
+   */
+  providerRef?: string
   /** Short narration shown on the payer's prompt / statement. */
   narration: string
   /**
@@ -81,12 +88,20 @@ export interface PaymentProvider {
   parseWebhook(rawBody: string): WebhookEvent
   /** Reconciliation poll — used by the scheduler to catch missed webhooks. */
   queryStatus(providerRef: string): Promise<ProviderStatus>
-  /** Verified financial facts. Status-only polling must never authorize settlement. */
-  queryCollection?(providerRef: string): Promise<{
-    reference: string
-    status: ProviderStatus
-    amount: number
-    currency: string
-    paidAt?: string
-  } | null>
+  /**
+   * Verified financial facts. Status-only polling must never authorize
+   * settlement. `{ notFound: true }` means the provider answered that it has
+   * no such collection; null means it could not be asked (outage, bad data).
+   */
+  queryCollection?(providerRef: string): Promise<CollectionFacts | { notFound: true } | null>
+}
+
+export interface CollectionFacts {
+  reference: string
+  status: ProviderStatus
+  amount: number
+  currency: string
+  paidAt?: string
+  /** The provider's own status word, e.g. Paystack's 'abandoned'. */
+  providerStatus?: string
 }

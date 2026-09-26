@@ -11,6 +11,7 @@ import { Business } from '../models/Business.js'
 import { Payment } from '../models/Payment.js'
 import { CapabilityRecord } from '../models/CapabilityRecord.js'
 import { creditWallet } from '../services/payments/walletLedger.js'
+import { reloadRegulatedFeatures } from '../config/regulatedFeatures.js'
 import router from '../routes/capabilities.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
@@ -18,7 +19,8 @@ const uri = testMongoUri
 describe.skipIf(!hasTestMongo)('capability workflows', () => {
   const business = new mongoose.Types.ObjectId(), developer = new mongoose.Types.ObjectId()
   const admin = new mongoose.Types.ObjectId(), government = new mongoose.Types.ObjectId()
-  const ids = [business, developer, admin, government]
+  const provider = new mongoose.Types.ObjectId()
+  const ids = [business, developer, admin, government, provider]
   const failedRef = `CAP-FAILED-${business}`
   let server: Server, url: string
   const headers = (id: mongoose.Types.ObjectId, roles: string[]) => ({
@@ -32,8 +34,9 @@ describe.skipIf(!hasTestMongo)('capability workflows', () => {
     await mongoose.connect(uri)
     await User.create(ids.map((_id, i) => ({
       _id, email: `cap-${i}-${_id}@rentos.test`, phone: '0241234567', firstName: 'Cap', lastName: 'Fixture',
-      passwordHash: 'fixture-only', roles: [['business', 'developer', 'admin', 'government'][i]], activeRole: ['business', 'developer', 'admin', 'government'][i],
+      passwordHash: 'fixture-only', roles: [['business', 'developer', 'admin', 'government', 'service_provider'][i]], activeRole: ['business', 'developer', 'admin', 'government', 'service_provider'][i],
     })))
+    await creditWallet(String(provider), 100, { type: 'deposit', reference: `CAP-SEED-${provider}`, description: 'fixture' })
     await Business.create({ ownerId: String(business), name: 'Fixture Movers', category: Business.schema.path('category').options.enum[0], phone: '0241234567', city: 'Accra' })
     await creditWallet(String(business), 100, { type: 'deposit', reference: `CAP-SEED-${business}`, description: 'fixture' })
     await Payment.create({ tenantId: String(business), landlordId: String(developer), purpose: 'rent', amount: 42, method: 'mtn_momo', reference: failedRef, status: 'failed' })
@@ -46,7 +49,7 @@ describe.skipIf(!hasTestMongo)('capability workflows', () => {
     await CapabilityRecord.deleteMany({ ownerId: { $in: ids.map(String) } })
     await Payment.deleteOne({ reference: failedRef })
     await Business.deleteMany({ ownerId: String(business) })
-    await Wallet.deleteMany({ userId: String(business) })
+    await Wallet.deleteMany({ userId: { $in: [String(business), String(provider)] } })
     await User.deleteMany({ _id: { $in: ids } })
     await mongoose.disconnect()
   })
@@ -57,6 +60,26 @@ describe.skipIf(!hasTestMongo)('capability workflows', () => {
     expect((await res.json()).data.data.amount).toBe(50)
     expect((await Wallet.findOne({ userId: String(business) }).lean())?.balance).toBe(50)
     expect((await Business.findOne({ ownerId: String(business) }).lean())?.subscriptionTier).toBe('featured')
+  })
+
+  it('refuses the removed provider payout workflow without touching the wallet', async () => {
+    const res = await post(provider, ['service_provider'], '/workflows', { kind: 'provider_payout', data: { amount: 40 } })
+    expect(res.status).toBe(400)
+    expect((await Wallet.findOne({ userId: String(provider) }).lean())?.balance).toBe(100)
+    expect(await CapabilityRecord.countDocuments({ ownerId: String(provider) })).toBe(0)
+  })
+
+  it('sells a featured listing only while the wallet feature is enabled', async () => {
+    reloadRegulatedFeatures({ NODE_ENV: 'test', REGULATED_FEATURES: 'lending' })
+    try {
+      const res = await post(business, ['business'], '/workflows', { kind: 'business_subscription' })
+      expect(res.status).toBe(403)
+      expect((await res.json()).code).toBe('FEATURE_UNAVAILABLE')
+    } finally {
+      reloadRegulatedFeatures()
+    }
+    // Other workflows are not wallet features.
+    expect((await post(business, ['business'], '/workflows', { kind: 'business_order', status: 'requested' })).status).toBe(201)
   })
 
   it('holds an off-plan listing for moderation however it was submitted', async () => {

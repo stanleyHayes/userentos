@@ -1,7 +1,11 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 
+/*
+ * No 'provider_payout': it debited the wallet into a 'queued' record that
+ * nothing ever paid out, and its owner could cancel it with no refund.
+ * Withdrawals go through POST /api/payouts (production held no such records).
+ */
 export type CapabilityKind =
-  | 'provider_payout'
   | 'business_order'
   | 'business_campaign'
   | 'business_subscription'

@@ -11,7 +11,8 @@ import http from 'http'
 import { config } from './config/index.js'
 import { UPLOADS_DIR } from './utils/uploads.js'
 import { seedDatabase } from './models/seed.js'
-import { startScheduler } from './services/scheduler.js'
+import { startScheduler, stopScheduler } from './services/scheduler.js'
+import { drainInFlight } from './services/inFlight.js'
 import { initSocket, shutdownRealtime } from './services/socket.js'
 import { rentPriceModel } from './services/ml/pricingModel.js'
 import { Property } from './models/Property.js'
@@ -47,6 +48,8 @@ import contentReportRoutes from './routes/contentReports.js'
 import adminAuditLogsRoutes from './routes/adminAuditLogs.js'
 import adminAffiliatesRoutes from './routes/adminAffiliates.js'
 import marketplaceWebhookRoutes from './routes/marketplaceWebhooks.js'
+import paystackWebhookRoutes from './routes/paystackWebhooks.js'
+import adminPaymentRoutes from './routes/adminPayments.js'
 import agreementRoutes from './routes/agreements.js'
 import paymentRoutes from './routes/payments.js'
 import savingsRoutes from './routes/savings.js'
@@ -164,6 +167,8 @@ app.use(
 // Each route inside `paymentWebhookRoutes` mounts its own `express.raw()`
 // so signature verification can hash the exact bytes the provider sent.
 app.use('/api/webhooks/payments', paymentWebhookRoutes)
+// The one Paystack webhook; the marketplace and payouts paths are aliases of it.
+app.use('/api/webhooks/paystack', paystackWebhookRoutes)
 app.use('/api/webhooks/marketplace', marketplaceWebhookRoutes)
 app.use('/api/webhooks/payouts', payoutWebhookRoutes)
 
@@ -390,6 +395,7 @@ app.use('/api/feature-flags', featureFlagRoutes)
 app.use('/api/admin/approvals', adminApprovalsRoutes)
 app.use('/api/admin/audit-logs', adminAuditLogsRoutes)
 app.use('/api/admin/affiliates', adminAffiliatesRoutes)
+app.use('/api/admin/payments', adminPaymentRoutes)
 app.use('/api/admin', adminViewsRoutes)
 app.use('/api/auth/biometric', biometricAuthRoutes)
 app.use('/api/move-outs', moveOutRoutes)
@@ -428,24 +434,29 @@ app.use(errorHandler)
 let realtime: ReturnType<typeof initSocket> | null = null
 function gracefulShutdown(signal: string) {
   logger.info(`Received ${signal}. Starting graceful shutdown...`)
-  // Socket.IO first: a bare httpServer.close() waits on every open WebSocket
-  // until the forced exit below. Clients reconnect to the next instance.
-  void shutdownRealtime(realtime, httpServer).then(() => {
-    logger.info('HTTP server closed.')
-    // .catch, not a bare void: if closing the connection rejects, the exit
-    // inside .then never runs and shutdown hangs until the 10s force-exit
-    // below fires with code 1 — a clean shutdown reported as a failure.
-    mongoose.connection.close(false)
-      .then(() => logger.info('MongoDB connection closed.'))
-      .catch((err) => logger.warn(`MongoDB close failed: ${(err as Error).message}`))
-      .finally(() => process.exit(0))
-  })
-
-  // Force exit after 10s
+  // Force exit after 25s: longer than the 20s provider timeout, so a webhook
+  // or cron job mid-call to a PSP can record its outcome before we go.
   setTimeout(() => {
     logger.error('Forced shutdown after timeout.')
     process.exit(1)
-  }, 10000)
+  }, 25_000)
+
+  // Socket.IO first: a bare httpServer.close() waits on every open WebSocket
+  // until the forced exit. Clients reconnect to the next instance. Bounded
+  // too: a long-lived connection must not hold the exit hostage.
+  const httpClosed = Promise.race([
+    shutdownRealtime(realtime, httpServer).then(() => logger.info('HTTP server closed.')),
+    new Promise<void>((resolve) => setTimeout(resolve, 22_000)),
+  ])
+  // Stop cron tasks and wait (bounded) for jobs and webhook processing
+  // already under way, then close the database they write to.
+  // .catch, not a bare void: if closing the connection rejects, the exit
+  // inside .finally still runs rather than waiting for the force-exit.
+  void Promise.allSettled([httpClosed, stopScheduler(22_000), drainInFlight(22_000)])
+    .then(() => mongoose.connection.close(false))
+    .then(() => logger.info('MongoDB connection closed.'))
+    .catch((err) => logger.warn(`MongoDB close failed: ${(err as Error).message}`))
+    .finally(() => process.exit(0))
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))

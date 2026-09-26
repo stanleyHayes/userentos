@@ -1,7 +1,6 @@
 import type { CapabilityKind } from '../models/CapabilityRecord.js'
 
 export const WORKFLOW_ROLES: Record<CapabilityKind, string[]> = {
-  provider_payout: ['service_provider'],
   business_order: ['tenant', 'landlord', 'business'],
   business_campaign: ['business'],
   business_subscription: ['business'],

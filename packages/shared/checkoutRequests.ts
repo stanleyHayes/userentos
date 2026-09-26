@@ -59,6 +59,8 @@ export function createCheckoutRequests(deps: {
   }
 }
 
+/** Every POST that starts a real collection; the API refuses these without an Idempotency-Key (428). */
 export function isProviderCheckout(path: string, body: unknown): boolean {
-  return path === '/payments' || path === '/savings/wallet/deposit' || (path === '/subscriptions/subscribe' && !!body && typeof body === 'object' && 'method' in body && !!body.method)
+  return path === '/payments' || path === '/savings/wallet/deposit' || path === '/marketplace/payments/initialize'
+    || (path === '/subscriptions/subscribe' && !!body && typeof body === 'object' && 'method' in body && !!body.method)
 }

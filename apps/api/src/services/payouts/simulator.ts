@@ -99,6 +99,7 @@ export const simulatedPayoutProvider: PayoutProvider = {
       amount: Number(data.amount ?? 0),
       timestamp: data.timestamp ?? new Date().toISOString(),
       failureReason: data.failureReason,
+      ...(data.reversed ? { reversed: true } : {}),
       raw: data,
     }
   },

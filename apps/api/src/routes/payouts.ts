@@ -19,14 +19,16 @@ import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { authenticate, requirePermission } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
-import { Payout, PAYOUT_STATUSES, type PayoutStatus } from '../models/Payout.js'
+import { Payout, PAYOUT_STATUSES, payoutRefundIntent, type PayoutStatus } from '../models/Payout.js'
 import { PayoutAccount } from '../models/PayoutAccount.js'
 import { Wallet } from '../models/Wallet.js'
 import { User } from '../models/User.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { getPayoutProvider } from '../services/payouts/index.js'
 import { TransferRejectedError } from '../services/payouts/types.js'
-import { reconcilePayout } from '../services/payouts/reconcile.js'
+import { reconcilePayout, WEBHOOK_OVERDUE_MS } from '../services/payouts/reconcile.js'
+import { applyPayoutRefund } from '../services/payouts/refund.js'
+import { withMoneyTransaction } from '../services/payments/moneyTransaction.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -210,41 +212,35 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
   const reference = `PO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 
-  // Debit FIRST: the guarded debit is what stops two concurrent requests from
-  // spending the same balance. If creating the record then fails, the credit
-  // below puts it straight back.
-  const debited = await debitWallet(req.user!.userId, amount, {
-    type: 'withdrawal',
+  // The guarded debit is what stops two concurrent requests from spending the
+  // same balance. The debit and the payout record are one transaction, so a
+  // crash between them cannot leave the wallet debited with no payout (on a
+  // standalone Mongo the debit is compensated instead).
+  const doc = {
+    userId: req.user!.userId,
+    amount,
+    status: 'requested' as const,
     reference,
-    description: 'Payout requested',
-  })
-  if (!debited) { error(res, 'Insufficient wallet balance', 409); return }
-
-  let payout
-  try {
-    payout = await Payout.create({
-      userId: req.user!.userId,
-      amount,
-      status: 'requested',
-      reference,
-      destination: {
-        type: account.type,
-        accountNumber: account.accountNumber,
-        bankName: account.bankName,
-        accountName: account.accountName,
-        recipientCode: account.recipientCode,
-      },
-    })
-  } catch (err) {
-    await creditWallet(req.user!.userId, amount, {
-      type: 'refund',
-      reference: `${reference}-REVERSAL`,
-      description: 'Reversed payout request',
-    }).catch((refundErr) => {
-      logger.error(`[Payouts] CRITICAL: debited ${amount} for ${reference} but could not record or refund it: ${(refundErr as Error).message}`)
-    })
-    throw err
+    destination: {
+      type: account.type,
+      accountNumber: account.accountNumber,
+      bankName: account.bankName,
+      accountName: account.accountName,
+      recipientCode: account.recipientCode,
+    },
   }
+  const payout = await withMoneyTransaction(async ({ session, onRollback }) => {
+    const debited = await debitWallet(req.user!.userId, amount, {
+      type: 'withdrawal',
+      reference,
+      description: 'Payout requested',
+    }, { session })
+    if (!debited) return null
+    onRollback(() => creditWallet(req.user!.userId, amount, { type: 'refund', reference: `${reference}-REVERSAL`, description: 'Reversed payout request' })
+      .catch((refundErr) => logger.error(`[Payouts] CRITICAL: debited ${amount} for ${reference} but could not record or refund it: ${(refundErr as Error).message}`)))
+    return session ? (await Payout.create([doc], { session }))[0] : await Payout.create(doc)
+  })
+  if (!payout) { error(res, 'Insufficient wallet balance', 409); return }
 
   void recordAudit(req, 'payout.requested', 'Payout', String(payout._id), { amount, reference })
   success(res, payoutView(payout as never), 'Payout requested — an admin will review it shortly', 201)
@@ -297,10 +293,13 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
   }
 
   // Claim it before calling the PSP, so two admins clicking at once cannot
-  // both send the transfer.
+  // both send the transfer. The first provider check is scheduled for when
+  // its webhook is overdue: a transfer whose confirmation never arrives is
+  // polled, rather than left 'processing' until someone notices.
+  const approvedAt = new Date()
   const claimed = await Payout.findOneAndUpdate(
     { _id: payout._id, status: 'requested' },
-    { $set: { status: 'processing', approvedBy: req.user!.userId, approvedAt: new Date() } },
+    { $set: { status: 'processing', approvedBy: req.user!.userId, approvedAt, nextReconcileAt: new Date(approvedAt.getTime() + WEBHOOK_OVERDUE_MS) } },
     { returnDocument: 'after' },
   )
   if (!claimed) { error(res, 'This payout was already picked up', 409); return }
@@ -323,7 +322,7 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
   } catch (err) {
     if (err instanceof TransferRejectedError) {
       // The provider answered and created no transfer: safe to queue again.
-      await Payout.updateOne({ _id: claimed._id, status: 'processing' }, { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '' } })
+      await Payout.updateOne({ _id: claimed._id, status: 'processing' }, { $set: { status: 'requested' }, $unset: { approvedBy: '', approvedAt: '', nextReconcileAt: '' } })
       logger.error(`[Payouts] transfer rejected for ${claimed.reference}: ${err.message}`)
       error(res, 'The provider rejected this transfer. It has been returned to the queue.', 502)
       return
@@ -335,8 +334,10 @@ router.post('/:id/approve', authenticate, requirePermission('payments:process'),
      * or approved again. It stays 'processing', which decline cannot touch,
      * until the provider is asked what happened.
      */
+    // Checked on the sweep's regular backoff from now, not the webhook deadline.
     await Payout.updateOne({ _id: claimed._id, status: 'processing' }, {
       $set: { needsReconciliation: true, failureReason: 'The provider did not confirm the transfer; reconcile before any other action.' },
+      $unset: { nextReconcileAt: '' },
     })
     logger.error(`[Payouts] transfer outcome unknown for ${claimed.reference}: ${(err as Error).message}`)
     void recordAudit(req, 'payout.outcome_unknown', 'Payout', String(claimed._id), { amount: claimed.amount, error: (err as Error).message })
@@ -369,34 +370,32 @@ router.post('/:id/decline', authenticate, requirePermission('payments:process'),
   const parsed = declineSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const declined = await Payout.findOneAndUpdate(
-    { _id: param(req.params.id), status: 'requested', refunded: false },
-    { $set: { status: 'failed', failureReason: parsed.data.reason, refunded: true, approvedBy: req.user!.userId, approvedAt: new Date() } },
-    { returnDocument: 'after' },
+  // Terminal and the refund claimed in one write; the refund itself goes
+  // through the durable journal, so a failed credit is retried, never lost.
+  const current = await Payout.findOne({ _id: param(req.params.id), status: 'requested', refunded: false }).select('_id userId amount reference').lean()
+  const declined = current && await Payout.findOneAndUpdate(
+    { _id: current._id, status: 'requested', refunded: false },
+    { $set: { status: 'failed', failureReason: parsed.data.reason, refunded: true, refundIntent: payoutRefundIntent(current), approvedBy: req.user!.userId, approvedAt: new Date() } },
+    { returnDocument: 'after', overwriteImmutable: true },
   )
   if (!declined) { error(res, 'Payout not found, or it is no longer pending', 404); return }
 
+  let refunded = false
   try {
-    await creditWallet(declined.userId, declined.amount, {
-      type: 'refund',
-      reference: `${declined.reference}-REFUND`,
-      description: 'Payout declined',
-    })
+    refunded = await applyPayoutRefund(String(declined._id))
   } catch (err) {
-    logger.error(`[Payouts] CRITICAL: declined ${declined.reference} but the refund did not apply: ${(err as Error).message}`)
-    error(res, 'Payout declined but the refund failed — escalate this immediately', 500)
-    return
+    logger.error(`[Payouts] declined ${declined.reference}; refund deferred to recovery: ${(err as Error).message}`)
   }
 
   void recordAudit(req, 'payout.declined', 'Payout', String(declined._id), { amount: declined.amount, reason: parsed.data.reason })
   notify({
     userId: declined.userId,
     title: 'Payout declined',
-    message: `Your GHS ${declined.amount.toFixed(2)} payout was declined (${parsed.data.reason}). The amount is back in your wallet.`,
+    message: `Your GHS ${declined.amount.toFixed(2)} payout was declined (${parsed.data.reason}). The amount is ${refunded ? 'back in your wallet' : 'being returned to your wallet'}.`,
     actionUrl: '/savings',
   }).catch((err) => logger.warn('[Payouts] notify failed:', (err as Error).message))
 
-  success(res, payoutView(declined as never), 'Payout declined and refunded')
+  success(res, payoutView(declined as never), refunded ? 'Payout declined and refunded' : 'Payout declined — the refund is queued and will be applied automatically')
 }))
 
 /** What the user can actually withdraw right now. */

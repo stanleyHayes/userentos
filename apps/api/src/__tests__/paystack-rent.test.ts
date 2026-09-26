@@ -199,7 +199,15 @@ describe('status polling', () => {
 
   it('returns financial verification facts in major units without customer data', async () => {
     vi.stubGlobal('fetch', okFetch({ reference: 'PAY-10', status: 'success', amount: 9900, currency: 'GHS', paid_at: '2026-09-12T12:00:00Z', customer: { email: 'private@example.com' } }))
-    await expect(paystackMtnProvider.queryCollection!('PAY-10')).resolves.toEqual({ reference: 'PAY-10', status: 'completed', amount: 99, currency: 'GHS', paidAt: '2026-09-12T12:00:00Z' })
+    await expect(paystackMtnProvider.queryCollection!('PAY-10')).resolves.toEqual({ reference: 'PAY-10', status: 'completed', amount: 99, currency: 'GHS', paidAt: '2026-09-12T12:00:00Z', providerStatus: 'success' })
+  })
+  it('tells a reference Paystack has never seen apart from an outage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: false, message: 'Transaction reference not found' }), { status: 400 })))
+    await expect(paystackMtnProvider.queryCollection!('PAY-11')).resolves.toEqual({ notFound: true })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: false, message: 'Server error' }), { status: 500 })))
+    await expect(paystackMtnProvider.queryCollection!('PAY-11')).resolves.toBeNull()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ETIMEDOUT')))
+    await expect(paystackMtnProvider.queryCollection!('PAY-11')).resolves.toBeNull()
   })
   it.each([undefined, '9900', 99.5, -1])('rejects invalid minor-unit amounts %s', async amount => {
     vi.stubGlobal('fetch', okFetch({ reference: 'PAY-10', status: 'success', amount, currency: 'GHS' }))

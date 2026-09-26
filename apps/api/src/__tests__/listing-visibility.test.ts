@@ -35,22 +35,23 @@ describe('what the public can see is defined once', () => {
 })
 
 describe('a webhook claim is released when the work throws', () => {
-  const src = read('routes/marketplaceWebhooks.ts')
+  // Charges are dispatched by the single Paystack webhook (paystackEvents.ts).
+  const src = read('services/payments/paystackEvents.ts')
+  const charge = src.slice(src.indexOf('async function applyChargeEvent'), src.indexOf('export interface SweepResult'))
 
   it('hands the event back so the retry sweep can actually retry', () => {
     // The claim was taken before the work and never released, so a transient
     // failure poisoned the event forever: the catch queued a retry that this
     // same guard then rejected as "already applied".
-    const catchBlock = src.slice(src.indexOf('} catch (err) {'))
+    const catchBlock = charge.slice(charge.indexOf('} catch (err) {'))
     expect(catchBlock).toMatch(/\$pull: \{ processedEventIds: eventId \}/)
   })
 
   it('only releases on a throw, not on a deliberate refusal', () => {
     // An amount mismatch is a permanent decision, already logged as CRITICAL.
     // Releasing it would have the sweep re-refuse it forever.
-    const catchBlock = src.slice(src.indexOf('} catch (err) {'))
-    expect(catchBlock).toContain('claimedTransactionId')
-    const body = src.slice(src.indexOf("if (event.event === 'charge.success')"), src.indexOf('} catch (err) {'))
+    const body = charge.slice(charge.indexOf("if (body.event === 'charge.success')"), charge.indexOf('} catch (err) {'))
+    expect(body).toContain('applySuccessfulCharge')
     expect(body).not.toContain('$pull')
   })
 })
