@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image, type ViewStyle,
+  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { DetailSkeleton } from '../../components/Skeleton'
 import { AITextInput } from '../../components/AITextInput'
 import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
+import { RejectListingModal } from '../../components/RejectListingModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -99,12 +100,11 @@ export default function PropertyDetailScreen() {
   const [applyRent, setApplyRent] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Qualification state
+  // Qualification state — GET /properties/:id/qualify answers only the unmet
+  // requirements, as human-readable `issues`; there are no per-check rows.
   const [qualification, setQualification] = useState<{
     qualified: boolean
-    checks: { requirement: string; met: boolean; detail: string }[]
-    passedCount: number
-    totalCount: number
+    issues: string[]
   } | null>(null)
 
   const [publishing, setPublishing] = useState(false)
@@ -140,7 +140,6 @@ export default function PropertyDetailScreen() {
 
   // Government reject modal
   const [showRejectModal, setShowRejectModal] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
   const [reviewing, setReviewing] = useState(false)
 
   // Agreements/tenants
@@ -200,8 +199,8 @@ export default function PropertyDetailScreen() {
         } catch { /* no-op */ }
 
         try {
-          const qualData = await api.get<{ qualified: boolean; checks: { requirement: string; met: boolean; detail: string }[]; passedCount: number; totalCount: number }>(`/properties/${id}/qualify`)
-          setQualification(qualData)
+          const qualData = await api.get<{ qualified: boolean; issues?: string[] }>(`/properties/${id}/qualify`)
+          setQualification({ qualified: qualData.qualified, issues: qualData.issues ?? [] })
         } catch { /* no-op */ }
       }
 
@@ -280,25 +279,24 @@ export default function PropertyDetailScreen() {
       Alert.alert('Cannot Publish', msg)} finally { setPublishing(false) }
   }
 
-  async function handleReviewAction(action: 'approve' | 'reject') {
-    if (action === 'reject' && !rejectReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for rejection.')
-      return
-    }
+  async function handleApprove() {
     setReviewing(true)
     try {
-      await api.post(`/properties/${id}/review`, {
-        action,
-        ...(action === 'reject' ? { reason: rejectReason.trim() } : {}),
-      })
-      setShowRejectModal(false)
-      setRejectReason('')
-      Alert.alert('Done', action === 'approve' ? 'Property listing approved.' : 'Property listing rejected.')
+      await api.post(`/properties/${id}/review`, { action: 'approve' })
+      Alert.alert('Done', 'Property listing approved.')
       await load()
     } catch (err) {
-      const _err = err as { message?: string }
       Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to process review')
     } finally { setReviewing(false) }
+  }
+
+  // Rejection goes through RejectListingModal, which collects the reason code
+  // the API requires — the old body sent only a free-text `reason`, so every
+  // rejection failed validation.
+  async function handleRejected() {
+    setShowRejectModal(false)
+    Alert.alert('Done', 'Property listing rejected.')
+    await load()
   }
 
   async function submitReview() {
@@ -630,76 +628,33 @@ export default function PropertyDetailScreen() {
       )}
 
       {/* Qualification Status */}
-      {isTenant && qualification && qualification.totalCount > 0 && (
+      {isTenant && qualification && !qualification.qualified && qualification.issues.length > 0 && (
         <View style={[s.section, neuCard(c)]}>
-          <View style={[
-            s.qualBanner,
-            { backgroundColor: qualification.qualified ? c.accent + '15' : c.warning + '15' },
-          ]}>
-            <Ionicons
-              name={qualification.qualified ? 'checkmark-circle' : 'alert-circle'}
-              size={20}
-              color={qualification.qualified ? c.accent : c.warning}
-            />
+          <View style={[s.qualBanner, { backgroundColor: c.warning + '15' }]}>
+            <Ionicons name="alert-circle" size={20} color={c.warning} />
             <View style={{ flex: 1 }}>
-              <Text style={[
-                s.qualBannerTitle,
-                { color: qualification.qualified ? c.accent : c.warning },
-              ]}>
-                {qualification.qualified ? 'You qualify for this property!' : "You don't meet all requirements"}
+              <Text style={[s.qualBannerTitle, { color: c.warning }]}>
+                You don't meet all requirements
               </Text>
               <Text style={[s.qualBannerSub, { color: c.muted }]}>
-                {qualification.passedCount} of {qualification.totalCount} requirements met
+                {qualification.issues.length} {qualification.issues.length === 1 ? 'requirement' : 'requirements'} not met
               </Text>
             </View>
           </View>
 
-          <View style={[s.qualProgressBg, { backgroundColor: c.border }]}>
-            <View style={[
-              s.qualProgressFill,
-              {
-                backgroundColor: qualification.qualified ? c.accent : c.warning,
-                width: `\${qualification.totalCount > 0 ? (qualification.passedCount / qualification.totalCount) * 100 : 0}%` as unknown as ViewStyle['width'],
-              },
-            ]} />
-          </View>
-
-          {qualification.checks.map((check, i) => (
-            <View
-              key={i}
-              style={[
-                s.qualCheckRow,
-                { backgroundColor: check.met ? c.accent + '08' : c.danger + '08' },
-              ]}
-            >
-              <Ionicons
-                name={check.met ? 'checkmark-circle' : 'close-circle'}
-                size={16}
-                color={check.met ? c.accent : c.danger}
-                style={{ marginTop: 1 }}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={[
-                  s.qualCheckReq,
-                  { color: check.met ? c.accent : c.danger },
-                ]}>
-                  {check.requirement}
-                </Text>
-                <Text style={[s.qualCheckDetail, { color: c.muted }]}>
-                  {check.detail}
-                </Text>
-              </View>
+          {qualification.issues.map((issue, i) => (
+            <View key={i} style={[s.qualCheckRow, { backgroundColor: c.danger + '08' }]}>
+              <Ionicons name="close-circle" size={16} color={c.danger} style={{ marginTop: 1 }} />
+              <Text style={[s.qualCheckReq, { color: c.danger, flex: 1 }]}>{issue}</Text>
             </View>
           ))}
 
-          {!qualification.qualified && (
-            <View style={[s.qualInfoNote, { backgroundColor: c.surface }]}>
-              <Ionicons name="information-circle-outline" size={14} color={c.muted} />
-              <Text style={[s.qualInfoText, { color: c.muted }]}>
-                You can still apply. The landlord will review your application and make the final decision.
-              </Text>
-            </View>
-          )}
+          <View style={[s.qualInfoNote, { backgroundColor: c.surface }]}>
+            <Ionicons name="information-circle-outline" size={14} color={c.muted} />
+            <Text style={[s.qualInfoText, { color: c.muted }]}>
+              You can still apply. The landlord will review your application and make the final decision.
+            </Text>
+          </View>
         </View>
       )}
 
@@ -794,7 +749,7 @@ export default function PropertyDetailScreen() {
           <View style={{ gap: 10 }}>
             <TouchableOpacity
               style={[s.primaryBtn, { backgroundColor: '#10b981', opacity: reviewing ? 0.6 : 1 }]}
-              onPress={() => handleReviewAction('approve')}
+              onPress={handleApprove}
               disabled={reviewing}
             >
               {reviewing ? (
@@ -1436,55 +1391,11 @@ export default function PropertyDetailScreen() {
       </Modal>
 
       {/* Reject Modal (Government) */}
-      <Modal visible={showRejectModal} animationType="slide" transparent>
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: c.white }]}>
-            <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Reject Listing</Text>
-              <TouchableOpacity onPress={() => setShowRejectModal(false)}>
-                <Ionicons name="close" size={24} color={c.muted} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[s.modalSubtitle, { color: c.muted }]}>
-              Provide a reason for rejecting "{property.title}"
-            </Text>
-
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-              <AITextInput
-                label="Rejection Reason *"
-                aiContext="property listing rejection reason"
-                value={rejectReason}
-                onChangeText={setRejectReason}
-                placeholder="Explain why this listing is being rejected..."
-                numberOfLines={4}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
-                <TouchableOpacity
-                  style={[s.outlineBtn, { borderColor: c.border, flex: 1 }]}
-                  onPress={() => setShowRejectModal(false)}
-                >
-                  <Text style={[s.outlineBtnText, { color: c.muted }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: c.danger, flex: 1, opacity: reviewing ? 0.6 : 1 }]}
-                  onPress={() => handleReviewAction('reject')}
-                  disabled={reviewing}
-                >
-                  {reviewing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={s.primaryBtnText}>Reject Listing</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ height: spacing.lg }} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <RejectListingModal
+        listing={showRejectModal ? { id, title: property.title } : null}
+        onClose={() => setShowRejectModal(false)}
+        onRejected={handleRejected}
+      />
     </ScrollView>
   )
 }
@@ -1646,11 +1557,8 @@ const s = StyleSheet.create({
   qualBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: spacing.sm },
   qualBannerTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
   qualBannerSub: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
-  qualProgressBg: { height: 5, borderRadius: 3, marginBottom: spacing.md, overflow: 'hidden' as const },
-  qualProgressFill: { height: 5, borderRadius: 3 },
   qualCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: spacing.xs },
   qualCheckReq: { fontSize: 12, fontFamily: 'Outfit_600SemiBold' },
-  qualCheckDetail: { fontSize: 10, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   qualInfoNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: spacing.sm },
   qualInfoText: { fontSize: 10, fontFamily: 'Outfit_400Regular', flex: 1 },
   qualApplyWarning: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6 },

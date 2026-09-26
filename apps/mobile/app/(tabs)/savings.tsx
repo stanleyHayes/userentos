@@ -167,8 +167,12 @@ function WalletAndSavings({ lendingEnabled, investmentsEnabled }: { lendingEnabl
       if (walletAction === 'deposit') {
         // Deposit initiates a real payment collection — the wallet is credited
         // only after the provider confirms, so show the payer instructions.
+        // No phone for bank transfer (the field is hidden): the API accepts an
+        // absent phone but rejects '' as shorter than 9 characters.
         const res = await api.post<{ instructions?: string }>('/savings/wallet/deposit', {
-          amount: Number(walletAmount), method: walletMethod, phone: walletPhone.trim(),
+          amount: Number(walletAmount),
+          method: walletMethod,
+          phone: walletMethod === 'bank_transfer' ? undefined : (walletPhone.trim() || undefined),
         })
         setDepositInstructions(res.instructions ?? 'Your deposit is pending confirmation. Check your wallet for its status.')
         setShowWalletModal(false)

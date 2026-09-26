@@ -7,9 +7,11 @@ import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { PushPermissionPrompt } from '../components/PushPermissionPrompt'
 
+// Matches GET /notifications: the flag is `read`. Reading `isRead` (never
+// sent) showed every notification as unread on every load.
 interface Notification {
   id: string; title: string; message: string; type: string
-  isRead: boolean; createdAt: string
+  read: boolean; createdAt: string
 }
 
 const typeIcons: Record<string, string> = {
@@ -30,7 +32,7 @@ export default function NotificationsScreen() {
   async function load() {
     try {
       const data = await api.get<{ items: Notification[] }>('/notifications')
-      setNotifications(data.items)
+      setNotifications(data.items ?? [])
     } catch { /* no-op */ } finally { setLoading(false) }
   }
 
@@ -41,35 +43,35 @@ export default function NotificationsScreen() {
   async function markAsRead(id: string) {
     try {
       await api.patch(`/notifications/${id}/read`, {})
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n))
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
     } catch { /* no-op */ }
   }
 
   async function markAllRead() {
     try {
       await api.patch('/notifications/read-all', {})
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     } catch { /* no-op */ }
   }
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   function renderNotification({ item }: { item: Notification }) {
     const icon = typeIcons[item.type] ?? 'notifications-outline'
     return (
       <TouchableOpacity
-        style={[s.card, neuCard(c), !item.isRead && { backgroundColor: c.primary + '05', borderLeftWidth: 3, borderLeftColor: c.primary }]}
-        onPress={() => { if (!item.isRead) markAsRead(item.id) }}
-        activeOpacity={item.isRead ? 1 : 0.7}
+        style={[s.card, neuCard(c), !item.read && { backgroundColor: c.primary + '05', borderLeftWidth: 3, borderLeftColor: c.primary }]}
+        onPress={() => { if (!item.read) markAsRead(item.id) }}
+        activeOpacity={item.read ? 1 : 0.7}
       >
         <View style={s.cardLeft}>
           <View style={[s.iconWrap, { backgroundColor: c.primary + '10' }]}>
             <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={20} color={c.primary} />
-            {!item.isRead && <View style={[s.unreadDot, { backgroundColor: c.danger, borderColor: c.white }]} />}
+            {!item.read && <View style={[s.unreadDot, { backgroundColor: c.danger, borderColor: c.white }]} />}
           </View>
         </View>
         <View style={s.cardBody}>
-          <Text style={[s.cardTitle, { color: c.primaryDark }, !item.isRead && s.cardTitleUnread]} numberOfLines={1}>{item.title}</Text>
+          <Text style={[s.cardTitle, { color: c.primaryDark }, !item.read && s.cardTitleUnread]} numberOfLines={1}>{item.title}</Text>
           <Text style={[s.cardMessage, { color: c.textLight }]} numberOfLines={2}>{item.message}</Text>
           <Text style={[s.cardDate, { color: c.muted }]}>{formatDate(item.createdAt)}</Text>
         </View>

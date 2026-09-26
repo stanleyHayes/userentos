@@ -8,10 +8,13 @@ import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { ListSkeleton } from '../components/Skeleton'
 
-interface Document { id: string; userId: string; name: string; type: string; mimeType: string; size: number; url: string; category: string; createdAt: string }
+// Field names follow the Document model: ownerId and fileSize (userId and
+// size were never sent, giving 'NaN MB' and hiding the owner's delete button).
+interface Document { id: string; ownerId: string; name: string; type: string; mimeType: string; fileSize?: number; fileUrl: string; category?: string; createdAt: string }
 interface DocumentsResponse { items: Document[]; total: number }
 
-function formatFileSize(bytes: number): string {
+function formatFileSize(bytes: number | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '—'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -93,7 +96,7 @@ export default function DocumentsScreen() {
         <View style={s.docList}>
           {documents.map((doc) => {
             const icon = getFileIcon(doc.mimeType)
-            const isOwn = doc.userId === user?.id
+            const isOwn = doc.ownerId === user?.id
             return (
               <View key={doc.id} style={[s.docCard, neuCard(c)]}>
                 <View style={s.docRow}>
@@ -105,7 +108,7 @@ export default function DocumentsScreen() {
                     <View style={s.docMeta}>
                       <View style={s.metaItem}>
                         <Ionicons name="server-outline" size={10} color={c.muted} />
-                        <Text style={[s.metaText, { color: c.muted }]}>{formatFileSize(doc.size)}</Text>
+                        <Text style={[s.metaText, { color: c.muted }]}>{formatFileSize(doc.fileSize)}</Text>
                       </View>
                       <View style={s.metaItem}>
                         <Ionicons name="time-outline" size={10} color={c.muted} />
@@ -119,7 +122,13 @@ export default function DocumentsScreen() {
                     )}
                   </View>
                   {isOwn && (
-                    <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(doc)} disabled={deleting === doc.id}>
+                    <TouchableOpacity
+                      style={s.deleteBtn}
+                      onPress={() => handleDelete(doc)}
+                      disabled={deleting === doc.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${doc.name}`}
+                    >
                       {deleting === doc.id ? (
                         <ActivityIndicator size="small" color={c.danger} />
                       ) : (

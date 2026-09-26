@@ -55,7 +55,11 @@ test('native rent payment keeps provider instructions visible', async ({ page })
 
 test('mobile deposit shows only available rails and retains instructions', async ({ page }) => {
   await login(page, 'tenant')
-  await page.route('**/api/savings/wallet/deposit', route => route.fulfill({ json: { success: true, data: { instructions: 'Deposit using original reference WALLET-123.' } } }))
+  const deposits: unknown[] = []
+  await page.route('**/api/savings/wallet/deposit', route => {
+    deposits.push(route.request().postDataJSON())
+    return route.fulfill({ json: { success: true, data: { instructions: 'Deposit using original reference WALLET-123.' } } })
+  })
   await page.getByText('RentGuard', { exact: true }).last().click()
   await page.getByText('Deposit', { exact: true }).click()
   await expect(page.getByText('Bank Transfer', { exact: true })).toBeVisible()
@@ -64,6 +68,9 @@ test('mobile deposit shows only available rails and retains instructions', async
   await page.getByText('Bank Transfer', { exact: true }).click()
   await page.getByText('Deposit', { exact: true }).last().click()
   await expect(page.getByText('Deposit using original reference WALLET-123.', { exact: true })).toBeVisible()
+  // Bank transfer hides the phone field; an empty phone ('') fails the API's
+  // 9-character minimum, so none is sent.
+  expect(deposits).toEqual([{ amount: 10, method: 'bank_transfer' }])
 })
 
 for (const scenario of ['unavailable', 'incomplete']) test(`mobile wallet ${scenario} response does not display a zero balance and can recover`, async ({ page }) => {

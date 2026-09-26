@@ -158,7 +158,9 @@ export default function HomeScreen() {
         {!isLandlord && (
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => router.push(activeAgreement ? '/(tabs)/agreements' as string : '/(tabs)/properties' as string)}
+            // Agreements is a stack screen (app/agreements.tsx), not a tab —
+            // '/(tabs)/agreements' matched nothing and opened the 404 screen.
+            onPress={() => router.push(activeAgreement ? '/agreements' : '/(tabs)/properties')}
             style={[
               s.residenceBanner,
               {
