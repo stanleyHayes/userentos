@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import type { User, UserRole } from '@/types'
 import { portal } from '@/hooks/usePortal'
 import { getBestRoleForPortal } from '@/lib/subdomain'
+import { accessTokenExpired } from '@/lib/accessToken'
 import { AUTH_KEY, PROFILE_KEY, createAuthStorage } from '@/stores/authStorage'
 
 let sessionGeneration = 0
@@ -196,6 +197,13 @@ export interface SessionPair { token: string; refreshToken: string }
 export async function renewSessionWith(request: () => Promise<SessionPair | null>): Promise<void> {
   const origin = useAuthStore.getState()
   const generation = sessionGeneration
+  // Auth routes never refresh on a 401 (on the two-factor ones it can mean a
+  // wrong code), and a refresh started under the lock held below would wait on
+  // itself, so an access token that has already expired is renewed first.
+  if (accessTokenExpired(origin.token) && !await refreshCurrentSession(origin.token)) {
+    useAuthStore.getState().logout()
+    throw new Error('Session expired')
+  }
   const run = async () => {
     const pair = await request()
     const current = useAuthStore.getState()
