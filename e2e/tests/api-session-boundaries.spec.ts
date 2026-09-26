@@ -115,3 +115,53 @@ test('late 401 reuses credentials already rotated by another request', async ({ 
   expect(slowRequests).toBe(2)
   expect(fastRequests).toBe(2)
 })
+
+// Auth routes never refresh on a 401 (on the two-factor ones it can mean a wrong
+// code), so a password or two-factor change made after the access token lapsed
+// renews the session before sending the change.
+const renewals = [
+  { title: 'a password change with an expired access token refreshes before it is sent', expired: true, refresh: 'accepted' },
+  { title: 'a password change whose expired session cannot refresh signs out without sending it', expired: true, refresh: 'rejected' },
+  { title: 'a password change with a live access token is sent without a refresh', expired: false, refresh: 'accepted' },
+] as const
+for (const { title, expired, refresh } of renewals) test(title, async ({ authedPage: page }) => {
+  await page.goto('/settings')
+  const user = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state.user)
+  await page.route('**/api/**', route => route.fulfill({ json: { data: { items: [], total: 0 } } }))
+  await page.route('**/api/users/me', route => route.fulfill({ json: { data: user } }))
+  const seconds = Math.floor(Date.now() / 1000)
+  const access = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: expired ? seconds - 60 : seconds + 600 })).toString('base64url')}.fixture`
+  let refreshes = 0
+  const presented: string[] = []
+  await page.route('**/api/auth/refresh', route => {
+    refreshes++
+    return route.fulfill(refresh === 'accepted' ? { json: { data: { token: 'refreshed-access', refreshToken: 'refreshed-refresh' } } } : { status: 401, json: { error: 'Invalid or expired refresh token' } })
+  })
+  await page.route('**/api/auth/change-password', route => {
+    const bearer = route.request().headers().authorization ?? ''
+    presented.push(bearer)
+    // Like the server, an expired access token is refused here and never refreshed.
+    return route.fulfill(bearer === `Bearer ${expired ? 'refreshed-access' : access}` ? { json: { data: { token: 'renewed-access', refreshToken: 'renewed-refresh' } } } : { status: 401, json: { error: 'Invalid or expired token' } })
+  })
+  const outcome = await page.evaluate(async access => {
+    const find = (pathname: string) => performance.getEntriesByType('resource').map(entry => entry.name).find(name => new URL(name).pathname === pathname)!
+    const { useAuthStore, renewSessionWith } = await import(find('/src/stores/authStore.ts'))
+    const { api } = await import(find('/src/lib/api.ts'))
+    useAuthStore.setState({ token: access })
+    try {
+      await renewSessionWith(() => api.post('/auth/change-password', { currentPassword: 'password123', newPassword: 'Renewed-fixture-1' }))
+    } catch (error) { return (error as Error).message }
+    const { token, refreshToken, isAuthenticated } = useAuthStore.getState()
+    return { token, refreshToken, isAuthenticated }
+  }, access)
+  expect(refreshes).toBe(expired ? 1 : 0)
+  if (refresh === 'rejected') {
+    expect(outcome).toBe('Session expired')
+    expect(presented).toEqual([])
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state.isAuthenticated)).toBe(false)
+    return
+  }
+  expect(outcome).toEqual({ token: 'renewed-access', refreshToken: 'renewed-refresh', isAuthenticated: true })
+  expect(presented).toEqual([`Bearer ${expired ? 'refreshed-access' : access}`])
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state.refreshToken)).toBe('renewed-refresh')
+})
