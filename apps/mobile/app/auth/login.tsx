@@ -19,6 +19,7 @@ import {
   readStoredRefreshToken,
   type BiometricCapability,
 } from '../../lib/biometric'
+import { takeBiometricAutoPrompt } from '../../lib/biometricAutoPrompt'
 
 interface LoginResponse {
   user?: User
@@ -52,8 +53,9 @@ export default function LoginScreen() {
       if (cancelled) return
       setCapability(cap)
       setBioEnabled(enabled)
-      // Auto-prompt on mount if biometric is enabled and available
-      if (cap.available && enabled) {
+      // Auto-prompt only on a cold start: after a sign-out it would sign
+      // straight back in (lib/biometricAutoPrompt). The button stays.
+      if (cap.available && enabled && takeBiometricAutoPrompt()) {
         void runBiometricLogin(true)
       }
     })()

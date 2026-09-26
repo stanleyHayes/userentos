@@ -6,7 +6,8 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore, type User } from '../stores/authStore'
+import { api } from '../lib/api'
 import { createSessionQueryClient, querySessionKey } from '../lib/sessionQueryClient'
 import { useFonts } from 'expo-font'
 import {
@@ -43,7 +44,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   usePushNotifications()
 
   useEffect(() => {
-    hydrate()
+    // The keychain keeps only the credentials; the profile comes from the API.
+    void hydrate(() => api.get<User>('/users/me'))
   }, [])
 
   useEffect(() => {
