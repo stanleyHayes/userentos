@@ -57,7 +57,8 @@ Remove the last bullet if a regulated feature is ever enabled, and describe that
 
 **Both stores**
 - **Sign in with Apple:** not required. There is no third-party or social login (email/password, optional TOTP, device biometrics).
-- **Tracking:** none. There are no advertising or tracking SDKs, so App Tracking Transparency is not needed. Sponsored listings are shown in context and aren't personalised across apps; reconcile this with the disclosure inventory's advertising note before answering.
+- **Tracking:** none. There are no advertising or tracking SDKs, so App Tracking Transparency is not needed.
+- **Ads:** the apps show none. Sponsored listings and paid featured businesses are served only when a screen asks for them, and only the website asks (details and the full answer table: [mobile-data-disclosures.md](mobile-data-disclosures.md#paid-placements-and-advertising-26-september-2026)).
 - **Age.** The Terms require users to be 18 or older, and sign-up requires confirming it.
   - Apple: choose the 18+ age rating.
   - Google: set the target audience to 18+.
@@ -65,7 +66,9 @@ Remove the last bullet if a regulated feature is ever enabled, and describe that
 
 **Google Play**
 - **Financial features declaration:** answer that the app offers none while every regulated feature is off. If lending is ever enabled, file the Personal Loans declaration. The code enforces a minimum 3-month term, shows APR including fees and the total cost of credit, and names the lender.
-- **Data safety:** use [mobile-data-disclosures.md](mobile-data-disclosures.md). Data is encrypted in transit. Users can request deletion in-app and on the web.
+- **Ads (App content → Ads):** "Does your app contain ads?" **No**. The Android app never requests paid placements, so it never receives a sponsored listing or a featured-business boost.
+- **Advertising ID:** No. `com.google.android.gms.permission.AD_ID` is in `app.json` `blockedPermissions`; check it is absent from the release AAB's merged manifest (`bundletool dump manifest`) before answering.
+- **Data safety:** use [mobile-data-disclosures.md](mobile-data-disclosures.md). Data is encrypted in transit. Users can request deletion in-app and on the web. Select "Advertising or marketing" for no data type; nothing is shared for advertising.
 - **Permissions:**
   - Photos use the system photo picker, so no storage permission.
   - Camera, microphone, storage, media and overlay permissions are blocked in `app.json`.
@@ -74,9 +77,10 @@ Remove the last bullet if a regulated feature is ever enabled, and describe that
 - **Target API level:** Expo SDK 55 / React Native 0.83 targets the current required level.
 
 **App Store**
+- **App Privacy:** "Used to track you": No for every data type. Tick neither Third-Party Advertising nor Developer's Advertising or Marketing for any data type, and do not declare Advertising Data. No App Tracking Transparency prompt.
 - **Guideline 5.1.2(i) (sharing personal data with AI):** consent is asked per request, as described in the review notes.
 - **Guidelines 3.2.1(viii) and 5.1.1(ix) (regulated financial services):** not applicable while the regulated features are off. If one is enabled, the developer account holder must be the licensed institution or show its partnership.
 
 ## Policies checked
 
-[App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) · [Apple age ratings](https://developer.apple.com/help/app-store-connect/reference/age-ratings) · [Google Play account deletion](https://support.google.com/googleplay/android-developer/answer/13327111) · [Google Play Financial Services policy](https://support.google.com/googleplay/android-developer/answer/9876821) · [Google Play UGC policy](https://support.google.com/googleplay/android-developer/answer/9876937) · [Google Play Data safety](https://support.google.com/googleplay/android-developer/answer/10787469)
+[App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) · [Apple App Privacy details](https://developer.apple.com/app-store/app-privacy-details/) · [Google Play ads declaration](https://support.google.com/googleplay/android-developer/answer/9859455) · [Google Play Advertising ID](https://support.google.com/googleplay/android-developer/answer/6048248) · [Apple age ratings](https://developer.apple.com/help/app-store-connect/reference/age-ratings) · [Google Play account deletion](https://support.google.com/googleplay/android-developer/answer/13327111) · [Google Play Financial Services policy](https://support.google.com/googleplay/android-developer/answer/9876821) · [Google Play UGC policy](https://support.google.com/googleplay/android-developer/answer/9876937) · [Google Play Data safety](https://support.google.com/googleplay/android-developer/answer/10787469)
