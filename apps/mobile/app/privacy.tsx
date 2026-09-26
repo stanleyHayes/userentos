@@ -7,6 +7,9 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { clearBiometricCredential } from '../lib/credentialStorage'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
+import { RETENTION_PERIOD_DAYS, describeRetentionDays } from '../../../packages/shared/retentionPeriods'
+
+const GRACE = describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)
 
 /**
  * Store subscriptions are billed by Apple/Google, not RentOS: closing the
@@ -44,7 +47,7 @@ export default function PrivacyScreen() {
       cache.clear()
       useAuthStore.getState().logout()
       const closedSession = useAuthStore.getState().sessionVersion
-      useNotificationStore.getState().pushToast({ title: 'Your account is closed', body: 'Core profile erased. See the privacy policy for retained records and deletion timelines.', type: 'system', persistent: true })
+      useNotificationStore.getState().pushToast({ title: 'Your account is closed', body: 'Listings and profiles taken down, core profile erased. See the privacy policy for retained records and deletion timelines.', type: 'system', persistent: true })
       // Closure already revoked server credentials. Only clear this device here.
       try { await clearBiometricCredential() }
       catch {
@@ -70,10 +73,10 @@ export default function PrivacyScreen() {
   return <ScrollView style={{ backgroundColor: c.surface }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
     <Text style={{ color: c.text, fontSize: 26, fontWeight: '700' }}>Privacy and personal data</Text>
     <View style={[neuCard(c), { padding: spacing.lg, gap: spacing.md }]}>
-      {closed ? <Text accessibilityLiveRegion="polite" style={{ color: c.text }}>Your account is closed. Core profile details have been erased and related personal records are scheduled for deletion after 30 days.</Text> : <>
+      {closed ? <Text accessibilityLiveRegion="polite" style={{ color: c.text }}>Your account is closed. Your listings and public profiles were taken down and your core profile erased. Your other personal records are deleted after {GRACE}.</Text> : <>
         <Text style={{ color: c.text }}>Your export contains personal information. Choose a secure destination when saving or sharing it.</Text>
         <TouchableOpacity accessibilityRole="button" style={button} disabled={busy} onPress={exportData}><Text style={{ color: '#fff' }}>Export my personal data</Text></TouchableOpacity>
-        <Text style={{ color: c.text }}>Deleting your account immediately erases your core profile and schedules related personal records for deletion after 30 days. Financial, agreement and dispute records may be retained for legal obligations. Deletion cannot be undone. It does not settle balances or end a tenancy.</Text>
+        <Text style={{ color: c.text }}>Deleting your account takes your listings and your service-provider, business, storefront and agency profiles down immediately, signs you out on every device and erases your core profile. Your other personal records are deleted after {GRACE}. Tenancy, payment and dispute records are kept while RentOS confirms how long the law requires them. Deletion cannot be undone. It does not settle balances or end a tenancy.</Text>
         <Text style={{ color: c.text }}>Type DELETE to confirm permanent account closure</Text>
         <TextInput accessibilityLabel="Type DELETE to confirm account deletion" style={[neuInset(c), { padding: spacing.md, color: c.text }]} value={confirmation} onChangeText={setConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!busy} />
         <TouchableOpacity accessibilityRole="button" style={{ ...button, backgroundColor: '#b42318', opacity: busy || confirmation !== 'DELETE' ? 0.5 : 1 }} disabled={busy || confirmation !== 'DELETE'} onPress={deleteAccount}><Text style={{ color: '#fff' }}>{busy ? 'Please wait…' : 'Delete my account'}</Text></TouchableOpacity>

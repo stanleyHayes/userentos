@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
+import { RETENTION_PERIOD_DAYS, describeRetentionDays } from '../../../../../packages/shared/retentionPeriods'
+
+const GRACE = describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)
 
 export function PrivacyControls() {
   const authenticated = useAuthStore(state => state.isAuthenticated)
@@ -44,8 +47,8 @@ export function PrivacyControls() {
 
   return <Card><CardContent className="space-y-4">
     <h2 className="text-xl font-bold">Your account and personal data</h2>
-    {closed ? <p role="status">Your account is closed and core profile erased. Related personal records are scheduled for deletion after 30 days. Records required for legal obligations or disputes may be retained.</p> : <>
-      <p>Download your data or permanently close your RentOS account. Closing erases your core profile immediately and schedules related personal records for deletion after 30 days. Financial, agreement and dispute records may be retained for legal obligations. Closing does not settle balances or terminate a tenancy, and cannot be undone.</p>
+    {closed ? <p role="status">Your account is closed. Your listings and public profiles were taken down and your core profile erased. Your other personal records are deleted after {GRACE}. Tenancy, payment and dispute records are kept while RentOS confirms how long the law requires them.</p> : <>
+      <p>Download your data or permanently close your RentOS account. Closing takes your listings and your service-provider, business, storefront and agency profiles down immediately, signs you out on every device and erases your core profile. Your other personal records are deleted after {GRACE}. Tenancy, payment and dispute records are kept while RentOS confirms how long the law requires them. Closing does not settle balances or end a tenancy, and cannot be undone.</p>
       {authenticated ? <>
         <Button variant="outline" disabled={busy} onClick={exportData}>Download my data</Button>
         <label className="block space-y-2">

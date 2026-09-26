@@ -4,6 +4,9 @@ import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
+import { RETENTION_PERIOD_DAYS, describeRetentionDays } from '../../../packages/shared/retentionPeriods'
+
+const ERASURE_GRACE = describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)
 
 interface User {
   id: string
@@ -80,13 +83,17 @@ export default function UsersAdminScreen() {
   }
 
   async function handleDelete(userId: string) {
-    Alert.alert('Delete User', 'Are you sure? This cannot be undone.', [
+    Alert.alert(
+      'Close account',
+      `Their listings and profiles go offline now, they are signed out everywhere and their identity is erased. The rest of their personal data is deleted after ${ERASURE_GRACE}; records the law requires are kept. This cannot be undone.`,
+      [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         setDeleting(true)
         try {
           await api.delete(`/users/${userId}`)
           setSelectedUser(null)
+          Alert.alert('Account closed', `Remaining personal data is deleted after ${ERASURE_GRACE}.`)
           // Reload the same view the admin is looking at, not an unfiltered one.
           void load(search, roleFilter)
         } catch (e) {

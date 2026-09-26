@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
 import { DoodleStars } from '@/components/ui/Doodles'
 import { LEGAL_ENTITY, PRIVACY_VERSION, DPC, legalEntityName, versionLabel } from './legalMeta'
+import { RETENTION_PERIOD_DAYS as P, describeRetentionDays as days } from '../../../../../packages/shared/retentionPeriods'
 
 /**
  * Privacy Policy. Every processor, retention period and automated decision
@@ -151,17 +152,26 @@ export function PrivacyPage() {
           id: 'retention',
           title: 'How Long We Keep It',
           content: (
-            <>
+            <div className="space-y-3">
+              <p>Your account data is kept while your account is open, unless a shorter period below applies.</p>
+              <p><strong>When you close your account</strong> (in Settings → Privacy, or by asking us by email), we straight away take down your listings and your service-provider, business, storefront and agency profiles, release any custom domain, stop sharing your tenant profile and tenant passport links, sign you out on every device, and erase or scramble your name, email, phone number, Ghana Card number, photo, two-factor secret and the IP address and device details recorded with your acceptance of our terms.</p>
+              <p><strong>{days(P.accountErasureGrace)} later</strong> we delete the rest of your personal records, including your tenant profile, photos, identity documents, payout accounts, saved properties, notifications, messages you sent (these are removed from the other person's conversation too), applications that were not approved, and your listings and profiles. Enquiries you sent are deleted or, where an agent keeps the lead, kept without your contact details. Reviews you wrote stay, with your name replaced by "Deleted User". Where a tenancy, payment or booking refers to one of your listings or profiles, we keep that record with its photos and contact details removed. If a payout to you is still being processed, we finish it first.</p>
+              <p><strong>Records we keep while we confirm the legal retention period.</strong> We keep the following, including after you close your account, while RentOS confirms how long the law requires us to keep them, and we do not use them for anything else in the meantime: tenancy agreements and signatures, renewals, move-in and move-out records, maintenance requests, disputes and their evidence, approved applications and tenancy documents (agreements, receipts and notices); rent payments, receipts, payouts, wallet and other payment records; loan, financing, insurance, investment, savings and payroll records where those services are offered; and reports that led to action against an account. The other party to a tenancy or payment relies on these records.</p>
+              <p><strong>Security log.</strong> Our security log of sign-ins, account changes and the acceptance of our terms, including the IP address and browser or app details recorded at the time, is kept for {days(P.auditLog)}, including after you close your account.</p>
               {list([
-                'Your account data is kept while your account is open.',
-                'When you close your account, your name, email, phone, Ghana Card number, photo and two-factor secret are erased or scrambled immediately, and your other personal records are deleted 30 days later. Payment, agreement and other financial or contract records, and reviews (with your name removed), are kept where we need them for legal obligations or claims.',
-                'Audit logs (including sign-in and acceptance records): 2 years.',
-                'Rent price estimate logs: 2 years. Redacted complaint records: 180 days. Payment-provider webhook records: 90 days. App-store notifications: 30 days after processing. Public registry page views (hashed IP address, browser and referring page): 13 months. Storefront visit statistics: 400 days. Reports we dismiss: 1 year after review (reports we act on are kept with the moderation record).',
+                `Notifications: deleted ${days(P.readNotification)} after they were sent once you have read them, and ${days(P.unreadNotification)} after they were last updated otherwise. Messages are kept while your account is open.`,
+                `Applications that were not approved: ${days(P.unapprovedApplication)} after their last update.`,
+                `Enquiries and viewing requests: ${days(P.enquiry)} after their last update.`,
+                `Requests to see your tenant profile that you denied or withdrew: ${days(P.closedProfileAccess)} after your answer.`,
+                `Profile photos you have replaced: deleted within ${days(P.replacedAvatar)}.`,
+                `Reports we dismiss: ${days(P.dismissedContentReport)} after review (reports we act on are kept with the moderation record, as above).`,
+                `Rent price estimate logs: ${days(P.valuationLog)}. Redacted complaint records: ${days(P.complaintLog)}. Payment-provider notifications: ${days(P.webhookEvent)}. App-store notifications: ${days(P.storeNotification)} after processing. Public registry page views (hashed IP address, browser and referring page): ${days(P.registryPageView)}. Storefront visit statistics: ${days(P.storefrontEvent)}.`,
                 'Sign-in sessions expire after 7 days of inactivity; biometric sign-in on a device after 90 days; password-reset links after 1 hour.',
-                'Notifications: 1 year once read, 2 years if never read. Messages are kept until your account is deleted.',
                 'AI requests are not stored by RentOS; the AI provider handles them under its own retention terms.',
               ])}
-            </>
+              <p><strong>Files.</strong> Photos and documents are stored with Cloudinary. When we delete one, we ask Cloudinary to delete it and to clear the copies held in its content-delivery network. Dispute evidence is stored privately and can only be opened by the parties to the dispute and the officials handling it.</p>
+              <p><strong>Backups.</strong> Deleted data can remain in our encrypted database backups until those backups expire. Backups are used only to recover from failures. We keep a record of every deletion, holding only an account or record number and never your name or contact details, until the last backup that could contain the data has expired; before any restored copy goes live, we apply those deletions to it again.</p>
+            </div>
           ),
         },
         {
@@ -187,7 +197,7 @@ export function PrivacyPage() {
             <>
               <p>Under the Data Protection Act, 2012 (Act 843) you can:</p>
               {list([
-                <><strong>Access and export</strong> your data — use the export option in Settings → Privacy on the website or in the app, or email us.</>,
+                <><strong>Access and export</strong> your data — use the export option in Settings → Privacy on the website or in the app, or email us. The export includes every kind of personal data linked to your account.</>,
                 <><strong>Correct</strong> inaccurate data — edit your profile, or email us for anything you cannot edit.</>,
                 <><strong>Delete</strong> your account and data — Settings → Privacy, or <a className="underline" href="/delete-account">/delete-account</a> (subject to the records we must keep, above).</>,
                 <><strong>Object to direct marketing.</strong> We do not send marketing messages today; if we ever do, you will be able to opt out in every message and in Settings.</>,

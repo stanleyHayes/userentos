@@ -25,6 +25,9 @@ import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import toast from 'react-hot-toast'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { RETENTION_PERIOD_DAYS, describeRetentionDays } from '../../../../packages/shared/retentionPeriods'
+
+const ERASURE_GRACE = describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)
 
 const ALL_ROLES: UserRole[] = ['tenant', 'landlord', 'property_manager', 'financier', 'employer', 'service_provider', 'business', 'developer', 'government', 'legal_officer', 'admin', 'super_admin']
 
@@ -191,9 +194,9 @@ export function UsersPage() {
   }
 
   function handleDeleteUser(user: User) {
-    if (!confirm(`Delete ${user.firstName} ${user.lastName}? This cannot be undone.`)) return
+    if (!confirm(`Close ${user.firstName} ${user.lastName}'s account? Their listings and profiles go offline now, they are signed out everywhere and their identity is erased. The rest of their personal data is deleted after ${ERASURE_GRACE}; records the law requires are kept. This cannot be undone.`)) return
     deleteUser.mutate(user.id, {
-      onSuccess: () => toast.success('User deleted'),
+      onSuccess: () => toast.success(`Account closed. Remaining personal data is deleted after ${ERASURE_GRACE}.`),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete user'),
     })
   }
