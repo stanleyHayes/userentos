@@ -4,7 +4,7 @@ import { DocumentModel } from '../models/Document.js'
 import { Property } from '../models/Property.js'
 import type { IErasureLedger } from '../models/ErasureLedger.js'
 import { erasureLedger, markAccountErasureComplete } from './erasureLedger.js'
-import { closeAccount, unpublishAccount } from './accountClosure.js'
+import { closeAccount, completeClosedAccount, unpublishAccount } from './accountClosure.js'
 import { eraseAccountRecords, ACCOUNT_ERASURE_DELAY_MS } from './accountErasure.js'
 import { eraseStoredAssets } from './propertyImages.js'
 import { erasureLedgerDays } from '../config/retentionSchedule.js'
@@ -18,9 +18,10 @@ import { logger } from '../utils/logger.js'
  *
  *  - account: an account open again (a restore from before the closure) is
  *    closed with its original request date, then erased if the grace period
- *    has passed. A closed account still in its grace period has its
- *    take-down re-applied. An account that no longer exists marks the entry
- *    complete.
+ *    has passed. A closed account has its sessions revoked again (and its
+ *    audit entry written, if missing), then its take-down re-applied inside
+ *    the grace period or its records erased after it. An account that no
+ *    longer exists marks the entry complete.
  *  - document / property: records still present are deleted, after their
  *    stored files are erased again ('not found' counts as done). Entries whose
  *    request never finished are completed the same way.
@@ -50,6 +51,9 @@ async function replayAccount(entry: IErasureLedger, now: Date, summary: ReplaySu
   }
   const tombstone = await User.findOne({ _id: uid, deletedAt: { $exists: true } }).select('deletedAt').lean()
   if (tombstone) {
+    // A closure can fail after the tombstone is saved, when the user can no
+    // longer retry it; finish its sessions and audit entry here.
+    await completeClosedAccount(uid, entry.source)
     if (tombstone.deletedAt && tombstone.deletedAt < cutoff) {
       if (await eraseAccountRecords(uid, cutoff)) summary.accountsErased++
     } else {

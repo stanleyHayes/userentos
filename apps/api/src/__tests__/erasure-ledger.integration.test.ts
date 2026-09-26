@@ -25,6 +25,10 @@ const { Worker } = await import('../models/Worker.js')
 const { TenantProfile } = await import('../models/TenantProfile.js')
 const { Favorite } = await import('../models/Favorite.js')
 const { DocumentModel } = await import('../models/Document.js')
+const { RefreshToken } = await import('../models/RefreshToken.js')
+const { BiometricToken } = await import('../models/BiometricToken.js')
+const { DeviceToken } = await import('../models/DeviceToken.js')
+const { AuditLog } = await import('../models/AuditLog.js')
 const { deleteFromCloudinary } = await import('../utils/cloudinary.js')
 const { erasureLedger, closeErasureLedger, warnIfErasureLedgerShared } = await import('../services/erasureLedger.js')
 const { replayErasureLedger } = await import('../services/erasureReplay.js')
@@ -40,6 +44,7 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
   const uid = String(subject)
   const owner = new mongoose.Types.ObjectId()
   const partial = new mongoose.Types.ObjectId()
+  const stranded = new mongoose.Types.ObjectId()
   let server: Server
   let base = ''
 
@@ -49,6 +54,7 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
       { _id: subject, email: `ledger-${uid}@rentos.test`, phone: '0201112223', firstName: 'Abena', lastName: 'Ledger', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
       { _id: owner, email: `ledger-owner-${String(owner)}@rentos.test`, phone: '0201112224', firstName: 'Owner', lastName: 'Ledger', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant' },
       { _id: partial, email: `ledger-partial-${String(partial)}@rentos.test`, phone: '0201112225', firstName: 'Kofi', lastName: 'Partial', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
+      { _id: stranded, email: `ledger-stranded-${String(stranded)}@rentos.test`, phone: '0201112226', firstName: 'Esi', lastName: 'Stranded', passwordHash: 'fixture', roles: ['tenant'], activeRole: 'tenant', sessionVersion: 0 },
     ])
     await Worker.collection.insertOne({ userId: String(partial), name: 'Kofi', phone: '0201112225', location: 'Accra', status: 'available', approvalStatus: 'approved' })
     await TenantProfile.collection.insertOne({ userId: uid, occupation: 'Teacher' })
@@ -64,7 +70,11 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Promise.all([
-      User.collection.deleteMany({ _id: { $in: [subject, owner, partial] } }),
+      User.collection.deleteMany({ _id: { $in: [subject, owner, partial, stranded] } }),
+      RefreshToken.collection.deleteMany({ userId: String(stranded) }),
+      BiometricToken.collection.deleteMany({ userId: String(stranded) }),
+      DeviceToken.collection.deleteMany({ userId: String(stranded) }),
+      AuditLog.collection.deleteMany({ entityId: { $in: [uid, String(partial), String(stranded)] } }),
       Worker.collection.deleteMany({ userId: String(partial) }),
       TenantProfile.collection.deleteMany({ userId: uid }),
       Favorite.collection.deleteMany({ userId: uid }),
@@ -162,5 +172,32 @@ describe.skipIf(!hasTestMongo)('the erasure ledger re-applies deletions to a res
     expect(await User.findById(pid).lean()).toBeNull()
     expect(await User.findOne({ _id: pid, deletedAt: { $exists: true } }).lean()).toMatchObject({ firstName: 'Deleted' })
     expect(await Worker.findOne({ userId: pid }).lean()).toMatchObject({ approvalStatus: 'rejected', status: 'offline' })
+  })
+
+  it('revokes the sessions of a closure that failed after the tombstone was saved', async () => {
+    // The user cannot retry this one: once deletedAt is set their token is refused.
+    const sid = String(stranded)
+    await RefreshToken.collection.insertOne({ userId: sid, tokenHash: `stranded-${sid}`, expiresAt: new Date(Date.now() + DAY) })
+    await BiometricToken.collection.insertOne({ userId: sid, tokenHash: `stranded-bio-${sid}`, deviceId: 'phone', expiresAt: new Date(Date.now() + DAY) })
+    await DeviceToken.collection.insertOne({ userId: sid, token: `ExponentPushToken[stranded-${sid}]`, platform: 'expo' })
+    const revoke = vi.spyOn(RefreshToken, 'updateMany').mockRejectedValueOnce(new Error('database blip'))
+    await expect(closeAccount(sid, { source: 'self_service', actorId: sid })).rejects.toBeInstanceOf(AccountClosureIncompleteError)
+    revoke.mockRestore()
+    expect(await User.findOne({ _id: sid, deletedAt: { $exists: true } }).lean()).toMatchObject({ firstName: 'Deleted' })
+    expect(await RefreshToken.findOne({ userId: sid }).lean()).not.toHaveProperty('revokedAt')
+    expect(await BiometricToken.countDocuments({ userId: sid })).toBe(1)
+    expect(await AuditLog.countDocuments({ action: 'users.delete', entityId: sid })).toBe(0)
+
+    const summary = await replayErasureLedger()
+    expect(summary.failed).toBe(0)
+    expect(await RefreshToken.findOne({ userId: sid }).lean()).toMatchObject({ revokedReason: 'gdpr_deletion' })
+    expect(await BiometricToken.countDocuments({ userId: sid })).toBe(0)
+    expect(await DeviceToken.countDocuments({ userId: sid })).toBe(0)
+    expect(await AuditLog.findOne({ action: 'users.delete', entityId: sid }).lean())
+      .toMatchObject({ userId: 'system', details: JSON.stringify({ source: 'self_service', completedBy: 'ledger_replay' }) })
+
+    // Replaying again writes no second audit entry.
+    await replayErasureLedger()
+    expect(await AuditLog.countDocuments({ action: 'users.delete', entityId: sid })).toBe(1)
   })
 })

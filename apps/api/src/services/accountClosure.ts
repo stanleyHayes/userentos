@@ -14,6 +14,7 @@ import { AgencyProfile } from '../models/AgencyProfile.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { WebhookSubscription } from '../models/WebhookSubscription.js'
+import { AuditLog } from '../models/AuditLog.js'
 import { rememberLegacyAvatar } from './avatarStorage.js'
 import { revokeAccountSessions } from './sessionRevocation.js'
 import { recordErasure } from './erasureLedger.js'
@@ -186,10 +187,7 @@ async function finishClosure(user: InstanceType<typeof User>, userId: string, re
   user.deletedAt = requestedAt
   await user.save()
 
-  // Bumps sessionVersion, disconnects sockets, removes push tokens and revokes
-  // refresh and biometric credentials; biometric enrolments go entirely.
-  await revokeAccountSessions(userId, 'gdpr_deletion')
-  await BiometricToken.deleteMany({ userId })
+  await endClosedAccountSessions(userId)
 
   await recordAuditEntry({
     userId: options.actorId,
@@ -199,4 +197,31 @@ async function finishClosure(user: InstanceType<typeof User>, userId: string, re
     details: { source: options.source, ...(options.reason ? { reason: options.reason } : {}) },
     ipAddress: options.ipAddress,
   })
+}
+
+/**
+ * Bumps sessionVersion, disconnects sockets, removes push tokens and revokes
+ * refresh and biometric credentials; biometric enrolments go entirely.
+ * Idempotent.
+ */
+async function endClosedAccountSessions(userId: string): Promise<void> {
+  await revokeAccountSessions(userId, 'gdpr_deletion')
+  await BiometricToken.deleteMany({ userId })
+}
+
+/**
+ * The steps after the tombstone is saved, again, for a closed account.
+ *
+ * Once deletedAt is set the user's token is refused, so if revoking sessions
+ * failed after the save they cannot retry the closure themselves — and their
+ * devices would keep refresh tokens and push enrolments until the day-30
+ * erasure. The ledger replay runs this for every closed account it sees:
+ * sessions revoked, push and biometric enrolments removed, and the
+ * 'users.delete' audit entry written if it never was. Idempotent.
+ */
+export async function completeClosedAccount(userId: string, source: string): Promise<void> {
+  await endClosedAccountSessions(userId)
+  if (!(await AuditLog.exists({ action: 'users.delete', entityType: 'User', entityId: userId }))) {
+    await recordAuditEntry({ userId: 'system', action: 'users.delete', entityType: 'User', entityId: userId, details: { source, completedBy: 'ledger_replay' } })
+  }
 }
