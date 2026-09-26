@@ -49,7 +49,16 @@ export default function PricingScreen() {
 
   const analysisQuery = useQuery({
     queryKey: ['pricing-analysis', city, type, bedrooms, bathrooms, furnished, floorArea],
-    queryFn: () => api.get<PricingAnalysis>(`/pricing/comparables?city=${encodeURIComponent(city)}&type=${type}&bedrooms=${bedrooms}&bathrooms=${bathrooms}&furnished=${furnished}&floorArea=${floorArea}`),
+    queryFn: () => {
+      // Optional params are left out rather than sent empty: the API coerces
+      // floorArea='' to 0 (fails "positive") and furnished='false' to true
+      // (any non-empty string is truthy), so the defaults blanked the tab and
+      // an entered floor area priced every unit as furnished.
+      const qs = new URLSearchParams({ city, type, bedrooms, bathrooms })
+      if (Number(floorArea) > 0) qs.set('floorArea', floorArea)
+      if (furnished) qs.set('furnished', 'true')
+      return api.get<PricingAnalysis>(`/pricing/comparables?${qs.toString()}`)
+    },
     enabled: activeTab === 'analysis' && !!city && !!type,
   })
 
@@ -167,6 +176,12 @@ export default function PricingScreen() {
                 </View>
                 <Text style={[s.suggestedRent, { color: c.text }]}>
                   Suggested Rent: <Text style={{ color: c.primary, fontFamily: 'Outfit_800ExtraBold' }}>GHS {analysisQuery.data.suggestedRent ?? 0}</Text>
+                </Text>
+              </View>
+            ) : analysisQuery.isError ? (
+              <View style={[s.card, neuCard(c)]}>
+                <Text style={[s.analysisError, { color: c.danger }]}>
+                  {(analysisQuery.error as Error)?.message || 'Could not load the market analysis.'}
                 </Text>
               </View>
             ) : null}
@@ -300,6 +315,7 @@ const s = StyleSheet.create({
   statValue: { fontSize: 16, fontFamily: 'Outfit_800ExtraBold' },
   statLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular', marginTop: 2 },
   suggestedRent: { fontSize: 15, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.sm },
+  analysisError: { fontSize: 13, fontFamily: 'Outfit_500Medium', textAlign: 'center' },
   trendRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#e2e8f020' },
   trendMonth: { fontSize: 13, fontFamily: 'Outfit_500Medium', flex: 1 },
   trendValue: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
