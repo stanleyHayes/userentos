@@ -115,11 +115,15 @@ registry.registerPath({
   path: '/auth/logout',
   tags: ['Auth'],
   summary: 'Log out (revoke refresh token)',
+  description: 'Signs this device out. When pushToken is this phone\'s push registration, it is removed too, so the signed-out phone stops receiving the account\'s notifications. An invalid or unknown pushToken is ignored and never blocks sign-out.',
   request: {
     body: {
       content: {
         'application/json': {
-          schema: z.object({ refreshToken: z.string() }),
+          schema: z.object({
+            refreshToken: z.string(),
+            pushToken: z.string().max(4096).optional().openapi({ description: 'This device\'s Expo or FCM push token' }),
+          }),
         },
       },
     },
@@ -459,6 +463,32 @@ registry.registerPath({
   responses: {
     200: { description: 'JSON response envelope containing data.exportedAt and the supported record groups' },
     401: { description: 'Missing, invalid, expired or deleted-account session' },
+  },
+})
+registry.registerPath({
+  method: 'post',
+  path: '/users/me/export-link',
+  tags: ['Privacy'],
+  summary: 'Mint a download token for the personal-data export file',
+  description: 'Returns a five-minute download token for GET /users/me/export.json, bound to this session. It is scoped to the export: it opens no other download, and agreement, passport or evidence download tokens do not open the export. Available to suspended accounts.',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: { description: 'Download token', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ token: z.string() }) }) } } },
+    401: { description: 'Missing, invalid, expired or deleted-account session (a download token is refused)' },
+  },
+})
+registry.registerPath({
+  method: 'get',
+  path: '/users/me/export.json',
+  tags: ['Privacy'],
+  summary: 'Download the personal-data export as a file',
+  description: 'The same records as GET /users/me/export, as a JSON file attachment (rentos-personal-data-YYYY-MM-DD.json, Cache-Control: no-store) rather than a response envelope. Authenticates with an export-scoped download token from POST /users/me/export-link, in ?token= or a Bearer header; a session token is refused. This export is sensitive personal data.',
+  request: {
+    query: z.object({ token: z.string().optional().openapi({ description: 'Download token from POST /users/me/export-link (or send it as a Bearer header)' }) }),
+  },
+  responses: {
+    200: { description: 'JSON file attachment containing exportedAt and the supported record groups', content: { 'application/json': { schema: z.object({ exportedAt: z.string() }) } } },
+    401: { description: 'Missing, expired, revoked or wrongly scoped download token, a session token, or a deleted account' },
   },
 })
 registry.registerPath({
