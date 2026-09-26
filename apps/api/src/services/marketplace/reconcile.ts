@@ -17,12 +17,15 @@
  * first. It used to take the 50 oldest open rows every run and only resolve
  * success or failure, so once 50 abandoned checkouts existed, a newer paid one
  * whose webhook was missed was never looked at. Checkouts Paystack reports as
- * abandoned, or has no record of, are now closed once they are a day old.
+ * abandoned, or has no record of, are now closed once they are a day old. A
+ * closed checkout can still be paid on the Paystack page the buyer has open;
+ * that charge arrives by webhook or /verify and settles as a late success
+ * (settle.ts).
  */
 import type { Types } from 'mongoose'
 import { MarketplaceTransaction, type IMarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
 import { verifyTransaction, TransactionNotFoundError, type VerifiedTransaction } from './paystack.js'
-import { applySuccessfulCharge, chargeRefusal, SETTLEABLE_STATUSES } from './settle.js'
+import { applySuccessfulCharge, settleRefusal, SETTLEABLE_STATUSES } from './settle.js'
 import { reconcileBackoffMs } from '../payouts/reconcile.js'
 import { logger } from '../../utils/logger.js'
 
@@ -47,10 +50,12 @@ async function closeCheckout(transaction: Pick<IMarketplaceTransaction, 'referen
  * Settle a verified success through the shared rules. The same rules as the
  * webhook and /verify: a FAILED row whose reference succeeded somewhere else
  * on the shared Paystack account — a wallet deposit — must never be marked
- * paid here.
+ * paid here, while a failed row's own charge (bound to it, for the amount
+ * owed) is a late success. The claim covers failed rows too, so a checkout
+ * closed while this check was under way still gets that rule.
  */
 async function applyPaidCharge(transaction: IMarketplaceTransaction, verified: VerifiedTransaction): Promise<boolean> {
-  const refusal = chargeRefusal(transaction, verified)
+  const refusal = settleRefusal(transaction, verified)
   if (refusal) {
     if (refusal !== 'already_paid' && refusal !== 'not_settleable') {
       logger.error(`[Reconcile] refusing to settle ${transaction.reference}: ${refusal} (provider ${verified.amount} ${verified.currency ?? ''})`)
@@ -59,7 +64,7 @@ async function applyPaidCharge(transaction: IMarketplaceTransaction, verified: V
   }
   const eventId = `reconcile:${transaction.reference}`
   const claimed = await MarketplaceTransaction.findOneAndUpdate(
-    { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES }, processedEventIds: { $ne: eventId } },
+    { _id: transaction._id, status: { $in: [...SETTLEABLE_STATUSES, 'failed'] }, processedEventIds: { $ne: eventId } },
     { $addToSet: { processedEventIds: eventId } },
     { returnDocument: 'after' },
   )

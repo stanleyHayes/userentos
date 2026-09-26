@@ -9,7 +9,8 @@ import { testMongoUri, hasTestMongo } from './testMongo.js'
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined), notifyPaymentConfirmed: vi.fn(), notifyPaymentReceived: vi.fn() }))
 vi.mock('../services/achievements.js', () => ({ checkAndAward: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/webhooks.js', () => ({ dispatchWebhook: vi.fn() }))
-vi.mock('../models/AuditLog.js', () => ({ AuditLog: { create: vi.fn().mockResolvedValue({}) } }))
+const audit = vi.hoisted(() => ({ create: vi.fn().mockResolvedValue({}) }))
+vi.mock('../models/AuditLog.js', () => ({ AuditLog: audit }))
 // Count provider initiations without replacing the simulated rail.
 const calls = vi.hoisted(() => ({ collections: [] as unknown[] }))
 vi.mock('../services/payments/index.js', async (orig) => {
@@ -24,7 +25,7 @@ vi.mock('../services/payments/index.js', async (orig) => {
     },
   }
 })
-const provider = vi.hoisted(() => ({ initialized: [] as unknown[] }))
+const provider = vi.hoisted(() => ({ initialized: [] as unknown[], verifyTransaction: vi.fn() }))
 vi.mock('../services/marketplace/paystack.js', async (orig) => ({
   ...(await orig() as Record<string, unknown>),
   initializeSplitTransaction: vi.fn(async (input: { reference: string }) => {
@@ -32,6 +33,7 @@ vi.mock('../services/marketplace/paystack.js', async (orig) => ({
     await new Promise((resolve) => setTimeout(resolve, 20))
     return { authorizationUrl: `https://checkout.test/${input.reference}`, accessCode: `ACCESS-${input.reference}`, reference: input.reference }
   }),
+  verifyTransaction: provider.verifyTransaction,
 }))
 
 process.env.PAYMENTS_PROVIDER_MODE = 'simulated'
@@ -41,6 +43,7 @@ const { Agreement } = await import('../models/Agreement.js')
 const { Payment } = await import('../models/Payment.js')
 const { MarketplaceTransaction } = await import('../models/MarketplaceTransaction.js')
 const { ServiceBooking } = await import('../models/ServiceBooking.js')
+const { Sponsorship } = await import('../models/Sponsorship.js')
 const { PaymentAccount } = await import('../models/PaymentAccount.js')
 const { finalizePayment } = await import('../services/payments/finalize.js')
 const { applySuccessfulCharge, BINDING_KEY } = await import('../services/marketplace/settle.js')
@@ -59,6 +62,7 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
     headers: { Authorization: auth(tenant, ['tenant']), 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
     body: JSON.stringify({ agreementId, rentPeriod: period, method: 'mtn_momo', phone: '0241234567' }),
   })
+  const alerts = (code: string) => audit.create.mock.calls.filter(([entry]) => (entry as { action: string }).action === `alert.${code}`)
 
   beforeAll(async () => {
     await mongoose.connect(testMongoUri)
@@ -79,7 +83,7 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
     server = await new Promise<Server>((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)) })
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   })
-  beforeEach(() => { calls.collections = []; provider.initialized = [] })
+  beforeEach(() => { calls.collections = []; provider.initialized = []; provider.verifyTransaction.mockReset(); audit.create.mockClear() })
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Payment.deleteMany({ tenantId: String(tenant) })
@@ -176,6 +180,44 @@ describe.skipIf(!hasTestMongo)('one in-flight collection per obligation', () => 
       expect(flagged).toMatchObject({ status: 'paid', refundStatus: 'required', duplicateOf: first.reference })
       expect((await MarketplaceTransaction.findById(first._id).lean())?.refundStatus).toBeUndefined()
       expect(await ServiceBooking.findById(bookingId).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 100 })
+    })
+
+    const checkout = (fields: Record<string, unknown>) => MarketplaceTransaction.create({ reference: `MKT-${tag}-${new mongoose.Types.ObjectId()}`, buyerId: String(tenant), buyerEmail: 'b@rentos.test', sellerId: String(seller), purpose: 'service_booking', grossAmount: 100, platformFeePercent: 5, platformFeeAmount: 5, sellerExpectedAmount: 95, status: 'pending', providerBound: true, ...fields })
+    const verifiedFor = (t: { _id: unknown; reference: string }) => ({ status: 'success', amount: 100, currency: 'GHS', reference: t.reference, metadata: { [BINDING_KEY]: String(t._id) } })
+
+    it('flags a charge for a booking the worker already marked paid in cash, leaving the booking alone', async () => {
+      await ServiceBooking.updateOne({ _id: bookingId }, { $set: { paymentStatus: 'paid', paymentAmount: 80 } })
+      const t = await checkout({ bookingId })
+      expect(await applySuccessfulCharge(t, verifiedFor(t), 'webhook')).toEqual({ applied: true })
+      const flagged = await MarketplaceTransaction.findById(t._id).lean()
+      expect(flagged).toMatchObject({ status: 'paid', refundStatus: 'required', refundReason: 'Booking was no longer awaiting payment' })
+      expect(flagged?.duplicateOf).toBeUndefined()
+      expect(await ServiceBooking.findById(bookingId).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 80 })
+      expect(alerts('marketplace_order_already_settled')).toHaveLength(1)
+    })
+
+    it('flags a charge for a campaign that is no longer awaiting payment, leaving the campaign alone', async () => {
+      const campaign = await Sponsorship.create({ propertyId: `prop-${tag}`, ownerId: String(tenant), productId: 'featured', placement: 'search', startAt: new Date(), endAt: new Date(Date.now() + 86_400_000), spend: 100, status: 'cancelled' })
+      try {
+        const t = await checkout({ reference: `SPN-${tag}-${campaign._id}`, sponsorshipId: String(campaign._id), sellerId: undefined, platformFeePercent: 100, platformFeeAmount: 100, sellerExpectedAmount: 0 })
+        expect(await applySuccessfulCharge(t, verifiedFor(t), 'webhook')).toEqual({ applied: true })
+        expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'paid', refundStatus: 'required', refundReason: 'Campaign was no longer awaiting payment' })
+        expect((await Sponsorship.findById(campaign._id).lean())?.status).toBe('cancelled')
+        expect(alerts('marketplace_order_already_settled')).toHaveLength(1)
+      } finally {
+        await Sponsorship.deleteOne({ _id: campaign._id })
+      }
+    })
+
+    it('/verify settles a checkout that was closed before the buyer finished paying, as a late success', async () => {
+      const t = await checkout({ bookingId, status: 'failed', failureReason: 'abandoned' })
+      provider.verifyTransaction.mockResolvedValue(verifiedFor(t))
+      const res = await fetch(`${base}/marketplace/verify/${t.reference}`, { headers: { Authorization: auth(tenant, ['tenant']) } })
+      expect(res.status).toBe(200)
+      expect((await res.json()).data.status).toBe('paid')
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date) })
+      expect((await ServiceBooking.findById(bookingId).lean())?.paymentStatus).toBe('paid')
+      expect(alerts('marketplace_late_success')).toHaveLength(1)
     })
   })
 

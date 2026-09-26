@@ -119,6 +119,16 @@ function accumulate(amount: number, key: string) {
   }
 }
 
+/** Another transaction still holds the buyer's money for this order, so the order stays paid. */
+async function orderPaidElsewhere(transaction: Pick<IMarketplaceTransaction, 'bookingId' | 'sponsorshipId'> & { _id: Types.ObjectId }): Promise<boolean> {
+  const orders = [
+    ...(transaction.bookingId ? [{ bookingId: transaction.bookingId }] : []),
+    ...(transaction.sponsorshipId ? [{ sponsorshipId: transaction.sponsorshipId }] : []),
+  ]
+  if (!orders.length) return false
+  return !!await MarketplaceTransaction.exists({ $or: orders, _id: { $ne: transaction._id }, status: { $in: REFUNDABLE_ORDER } })
+}
+
 async function applyOrderRefund(transaction: Pick<IMarketplaceTransaction, 'reference' | 'grossAmount' | 'discountAmount' | 'bookingId' | 'sponsorshipId' | 'buyerId'> & { _id: Types.ObjectId }, amount: number, key: string): Promise<RefundOutcome> {
   const owed = round2(transaction.grossAmount - transaction.discountAmount)
   const updated = await MarketplaceTransaction.findOneAndUpdate(
@@ -136,18 +146,24 @@ async function applyOrderRefund(transaction: Pick<IMarketplaceTransaction, 'refe
     financialAlert('marketplace_partial_refund', { type: 'MarketplaceTransaction', id: String(transaction._id) }, { reference: transaction.reference, refundedAmount: updated.refundedAmount, owed })
     return 'applied'
   }
-  // A refund the platform owed (a duplicate charge) is now settled.
+  // A refund the platform owed (a duplicate charge, or a charge for an order
+  // already settled another way) is now settled.
   if (updated.refundStatus === 'required') {
     await MarketplaceTransaction.updateOne({ _id: transaction._id, refundStatus: 'required' }, { $set: { refundStatus: 'refunded' } })
   }
-  // The order is no longer paid for: the worker must not treat it as settled,
-  // the campaign must stop serving, and affiliates earn nothing on it.
-  if (transaction.bookingId) {
-    await ServiceBooking.updateOne({ _id: transaction.bookingId, paymentStatus: 'paid' }, { $set: { paymentStatus: 'refunded' } })
+  // A flagged charge never paid for its order, and an order another
+  // transaction still pays for stays paid: refunding either leaves the order
+  // as its real payment set it. Otherwise the order is no longer paid for:
+  // the worker must not treat it as settled and the campaign must stop serving.
+  const orderUntouched = !!updated.refundStatus || !!updated.duplicateOf || await orderPaidElsewhere(transaction)
+  if (!orderUntouched && transaction.bookingId) {
+    // The amount goes too, or the worker's earnings still count the job as paid.
+    await ServiceBooking.updateOne({ _id: transaction.bookingId, paymentStatus: 'paid' }, { $set: { paymentStatus: 'refunded' }, $unset: { paymentAmount: 1 } })
   }
-  if (transaction.sponsorshipId) {
+  if (!orderUntouched && transaction.sponsorshipId) {
     await Sponsorship.updateOne({ _id: transaction.sponsorshipId, status: { $in: ['active', 'pending_payment'] } }, { $set: { status: 'paused', pausedReason: 'Payment refunded' } })
   }
+  // Affiliates earn nothing on money that went back, whichever charge it was.
   await reverseCommissionsFor(transaction.reference, 'Source payment refunded')
   logger.info(`[Refunds] ${transaction.reference} refunded in full (${updated.refundedAmount} GHS)`)
   return 'applied'

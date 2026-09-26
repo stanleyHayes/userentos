@@ -76,11 +76,18 @@ export interface IMarketplaceTransaction extends Document {
   /** Cumulative GHS refunded by the provider, and the refund events already applied. */
   refundedAmount?: number
   refundEventIds?: string[]
-  /** The buyer is owed a refund (e.g. a second charge for an order already paid). Admin-issued. */
+  /**
+   * The buyer is owed a refund: a second charge for an order already paid, or
+   * a charge for an order no longer awaiting payment. Admin-issued. A charge
+   * flagged this way never paid for its order, so refunding it leaves the
+   * order alone.
+   */
   refundStatus?: 'required' | 'refunded' | 'waived'
   refundReason?: string
   /** The reference of the transaction that had already paid this order. */
   duplicateOf?: string
+  /** A verified success that arrived after this checkout had been closed as failed. */
+  lateSuccessAt?: Date
   /** Status to restore when a chargeback is resolved in the platform's favour. */
   preDisputeStatus?: MarketplaceTransactionStatus
   disputedAt?: Date
@@ -135,6 +142,7 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   refundStatus: { type: String, enum: ['required', 'refunded', 'waived'] },
   refundReason: String,
   duplicateOf: String,
+  lateSuccessAt: Date,
   preDisputeStatus: { type: String, enum: ['initialized', 'pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'disputed'] },
   disputedAt: Date,
 }, { timestamps: true })
