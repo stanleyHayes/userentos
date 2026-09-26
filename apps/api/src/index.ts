@@ -23,6 +23,7 @@ import { success } from './utils/response.js'
 import { runBootstrap } from './models/BootstrapState.js'
 import { rateLimitBackend } from './middleware/rateLimit.js'
 import { warnOnTestKeyInLiveMode } from './services/payments/index.js'
+import { warnIfVisitorHashSecretUnset } from './utils/visitorHash.js'
 import { basetenClient } from './services/ml/baseten.js'
 import swaggerUi from 'swagger-ui-express'
 import { generateOpenAPIDoc } from './openapi/registry.js'
@@ -554,6 +555,7 @@ async function start() {
       // number configured.
       logger.info(`Rate limiting: ${rateLimitBackend()}-backed`)
       warnOnTestKeyInLiveMode()
+      warnIfVisitorHashSecretUnset()
 
       /*
        * Absorb the Baseten cold start here rather than on a user's first

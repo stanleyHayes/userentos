@@ -8,7 +8,6 @@
  * without the plan "cannot bypass the API", so none of these checks live in
  * the UI.
  */
-import crypto from 'crypto'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
 import type { Types } from 'mongoose'
@@ -23,6 +22,7 @@ import { BlogPost } from '../models/BlogPost.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
+import { visitorHash } from '../utils/visitorHash.js'
 import { hostingProvider } from '../services/hosting/index.js'
 import { requireEntitlement, getFeature, EntitlementError } from '../services/entitlements.js'
 import {
@@ -546,8 +546,10 @@ router.get('/me/analytics', authenticate, asyncHandler(async (req, res) => {
       { $group: { _id: { date: dayKey, visitor: '$visitorHash' } } },
       { $group: { _id: '$_id.date', visitors: { $sum: 1 } } },
     ]),
-    // Window uniques are counted separately, not summed from the daily rows —
-    // a visitor who comes back on Tuesday is one visitor, not two.
+    // Window uniques are counted separately, not summed from the daily rows.
+    // Visitor hashes rotate daily (utils/visitorHash.ts), so a visitor who
+    // comes back on Tuesday counts again: no stored key links one person's
+    // visits across days.
     StorefrontEvent.aggregate([
       { $match: { ...current, type: 'view' } },
       { $group: { _id: '$visitorHash' } },
@@ -667,19 +669,20 @@ const trackSchema = z.object({
 })
 
 /**
- * A stable visitor key that identifies nobody.
+ * A visitor key that identifies nobody.
  *
- * The client's per-tab session id is preferred; without one we hash the request
- * IP instead, so "unique visitors" still means something for a visitor with no
- * JavaScript. Either way only the digest is stored — the same trade
- * RegistryPageView.ipHash makes.
+ * The client's per-tab session id is preferred; without one we key on the
+ * request IP instead, so "unique visitors" still means something for a visitor
+ * with no JavaScript. Either way only the keyed, daily-rotating digest is
+ * stored (utils/visitorHash.ts) — never the session id or the IP itself — the
+ * same trade RegistryPageView.ipHash makes.
  */
-function visitorHash(req: Request, sessionId?: string): string {
+function storefrontVisitorHash(req: Request, sessionId?: string): string {
   const forwarded = req.headers['x-forwarded-for']
   const ip = typeof forwarded === 'string' && forwarded.length > 0
     ? forwarded.split(',')[0].trim()
     : req.ip ?? req.socket?.remoteAddress ?? 'unknown'
-  return crypto.createHash('sha256').update(sessionId ?? ip).digest('hex')
+  return visitorHash(sessionId ? `session:${sessionId}` : `ip:${ip}`)
 }
 
 /**
@@ -710,8 +713,7 @@ router.post('/:slug/track', publicLimiter, optionalAuth, asyncHandler(async (req
       type: parsed.data.type,
       propertyId: parsed.data.propertyId,
       channel: parsed.data.channel,
-      sessionId: parsed.data.sessionId,
-      visitorHash: visitorHash(req, parsed.data.sessionId),
+      visitorHash: storefrontVisitorHash(req, parsed.data.sessionId),
     })
   } catch (err) {
     // Best effort, like the registry tracker: a metrics write must never be the

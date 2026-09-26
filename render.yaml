@@ -47,6 +47,9 @@ services:
       # 64 hex chars; encrypts national ID numbers at rest. Required.
       - key: PII_ENCRYPTION_KEY
         sync: false
+      # Long random value; keys the daily visitor hashes on public pages.
+      - key: VISITOR_HASH_SECRET
+        sync: false
       # MTN MoMo Collections. BASE_URL defaults to the sandbox host, so it must
       # be set for live. CALLBACK_URL is this service's public webhook:
       # https://<api-host>/api/payments/webhook/mtn_momo
