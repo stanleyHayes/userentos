@@ -10,6 +10,7 @@ import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { notify } from '../services/notify.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { withMoneyTransaction, InsufficientFundsError } from '../services/payments/moneyTransaction.js'
 import { round2 } from '../utils/money.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -388,49 +389,49 @@ router.post(
     const ref = `REFUND-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
 
     if (refundAmount > 0) {
-      // 1. Atomically claim the refund — concurrent/retried calls can't double-pay.
-      const claimed = await MoveOut.findOneAndUpdate(
-        { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
-        { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: ref } },
-        { returnDocument: 'after' },
-      )
+      /*
+       * Claim the refund, debit the landlord and credit the tenant as ONE
+       * transaction. They used to be three writes with compensation, so a
+       * crash after the claim left the move-out 'refund_paid' with nothing
+       * transferred. The conditional claim is what stops concurrent or retried
+       * calls from paying twice. (On a standalone Mongo each step is undone
+       * if a later one fails.)
+       */
+      const description = `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`
+      let claimed
+      try {
+        claimed = await withMoneyTransaction(async ({ session, onRollback }) => {
+          const won = await MoveOut.findOneAndUpdate(
+            { _id: mo._id, status: { $nin: [...LOCKED_STATUSES] } },
+            { $set: { status: 'refund_paid', refundedAt: new Date().toISOString(), refundReference: ref } },
+            { returnDocument: 'after', session },
+          )
+          if (!won) return null
+          onRollback(() => MoveOut.updateOne({ _id: mo._id, refundReference: ref }, { $set: { status: mo.status }, $unset: { refundedAt: 1, refundReference: 1 } }))
+
+          const debited = await debitWallet(mo.landlordId, refundAmount, { type: 'withdrawal', reference: ref, description }, { session })
+          if (!debited) throw new InsufficientFundsError()
+          onRollback(() => creditWallet(mo.landlordId, refundAmount, { type: 'refund', reference: `${ref}-REV`, description: 'Reversal of failed deposit refund' }))
+
+          await creditWallet(mo.tenantId, refundAmount, { type: 'deposit', reference: ref, description }, { session })
+          return won
+        })
+      } catch (err) {
+        if (err instanceof InsufficientFundsError) {
+          error(res, `Insufficient landlord wallet balance for refund (need GHS ${refundAmount.toFixed(2)})`)
+          return
+        }
+        console.error(`[moveOut/refund] refund transfer failed and was rolled back for ${mo._id}: ${(err as Error).message}`)
+        throw err
+      }
       if (!claimed) {
         const current = await MoveOut.findById(mo._id).select('status').lean()
         error(res, current?.status === 'disputed' ? 'Resolve the dispute before processing the refund' : 'Refund has already been processed', 409)
         return
       }
 
-      // 2. Debit the landlord, then credit the tenant. On credit failure the
-      //    debit is reversed and the claim rolled back — money is never stranded.
-      const debited = await debitWallet(mo.landlordId, refundAmount, {
-        type: 'withdrawal',
-        reference: ref,
-        description: `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`,
-      })
-      if (!debited) {
-        await MoveOut.updateOne({ _id: mo._id }, { $set: { status: mo.status }, $unset: { refundedAt: 1, refundReference: 1 } })
-        error(res, `Insufficient landlord wallet balance for refund (need GHS ${refundAmount.toFixed(2)})`)
-        return
-      }
-      try {
-        await creditWallet(mo.tenantId, refundAmount, {
-          type: 'deposit',
-          reference: ref,
-          description: `Security deposit refund (move-out ${(mo._id as Types.ObjectId).toString().slice(-6)})`,
-        })
-      } catch (err) {
-        await creditWallet(mo.landlordId, refundAmount, {
-          type: 'refund',
-          reference: `${ref}-REV`,
-          description: 'Reversal of failed deposit refund',
-        })
-        await MoveOut.updateOne({ _id: mo._id }, { $set: { status: mo.status }, $unset: { refundedAt: 1, refundReference: 1 } })
-        console.error(`[moveOut/refund] tenant credit failed, landlord reimbursed for ${mo._id}: ${(err as Error).message}`)
-        throw err
-      }
-
       mo.status = 'refund_paid'
-      mo.refundedAt = new Date().toISOString()
+      mo.refundedAt = claimed.refundedAt
       mo.refundReference = ref
     } else {
       // No refund owed — still issue a reference for traceability. Same

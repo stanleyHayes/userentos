@@ -8,14 +8,19 @@
  *    never moves without a record
  *  - debits are guarded: balance can never go negative, concurrent debits
  *    can't double-spend
- *  - every amount rounds through utils/money (no float drift)
+ *  - every amount rounds through utils/money, and the stored balance is
+ *    $round-ed to whole pesewas in the same write, so 0.70 - 0.40 is stored
+ *    as 0.30 and a later 0.30 debit still passes the guard
  *  - the embedded transactions array stays bounded ($slice) so long-lived
  *    wallets never approach the 16MB document cap
  *
- * NOTE: no multi-document transactions here — Mongo may run standalone.
- * Callers compose debit-first + compensating-credit ordering for transfers.
+ * Each operation accepts an optional session so a caller moving money between
+ * documents can make the whole transfer one transaction (see
+ * moneyTransaction.ts). Without one they behave exactly as before, which is
+ * what a standalone Mongo still needs.
  */
 
+import type { ClientSession } from 'mongoose'
 import { Wallet } from '../../models/Wallet.js'
 import { round2 } from '../../utils/money.js'
 
@@ -23,6 +28,11 @@ export interface WalletTxMeta {
   type: string
   reference?: string
   description?: string
+}
+
+export interface WalletWriteOptions {
+  /** Join the caller's multi-document transaction. */
+  session?: ClientSession
 }
 
 /** Keep only the most recent transactions embedded on the wallet document. */
@@ -37,7 +47,7 @@ function assertValidAmount(amount: number, direction: 'credit' | 'debit'): numbe
 }
 
 /** Atomic credit. Throws on failure (DB error or invalid amount). */
-export async function creditWallet(userId: string, amount: number, meta: WalletTxMeta): Promise<void> {
+export async function creditWallet(userId: string, amount: number, meta: WalletTxMeta, opts: WalletWriteOptions = {}): Promise<void> {
   const value = assertValidAmount(amount, 'credit')
   const reference = meta.reference ?? `CR-${Date.now()}`
 
@@ -47,7 +57,7 @@ export async function creditWallet(userId: string, amount: number, meta: WalletT
   const wallet = await Wallet.findOneAndUpdate(
     { userId },
     [
-      { $set: { balance: { $add: [{ $ifNull: ['$balance', 0] }, value] } } },
+      { $set: { balance: { $round: [{ $add: [{ $ifNull: ['$balance', 0] }, value] }, 2] } } },
       {
         $set: {
           transactions: {
@@ -74,7 +84,7 @@ export async function creditWallet(userId: string, amount: number, meta: WalletT
     // updatePipeline is REQUIRED for the array form above: Mongoose 9 rejects an
     // array update without it ("Cannot pass an array to query updates unless the
     // `updatePipeline` option is set"), which made every credit throw at runtime.
-    { returnDocument: 'after', upsert: true, updatePipeline: true },
+    { returnDocument: 'after', upsert: true, updatePipeline: true, session: opts.session },
   )
   if (!wallet) throw new Error(`Failed to credit wallet for user ${userId}`)
 }
@@ -84,7 +94,7 @@ export async function creditWallet(userId: string, amount: number, meta: WalletT
  * Returns false when funds are insufficient (no write happened).
  * Throws on other failures (invalid amount, DB error).
  */
-export async function debitWallet(userId: string, amount: number, meta: WalletTxMeta): Promise<boolean> {
+export async function debitWallet(userId: string, amount: number, meta: WalletTxMeta, opts: WalletWriteOptions = {}): Promise<boolean> {
   const value = assertValidAmount(amount, 'debit')
   const reference = meta.reference ?? `DR-${Date.now()}`
 
@@ -93,7 +103,7 @@ export async function debitWallet(userId: string, amount: number, meta: WalletTx
   const wallet = await Wallet.findOneAndUpdate(
     { userId, balance: { $gte: value } },
     [
-      { $set: { balance: { $add: ['$balance', -value] } } },
+      { $set: { balance: { $round: [{ $add: ['$balance', -value] }, 2] } } },
       {
         $set: {
           transactions: {
@@ -119,7 +129,7 @@ export async function debitWallet(userId: string, amount: number, meta: WalletTx
     ],
     // See the note on creditWallet: the array form needs updatePipeline in
     // Mongoose 9, or the debit throws instead of returning false.
-    { returnDocument: 'after', updatePipeline: true },
+    { returnDocument: 'after', updatePipeline: true, session: opts.session },
   )
   if (!wallet) return false // insufficient funds (or no wallet — same outcome)
   return true
