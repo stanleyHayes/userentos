@@ -7,7 +7,10 @@ import { authenticate } from '../middleware/auth.js'
 import type { AuthPayload } from '../middleware/auth.js'
 import { config } from '../config/index.js'
 import { BiometricToken } from '../models/BiometricToken.js'
+import { isSessionRevoked } from '../models/RevokedSession.js'
 import { disconnectBiometricUser } from '../services/socket.js'
+import { ROTATION_GRACE_MS, revokeDeviceSession } from '../services/sessionRevocation.js'
+import { sessionVersionFilter, biometricVersionFilter } from '../services/sessionVersion.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -64,6 +67,8 @@ router.post('/enroll', loginLimiter, authenticate, async (req, res) => {
     userId: req.user!.userId,
     sessionVersion: req.user!.sessionVersion ?? 0,
     biometricVersion: user.biometricVersion ?? 0,
+    // Each enrollment is its own device session (the `sid` of tokens it mints).
+    familyId: crypto.randomUUID(),
     tokenHash,
     deviceId: parsed.data.deviceId,
     deviceLabel: parsed.data.deviceLabel,
@@ -88,44 +93,51 @@ router.post('/exchange', loginLimiter, async (req, res) => {
   const tokenHash = hashToken(parsed.data.refreshToken)
 
   // Rotate atomically — only the first concurrent exchange can claim the token.
+  // Bound to its device: a presentation from anywhere else claims nothing,
+  // so it cannot burn the real device's token.
   const record = await BiometricToken.findOneAndUpdate(
-    { tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
+    { tokenHash, deviceId: parsed.data.deviceId, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
     { $set: { revokedAt: new Date(), revokedReason: 'rotated', lastUsedAt: new Date() } },
     { returnDocument: 'after' },
   )
   if (!record) {
-    const existing = await BiometricToken.findOne({ tokenHash })
-    if (existing?.revokedAt) {
-      // Replayed an already-rotated token — possible compromise. Revoke ALL of this user's tokens.
-      await User.updateOne({ _id: existing.userId }, { $inc: { biometricVersion: 1 } })
-      disconnectBiometricUser(existing.userId)
+    // Only a rotated token presented again is replay (see AuthService.refresh
+    // for the rules), and only once: the claim flips it to 'replay_detected'.
+    // Revoked for any other reason, rotated moments ago, or from an already
+    // revoked generation, it is simply refused.
+    const rotated = await BiometricToken.findOne({ tokenHash, revokedReason: 'rotated', revokedAt: { $lte: new Date(Date.now() - ROTATION_GRACE_MS) } })
+    const current = rotated && await User.exists({ _id: rotated.userId, ...sessionVersionFilter(rotated.sessionVersion ?? 0), ...biometricVersionFilter(rotated.biometricVersion ?? 0) })
+    const replayed = current && await BiometricToken.findOneAndUpdate(
+      { _id: rotated._id, revokedReason: 'rotated' },
+      { $set: { revokedReason: 'replay_detected', replayDetectedAt: new Date() } },
+    )
+    if (replayed) {
+      // Possible compromise. Revoke ALL of this user's biometric tokens.
+      await User.updateOne({ _id: replayed.userId }, { $inc: { biometricVersion: 1 } })
+      disconnectBiometricUser(replayed.userId)
       await BiometricToken.updateMany(
-        { userId: existing.userId, revokedAt: { $exists: false } },
+        { userId: replayed.userId, revokedAt: { $exists: false } },
         { $set: { revokedAt: new Date(), revokedReason: 'replay_detected' } },
       )
       error(res, 'Refresh token already used. All biometric sessions for this account have been revoked.', 401)
       return
     }
-    // Token unknown or expired — don't leak which.
+    // Token unknown, expired, revoked or on another device — don't leak which.
     error(res, 'Invalid refresh token', 401)
-    return
-  }
-  if (record.deviceId !== parsed.data.deviceId) {
-    error(res, 'Device mismatch', 401)
     return
   }
 
   const user = await User.findById(record.userId)
-  if (!user) {
-    error(res, 'User no longer exists', 401)
-    return
-  }
-
-  if ((record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0) ||
+  if (!user ||
+      (record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0) ||
       (record.biometricVersion ?? 0) !== (user.biometricVersion ?? 0)) {
-    error(res, 'Invalid refresh token', 401); return
+    // Claimed but never rotated: presenting it again must not look like replay.
+    await BiometricToken.updateOne({ _id: record._id }, { $set: { revokedReason: 'session_revoked' } })
+    error(res, user ? 'Invalid refresh token' : 'User no longer exists', 401); return
   }
 
+  // Enrollments from before session families start one here.
+  const familyId = record.familyId ?? crypto.randomUUID()
   const newToken = generateOpaqueToken()
   const newHash = hashToken(newToken)
   const newExpiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000)
@@ -133,16 +145,24 @@ router.post('/exchange', loginLimiter, async (req, res) => {
     userId: record.userId,
     sessionVersion: record.sessionVersion ?? 0,
     biometricVersion: record.biometricVersion ?? 0,
+    familyId,
     tokenHash: newHash,
     deviceId: record.deviceId,
     deviceLabel: record.deviceLabel,
     expiresAt: newExpiresAt,
   })
+  // The device revoked while this exchange ran: the revoke records the
+  // session before revoking the family, so one of the two catches the successor.
+  if (record.familyId && await isSessionRevoked(record.familyId)) {
+    await BiometricToken.updateOne({ tokenHash: newHash }, { $set: { revokedAt: new Date(), revokedReason: 'user_revoked' } })
+    error(res, 'Invalid refresh token', 401); return
+  }
 
   // Mint a session JWT (same shape as a normal login — 'session' purpose required by authenticate)
   const payload: AuthPayload = {
     biometricVersion: record.biometricVersion ?? 0,
     sessionVersion: user.sessionVersion ?? 0,
+    sid: familyId,
     userId: user._id.toString(),
     email: user.email,
     roles: user.roles,
@@ -171,11 +191,26 @@ router.get('/devices', authenticate, async (req, res) => {
 })
 
 // ────────────────────────────────────────
-// Revoke a specific device (logged-in user).
+// Revoke a specific device (logged-in user). The access tokens that device
+// minted from this enrollment stop working and its sockets close too; the
+// account's other devices stay signed in.
 // ────────────────────────────────────────
 router.post('/devices/:id/revoke', authenticate, async (req, res) => {
   const record = await BiometricToken.findById(param(req.params.id))
   if (!record || record.userId !== req.user!.userId) { error(res, 'Device not found', 404); return }
+  if (record.familyId) {
+    // Revoke the enrollment, not only the listed record: the device may have
+    // rotated it by exchanging since the list was fetched.
+    const { familyId } = record
+    if (!await BiometricToken.exists({ familyId, revokedAt: { $exists: false } })) { error(res, 'Already revoked'); return }
+    await revokeDeviceSession(familyId, 'user_revoked')
+    await BiometricToken.updateMany(
+      { familyId, revokedAt: { $exists: false } },
+      { $set: { revokedAt: new Date(), revokedReason: 'user_revoked' } },
+    )
+    success(res, idOf((await BiometricToken.findById(record._id).lean()) ?? record.toObject()))
+    return
+  }
   if (record.revokedAt) { error(res, 'Already revoked'); return }
   record.revokedAt = new Date()
   record.revokedReason = 'user_revoked'

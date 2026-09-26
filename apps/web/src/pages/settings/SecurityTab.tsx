@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
-import { useAuthStore } from '@/stores/authStore'
+import { renewSessionWith, useAuthStore, type SessionPair } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Shield, Check, Copy, ShieldCheck, LogOut } from 'lucide-react'
 import { PasswordInput } from '@/components/ui/PasswordInput'
@@ -27,7 +27,8 @@ export function SecurityTab() {
 
     setStatus('loading')
     try {
-      await api.post('/auth/change-password', { currentPassword: form.currentPassword, newPassword: form.newPassword })
+      // Every other session is signed out; this device gets a fresh pair.
+      await renewSessionWith(() => api.post<SessionPair | null>('/auth/change-password', { currentPassword: form.currentPassword, newPassword: form.newPassword }))
       setStatus('success')
       setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err) {
@@ -72,7 +73,7 @@ export function SecurityTab() {
               </div>
               <div>
                 <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Password Updated Successfully!</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">Your account is now secured with the new password.</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">Your other devices have been signed out. You're still signed in here.</p>
               </div>
             </div>
           </div>
@@ -196,7 +197,7 @@ export function SecurityTab() {
           {/* Submit */}
           <div className="flex items-center justify-between pt-2">
             <p className="text-[11px] text-muted dark:text-gray-500 hidden sm:block">
-              You will need to sign in again after changing your password.
+              Changing your password signs out your other devices. You stay signed in here.
             </p>
             <Button
               type="submit"
@@ -283,7 +284,7 @@ function MfaCard({ enabled, onChange }: { enabled: boolean; onChange: (enabled: 
     setStatus('loading')
     setErrorMsg('')
     try {
-      await api.post('/auth/mfa/enable', { code })
+      await renewSessionWith(() => api.post<SessionPair | null>('/auth/mfa/enable', { code }))
       onChange(true)
       setSetup(null)
       setCode('')
@@ -299,7 +300,7 @@ function MfaCard({ enabled, onChange }: { enabled: boolean; onChange: (enabled: 
     setStatus('loading')
     setErrorMsg('')
     try {
-      await api.post('/auth/mfa/disable', { code })
+      await renewSessionWith(() => api.post<SessionPair | null>('/auth/mfa/disable', { code }))
       onChange(false)
       setCode('')
       setStatus('idle')
@@ -329,7 +330,7 @@ function MfaCard({ enabled, onChange }: { enabled: boolean; onChange: (enabled: 
               <Badge variant={enabled ? 'success' : 'default'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>
             </div>
             <p className="text-xs text-muted dark:text-gray-500 mt-0.5">
-              Require a code from an authenticator app (Google Authenticator, Authy, 1Password) at login.
+              Require a code from an authenticator app (Google Authenticator, Authy, 1Password) at login. Turning it on or off signs out your other devices.
             </p>
           </div>
         </div>

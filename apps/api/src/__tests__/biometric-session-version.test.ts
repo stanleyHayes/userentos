@@ -15,8 +15,8 @@ vi.mock('../middleware/auth.js', () => ({ authenticate: (req: Request, _res: Res
 } }))
 vi.mock('../middleware/rateLimit.js', () => ({ loginLimiter: (_req: Request, _res: Response, next: NextFunction) => next() }))
 vi.mock('bcryptjs', () => ({ default: { compare: vi.fn().mockResolvedValue(true) } }))
-vi.mock('../models/User.js', () => ({ User: { findById: vi.fn(), updateOne: vi.fn() } }))
-vi.mock('../models/BiometricToken.js', () => ({ BiometricToken: { findOne: vi.fn(), findOneAndUpdate: vi.fn(), create: vi.fn(), updateMany: vi.fn() } }))
+vi.mock('../models/User.js', () => ({ User: { findById: vi.fn(), updateOne: vi.fn(), exists: vi.fn() } }))
+vi.mock('../models/BiometricToken.js', () => ({ BiometricToken: { findOne: vi.fn(), findOneAndUpdate: vi.fn(), create: vi.fn(), updateMany: vi.fn(), updateOne: vi.fn() } }))
 const user = { _id: 'fixture', email: 'fixture@example.test', roles: ['tenant'], sessionVersion: 2, passwordHash: 'fixture', toSafe: () => ({ id: 'fixture' }) }
 const record = { userId: 'fixture', deviceId: 'fixture-device', sessionVersion: 2 }
 let server: Server, base: string
@@ -72,8 +72,10 @@ it('revoke-all advances only biometric generation before record cleanup', async 
   expect(vi.mocked(User.updateOne).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(BiometricToken.updateMany).mock.invocationCallOrder[0])
 })
 it('replay advances biometric generation before cleanup', async () => {
-  vi.mocked(BiometricToken.findOneAndUpdate).mockResolvedValue(null)
-  vi.mocked(BiometricToken.findOne).mockResolvedValue({ ...record, revokedAt: new Date() } as never)
+  // The claim finds no live token; a rotated one from the current generation is then claimed as replay.
+  vi.mocked(BiometricToken.findOneAndUpdate).mockResolvedValueOnce(null).mockResolvedValueOnce({ ...record, _id: 'rotated' } as never)
+  vi.mocked(BiometricToken.findOne).mockResolvedValue({ ...record, _id: 'rotated', revokedAt: new Date(Date.now() - 60_000), revokedReason: 'rotated' } as never)
+  vi.mocked(User.exists).mockResolvedValue({ _id: 'fixture' } as never)
   expect((await exchange()).status).toBe(401)
   expect(User.updateOne).toHaveBeenCalledWith({ _id: 'fixture' }, { $inc: { biometricVersion: 1 } })
   expect(disconnectBiometricUser).toHaveBeenCalledWith('fixture')

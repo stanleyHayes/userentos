@@ -56,7 +56,8 @@ describe.skipIf(!hasTestMongo)('push registration revocation', () => {
   })
   it('replayed refresh credentials remove push registrations through the shared revoker', async () => {
     const { userId, otherId, plain } = await fixture('replay')
-    await RefreshToken.updateOne({ userId }, { $set: { revokedAt: new Date(), revokedReason: 'rotated' } })
+    // Rotated longer ago than the grace window for a retried request.
+    await RefreshToken.updateOne({ userId }, { $set: { revokedAt: new Date(Date.now() - 60_000), revokedReason: 'rotated' } })
     expect(await service.refresh(plain)).toMatchObject({ status: 401 })
     expect(await DeviceToken.countDocuments({ userId })).toBe(0)
     expect(await DeviceToken.countDocuments({ userId: otherId })).toBe(1)

@@ -12,7 +12,7 @@ import { config } from './config/index.js'
 import { UPLOADS_DIR } from './utils/uploads.js'
 import { seedDatabase } from './models/seed.js'
 import { startScheduler } from './services/scheduler.js'
-import { initSocket } from './services/socket.js'
+import { initSocket, shutdownRealtime } from './services/socket.js'
 import { rentPriceModel } from './services/ml/pricingModel.js'
 import { Property } from './models/Property.js'
 import { logger } from './utils/logger.js'
@@ -424,9 +424,12 @@ app.use(notFoundHandler)
 app.use(errorHandler)
 
 // ─── Graceful shutdown ───
+let realtime: ReturnType<typeof initSocket> | null = null
 function gracefulShutdown(signal: string) {
   logger.info(`Received ${signal}. Starting graceful shutdown...`)
-  httpServer.close(() => {
+  // Socket.IO first: a bare httpServer.close() waits on every open WebSocket
+  // until the forced exit below. Clients reconnect to the next instance.
+  void shutdownRealtime(realtime, httpServer).then(() => {
     logger.info('HTTP server closed.')
     // .catch, not a bare void: if closing the connection rejects, the exit
     // inside .then never runs and shutdown hangs until the 10s force-exit
@@ -544,7 +547,7 @@ async function start() {
     }
 
     // Initialize Socket.IO
-    initSocket(httpServer)
+    realtime = initSocket(httpServer)
 
     httpServer.listen(config.port, () => {
       logger.info(`RentOS API v0.2.0 running on http://localhost:${config.port}`)

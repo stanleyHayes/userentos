@@ -64,6 +64,16 @@ function connectSocket(token: string): Socket {
     const user = useAuthStore.getState().user
     if (user) useAuthStore.setState({ user: { ...user, suspendedAt: data.suspendedAt } })
   })
+  // The server revoked the session this socket authenticated with (signed
+  // out from another device, password reset, account closed). A tab already
+  // holding a newer token, like the pair a password change returns, stays.
+  const created = socket
+  socket.on('session:revoked', () => {
+    const { isAuthenticated, token: current, logout } = useAuthStore.getState()
+    if (!isAuthenticated || current !== (created.auth as { token?: string }).token) return
+    logout()
+    useToastStore.getState().addToast('You have been signed out. Please sign in again.', 'info')
+  })
 
   socket.on('connect_error', (err) => {
     console.warn('[Socket] Connection error:', err.message)

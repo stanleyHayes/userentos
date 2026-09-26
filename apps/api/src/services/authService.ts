@@ -13,9 +13,19 @@ import { DeviceToken } from '../models/DeviceToken.js'
 import { User, type IUserConsents } from '../models/User.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.js'
+import { sessionVersionFilter } from './sessionVersion.js'
 import QRCode from 'qrcode'
-import { disconnectUser } from './socket.js'
+import { disconnectUser, disconnectSession } from './socket.js'
+import { ROTATION_GRACE_MS, revokeDeviceSession } from './sessionRevocation.js'
+import { isSessionRevoked } from '../models/RevokedSession.js'
 import { recordAuditEntry } from '../utils/audit.js'
+
+/** The device making an authenticated request: its session family (the
+ * access token's `sid`) and label, for a replacement token pair. */
+export interface DeviceSession {
+  sid?: string
+  deviceLabel?: string
+}
 
 interface RegisterData {
   email: string
@@ -34,8 +44,10 @@ function expiresIn(seconds: number) {
  * full-power session JWT into URLs (which end up in logs/history). */
 const DOWNLOAD_TOKEN_TTL_SECONDS = 5 * 60
 
-export function signDownloadToken(userId: string): string {
-  return jwt.sign({ userId, purpose: 'download' }, config.jwtSecret, {
+/** Bound to the session that minted it: logout-all, a password change or
+ * that device signing out also ends its download links. */
+export function signDownloadToken(userId: string, sessionVersion: number | undefined, sid?: string): string {
+  return jwt.sign({ userId, purpose: 'download', sessionVersion: sessionVersion ?? 0, sid }, config.jwtSecret, {
     expiresIn: DOWNLOAD_TOKEN_TTL_SECONDS,
   })
 }
@@ -59,13 +71,15 @@ export class AuthService {
     private readonly logger: Logger,
   ) {}
 
-  private async createRefreshToken(userId: string, sessionVersion: number, deviceLabel?: string, ipAddress?: string) {
+  /** `familyId` is the device's session: new at sign-in, carried through rotation. */
+  private async createRefreshToken(userId: string, sessionVersion: number, familyId: string, deviceLabel?: string, ipAddress?: string) {
     const plain = generateRefreshToken()
     const tokenHash = hashRefreshToken(plain)
     await RefreshToken.create({
       userId,
       tokenHash,
       sessionVersion,
+      familyId,
       deviceLabel,
       ipAddress,
       expiresAt: expiresIn(config.jwtRefreshExpiresIn),
@@ -156,9 +170,10 @@ export class AuthService {
       }
     }
 
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
+    const sid = crypto.randomUUID()
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, sid, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User registered: ${email} (${role})`)
@@ -203,9 +218,10 @@ export class AuthService {
       return { data: { mfaRequired: true, mfaToken } }
     }
 
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const sid = crypto.randomUUID()
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, sid, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in: ${email}`)
@@ -243,9 +259,10 @@ export class AuthService {
       return { error: 'Invalid authentication code', status: 401 }
     }
 
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const sid = crypto.randomUUID()
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
     const token = this.signAccessToken(payload)
-    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
+    const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, sid, deviceLabel, ipAddress)
 
     const safeUser = (user as unknown as { toSafe(): Record<string, unknown> }).toSafe()
     this.logger.info(`User logged in with MFA: ${user.email}`)
@@ -288,8 +305,10 @@ export class AuthService {
     return { data: { secret, otpauthUrl, qrDataUrl } }
   }
 
-  /** Confirm MFA enrollment by verifying a code against the pending secret. */
-  async mfaEnable(userId: string, code: string, ipAddress?: string) {
+  /** Confirm MFA enrollment by verifying a code against the pending secret.
+   * Signs every other session out (one may predate the second factor) and
+   * returns a fresh token pair for this device. */
+  async mfaEnable(userId: string, code: string, ipAddress?: string, device: DeviceSession = {}) {
     const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (user.mfaEnabled) return { error: 'MFA is already enabled', status: 400 }
@@ -301,14 +320,16 @@ export class AuthService {
 
     user.mfaEnabled = true
     await user.save()
+    const tokens = await this.renewAfterRevokingAll(userId, 'mfa_changed', device, ipAddress)
     this.logger.info(`MFA enabled for user: ${user.email}`)
     this.audit('auth.mfa.enable', userId, ipAddress)
-    this.securityNotice(userId, 'Two-factor authentication turned on', 'Two-factor authentication was turned on for your RentOS account. If this was not you, reset your password and contact support now.')
-    return { data: null, message: 'Two-factor authentication enabled' }
+    this.securityNotice(userId, 'Two-factor authentication turned on', 'Two-factor authentication was turned on for your RentOS account and your other devices were signed out. If this was not you, reset your password and contact support now.')
+    return { data: tokens, message: 'Two-factor authentication enabled' }
   }
 
-  /** Disable MFA — requires a valid code from the current secret. */
-  async mfaDisable(userId: string, code: string, ipAddress?: string) {
+  /** Disable MFA — requires a valid code from the current secret. Like
+   * enabling it, signs the other sessions out and renews this device's. */
+  async mfaDisable(userId: string, code: string, ipAddress?: string, device: DeviceSession = {}) {
     const user = await this.userRepo.findById(userId, { select: '+mfaSecret' })
     if (!user) return { error: 'User not found', status: 404 }
     if (!user.mfaEnabled || !user.mfaSecret) return { error: 'MFA is not enabled', status: 400 }
@@ -320,10 +341,11 @@ export class AuthService {
     user.mfaEnabled = false
     user.mfaSecret = undefined
     await user.save()
+    const tokens = await this.renewAfterRevokingAll(userId, 'mfa_changed', device, ipAddress)
     this.logger.info(`MFA disabled for user: ${user.email}`)
     this.audit('auth.mfa.disable', userId, ipAddress)
-    this.securityNotice(userId, 'Two-factor authentication turned off', 'Two-factor authentication was turned off for your RentOS account. If this was not you, reset your password and contact support now.')
-    return { data: null, message: 'Two-factor authentication disabled' }
+    this.securityNotice(userId, 'Two-factor authentication turned off', 'Two-factor authentication was turned off for your RentOS account and your other devices were signed out. If this was not you, reset your password and contact support now.')
+    return { data: tokens, message: 'Two-factor authentication disabled' }
   }
 
   async refresh(plainRefreshToken: string, deviceLabel?: string, ipAddress?: string) {
@@ -337,33 +359,76 @@ export class AuthService {
     )
 
     if (!record) {
-      // Distinguish replay of a revoked/expired token from a genuinely unknown one:
-      // a replay means the token chain may be compromised — nuke all user sessions.
-      const existing = await RefreshToken.findOne({ tokenHash })
-      if (existing?.revokedAt) {
-        await this.revokeAllSessions(existing.userId, 'replay_detected')
-        this.logger.warn(`Refresh-token replay detected for user: ${existing.userId} — all sessions revoked`)
-      } else {
-        this.logger.warn('Refresh attempt with invalid or expired token')
-      }
+      const replayedBy = await this.claimReplay(tokenHash)
+      if (replayedBy) this.logger.warn(`Refresh-token replay detected for user: ${replayedBy} — all sessions revoked`)
+      else this.logger.warn('Refresh attempt with an invalid, expired or revoked token')
       return { error: 'Invalid or expired refresh token', status: 401 }
     }
 
     const user = await this.userRepo.findById(record.userId)
-    if (!user) {
-      return { error: 'User not found', status: 404 }
+    if (!user || (record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+      // Claimed but never rotated (no successor exists): presenting it again
+      // later must not look like replay of a rotated token.
+      await RefreshToken.updateOne({ _id: record._id }, { $set: { revokedReason: 'session_revoked' } })
+      return user ? { error: 'Invalid or expired refresh token', status: 401 } : { error: 'User not found', status: 404 }
     }
 
-    if ((record.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+    // Tokens issued before session families existed start one here.
+    const familyId = record.familyId ?? crypto.randomUUID()
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid: familyId, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    const token = this.signAccessToken(payload)
+    const newRefreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, familyId, deviceLabel, ipAddress)
+    // This device signing out while the rotation ran: logout records the
+    // session before revoking the family, so either the successor exists in
+    // time for that revocation or the record is visible here.
+    if (record.familyId && await isSessionRevoked(record.familyId)) {
+      await RefreshToken.updateOne({ tokenHash: hashRefreshToken(newRefreshToken) }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } })
       return { error: 'Invalid or expired refresh token', status: 401 }
     }
 
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
-    const token = this.signAccessToken(payload)
-    const newRefreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
-
     this.logger.info(`Token refreshed for user: ${user._id}`)
     return { data: { token, refreshToken: newRefreshToken } }
+  }
+
+  /**
+   * A rotated refresh token presented again means someone else holds a copy
+   * of the chain: revoke every session, once. Nothing else counts. A token
+   * revoked for any other reason (logout, logout-all, password change) is
+   * simply dead; one rotated under ROTATION_GRACE_MS ago is taken for a
+   * retried request whose response was lost; and one from an earlier session
+   * generation belongs to a chain that is already revoked. The claim flips
+   * the token to 'replay_detected', so a second presentation is inert.
+   * Returns the account id when it revoked.
+   */
+  private async claimReplay(tokenHash: string): Promise<string | null> {
+    const rotated = await RefreshToken.findOne({ tokenHash, revokedReason: 'rotated', revokedAt: { $lte: new Date(Date.now() - ROTATION_GRACE_MS) } })
+    if (!rotated || !await User.exists({ _id: rotated.userId, ...sessionVersionFilter(rotated.sessionVersion ?? 0) })) return null
+    const claimed = await RefreshToken.findOneAndUpdate(
+      { _id: rotated._id, revokedReason: 'rotated' },
+      { $set: { revokedReason: 'replay_detected', replayDetectedAt: new Date() } },
+    )
+    if (!claimed) return null
+    await this.revokeAllSessions(rotated.userId, 'replay_detected')
+    return rotated.userId
+  }
+
+  /**
+   * Sign every session out, then give the calling device a fresh pair at the
+   * new generation so it stays signed in. Its own sockets close quietly
+   * first: a 'session:revoked' would have the client sign itself out before
+   * the new pair arrives. The client reconnects with the new token.
+   */
+  private async renewAfterRevokingAll(userId: string, reason: string, device: DeviceSession, ipAddress?: string) {
+    if (device.sid) disconnectSession(device.sid, { notify: false })
+    await this.revokeAllSessions(userId, reason)
+    const user = await this.userRepo.findById(userId)
+    if (!user) return null
+    const sid = crypto.randomUUID()
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid, userId, email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
+    return {
+      token: this.signAccessToken(payload),
+      refreshToken: await this.createRefreshToken(userId, user.sessionVersion ?? 0, sid, device.deviceLabel, ipAddress),
+    }
   }
 
   /** Revoke refresh/biometric credentials and remove current push enrollments. */
@@ -384,10 +449,23 @@ export class AuthService {
     ])
   }
 
+  /**
+   * Sign this device out: its whole session family, not only the token
+   * presented (a concurrent refresh may already have rotated it), plus its
+   * access tokens and sockets. Other devices stay signed in.
+   */
   async logout(plainRefreshToken: string) {
     const tokenHash = hashRefreshToken(plainRefreshToken)
     const record = await RefreshToken.findOne({ tokenHash })
-    if (record && !record.revokedAt) {
+    if (record?.familyId) {
+      await revokeDeviceSession(record.familyId, 'logout')
+      await RefreshToken.updateMany(
+        { familyId: record.familyId, revokedAt: { $exists: false } },
+        { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
+      )
+      this.logger.info(`Session signed out (logout) for user: ${record.userId}`)
+    } else if (record && !record.revokedAt) {
+      // Issued before session families: only this token can be revoked.
       record.revokedAt = new Date()
       record.revokedReason = 'logout'
       await record.save()
@@ -396,13 +474,17 @@ export class AuthService {
     return { data: null }
   }
 
-  async logoutAll(userId: string) {
+  /** `currentSid` is the calling device, whose client signs itself out: its
+   * sockets close without a 'session:revoked' racing that. */
+  async logoutAll(userId: string, currentSid?: string) {
+    if (currentSid) disconnectSession(currentSid, { notify: false })
     await this.revokeAllSessions(userId, 'logout_all')
     this.logger.info(`All sessions revoked for user: ${userId}`)
     return { data: null }
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string, ipAddress?: string) {
+  /** Signs every other session out and returns a fresh pair for this device. */
+  async changePassword(userId: string, currentPassword: string, newPassword: string, ipAddress?: string, device: DeviceSession = {}) {
     const user = await this.userRepo.findById(userId)
     if (!user) {
       return { error: 'User not found', status: 404 }
@@ -420,13 +502,14 @@ export class AuthService {
     await user.save()
 
     // Credential change must kill every existing session, including any an
-    // attacker may hold — this is the classic post-compromise action.
-    await this.revokeAllSessions(userId, 'credentials_changed')
+    // attacker may hold — this is the classic post-compromise action. The
+    // device that made the change gets a fresh session in its place.
+    const tokens = await this.renewAfterRevokingAll(userId, 'credentials_changed', device, ipAddress)
 
     this.logger.info(`Password changed for user: ${userId}`)
     this.audit('auth.password.change', userId, ipAddress)
-    this.securityNotice(userId, 'Your password was changed', 'The password for your RentOS account was changed and you were signed out on other devices. If this was not you, reset your password and contact support now.')
-    return { data: null, message: 'Password changed successfully' }
+    this.securityNotice(userId, 'Your password was changed', 'The password for your RentOS account was changed and your other devices were signed out. If this was not you, reset your password and contact support now.')
+    return { data: tokens, message: 'Password changed successfully' }
   }
 
   async forgotPassword(email: string, ipAddress?: string) {
@@ -482,7 +565,8 @@ export class AuthService {
     user.credentialsChangedAt = new Date()
     await user.save()
 
-    // Recovery complete — every existing session (attacker's included) dies.
+    // Recovery complete — every existing session (attacker's included) dies,
+    // and this unauthenticated flow issues none: the user signs in again.
     await this.revokeAllSessions(userId, 'credentials_changed')
 
     this.logger.info(`Password reset completed for user: ${userId}`)
