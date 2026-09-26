@@ -60,6 +60,8 @@ export interface TransferLookup {
   /** GHS major units, when the provider reports it. */
   amount?: number
   failureReason?: string
+  /** The provider reversed the transfer (the money came back), as opposed to it never going out. */
+  reversed?: boolean
 }
 
 export interface TransferResult {
@@ -80,6 +82,11 @@ export interface PayoutWebhookEvent {
   timestamp: string
   /** Reason text when the transfer failed or reversed. */
   failureReason?: string
+  /**
+   * A reversal: status stays 'failed' (the money is not with the payee), but a
+   * payout already marked paid moves to 'reversed' and is refunded.
+   */
+  reversed?: boolean
   raw: unknown
 }
 

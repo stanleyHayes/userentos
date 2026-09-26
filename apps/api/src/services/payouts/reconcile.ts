@@ -52,9 +52,19 @@ export async function reconcilePayout(
       amount: lookup.amount ?? 0,
       timestamp: new Date().toISOString(),
       failureReason: lookup.failureReason,
+      reversed: lookup.reversed,
       raw: opts.actorId ? { reconciledBy: opts.actorId } : { reconciledBy: opts.source },
     }, { source: opts.source })
-    if (!moved) return { kind: 'mismatch' }
+    if (!moved) {
+      // A webhook may have settled it while we asked; only a payout still
+      // processing after that is a genuine disagreement.
+      const current = await Payout.findById(payout._id).select('status').lean()
+      if (current && current.status !== 'processing') {
+        await Payout.updateOne({ _id: payout._id }, { $unset: { needsReconciliation: '', nextReconcileAt: '' } })
+        return { kind: 'settled', status: current.status === 'paid' ? 'paid' : 'failed' }
+      }
+      return { kind: 'mismatch' }
+    }
     await Payout.updateOne({ _id: payout._id }, { $unset: { needsReconciliation: '', nextReconcileAt: '' } })
     outcome = { kind: 'settled', status: lookup.status }
   } else if (lookup.status === 'not_found') {
@@ -85,6 +95,12 @@ export const payoutsOffered = () => isRegulatedFeatureEnabled('rent_collection')
 
 /** Payouts become eligible this long after the transfer was sent. */
 export const RECONCILE_MIN_AGE_MS = 5 * 60_000
+/**
+ * A normally accepted transfer is first checked this long after approval:
+ * by then its webhook is overdue. (A transfer whose send timed out is held
+ * with needsReconciliation and checked from RECONCILE_MIN_AGE_MS.)
+ */
+export const WEBHOOK_OVERDUE_MS = 30 * 60_000
 const BACKOFF_BASE_MS = 5 * 60_000
 const BACKOFF_MAX_MS = 6 * 60 * 60_000
 
@@ -94,8 +110,10 @@ export function reconcileBackoffMs(attempts: number): number {
 }
 
 /**
- * Scheduled sweep: ask the provider about every payout held for
- * reconciliation that is old enough and due. Each payout is claimed (its next
+ * Scheduled sweep: ask the provider about every processing payout that is old
+ * enough and due — not only those held for reconciliation, so a transfer whose
+ * webhook never arrived stops blocking the payee's next payout. Approval
+ * schedules the first check for when the webhook is overdue. Each payout is claimed (its next
  * check pushed out by the backoff) before the provider is called, so
  * overlapping runs or a crash mid-sweep never hammer the provider or skip
  * the backoff.
@@ -107,7 +125,6 @@ export async function reconcileUncertainPayouts(opts: { now?: Date; limit?: numb
   if (!payoutsOffered()) return summary
   const due: Record<string, unknown> = {
     status: 'processing',
-    needsReconciliation: true,
     approvedAt: { $lte: new Date(now.getTime() - RECONCILE_MIN_AGE_MS) },
     $or: [{ nextReconcileAt: { $exists: false } }, { nextReconcileAt: { $lte: now } }],
     // `userIds` limits the sweep to specific accounts (tests share a database).

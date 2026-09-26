@@ -653,7 +653,7 @@ export interface Payout {
   id: string
   userId: string
   amount: number
-  status: 'requested' | 'processing' | 'paid' | 'failed'
+  status: 'requested' | 'processing' | 'paid' | 'failed' | 'reversed'
   reference: string
   destination: { bankName: string; accountNumber: string; accountName: string }
   failureReason?: string
