@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { getSponsoredPlacements, applySponsoredPlacements, recordImpressions } from '../services/marketplace/sponsorshipServing.js'
+import { getSponsoredPlacements, applySponsoredPlacements, recordImpressions, isSponsoredPlacement } from '../services/marketplace/sponsorshipServing.js'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { propertyService } from '../container.js'
@@ -155,6 +155,15 @@ export const propertyController = {
   list: async (req: Request, res: Response) => {
     const q = req.query
 
+    // Opt-in paid placement. An unknown value is refused rather than ignored,
+    // so a client that thinks it asked for (and labels) sponsored items can't
+    // silently get none, or the reverse.
+    const sponsoredPlacement = isSponsoredPlacement(q.placement) ? q.placement : undefined
+    if (q.placement !== undefined && !sponsoredPlacement) {
+      error(res, 'Unknown placement')
+      return
+    }
+
     const filters: Record<string, unknown> = {
       status: q.status as string | undefined,
       type: q.type as string | undefined,
@@ -256,12 +265,15 @@ export const propertyController = {
       }
     }
 
-    // Sponsored listings ride on top of the organic results (spec §9). Only
-    // applied to the public browse — a landlord looking at their own portfolio
-    // has no use for advertising, and an admin view must show true ordering.
+    // Sponsored listings ride on top of the organic results (spec §9), but only
+    // for a screen that asks for them with ?placement=search_top and labels
+    // them. Every other caller (dropdowns, a saved-items filter, the mobile
+    // apps, which declare no ads in the stores) gets organic order and counts
+    // no impression. Never for a landlord's own portfolio or an admin view,
+    // which must show true ordering.
     let served: typeof items = items
-    if (!ownOnly && !isAdmin) {
-      const placements = await getSponsoredPlacements('search_top', {
+    if (sponsoredPlacement && !ownOnly && !isAdmin) {
+      const placements = await getSponsoredPlacements(sponsoredPlacement, {
         city: typeof q.city === 'string' ? q.city : undefined,
       })
       if (placements.length > 0) {

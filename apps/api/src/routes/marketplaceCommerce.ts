@@ -21,6 +21,7 @@ import { recordAudit } from '../utils/audit.js'
 import { requireEntitlement, requireQuota, EntitlementError } from '../services/entitlements.js'
 import { validateCoupon } from '../services/marketplace/coupons.js'
 import { recordAttribution } from '../services/marketplace/affiliate.js'
+import { SPONSORED_PLACEMENTS } from '../services/marketplace/sponsoredPlacements.js'
 
 const router = Router()
 
@@ -40,7 +41,8 @@ router.post('/sponsorship/products', authenticate, requireRole('admin', 'super_a
   const schema = z.object({
     name: z.string().min(2).max(80),
     description: z.string().max(500).optional(),
-    placement: z.enum(['search_top', 'homepage', 'category', 'city']),
+    // Only placements a public surface serves — see sponsoredPlacements.ts.
+    placement: z.enum(SPONSORED_PLACEMENTS),
     durationDays: z.number().int().min(1).max(365),
     price: z.number().min(0),
     targeting: z.object({

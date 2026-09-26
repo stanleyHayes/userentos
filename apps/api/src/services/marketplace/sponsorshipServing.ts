@@ -13,9 +13,22 @@
  *  - Sponsored items must be clearly labelled. Serving returns the sponsorship
  *    id alongside the property so the caller cannot render a boost without
  *    also having the flag to label it.
+ *
+ * A third rule keeps the store privacy answers true (App Store "Third-Party
+ * Advertising" / Google Play "Advertising or marketing" both unticked, no
+ * tracking): choosing and counting a sponsored item uses only the placement
+ * and the filters on the request, never who is asking. Nothing here may take a
+ * user id, device id, IP, session or profile — sponsorship-serving.test.ts pins
+ * the signatures. Picking sponsored items from a profile, favourites, history
+ * or location would change those answers and the privacy policy in the same
+ * release.
  */
 import { Sponsorship } from '../../models/Sponsorship.js'
 import { Property } from '../../models/Property.js'
+import { escapeRegex } from '../../utils/params.js'
+import type { SponsoredPlacementName } from './sponsoredPlacements.js'
+
+export { SPONSORED_PLACEMENTS, isSponsoredPlacement, type SponsoredPlacementName } from './sponsoredPlacements.js'
 
 /** A property that is currently being served as sponsored. */
 export interface SponsoredPlacement {
@@ -29,14 +42,24 @@ import { PUBLICLY_VISIBLE_STATUSES as SERVABLE_LISTING_STATUSES } from '../prope
 
 /**
  * Active sponsorships for a placement, filtered down to listings that are
- * still publicly visible.
+ * still publicly visible and, when the request has one, in the city it asked
+ * for.
  *
  * The listing check is a second query rather than a join because the campaign
  * and the listing can fall out of step at any moment — a suspension does not
  * write to the campaign.
+ *
+ * Every active campaign is considered before anything is cut. The old query
+ * took the oldest nine and only then applied the city, so with more campaigns
+ * than that a newer paid campaign in the searched city never served. Active
+ * campaigns are a small, paid set, so reading them all is cheap.
+ *
+ * Rotation is least-shown first: among campaigns that qualify, the one with
+ * the fewest impressions serves, so every advertiser gets a turn rather than
+ * the earliest buyer taking the slot for good.
  */
 export async function getSponsoredPlacements(
-  placement: string,
+  placement: SponsoredPlacementName,
   opts: { city?: string; limit?: number } = {},
 ): Promise<SponsoredPlacement[]> {
   const now = new Date()
@@ -47,7 +70,7 @@ export async function getSponsoredPlacements(
     status: 'active',
     startAt: { $lte: now },
     endAt: { $gte: now },
-  }).sort({ createdAt: 1 }).limit(limit * 3).lean()
+  }).select('_id propertyId placement').sort({ 'metrics.impressions': 1, createdAt: 1 }).lean()
 
   if (campaigns.length === 0) return []
 
@@ -57,7 +80,10 @@ export async function getSponsoredPlacements(
     listingStatus: { $in: SERVABLE_LISTING_STATUSES },
     isActive: { $ne: false },
   }
-  if (opts.city) filter['address.city'] = opts.city
+  // The organic filter's semantics (propertyService.listProperties): a
+  // case-insensitive substring. An exact match served nothing for "accra"
+  // while the organic results showed every Accra listing.
+  if (opts.city) filter['address.city'] = { $regex: escapeRegex(opts.city), $options: 'i' }
 
   const servable = await Property.find(filter).select('_id').lean()
   const servableIds = new Set(servable.map((p) => String(p._id)))
@@ -101,17 +127,21 @@ export function applySponsoredPlacements<T extends { id: string }>(
   return [...promoted, ...rest]
 }
 
-/** Count an impression. Best-effort: never block a page render on metrics. */
+/**
+ * Count an impression. Best-effort: never block a page render on metrics.
+ *
+ * One aggregate counter per campaign and nothing else — no per-view row, no
+ * viewer. That is what lets advertisers see delivery without Apple or Google
+ * counting it as advertising data linked to a person. There is deliberately no
+ * click counter: nothing called one, and a public endpoint that anyone can hit
+ * to bump a campaign's clicks is not a number worth reporting.
+ */
 export function recordImpressions(sponsorshipIds: string[]): void {
   if (sponsorshipIds.length === 0) return
   Sponsorship.updateMany(
     { _id: { $in: sponsorshipIds } },
     { $inc: { 'metrics.impressions': 1 } },
   ).catch(() => undefined)
-}
-
-export function recordClick(sponsorshipId: string): void {
-  Sponsorship.updateOne({ _id: sponsorshipId }, { $inc: { 'metrics.clicks': 1 } }).catch(() => undefined)
 }
 
 /**
