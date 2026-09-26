@@ -9,6 +9,9 @@ import crypto from 'crypto'
 export interface IRefreshToken extends Document {
   userId: string
   sessionVersion?: number
+  /** One sign-in on one device, carried through every rotation. Access tokens
+   * carry it as `sid`, so signing that device out can reject them too. */
+  familyId?: string
   /** SHA-256 hex digest of the opaque refresh token */
   tokenHash: string
   /** Optional client hint, e.g. 'Chrome 125 / macOS' */
@@ -19,12 +22,15 @@ export interface IRefreshToken extends Document {
   expiresAt: Date
   revokedAt?: Date
   revokedReason?: string
+  /** Set once, when a rotated token was presented again (see AuthService.refresh). */
+  replayDetectedAt?: Date
 }
 
 const schema = new Schema<IRefreshToken>({
   userId: { type: String, required: true, index: true },
   tokenHash: { type: String, required: true, unique: true },
   sessionVersion: { type: Number, default: 0, immutable: true },
+  familyId: { type: String, immutable: true },
   deviceLabel: { type: String },
   ipAddress: { type: String },
   lastUsedAt: { type: Date },
@@ -33,9 +39,11 @@ const schema = new Schema<IRefreshToken>({
   expiresAt: { type: Date, required: true },
   revokedAt: { type: Date },
   revokedReason: { type: String },
+  replayDetectedAt: { type: Date },
 }, { timestamps: true })
 
 schema.index({ userId: 1, revokedAt: 1 })
+schema.index({ familyId: 1 })
 schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }) // MongoDB TTL — auto-delete expired tokens
 
 export const RefreshToken = mongoose.model<IRefreshToken>('RefreshToken', schema)

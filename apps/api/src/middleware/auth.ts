@@ -3,12 +3,17 @@ import jwt from 'jsonwebtoken'
 import { config } from '../config/index.js'
 import { error } from '../utils/response.js'
 import { User } from '../models/User.js'
+import { isSessionRevoked } from '../models/RevokedSession.js'
 import { sessionVersionFilter, biometricVersionFilter } from '../services/sessionVersion.js'
 import { suspendedAccess } from '../services/suspendedAccess.js'
 
 export interface AuthPayload {
   biometricVersion?: number
   sessionVersion?: number
+  /** Session family: one sign-in on one device, the same across token
+   * rotations. Signing that device out lists it in RevokedSession. Tokens
+   * issued before families existed have none. */
+  sid?: string
   suspended?: boolean
   userId: string
   email: string
@@ -53,7 +58,13 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       error(res, 'Invalid or expired token', 401)
       return
     }
-    const active = await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } })
+    // A device signed out on its own (logout, biometric device revoke) still
+    // matches the account-level versions, so its sid is checked separately.
+    const [revoked, active] = await Promise.all([
+      isSessionRevoked(payload.sid),
+      User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } }),
+    ])
+    if (revoked) { error(res, 'Invalid or expired token', 401); return }
     if (!active) {
       const existing = await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false } })
       if (!existing) { error(res, 'Invalid or expired token', 401); return }
@@ -76,7 +87,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
     try {
       const token = header.slice(7)
       const payload = jwt.verify(token, config.jwtSecret) as AuthPayload
-      if (payload.purpose === 'session' && await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
+      if (payload.purpose === 'session' && !await isSessionRevoked(payload.sid) && await User.exists({ _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), ...biometricVersionFilter(payload.biometricVersion), deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
         if (!payload.permissions) payload.permissions = []
         req.user = payload
       }
@@ -89,7 +100,8 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
  * Download-only auth for file downloads opened via browser links (PDFs).
  * Accepts a short-lived 'download'-purpose token via Bearer header or ?token=
  * query param. Session tokens are deliberately NOT accepted here, so a leaked
- * download URL never yields account access.
+ * download URL never yields account access. The token carries the session
+ * version and sid it was minted under, so revoking that session ends it too.
  */
 export async function authenticateDownload(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization
@@ -107,8 +119,10 @@ export async function authenticateDownload(req: Request, res: Response, next: Ne
       error(res, 'Invalid or expired download token', 401)
       return
     }
-    const active = await User.exists({ _id: payload.userId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })
-    if (!active && (!suspendedAccess(req.method, req.originalUrl || '') || !await User.exists({ _id: payload.userId, deletedAt: { $exists: false } }))) {
+    if (await isSessionRevoked(payload.sid)) { error(res, 'Invalid or expired download token', 401); return }
+    const session = { _id: payload.userId, ...sessionVersionFilter(payload.sessionVersion), deletedAt: { $exists: false } }
+    const active = await User.exists({ ...session, suspendedAt: { $exists: false } })
+    if (!active && (!suspendedAccess(req.method, req.originalUrl || '') || !await User.exists(session))) {
       error(res, 'Invalid or expired download token', 401); return
     }
     payload.suspended = !active

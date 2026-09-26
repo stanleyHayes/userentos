@@ -497,7 +497,7 @@ async function streamPassportPdfResponse(
 // Mint a short-lived, download-only token for the PDF. This replaces putting
 // the full session JWT in ?token= URLs (which leaked into logs/history).
 const documentLinkHandler = asyncHandler(async (req: Request, res: Response) => {
-  success(res, { token: signDownloadToken(req.user!.userId) })
+  success(res, { token: signDownloadToken(req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
 })
 
 // Authenticated PDF — accepts a download-purpose token only (Bearer or ?token=).

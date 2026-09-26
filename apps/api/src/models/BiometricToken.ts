@@ -9,6 +9,9 @@ export interface IBiometricToken extends Document {
   userId: string
   biometricVersion?: number
   sessionVersion?: number
+  /** One enrollment on one device, carried through every rotation. Access
+   * tokens it mints carry it as `sid`, so revoking the device rejects them. */
+  familyId?: string
   /** SHA-256 hex digest of the opaque refresh token */
   tokenHash: string
   /** Stable per-install device identifier supplied by the client (uuid) */
@@ -20,6 +23,8 @@ export interface IBiometricToken extends Document {
   expiresAt: Date
   revokedAt?: Date
   revokedReason?: string
+  /** Set once, when a rotated token was presented again (see /exchange). */
+  replayDetectedAt?: Date
 }
 
 const schema = new Schema<IBiometricToken>({
@@ -27,15 +32,18 @@ const schema = new Schema<IBiometricToken>({
   tokenHash: { type: String, required: true, unique: true },
   biometricVersion: { type: Number, default: 0, immutable: true },
   sessionVersion: { type: Number, default: 0, immutable: true },
+  familyId: { type: String, immutable: true },
   deviceId: { type: String, required: true },
   deviceLabel: { type: String },
   lastUsedAt: { type: Date },
   expiresAt: { type: Date, required: true },
   revokedAt: { type: Date },
   revokedReason: { type: String },
+  replayDetectedAt: { type: Date },
 }, { timestamps: true })
 
 schema.index({ userId: 1, deviceId: 1 })
+schema.index({ familyId: 1 })
 schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }) // MongoDB TTL — auto-delete expired tokens
 
 export const BiometricToken = mongoose.model<IBiometricToken>('BiometricToken', schema)

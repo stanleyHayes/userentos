@@ -37,6 +37,11 @@ function getClientMeta(req: Request) {
   return { deviceLabel, ipAddress }
 }
 
+/** The signed-in device, for flows that sign other sessions out and renew this one. */
+function getDeviceSession(req: Request) {
+  return { sid: req.user?.sid, deviceLabel: getClientMeta(req).deviceLabel }
+}
+
 export const authController = {
   register: async (req: Request, res: Response) => {
     const parsed = registerSchema.safeParse(req.body)
@@ -94,7 +99,7 @@ export const authController = {
 
   logoutAll: async (req: Request, res: Response) => {
     const userId = req.user!.userId
-    await authService.logoutAll(userId)
+    await authService.logoutAll(userId, req.user!.sid)
     success(res, null, 'Logged out from all devices')
   },
 
@@ -105,8 +110,9 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword, getClientMeta(req).ipAddress)
+    const result = await authService.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword, getClientMeta(req).ipAddress, getDeviceSession(req))
     if (result.error) { error(res, result.error, result.status); return }
+    // data is this device's replacement { token, refreshToken }.
     success(res, result.data, result.message)
   },
 
@@ -150,7 +156,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.mfaEnable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress)
+    const result = await authService.mfaEnable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress, getDeviceSession(req))
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },
@@ -160,7 +166,7 @@ export const authController = {
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const result = await authService.mfaDisable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress)
+    const result = await authService.mfaDisable(req.user!.userId, parsed.data.code, getClientMeta(req).ipAddress, getDeviceSession(req))
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, result.message)
   },
