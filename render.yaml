@@ -49,7 +49,7 @@ services:
         sync: false
       # MTN MoMo Collections. BASE_URL defaults to the sandbox host, so it must
       # be set for live. CALLBACK_URL is this service's public webhook:
-      # https://<api-host>/api/payments/webhook/mtn_momo
+      # https://<api-host>/api/webhooks/payments/mtn-momo
       - key: MTN_MOMO_SUBSCRIPTION_KEY
         sync: false
       - key: MTN_MOMO_API_USER
@@ -91,9 +91,12 @@ services:
         sync: false
 
       # ─── Payouts (money out) ───
-      # Which PSP sends payouts. Point the Paystack webhook at
-      # https://<api-host>/api/webhooks/payouts/paystack — signatures are
-      # verified with the secret key, so there is no separate webhook secret.
+      # Which PSP sends payouts. Paystack sends EVERY event (charges, transfers,
+      # refunds, disputes) to one URL: set it, for live and test, to
+      # https://<api-host>/api/webhooks/paystack — signatures are verified with
+      # the secret key, so there is no separate webhook secret. The older
+      # /api/webhooks/payouts/paystack and /api/webhooks/marketplace/paystack
+      # paths are aliases of it, kept so events are not lost while switching.
       - key: PAYOUT_PROVIDER
         value: paystack
       - key: PAYSTACK_SECRET_KEY

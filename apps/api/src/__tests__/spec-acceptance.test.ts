@@ -77,18 +77,20 @@ describe('spec acceptance matrix (§18) and definition of done (§19)', () => {
   })
 
   it('§8.4 webhooks verify signatures and dedupe by provider event id', () => {
-    const webhook = read('routes/marketplaceWebhooks.ts')
-    expect(webhook).toContain('verifyWebhookSignature')
-    expect(webhook).toContain('processedEventIds')
+    // One Paystack webhook; the marketplace path is an alias of it.
+    expect(read('routes/marketplaceWebhooks.ts')).toContain('paystackWebhookHandler')
+    expect(read('routes/paystackWebhooks.ts')).toContain('verifyWebhookSignature')
+    const dispatcher = read('services/payments/paystackEvents.ts')
+    expect(dispatcher).toContain('processedEventIds')
     // Redirect success alone must never mark a transaction paid.
-    expect(webhook).toContain('verifyTransaction')
+    expect(dispatcher).toContain('verifyTransaction')
   })
 
   it('§15 secret keys are never sent to a client', () => {
     const adapter = read('services/marketplace/paystack.ts')
     expect(adapter).toContain('PAYSTACK_SECRET_KEY')
     // The secret is read server-side only; no route echoes it.
-    for (const file of ['routes/marketplacePayments.ts', 'routes/marketplaceWebhooks.ts']) {
+    for (const file of ['routes/marketplacePayments.ts', 'routes/marketplaceWebhooks.ts', 'routes/paystackWebhooks.ts']) {
       expect(read(file)).not.toContain('PAYSTACK_SECRET_KEY')
     }
   })

@@ -30,7 +30,7 @@ interface Booking {
   proposedFinalCost?: number
   quoteAmount?: number
   quoteAccepted: boolean
-  paymentStatus: 'pending' | 'partial' | 'paid'
+  paymentStatus: 'pending' | 'partial' | 'paid' | 'refunded'
   rating?: number
   review?: string
   createdAt: string

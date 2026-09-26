@@ -6,6 +6,10 @@ import { ttlSeconds } from '../config/retention.js'
  * dead-letter retry (spec §8.4).
  *
  * `eventId` is unique per provider so a replayed delivery is visible as such.
+ * A row is written BEFORE the event is processed and marked processedAt only
+ * after processing succeeded, so a crash or deploy mid-handler leaves it for
+ * the dead-letter sweep. `leaseUntil` lets exactly one delivery (or sweep)
+ * process an event at a time.
  * Payloads expire automatically: they are operational evidence, not a
  * permanent record, and they can contain buyer contact details.
  */
@@ -17,6 +21,7 @@ export interface IWebhookEvent extends Document {
   payload: string
   processedAt?: Date
   processingError?: string
+  leaseUntil?: Date
   attempts: number
   createdAt: Date
 }
@@ -29,6 +34,7 @@ const webhookEventSchema = new Schema<IWebhookEvent>({
   payload: { type: String, required: true },
   processedAt: Date,
   processingError: String,
+  leaseUntil: Date,
   attempts: { type: Number, default: 0 },
 }, { timestamps: { createdAt: true, updatedAt: false } })
 

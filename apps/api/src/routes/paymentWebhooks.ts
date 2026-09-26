@@ -21,6 +21,7 @@ import { airtelTigoMoneyProvider } from '../services/payments/airteltigoMoney.js
 import { bankTransferProvider } from '../services/payments/bankTransfer.js'
 import { finalizePayment } from '../services/payments/finalize.js'
 import type { PaymentProvider } from '../services/payments/types.js'
+import { trackInFlight } from '../services/inFlight.js'
 
 const router = Router()
 
@@ -61,7 +62,8 @@ function makeHandler(provider: PaymentProvider) {
     }
 
     try {
-      await finalizePayment(event, { source: 'webhook', providerSource: provider.source })
+      // Tracked so a deploy lets it finish before the database closes.
+      await trackInFlight(finalizePayment(event, { source: 'webhook', providerSource: provider.source }))
     } catch (err) {
       console.error(`[Webhook:${provider.id}] finalize threw:`, (err as Error).message)
       // Delivery was not processed. Ask the provider to retry; a status poll
