@@ -13,7 +13,8 @@ const fileFilter = (_req: unknown, file: Express.Multer.File, cb: multer.FileFil
   if (allowed.includes(file.mimetype)) {
     cb(null, true)
   } else {
-    cb(new Error('File type not allowed'))
+    // Tagged 400 so the error handler reports the reason, not a 500.
+    cb(Object.assign(new Error('Only images (jpeg/png/webp/gif), MP4 video, PDF and Word documents are allowed'), { status: 400 }))
   }
 }
 

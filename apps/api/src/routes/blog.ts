@@ -139,14 +139,29 @@ router.patch('/:id', authenticate, requireRole('admin', 'government', 'legal_off
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-  const post = await BlogPost.findByIdAndUpdate(param(req.params.id), parsed.data, { returnDocument: 'after' }).lean()
-  if (!post) { error(res, 'Post not found', 404); return }
+  /*
+   * Staff edit RentOS editorial only. Unscoped, this let government and legal
+   * officers rewrite any seller's storefront post, and re-publish one an admin
+   * had taken down — storefront moderation belongs to the audited takedown in
+   * authoring.ts. A removed post can't be switched back on from here either.
+   */
+  const scope: Record<string, unknown> = { _id: param(req.params.id), ...PLATFORM_ONLY }
+  const filter: Record<string, unknown> = parsed.data.published ? { ...scope, status: { $ne: 'removed' } } : scope
+  const post = await BlogPost.findOneAndUpdate(filter, parsed.data, { returnDocument: 'after' }).lean()
+  if (!post) {
+    const removed = parsed.data.published && await BlogPost.exists({ ...scope, status: 'removed' })
+    if (removed) { error(res, 'This post was removed by moderation and can no longer be published.', 403); return }
+    error(res, 'Post not found', 404)
+    return
+  }
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })
 
-// Admin: delete post
+// Admin: delete post — RentOS editorial only (see PATCH). A seller's post is
+// taken down through /api/authoring/posts/:id/takedown, which is audited.
 router.delete('/:id', authenticate, requireRole('admin', 'government', 'legal_officer'), async (req, res) => {
-  await BlogPost.findByIdAndDelete(param(req.params.id))
+  const result = await BlogPost.deleteOne({ _id: param(req.params.id), ...PLATFORM_ONLY })
+  if (!result.deletedCount) { error(res, 'Post not found', 404); return }
   success(res, null, 'Post deleted')
 })
 

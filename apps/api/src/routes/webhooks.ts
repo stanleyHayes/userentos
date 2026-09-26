@@ -98,6 +98,15 @@ router.patch('/subscriptions/:id', authenticate, async (req, res) => {
   if (!sub) { error(res, 'Subscription not found', 404); return }
 
   const { isActive, events } = req.body
+  // Re-activating counts against the same cap as creating: otherwise pausing
+  // ten, creating ten more and switching the first ten back on beats it.
+  if (isActive === true && !sub.isActive) {
+    const activeCount = await WebhookSubscription.countDocuments({ userId: req.user!.userId, isActive: true })
+    if (activeCount >= MAX_SUBSCRIPTIONS_PER_USER) {
+      error(res, `Subscription limit reached (max ${MAX_SUBSCRIPTIONS_PER_USER} active subscriptions)`, 409)
+      return
+    }
+  }
   if (typeof isActive === 'boolean') sub.isActive = isActive
   if (events && Array.isArray(events)) {
     const invalid = events.filter((e: string) => e !== '*' && !VALID_EVENTS.includes(e as WebhookEvent))

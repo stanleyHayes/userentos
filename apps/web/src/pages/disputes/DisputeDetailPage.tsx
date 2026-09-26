@@ -271,7 +271,8 @@ export function DisputeDetailPage() {
                 type="file"
                 className="hidden"
                 multiple
-                accept="image/*,video/*,.pdf,.doc,.docx"
+                // Exactly what the server's evidence filter accepts.
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,application/pdf"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? [])
                   if (files.length > 0) {

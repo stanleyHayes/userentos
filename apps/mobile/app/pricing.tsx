@@ -49,7 +49,7 @@ export default function PricingScreen() {
 
   const analysisQuery = useQuery({
     queryKey: ['pricing-analysis', city, type, bedrooms, bathrooms, furnished, floorArea],
-    queryFn: () => api.get<PricingAnalysis>(`/pricing/comparables?city=${encodeURIComponent(city)}&type=${type}&bedrooms=${bedrooms}&bathrooms=${bathrooms}&furnished=${furnished}&floorArea=${floorArea}`),
+    queryFn: () => api.get<PricingAnalysis>(`/pricing/comparables?city=${encodeURIComponent(city)}&type=${type}&bedrooms=${bedrooms}&bathrooms=${bathrooms}&furnished=${furnished}${floorArea.trim() ? `&floorArea=${encodeURIComponent(floorArea.trim())}` : ''}`),
     enabled: activeTab === 'analysis' && !!city && !!type,
   })
 

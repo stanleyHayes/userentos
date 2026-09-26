@@ -71,6 +71,8 @@ function isLandlordRole(roles: string[]): boolean {
   return roles.includes('landlord') || roles.includes('property_manager')
 }
 
+/** Read access for oversight. Writes use isAdminStaff: a regulator can view
+ * any request but must not close, re-cost or annotate one. */
 function isAdminRole(roles: string[]): boolean {
   return roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
 }
@@ -282,7 +284,7 @@ router.patch(
     }
 
     const isLandlord =
-      request.landlordId === userId.toString() || isAdminRole(roles) || await hasDelegatedScope(userId.toString(), request.propertyId, 'maintenance')
+      request.landlordId === userId.toString() || isAdminStaff(roles) || await hasDelegatedScope(userId.toString(), request.propertyId, 'maintenance')
     const isTenant = request.tenantId === userId.toString()
 
     if (!isLandlord && !isTenant) {
@@ -353,7 +355,7 @@ router.post(
     const isParticipant =
       request.tenantId === userId.toString() ||
       request.landlordId === userId.toString() ||
-      isAdminRole(roles)
+      isAdminStaff(roles)
 
     if (!isParticipant) {
       error(res, 'Not authorized', 403)
@@ -400,7 +402,7 @@ router.post(
     }
 
     const isLandlord =
-      request.landlordId === userId.toString() || isAdminRole(roles)
+      request.landlordId === userId.toString() || isAdminStaff(roles)
     if (!isLandlord) {
       error(res, 'Only the landlord can mark a request completed', 403)
       return

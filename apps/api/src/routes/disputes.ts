@@ -36,7 +36,8 @@ const upload = multer({
     if (ALLOWED_MIME_TO_EXT[file.mimetype]) {
       cb(null, true)
     } else {
-      cb(new Error('Only images (jpeg/png/webp/gif), video (mp4/mov/webm) and PDF files are allowed as evidence'))
+      // Tagged 400 so the error handler reports the reason, not a 500.
+      cb(Object.assign(new Error('Only images (jpeg/png/webp/gif), video (mp4/mov/webm) and PDF files are allowed as evidence'), { status: 400 }))
     }
   },
 })

@@ -33,12 +33,12 @@ export function DocumentGridCard({
     >
       <CardContent>
         {/* Category color bar */}
-        <div className={`-mx-4 -mt-4 mb-4 h-1 ${CATEGORY_CONFIG[doc.category]?.bg ?? 'bg-gray-500/10'}`}
-          style={{ background: `linear-gradient(90deg, ${getCategoryGradient(doc.category)})` }}
+        <div className={`-mx-4 -mt-4 mb-4 h-1 ${CATEGORY_CONFIG[doc.type]?.bg ?? 'bg-gray-500/10'}`}
+          style={{ background: `linear-gradient(90deg, ${getCategoryGradient(doc.type)})` }}
         />
 
         <div className="flex items-start justify-between mb-3">
-          <div className={`w-11 h-11 rounded-xl ${CATEGORY_CONFIG[doc.category]?.bg ?? 'bg-gray-500/10'} flex items-center justify-center`}>
+          <div className={`w-11 h-11 rounded-xl ${CATEGORY_CONFIG[doc.type]?.bg ?? 'bg-gray-500/10'} flex items-center justify-center`}>
             {getFileIcon(doc.mimeType)}
           </div>
           <div className="relative">
@@ -66,8 +66,8 @@ export function DocumentGridCard({
         </h3>
 
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant={CATEGORY_BADGE[doc.category] ?? 'muted'} className="text-[10px]">
-            {categoryOptions.find((c) => c.value === doc.category)?.label ?? doc.category}
+          <Badge variant={CATEGORY_BADGE[doc.type] ?? 'muted'} className="text-[10px]">
+            {categoryOptions.find((c) => c.value === doc.type)?.label ?? doc.type}
           </Badge>
         </div>
 
@@ -76,8 +76,8 @@ export function DocumentGridCard({
             <span className="flex items-center gap-1"><HardDrive size={10} /> {formatFileSize(doc.fileSize)}</span>
             <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(doc.createdAt)}</span>
           </div>
-          {doc.url && (
-            <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-primary dark:text-blue-400 hover:text-primary-dark dark:hover:text-blue-300 transition-colors">
+          {doc.fileUrl && (
+            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary dark:text-blue-400 hover:text-primary-dark dark:hover:text-blue-300 transition-colors">
               <Download size={14} />
             </a>
           )}

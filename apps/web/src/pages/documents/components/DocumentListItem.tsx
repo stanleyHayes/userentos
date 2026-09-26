@@ -33,18 +33,18 @@ export function DocumentListItem({
       <div className="flex items-center gap-4 p-3 sm:p-4">
         {/* Category indicator line */}
         <div className="hidden sm:block w-1 self-stretch -my-4 -ml-4 rounded-l-2xl flex-shrink-0"
-          style={{ background: `linear-gradient(180deg, ${getCategoryGradient(doc.category)})` }}
+          style={{ background: `linear-gradient(180deg, ${getCategoryGradient(doc.type)})` }}
         />
 
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 ${CATEGORY_CONFIG[doc.category]?.bg ?? 'bg-gray-500/10'}`}>
+        <div className={`flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 ${CATEGORY_CONFIG[doc.type]?.bg ?? 'bg-gray-500/10'}`}>
           {getFileIcon(doc.mimeType)}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <h3 className="text-sm font-semibold text-primary-dark dark:text-white truncate">{doc.name}</h3>
-            <Badge variant={CATEGORY_BADGE[doc.category] ?? 'muted'} className="text-[10px] hidden sm:inline-flex flex-shrink-0">
-              {categoryOptions.find((c) => c.value === doc.category)?.label ?? doc.category}
+            <Badge variant={CATEGORY_BADGE[doc.type] ?? 'muted'} className="text-[10px] hidden sm:inline-flex flex-shrink-0">
+              {categoryOptions.find((c) => c.value === doc.type)?.label ?? doc.type}
             </Badge>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted dark:text-gray-400">
@@ -54,8 +54,8 @@ export function DocumentListItem({
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {doc.url && (
-            <a href={doc.url} target="_blank" rel="noopener noreferrer">
+          {doc.fileUrl && (
+            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="!p-2"><Download size={14} /></Button>
             </a>
           )}
