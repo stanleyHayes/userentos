@@ -18,7 +18,7 @@ describe('account suspension enforcement', () => {
     vi.mocked(User.updateOne).mockResolvedValue({ matchedCount: 1 } as never)
     expect(await suspendAccount('user', 'report', 'reason')).toBe(true)
     expect(User.updateOne).toHaveBeenCalledWith(expect.objectContaining({ suspendedAt: { $exists: false } }), { $set: { suspendedAt: expect.any(Date), suspensionReason: 'reason', suspensionReportId: 'report' } })
-    expect(disconnectUser).toHaveBeenCalledWith('user')
+    expect(disconnectUser).toHaveBeenCalledWith('user', { notify: false })
   })
   it('does not claim success if the account became ineligible during the write', async () => {
     vi.mocked(User.exists).mockResolvedValueOnce({ _id: 'user' } as never).mockResolvedValueOnce(null)

@@ -8,6 +8,8 @@ export async function suspendAccount(userId: string, reportId: string, reason: s
   const result = await User.updateOne({ ...filter, suspendedAt: { $exists: false } }, { $set: { suspendedAt: new Date(), suspensionReason: reason, suspensionReportId: reportId } })
   if (!result.matchedCount && !await User.exists({ ...filter, suspendedAt: { $exists: true } })) return false
   try { getIO().to(`user:${userId}`).emit('account:suspended', { suspendedAt: new Date().toISOString() }) } catch { /* Clients can also retrieve status through /users/me. */ }
-  disconnectUser(userId)
+  // No 'session:revoked': that signs clients out, and a suspended account keeps
+  // a restricted session (see suspendedAccess).
+  disconnectUser(userId, { notify: false })
   return true
 }

@@ -234,8 +234,16 @@ Every 5 minutes, pending payments older than 2 minutes with a `providerRef` are 
 ### Socket.IO
 - Initialized over the shared HTTP server in `index.ts`
 - JWT auth middleware on connection
-- Rooms: `user:<id>` (personal), `chat:<conversationId>` (chat)
-- Events: `notification:new`, `badges:update`, `typing:start/stop`, `user:online/offline`
+- Rooms: `user:<id>` (personal), `chat:<conversationId>` (chat); revocation-only `session:<id>`, `biometric:<id>` and `sid:<sessionId>` (one device's sign-in)
+- Events: `notification:new`, `badges:update`, `typing:start/stop`, `user:online/offline`, `session:expired`, `session:revoked` (clients sign out), `account:suspended`
+
+### Session revocation
+- Access tokens carry `sessionVersion`, `biometricVersion` (biometric logins) and `sid`, the session family carried through refresh rotation. Logout and per-device biometric revoke list the `sid` in the `RevokedSession` TTL collection, which `authenticate`, `optionalAuth`, download links and sockets check.
+- A socket is closed, with `session:revoked` sent first, by the direct `disconnect*` calls, by a change-stream watcher on `User` and `RevokedSession` (every instance, about a second), by a 30-second batched sweep, and by a throttled (15 s) re-check before a packet is handled. Without a replica set the watcher logs once and the sweep alone applies.
+- Only a refresh or biometric token that was rotated away counts as replay, once, and not within 30 seconds of its rotation.
+
+### Before running more than one API instance
+Production runs a single instance. The default in-memory Socket.IO adapter only reaches the local process's sockets: revocation still reaches every instance (watcher and sweep), but notifications, chat and presence do not. Scaling out first needs a shared adapter (`@socket.io/mongo-adapter` or a Redis adapter), websocket-only transports or sticky sessions, presence through `fetchSockets()` instead of the per-process map, and a single scheduler runner.
 
 ### Notification Channels
 1. **In-app** — Socket.IO + persisted `Notification` documents
