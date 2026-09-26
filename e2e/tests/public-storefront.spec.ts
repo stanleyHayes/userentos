@@ -18,7 +18,9 @@ const listing = (i: number) => ({
   address: { city: 'Accra', region: 'Greater Accra' }, images: [],
 })
 
-type TrackEvent = { type: string; propertyId?: string; channel?: string; sessionId?: string }
+type TrackEvent = { type: string; propertyId?: string; propertyIds?: string[]; channel?: string; sessionId?: string }
+/** Listing impressions across beacons (sent one batch per page of cards). */
+const impressions = (events: TrackEvent[]) => events.filter(e => e.type === 'listing_impression').flatMap(e => e.propertyIds ?? (e.propertyId ? [e.propertyId] : []))
 
 /** Answers the storefront and agency APIs and records every storefront analytics event the page sends. */
 async function mockStorefrontApi(page: Page, resolvedHosts: string[] = []) {
@@ -79,10 +81,12 @@ test('a visitor sees every listing, opens one without signing in, and is counted
   await expect(page.getByRole('link', { name: /Listing 7\b/ })).toHaveAttribute('href', `/registry/${listingId(7)}`)
   await expect(page.getByRole('link', { name: 'RentOS' })).toHaveAttribute('href', '/')
 
-  // One storefront view and one impression per listing, all from one visitor.
-  await expect.poll(() => events.filter(e => e.type === 'listing_impression').length).toBe(TOTAL)
+  // One storefront view and one impression per listing, all from one visitor,
+  // in one beacon per page of cards (not one request per card).
+  await expect.poll(() => impressions(events).length).toBe(TOTAL)
   expect(events.filter(e => e.type === 'view')).toHaveLength(1)
-  expect(new Set(events.filter(e => e.type === 'listing_impression').map(e => e.propertyId)).size).toBe(TOTAL)
+  expect(new Set(impressions(events)).size).toBe(TOTAL)
+  expect(events.filter(e => e.type === 'listing_impression')).toHaveLength(2)
   const sessions = new Set(events.map(e => e.sessionId))
   expect(sessions.size).toBe(1)
   expect([...sessions][0]).toMatch(/^[0-9a-f-]{36}$/)
@@ -99,7 +103,7 @@ test('a visitor sees every listing, opens one without signing in, and is counted
   await page.reload()
   await expect(cards(page)).toHaveCount(24)
   await expect.poll(() => events.filter(e => e.type === 'view' && !e.propertyId).length).toBe(2)
-  expect(events.filter(e => e.type === 'listing_impression')).toHaveLength(TOTAL)
+  expect(impressions(events)).toHaveLength(TOTAL)
 
   // Opening a listing feeds "Top listings" and shows it to a signed-out visitor.
   await page.getByRole('link', { name: /Listing 3\b/ }).click()

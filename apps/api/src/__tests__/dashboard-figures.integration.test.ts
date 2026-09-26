@@ -19,6 +19,7 @@ const { FinancingContract } = await import('../models/FinancingContract.js')
 const { Employer } = await import('../models/Employer.js')
 const { ROLE_DEFAULT_PERMISSIONS } = await import('../types/index.js')
 const { grantSelfRegisteredRoleDefaults } = await import('../scripts/grantSelfRegisteredRoleDefaults.js')
+const { AuditLog } = await import('../models/AuditLog.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: analyticsRouter } = await import('../routes/analytics.js')
 const { default: applicationsRouter } = await import('../routes/applications.js')
@@ -145,11 +146,11 @@ describe.skipIf(!hasTestMongo)('dashboard figures match the records behind them'
 
   it('reports pending and overdue payments, and pending applications received before the window', async () => {
     const landlord = (await get('/analytics/me', as(ids.landlord, ['landlord', 'tenant']))).data
-    expect(landlord).toMatchObject({ pendingPayments: 2, pendingAmount: 1500, overduePayments: 1, overdueAmount: 1000, pendingApplications: 1, totalApplications: 0 })
+    expect(landlord).toMatchObject({ pendingPayments: 1, pendingAmount: 500, overduePayments: 1, overdueAmount: 1000, pendingApplications: 1, totalApplications: 1 })
 
     // A stale wallet top-up is pending, but it is not overdue rent.
     const tenant = (await get('/analytics/me', as(ids.tenant, ['tenant']))).data
-    expect(tenant).toMatchObject({ pendingPayments: 3, pendingAmount: 1550, overduePayments: 1, overdueAmount: 1000 })
+    expect(tenant).toMatchObject({ pendingPayments: 2, pendingAmount: 550, overduePayments: 1, overdueAmount: 1000 })
     expect(tenant).toMatchObject({ activeAgreements: 1, nextPaymentAmount: 1000, totalSaved: 300, savingsTarget: 1000, activePlans: 1, pendingApplications: 1 })
   })
 
@@ -189,9 +190,19 @@ describe.skipIf(!hasTestMongo)('dashboard figures match the records behind them'
   })
 
   it('backfills role defaults for self-registered employers and financiers only', async () => {
-    const scope = [ids.employer, ids.fin, ids.both, ids.granted]
+    // An admin revoked this lender's access by setting [] (audited), and this
+    // employer was invited: neither may be re-granted anything.
+    const revoked = String(new mongoose.Types.ObjectId()), invited = String(new mongoose.Types.ObjectId())
+    await User.create([
+      { _id: revoked, email: `revoked-${revoked}@example.test`, phone: 'fixture', firstName: 'Revoked', lastName: 'Lender', passwordHash: 'fixture', roles: ['financier'], activeRole: 'financier', permissions: [] },
+      { _id: invited, email: `invited-${invited}@example.test`, phone: 'fixture', firstName: 'Invited', lastName: 'Employer', passwordHash: 'fixture', roles: ['employer'], activeRole: 'employer', permissions: [], invitedBy: ids.admin },
+    ])
+    await AuditLog.create({ userId: ids.admin, action: 'users.permissions.update', entityType: 'User', entityId: revoked, details: '{"permissions":[]}' })
+    const scope = [ids.employer, ids.fin, ids.both, ids.granted, revoked, invited]
     expect(await grantSelfRegisteredRoleDefaults({ userIds: scope })).toEqual({ users: 3 })
     const perms = async (id: string) => ((await User.findById(id).lean())!.permissions ?? []).slice().sort()
+    expect(await perms(revoked)).toEqual([])
+    expect(await perms(invited)).toEqual([])
     expect(await perms(ids.employer)).toEqual([...ROLE_DEFAULT_PERMISSIONS.employer!].sort())
     expect(await perms(ids.fin)).toEqual([...ROLE_DEFAULT_PERMISSIONS.financier!].sort())
     expect(await perms(ids.both)).toEqual([...new Set([...ROLE_DEFAULT_PERMISSIONS.employer!, ...ROLE_DEFAULT_PERMISSIONS.financier!])].sort())
@@ -199,5 +210,6 @@ describe.skipIf(!hasTestMongo)('dashboard figures match the records behind them'
     expect(await perms(ids.granted)).toEqual(['users:view'])
     // Re-running changes nothing.
     expect(await grantSelfRegisteredRoleDefaults({ userIds: scope })).toEqual({ users: 0 })
+    await Promise.all([User.deleteMany({ _id: { $in: [revoked, invited] } }), AuditLog.deleteMany({ entityId: revoked })])
   })
 })

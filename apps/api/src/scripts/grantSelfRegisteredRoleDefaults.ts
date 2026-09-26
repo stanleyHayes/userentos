@@ -2,8 +2,11 @@
  * One-off backfill: employers and financiers who signed up themselves were
  * created with no permissions, so every permission-gated employer or
  * financing call answered 403 until an admin granted them by hand. Gives
- * those accounts their role's default permissions. Accounts that already hold
- * any permission (an admin has set them) are left alone. Safe to re-run.
+ * those accounts their role's default permissions. Left alone: accounts that
+ * already hold any permission, invited accounts, and any account whose
+ * permissions an admin has ever changed (an audited 'users.permissions.update'
+ * — setting [] is how an admin revokes a lender's or employer's access while
+ * keeping the role). Safe to re-run.
  *
  * Accounts pick the new permissions up at their next sign-in or token refresh.
  *
@@ -13,6 +16,7 @@ import mongoose from 'mongoose'
 import { pathToFileURL } from 'node:url'
 import { config } from '../config/index.js'
 import { User } from '../models/User.js'
+import { AuditLog } from '../models/AuditLog.js'
 import { ROLE_DEFAULT_PERMISSIONS } from '../types/index.js'
 
 const ROLES = ['employer', 'financier'] as const
@@ -22,8 +26,13 @@ export async function grantSelfRegisteredRoleDefaults(scope: { userIds?: string[
   const only = scope.userIds ? { _id: { $in: scope.userIds } } : {}
   // Chosen once, before any grant, so an account holding both roles gets both
   // sets and not just the first.
-  const targets = await User.find({ ...only, roles: { $in: [...ROLES] }, permissions: { $size: 0 } }).select('_id').lean()
-  const ids = targets.map((t) => t._id)
+  const candidates = await User.find({ ...only, roles: { $in: [...ROLES] }, permissions: { $size: 0 }, invitedBy: { $exists: false } }).select('_id').lean()
+  const adminSet = new Set((await AuditLog.find({
+    action: 'users.permissions.update',
+    entityType: 'User',
+    entityId: { $in: candidates.map((c) => String(c._id)) },
+  }).select('entityId').lean()).map((a) => String(a.entityId)))
+  const ids = candidates.filter((c) => !adminSet.has(String(c._id))).map((c) => c._id)
   for (const role of ROLES) {
     await User.updateMany({ _id: { $in: ids }, roles: role }, { $addToSet: { permissions: { $each: ROLE_DEFAULT_PERMISSIONS[role] ?? [] } } })
   }

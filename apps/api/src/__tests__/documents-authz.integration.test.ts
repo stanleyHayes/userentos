@@ -96,6 +96,19 @@ describe.skipIf(!hasTestMongo)('document access and uploads', () => {
     expect(victimList.body.data.items!.map((d) => d.id)).not.toContain(response.body.data!.id)
   })
 
+  it('does not carry an old sharing list onto new versions', async () => {
+    // Planted before the fix: owned by `owner`, shared with `victim`.
+    const planted = await DocumentModel.create({ ownerId: ids.owner, name: 'Lease renewal', type: 'rental_agreement', mimeType: 'application/pdf', fileUrl: 'https://res.cloudinary.test/old.pdf', fileSize: 10, accessControl: [ids.owner, ids.victim] })
+    const form = new FormData()
+    form.append('file', new Blob([new TextEncoder().encode('%PDF-')], { type: 'application/pdf' }), 'file.pdf')
+    const response = await fetch(`${base}/documents/${planted._id}/version`, { method: 'POST', headers: auth(ids.owner, ['tenant']), body: form })
+    expect(response.status).toBe(201)
+    const version = (await response.json() as { data: { id: string; accessControl: string[] } }).data
+    expect(version.accessControl).toEqual([ids.owner])
+    const victimList = await get('/documents', ids.victim, ['tenant'])
+    expect(victimList.body.data.items!.map((d) => d.id)).not.toContain(version.id)
+  })
+
   it('answers a disallowed file type with a 400 and the reason', async () => {
     const response = await upload({ type: 'other' }, 'text/html')
     expect(response.status).toBe(400)

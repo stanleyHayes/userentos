@@ -54,7 +54,8 @@ export default function HomeScreen() {
         .then((favs) => (favs.items ?? []).slice(0, 5))
         .catch(() => [] as PropertyItem[])
       const [data, savedItems, recs, agreementsRes] = await Promise.all([
-        api.get<Record<string, number>>('/analytics/me'),
+        // Figures for the role this user is acting as (tenant + landlord accounts).
+        api.get<Record<string, number>>(`/analytics/me${user?.activeRole ? `?as=${encodeURIComponent(user.activeRole)}` : ''}`),
         saved,
         // { items, total } — not a bare array. Read as an array this was always
         // empty, so "Recommended for You" never showed anything.
@@ -69,7 +70,8 @@ export default function HomeScreen() {
     } catch { /* no-op */ } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  // Reload when the user switches role: the figures are per role.
+  useEffect(() => { load() }, [user?.activeRole])
 
   async function onRefresh() {
     setRefreshing(true)

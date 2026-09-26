@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { Property } from '../models/Property.js'
+import { StorefrontEvent } from '../models/StorefrontEvent.js'
 import { storefrontHost } from '../middleware/storefrontHost.js'
 import router from '../routes/storefronts.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
@@ -51,6 +52,7 @@ describe.skipIf(!hasTestMongo)('public storefront reads', () => {
       Property.deleteMany({ landlordId: ownerId }),
       StorefrontDomain.deleteMany({ storefrontId }),
       Storefront.deleteMany({ ownerId }),
+      StorefrontEvent.deleteMany({ storefrontSlug: slug }),
     ])
     await mongoose.disconnect()
   })
@@ -87,5 +89,18 @@ describe.skipIf(!hasTestMongo)('public storefront reads', () => {
     const titles = [...first.items, ...second.items].map((p: { title: string }) => p.title)
     expect(new Set(titles).size).toBe(15)
     expect(titles).not.toContain('Draft')
+  })
+
+  it('records a page of listing impressions from one beacon, and only impressions batch', async () => {
+    const track = (body: unknown) => fetch(`${base()}/${slug}/track`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const ids = Array.from({ length: 24 }, () => String(new mongoose.Types.ObjectId()))
+    const batch = await track({ type: 'listing_impression', propertyIds: [...ids, ids[0]], sessionId: 'visitor-session-1' })
+    expect(batch.status).toBe(200)
+    expect((await batch.json()).data).toEqual({ recorded: true })
+    const stored = await StorefrontEvent.find({ storefrontSlug: slug, type: 'listing_impression' }).lean()
+    expect(stored).toHaveLength(24)
+    expect(new Set(stored.map((e) => e.visitorHash)).size).toBe(1)
+    expect((await track({ type: 'view', propertyIds: ids.slice(0, 2) })).status).toBe(400)
+    expect((await track({ type: 'listing_impression', propertyIds: Array(61).fill(ids[0]) })).status).toBe(400)
   })
 })

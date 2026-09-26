@@ -70,9 +70,9 @@ const isOverdueRent = (p: { purpose?: string }, cutoffMs: number) =>
 
 export const analyticsController = {
   // Point-in-time figures (leases, tenants, savings, pending and overdue
-  // payments, pending applications, open disputes) come from current state.
-  // Only period totals (revenue, payments made, applications and reviews
-  // received) use the date window, which defaults to the last 90 days.
+  // payments, applications, open disputes) come from current state. Only
+  // period totals (revenue, payments made, reviews received) use the date
+  // window, which defaults to the last 90 days.
   me: async (req: Request, res: Response) => {
     const userId = req.user!.userId
     const roles = req.user!.roles
@@ -97,7 +97,9 @@ export const analyticsController = {
         // Pending payments have no paidAt, so the old paidAt window never matched them.
         Payment.find({ landlordId: userId, status: 'pending' }).lean(),
         Dispute.find({ $or: [{ filedBy: userId }, { filedAgainst: userId }] }).lean(),
-        Application.find({ landlordId: userId, ...dateFilter(start, end) }).lean(),
+        // All-time, like pendingApplications beside it: a windowed total read
+        // '0 total' next to 'Pending 1' for an application older than the window.
+        Application.find({ landlordId: userId }).lean(),
         Application.countDocuments({ landlordId: userId, status: 'pending' }),
         Review.find({ landlordId: userId, ...dateFilter(start, end) }).lean(),
       ])
@@ -179,8 +181,10 @@ export const analyticsController = {
         lastMonthRevenue,
         revenueChange,
         monthlyIncome,
-        pendingPayments: pendingPayments.length,
-        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0),
+        // Pending and overdue are separate buckets (dashboards show them side
+        // by side); overdue rows are not counted again as pending.
+        pendingPayments: pendingPayments.length - overduePayments.length,
+        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
         overduePayments: overduePayments.length,
         overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
         openDisputes: allDisputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved').length,
@@ -208,7 +212,9 @@ export const analyticsController = {
         SavingsPlan.find({ userId }).lean(),
         Wallet.findOne({ userId }).lean(),
         Dispute.find({ filedBy: userId }).lean(),
-        Application.find({ tenantId: userId, ...dateFilter(start, end) }).lean(),
+        // All-time, like pendingApplications beside it: a windowed total read
+        // '0 total' next to 'Pending 1' for an application older than the window.
+        Application.find({ tenantId: userId }).lean(),
         Application.countDocuments({ tenantId: userId, status: 'pending' }),
       ])
 
@@ -246,8 +252,10 @@ export const analyticsController = {
         savingsProgress: savingsTarget > 0 ? Math.round((totalSaved / savingsTarget) * 100) : 0,
         monthlyPayments,
         // Pending/overdue
-        pendingPayments: pendingPayments.length,
-        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0),
+        // Pending and overdue are separate buckets (dashboards show them side
+        // by side); overdue rows are not counted again as pending.
+        pendingPayments: pendingPayments.length - overduePayments.length,
+        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
         overduePayments: overduePayments.length,
         overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
         // Disputes

@@ -138,7 +138,10 @@ router.post('/:id/version', authenticate, upload.single('file'), async (req, res
     parentId: existing._id.toString(),
     linkedEntityId: existing.linkedEntityId,
     linkedEntityType: existing.linkedEntityType,
-    accessControl: existing.accessControl,
+    // Owner only, like a new upload. Copying the old list let anyone who had
+    // planted a document with accessControl=[victim] keep dropping new files
+    // into that person's Documents page, one "version" at a time.
+    accessControl: [req.user!.userId],
   })
 
   await AuditLog.create({

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { setMeta, setOgMeta } from '@/lib/seo'
+import { useAuthStore } from '@/stores/authStore'
 
 interface RegistryListing {
   id: string
@@ -50,6 +51,10 @@ function PropertyTypeIcon({ type, size = 14 }: { type: string; size?: number }) 
 
 export function PublicRegistryDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const returnHereAfterAuth = () => {
+    try { sessionStorage.setItem('postAuthRedirect', `/properties/${id}`) } catch { /* storage blocked */ }
+  }
 
   const { data: item, isLoading, isError } = useQuery({
     queryKey: ['public-registry', id],
@@ -258,26 +263,48 @@ export function PublicRegistryDetailPage() {
 
             {/* CTA card */}
             <Card className="bg-gradient-to-br from-primary to-[#2d5a8e] dark:from-blue-600 dark:to-blue-500 text-white border-0">
-              <div className="flex items-start gap-3 mb-3">
-                <Lock size={18} className="shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="text-sm font-bold">Want to apply?</h3>
-                  <p className="text-xs text-white/80 mt-1 leading-relaxed">
-                    Create a free RentOS account to contact the landlord, apply with your
-                    RentOS profile, and sign your tenancy agreement digitally.
-                  </p>
-                </div>
-              </div>
-              <Link to="/register" className="block">
-                <Button size="md" className="w-full bg-white text-primary hover:bg-white/90">
-                  Create Free Account <ArrowRight size={14} />
-                </Button>
-              </Link>
-              <Link to="/login" className="block mt-2">
-                <Button variant="ghost" size="sm" className="w-full text-white/90 hover:bg-white/10 hover:text-white">
-                  Already have an account? Sign in
-                </Button>
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-start gap-3 mb-3">
+                    <ArrowRight size={18} className="shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-bold">Want to apply?</h3>
+                      <p className="text-xs text-white/80 mt-1 leading-relaxed">
+                        Open the full listing to contact the landlord and apply with your RentOS profile.
+                      </p>
+                    </div>
+                  </div>
+                  <Link to={`/properties/${id}`} className="block">
+                    <Button size="md" className="w-full bg-white text-primary hover:bg-white/90">
+                      Open listing to apply <ArrowRight size={14} />
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start gap-3 mb-3">
+                    <Lock size={18} className="shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-bold">Want to apply?</h3>
+                      <p className="text-xs text-white/80 mt-1 leading-relaxed">
+                        Create a free RentOS account to contact the landlord, apply with your
+                        RentOS profile, and sign your tenancy agreement digitally.
+                      </p>
+                    </div>
+                  </div>
+                  {/* After signing up or in, come back to this listing, not the dashboard. */}
+                  <Link to="/register" className="block" onClick={returnHereAfterAuth}>
+                    <Button size="md" className="w-full bg-white text-primary hover:bg-white/90">
+                      Create Free Account <ArrowRight size={14} />
+                    </Button>
+                  </Link>
+                  <Link to="/login" className="block mt-2" onClick={returnHereAfterAuth}>
+                    <Button variant="ghost" size="sm" className="w-full text-white/90 hover:bg-white/10 hover:text-white">
+                      Already have an account? Sign in
+                    </Button>
+                  </Link>
+                </>
+              )}
             </Card>
 
             {/* Trust mini-card */}

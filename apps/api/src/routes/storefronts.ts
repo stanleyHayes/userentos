@@ -13,7 +13,7 @@ import { z } from 'zod'
 import type { Types } from 'mongoose'
 import { authenticate, optionalAuth, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
-import { publicLimiter } from '../middleware/rateLimit.js'
+import { trackLimiter } from '../middleware/rateLimit.js'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
@@ -666,14 +666,21 @@ router.get('/resolve/host', asyncHandler(async (req, res) => {
 }))
 
 
+const objectId = z.string().regex(/^[a-f0-9]{24}$/i)
 const trackSchema = z.object({
   type: z.enum(['view', 'listing_impression', 'contact_click']),
-  propertyId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
+  propertyId: objectId.optional(),
+  // A page's worth of listing impressions in one beacon (one per card was 24
+  // requests a page).
+  propertyIds: z.array(objectId).min(1).max(60).optional(),
   channel: z.enum(['phone', 'email', 'whatsapp']).optional(),
   sessionId: z.string().min(8).max(64).optional(),
 }).refine((body) => body.type !== 'contact_click' || body.channel !== undefined, {
   message: 'A contact click must say which channel it used',
   path: ['channel'],
+}).refine((body) => !body.propertyIds || body.type === 'listing_impression', {
+  message: 'Only listing impressions can be batched',
+  path: ['propertyIds'],
 })
 
 /**
@@ -703,7 +710,7 @@ function storefrontVisitorHash(req: Request, sessionId?: string): string {
  * from index.ts, the same way the public GETs below do it, so the owner check
  * cannot quietly stop working if the router is mounted anywhere else.
  */
-router.post('/:slug/track', publicLimiter, optionalAuth, asyncHandler(async (req, res) => {
+router.post('/:slug/track', trackLimiter, optionalAuth, asyncHandler(async (req, res) => {
   const parsed = trackSchema.safeParse(req.body ?? {})
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -715,14 +722,16 @@ router.post('/:slug/track', publicLimiter, optionalAuth, asyncHandler(async (req
   if (req.user?.userId === storefront.ownerId) { success(res, { recorded: false }); return }
 
   let recorded = true
+  const visitorHash = storefrontVisitorHash(req, parsed.data.sessionId)
+  const propertyIds = parsed.data.propertyIds ? [...new Set(parsed.data.propertyIds)] : [parsed.data.propertyId]
   try {
-    await StorefrontEvent.create({
+    await StorefrontEvent.insertMany(propertyIds.map((propertyId) => ({
       storefrontSlug: slug,
       type: parsed.data.type,
-      propertyId: parsed.data.propertyId,
+      propertyId,
       channel: parsed.data.channel,
-      visitorHash: storefrontVisitorHash(req, parsed.data.sessionId),
-    })
+      visitorHash,
+    })))
   } catch (err) {
     // Best effort, like the registry tracker: a metrics write must never be the
     // reason a public page fails.

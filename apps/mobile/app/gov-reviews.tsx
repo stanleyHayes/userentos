@@ -57,6 +57,9 @@ export default function GovReviewsScreen() {
             await api.post(`/properties/${id}/review`, { action: 'approve' })
             Alert.alert('Approved', 'Property has been approved and is now listed.')
             setProperties((prev) => prev.filter((p) => p.id !== id))
+            // The queue is served a page at a time: reload so listings beyond
+            // the first page move up instead of a false "All caught up".
+            void load()
           } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to approve property')
@@ -70,6 +73,7 @@ export default function GovReviewsScreen() {
     setRejecting(null)
     setProperties((prev) => prev.filter((p) => p.id !== id))
     Alert.alert('Rejected', 'Property has been rejected.')
+    void load()
   }
 
   function renderProperty({ item }: { item: PendingProperty }) {

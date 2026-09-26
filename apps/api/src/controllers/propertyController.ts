@@ -11,7 +11,7 @@ import { uploadToCloudinary } from '../utils/cloudinary.js'
 import { notify } from '../services/notify.js'
 import { embed } from '../services/embeddings.js'
 import { cache } from '../services/cache.js'
-import { canTransition, PUBLICLY_VISIBLE_STATUSES, type ReviewStatus } from '../services/propertyReview.js'
+import { canReview, canTransition, PUBLICLY_VISIBLE_STATUSES, type ReviewStatus } from '../services/propertyReview.js'
 import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 
 // With credit reporting off no tenant has a score to meet a landlord's minimum,
@@ -303,19 +303,22 @@ export const propertyController = {
     if (!property) { error(res, 'Property not found', 404); return }
 
     // Authorization: draft/pending/rejected properties are only visible to
-    // their landlord, admins, or super_admins
+    // their landlord, admins, super_admins, and reviewers (government and
+    // legal officers moderate from this page; the queue links here).
     const isOwner = user && property.landlordId === user.userId
     const isAdmin = user && (user.roles.includes('admin') || user.roles.includes('super_admin'))
+    const isReviewer = !!user && canReview({ roles: user.roles, permissions: user.permissions ?? [] }, 'property.review.read')
     const isPublic = isPubliclyVisible(property.listingStatus)
 
-    if (!isPublic && !isOwner && !isAdmin) {
+    if (!isPublic && !isOwner && !isAdmin && !isReviewer) {
       error(res, 'Property not found', 404)
       return
     }
 
     const landlord = await User.findById(property.landlordId).select('firstName lastName verificationStatus').lean()
     success(res, {
-      ...(isOwner || isAdmin ? property : publicPropertyView(property)),
+      // Reviewers see the full record, as the review queue already shows it.
+      ...(isOwner || isAdmin || isReviewer ? property : publicPropertyView(property)),
       id: (property._id as Types.ObjectId).toString(),
       landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
       // Only an approved identity review (a person checked the Ghana Card), as

@@ -449,7 +449,7 @@ export function PropertyDetailPage() {
           )}
 
           {/* Qualification Status */}
-          {isTenant && qualification && qualification.totalCount > 0 && (
+          {isTenant && qualification && (
             <QualificationCard qualification={qualification} />
           )}
 

@@ -53,4 +53,13 @@ describe.skipIf(!hasTestMongo)('webhook subscription cap', () => {
     expect(await patch(String(paused[0]._id), { isActive: true })).toBe(200)
     expect(await WebhookSubscription.countDocuments({ userId, isActive: true })).toBe(10)
   })
+
+  it('holds the cap when re-activations race each other', async () => {
+    await WebhookSubscription.deleteMany({ userId })
+    const paused = await subscribe(5, false)
+    await subscribe(9, true)
+    const statuses = await Promise.all(paused.map((p) => patch(String(p._id), { isActive: true })))
+    expect(statuses.filter((code) => code === 200).length).toBeLessThanOrEqual(1)
+    expect(await WebhookSubscription.countDocuments({ userId, isActive: true })).toBeLessThanOrEqual(10)
+  })
 })

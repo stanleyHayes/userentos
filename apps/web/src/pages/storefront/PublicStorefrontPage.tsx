@@ -18,7 +18,7 @@ const VISITOR_KEY = 'rentos-storefront-visitor'
 
 type TrackEvent =
   | { type: 'view'; propertyId?: string }
-  | { type: 'listing_impression'; propertyId: string }
+  | { type: 'listing_impression'; propertyIds: string[] }
   | { type: 'contact_click'; channel: 'phone' | 'email' }
 
 /** A random per-tab id, so "unique visitors" means something without naming anyone. */
@@ -130,15 +130,15 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
     trackStorefront(storefrontSlug, { type: 'view' })
   }, [storefrontSlug])
 
-  // An impression for each listing card as it is rendered, "Load more" included.
+  // An impression for each listing card as it is rendered, "Load more"
+  // included — sent as one beacon per batch of new cards, not one per card.
   const impressed = useRef(new Set<string>())
   useEffect(() => {
     if (!storefrontSlug) return
     const fresh = items.map((p) => p.id).filter((id) => !impressed.current.has(`${storefrontSlug}:${id}`))
     fresh.forEach((id) => impressed.current.add(`${storefrontSlug}:${id}`))
-    for (const propertyId of unseenThisSession(storefrontSlug, fresh)) {
-      trackStorefront(storefrontSlug, { type: 'listing_impression', propertyId })
-    }
+    const unseen = unseenThisSession(storefrontSlug, fresh)
+    if (unseen.length) trackStorefront(storefrontSlug, { type: 'listing_impression', propertyIds: unseen })
   }, [storefrontSlug, items])
 
   // Refetching a query that never loaded puts it back to pending. After a

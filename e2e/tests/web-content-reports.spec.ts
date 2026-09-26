@@ -55,7 +55,7 @@ function propertyApi(landlordVerified: boolean): MockHandler {
   ]
   return ({ path }) => {
     if (path === `/properties/${propertyId}`) return { data: property }
-    if (path === `/properties/${propertyId}/qualify`) return { data: { qualified: true, checks: [], passedCount: 0, totalCount: 0 } }
+    if (path === `/properties/${propertyId}/qualify`) return { data: { qualified: true, issues: [], propertyId } }
     if (path === `/reviews/property/${propertyId}`) return { data: { reviews, summary: { count: 2, avgRating: 3.5 } } }
     if (path.startsWith('/reviews/neighborhood/')) return { status: 404, error: 'No data' }
     return undefined
