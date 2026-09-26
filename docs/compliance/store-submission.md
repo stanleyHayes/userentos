@@ -38,6 +38,11 @@ Reviewers need accounts that already hold data. Create them through the normal f
 4. As the tenant, apply to the property. As the landlord, approve the application.
 5. Both accounts sign the generated agreement.
 6. Send a couple of chat messages between them.
+7. Allow the landlord's review purchases. App Review and TestFlight buy subscriptions in Apple's sandbox, and Google's reviewers and license testers make test purchases. The production API accepts those free purchases only for accounts listed in `STORE_SANDBOX_ALLOWED_USER_IDS`. Any other account is told the test purchase is not accepted for it, and gets no plan.
+   - Find the landlord's user ID: sign in as it and read `id` from `GET /api/users/me`, or use the `_id` of its `users` document.
+   - Add that ID to `STORE_SANDBOX_ALLOWED_USER_IDS` on the production API, then redeploy so the server reads it. The list is comma-separated; the only other accounts that belong on it are your own testers' while they test purchases on TestFlight or a Play testing track.
+   - Apple sandbox purchases are verified against Apple's production API first and the sandbox second, so no other setting changes. They are stored with environment `test` and never count as revenue.
+   - Remove the ID when review is over. The landlord's test plan stops applying straight away.
 
 Enter both accounts' credentials in the review information. Give Google the same through **App access**.
 
