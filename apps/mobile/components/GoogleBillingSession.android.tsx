@@ -1,10 +1,9 @@
 import { useEffect } from 'react'
 import { AppState } from 'react-native'
-import type { Purchase } from 'expo-iap'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { useGoogleBillingStore, type GoogleOffer } from '../stores/googleBillingStore'
-import { completeGooglePurchase, type GoogleCompletion } from '../lib/googlePurchaseCompletion'
+import { createGooglePurchaseCompleter, type GoogleCompletion } from '../lib/googlePurchaseCompletion'
 import { serializeConnection } from '../lib/storeConnection'
 import { mapStoreError, restoreSummary } from '../lib/storeErrors'
 
@@ -23,25 +22,17 @@ export default function GoogleBillingSession() {
     let sdk: typeof import('expo-iap') | undefined
     let binding = ''
     let cleanup: (() => void) | undefined
-    const pending = new Set<string>()
     const current = () => !disposed && useAuthStore.getState().user?.id === userId && !useAuthStore.getState().user?.suspendedAt
     const set = (state: Partial<ReturnType<typeof useGoogleBillingStore.getState>>) => { if (current()) useGoogleBillingStore.setState(state) }
     const fail = (message: string) => set({ error: message, busy: false })
-    async function complete(purchase: Purchase) {
-      if (!current() || purchase.store !== 'google' || !purchase.purchaseToken || pending.has(purchase.purchaseToken)) return
-      pending.add(purchase.purchaseToken)
-      try {
-        // Pending purchases are posted too (lib/googlePurchaseCompletion.ts).
-        // Google acknowledgement is performed on the server after activation.
-        // Do not consume a subscription or acknowledge it before verification.
-        const completion = await completeGooglePurchase(purchase, { current,
-          verify: purchaseToken => api.post<GoogleCompletion>('/store-billing/google/complete', { purchaseToken }),
-        })
-        if (!completion) return
-        set({ busy: false, error: '', message: completion.message, revision: useGoogleBillingStore.getState().revision + 1 })
-      } catch (error) { fail(error instanceof Error ? error.message : 'Could not finish verifying your purchase. Tap Restore purchases to retry; do not purchase again.') }
-      finally { pending.delete(purchase.purchaseToken) }
-    }
+    // Every Play token, pending and unknown ones included, goes to the server
+    // (lib/googlePurchaseCompletion.ts).
+    const complete = createGooglePurchaseCompleter({
+      current,
+      verify: purchaseToken => api.post<GoogleCompletion>('/store-billing/google/complete', { purchaseToken }),
+      update: set,
+      revision: () => useGoogleBillingStore.getState().revision,
+    })
     /** `explicit`: the user tapped Restore. The silent restore on start and
      * on every foreground reports neither "nothing found" nor its failures. */
     async function restore(explicit = true) {
@@ -92,7 +83,7 @@ export default function GoogleBillingSession() {
       try {
         sdk = await import('expo-iap')
         if (!current()) return
-        const updated = sdk.purchaseUpdatedListener(purchase => { void complete(purchase) })
+        const updated = sdk.purchaseUpdatedListener(purchase => { void complete(purchase, true) })
         const errors = sdk.purchaseErrorListener(error => {
           const outcome = mapStoreError(error.code, 'Google Play')
           if (outcome.kind === 'restore') { set({ busy: false, error: '' }); void restore(); return }
