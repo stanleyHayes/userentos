@@ -11,7 +11,7 @@ interface CityAutocompleteProps {
 }
 
 /**
- * Searchable city picker — every Ghanaian city/town (country-state-city).
+ * Searchable city picker — every Ghanaian city/town (GHANA_CITIES).
  * Used anywhere we previously accepted free-text city input.
  */
 export function CityAutocomplete({ id, label, value, onChange, required }: CityAutocompleteProps) {
