@@ -22,16 +22,17 @@ interface WorkerDetail {
   skills: string[]
   bio: string
   location: string
-  serviceRadius: number
-  hourlyRate: number
-  fixedRates: Record<string, number>
+  serviceRadiusKm?: number
+  // Optional on the Worker model — a worker may quote per job instead.
+  hourlyRate?: number
+  fixedRates?: { service: string; price: number }[]
   rating: number
   reviewCount: number
   completedJobs: number
   verificationLevel: string
   emergencyAvailable: boolean
-  yearsExperience: number
-  availability: Record<string, boolean>
+  // Time slots per weekday; an empty array means the worker is off that day.
+  availability?: Record<string, string[]>
   portfolio?: string[]
 }
 
@@ -97,9 +98,12 @@ export default function WorkerDetailScreen() {
     )
   }
 
+  // Every weekday key is present (as an array, possibly empty), so a truthy
+  // check listed all seven days for every worker.
   const availabilityDays = Object.entries(worker.availability ?? {})
-    .filter(([, v]) => v)
+    .filter(([, v]) => Array.isArray(v) && v.length > 0)
     .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1, 3))
+  const fixedRates = (worker.fixedRates ?? []).filter((r) => r.service && r.price != null)
 
   return (
     <View style={[s.container, { backgroundColor: c.background }]}>
@@ -143,11 +147,6 @@ export default function WorkerDetailScreen() {
             <Text style={[s.statValue, { color: c.primary }]}>{worker.completedJobs}</Text>
             <Text style={[s.statLabel, { color: c.muted }]}>Jobs</Text>
           </View>
-          <View style={[s.statDivider, { backgroundColor: c.border }]} />
-          <View style={s.statItem}>
-            <Text style={[s.statValue, { color: c.primary }]}>{worker.yearsExperience}</Text>
-            <Text style={[s.statLabel, { color: c.muted }]}>Years</Text>
-          </View>
         </View>
 
         {/* Details */}
@@ -179,18 +178,21 @@ export default function WorkerDetailScreen() {
           </>}
           <Text style={[s.sectionTitle, { color: c.text, marginTop: spacing.md }]}>Availability</Text>
           <Text style={[s.bio, { color: c.textLight }]}>
-            {availabilityDays.join(', ')} · {worker.location} ({worker.serviceRadius}km radius)
+            {availabilityDays.length ? availabilityDays.join(', ') : 'Not set'} · {worker.location}
+            {worker.serviceRadiusKm != null ? ` (${worker.serviceRadiusKm}km radius)` : ''}
           </Text>
 
-          {Object.keys(worker.fixedRates ?? {}).length > 0 && (
+          {/* fixedRates is an array of { service, price } — rendering its
+              entries as [key, value] pairs put objects in <Text> and crashed. */}
+          {fixedRates.length > 0 && (
             <>
               <Text style={[s.sectionTitle, { color: c.text, marginTop: spacing.md }]}>Fixed Rates</Text>
-              {Object.entries(worker.fixedRates).map(([key, val]) => (
-                <View key={key} style={s.rateRow}>
+              {fixedRates.map((rate, i) => (
+                <View key={`${rate.service}-${i}`} style={s.rateRow}>
                   <Text style={[s.rateLabel, { color: c.textLight }]}>
-                    {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                    {rate.service.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                   </Text>
-                  <Text style={[s.rateValue, { color: c.primary }]}>GHS {val}</Text>
+                  <Text style={[s.rateValue, { color: c.primary }]}>GHS {rate.price}</Text>
                 </View>
               ))}
             </>
@@ -216,7 +218,9 @@ export default function WorkerDetailScreen() {
       <View style={[s.ctaBar, { backgroundColor: c.card, borderColor: c.border }]}>
         <View>
           <Text style={[s.ctaLabel, { color: c.muted }]}>Hourly Rate</Text>
-          <Text style={[s.ctaPrice, { color: c.text }]}>GHS {worker.hourlyRate}</Text>
+          <Text style={[s.ctaPrice, { color: c.text }]}>
+            {worker.hourlyRate != null ? `GHS ${worker.hourlyRate}` : 'Quote on request'}
+          </Text>
           <Text style={[s.ctaSub, { color: c.muted }]}>The worker will send a priced quote after your request</Text>
         </View>
         <TouchableOpacity
