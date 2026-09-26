@@ -298,9 +298,18 @@ router.get('/developer/market', authenticate, requireRole('developer', 'landlord
   })
 })
 
+/**
+ * The public developments page. Account ids and the admin's review stamp
+ * (reviewedBy, reviewedAt, reviewReason) are internal, as they are on every
+ * other public view, so they are stripped rather than served to anyone.
+ */
 router.get('/developer/offplan', async (_req, res) => {
   const items = await CapabilityRecord.find({ kind: 'offplan_listing', status: { $in: PUBLIC_OFFPLAN_STATUSES } }).sort({ createdAt: -1 }).limit(100).lean()
-  success(res, { items: items.map((item) => idOf(item as unknown as Record<string, unknown>)) })
+  success(res, { items: items.map((item) => {
+    const { ownerId: _o, participantId: _p, data, ...rest } = item as unknown as Record<string, unknown> & { data?: Record<string, unknown> }
+    const { reviewedBy: _rb, reviewedAt: _ra, reviewReason: _rr, ...publicData } = data ?? {}
+    return { ...idOf(rest), data: publicData }
+  }) })
 })
 
 router.get('/employer/compliance.csv', authenticate, requireRole('employer'), async (req, res) => {
