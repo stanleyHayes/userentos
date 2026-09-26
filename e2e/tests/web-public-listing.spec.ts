@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+import { allRegulatedFeatures } from '../helpers/regulatedFeatures'
 
 // The mobile share sheet links https://userentos.com/registry/<id>
 // (apps/mobile/lib/listingShare.ts). Signed out, that page must render the
@@ -13,25 +14,34 @@ const listing = {
   landlordIdentityVerified: false,
 }
 
-test('a shared listing link opens the public page while signed out', async ({ page }) => {
+/** No stored session; the listing endpoint answers `detail`, everything else an empty result. */
+async function signedOut(page: Page, detail: { status: number; data?: unknown }) {
   const requested: string[] = []
+  await page.route('**/socket.io/**', route => route.abort())
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     requested.push(path)
-    if (path === `/api/public/properties/${id}`) return route.fulfill({ json: { success: true, data: listing } })
-    if (path === '/api/public/properties/track') return route.fulfill({ json: { success: true, data: null } })
-    return route.fulfill({ status: 401, json: { success: false, error: 'Authentication required' } })
+    if (path === `/api/public/properties/${id}`) {
+      return route.fulfill({ status: detail.status, json: detail.status < 400 ? { success: true, data: detail.data } : { success: false, error: 'Property not found' } })
+    }
+    const data = path === '/api/platform/features' ? allRegulatedFeatures : path === '/api/public/properties/track' ? null : { items: [], total: 0 }
+    return route.fulfill({ json: { success: true, data } })
   })
+  return requested
+}
+
+test('a shared listing link opens the public page while signed out', async ({ page }) => {
+  const requested = await signedOut(page, { status: 200, data: listing })
   await page.goto(`/registry/${id}`)
   await expect(page.getByRole('heading', { name: listing.title })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByText('Reviewed listing on RentOS', { exact: true })).toBeVisible()
-  expect(page.url()).toContain(`/registry/${id}`)
+  expect(new URL(page.url()).pathname).toBe(`/registry/${id}`)
   expect(requested).toContain(`/api/public/properties/${id}`)
 })
 
-test('a listing that is no longer public shows not found instead of signing in', async ({ page }) => {
-  await page.route('**/api/**', (route) => route.fulfill({ status: 404, json: { success: false, error: 'Property not found' } }))
+test('a listing that is no longer public shows not found instead of the sign-in page', async ({ page }) => {
+  await signedOut(page, { status: 404 })
   await page.goto(`/registry/${id}`)
   await expect(page.getByRole('heading', { name: 'Property not found' })).toBeVisible({ timeout: 20_000 })
-  expect(page.url()).toContain(`/registry/${id}`)
+  expect(new URL(page.url()).pathname).toBe(`/registry/${id}`)
 })
