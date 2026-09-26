@@ -2,8 +2,9 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { useUploadPropertyImages } from '@/hooks/useApi'
-import { Send, MessageSquare, MapPin } from 'lucide-react'
+import { Send, MessageSquare, MapPin, Pencil } from 'lucide-react'
 import { SetLocationModal } from './SetLocationModal'
+import { EditListingModal, type EditableListing } from './EditListingModal'
 import type { ListingStatus } from '@/types'
 
 interface OwnerActionsProps {
@@ -13,6 +14,8 @@ interface OwnerActionsProps {
   rejectionReason?: string
   /** What a reviewer asked the owner to fix ('changes_requested'). */
   reviewIssues?: string[]
+  /** Current content, for the edit form offered after a rejection or change request. */
+  listing: EditableListing
   publishErrors: { field: string; message: string }[]
   onPublish: () => void
   isPublishing: boolean
@@ -20,11 +23,24 @@ interface OwnerActionsProps {
   messagingReviewer: boolean
 }
 
-export function OwnerActions({ propertyId, listingStatus, coordinates, rejectionReason, reviewIssues, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
+export function OwnerActions({ propertyId, listingStatus, coordinates, rejectionReason, reviewIssues, listing, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
   const qc = useQueryClient()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const uploadImages = useUploadPropertyImages()
   const [locationOpen, setLocationOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+
+  // Fix what the reviewer raised, then send it back: two steps, two buttons.
+  const editAndResubmit = (
+    <>
+      <Button variant="outline" className="w-full" onClick={() => setEditOpen(true)}>
+        <Pencil size={14} /> Edit listing
+      </Button>
+      <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
+        <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Resubmit for review'}
+      </Button>
+    </>
+  )
 
   return (
     <div className="space-y-2">
@@ -58,9 +74,7 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
             <p className="font-semibold">Rejection Reason:</p>
             <p>{rejectionReason || 'No reason provided'}</p>
           </div>
-          <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
-            <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Edit & Resubmit'}
-          </Button>
+          {editAndResubmit}
         </div>
       )}
       {listingStatus === 'changes_requested' && (
@@ -74,9 +88,7 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
               </ul>
             )}
           </div>
-          <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
-            <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Edit & Resubmit'}
-          </Button>
+          {editAndResubmit}
         </div>
       )}
       {publishErrors.length > 0 && (
@@ -100,6 +112,9 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
         </p>
       )}
 
+      {editOpen && (
+        <EditListingModal open={editOpen} onClose={() => setEditOpen(false)} propertyId={propertyId} listing={listing} />
+      )}
       <SetLocationModal
         open={locationOpen}
         onClose={() => setLocationOpen(false)}

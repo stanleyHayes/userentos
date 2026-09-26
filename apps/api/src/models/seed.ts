@@ -1311,6 +1311,20 @@ export async function seedDatabase() {
   // WORKERS — 4 skilled tradespeople
   // ════════════════════════════════════════════
 
+  // The fixtures below are written in a compact legacy shape (a yes/no per
+  // day, a { service: price } map, serviceRadius). Convert to the schema's:
+  // Mongoose stored `true` as ['true'] and dropped the map and radius, so days
+  // off showed as available and the fixed rates vanished.
+  const WORKER_SLOTS = ['08:00-12:00', '12:00-16:00', '16:00-20:00']
+  const toWorkerShape = <T extends { availability: Record<string, boolean>; fixedRates: Record<string, number | undefined>; serviceRadius: number }>(
+    { availability, fixedRates, serviceRadius, ...rest }: T,
+  ) => ({
+    ...rest,
+    serviceRadiusKm: serviceRadius,
+    fixedRates: Object.entries(fixedRates).flatMap(([service, price]) => (price === undefined ? [] : [{ service, price }])),
+    availability: Object.fromEntries(Object.entries(availability).map(([day, open]) => [day, open ? WORKER_SLOTS : []])),
+  })
+
   const workers = await Worker.insertMany([
     {
       name: 'Kwasi Osei', phone: '0244441111', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
@@ -1352,7 +1366,7 @@ export async function seedDatabase() {
       status: 'available', availability: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: false },
       yearsExperience: 4, idType: 'ghana_card', idNumber: 'GHA-345678901-2',
     },
-  ])
+  ].map(toWorkerShape))
 
   const [plumber, electrician, carpenter] = workers
 

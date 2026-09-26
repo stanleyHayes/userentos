@@ -291,6 +291,7 @@ export function PropertyDetailPage() {
                   coordinates={p.coordinates}
                   rejectionReason={p.rejectionReason}
                   reviewIssues={p.reviewIssues}
+                  listing={{ title: p.title, description: p.description, rentAmount: p.rentAmount, rules: p.rules }}
                   publishErrors={publishErrors}
                   onPublish={() => publishMutation.mutate()}
                   isPublishing={publishMutation.isPending}

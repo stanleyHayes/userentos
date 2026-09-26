@@ -54,15 +54,21 @@ test('a moderator approves, and rejects with a reason code, from the listing pag
   expect(decisions.at(-1)).toEqual({ id: 'prop-reject', body: { action: 'reject', reasonCode: 'poor_media', note: 'The photos show a different building.' } })
 })
 
-test('an owner sees what a reviewer asked to change and can resubmit', async ({ page }) => {
+test('an owner sees what a reviewer asked to change, edits the listing and resubmits', async ({ page }) => {
   let current = listing('prop-changes', {
     listingStatus: 'changes_requested',
     rejectionReason: 'Nearly there, two things to fix.',
     reviewIssues: ['Add interior photos of the kitchen', 'State the monthly service charge'],
   })
   const published: string[] = []
-  await signInWithMockedApi(page, landlord, ({ method, path }) => {
+  const edits: Record<string, unknown>[] = []
+  await signInWithMockedApi(page, landlord, ({ method, path, body }) => {
     if (method === 'GET' && path === '/properties/prop-changes') return { data: current }
+    if (method === 'PATCH' && path === '/properties/prop-changes') {
+      edits.push(body as Record<string, unknown>)
+      current = { ...current, ...(body as object) }
+      return { data: current }
+    }
     if (method === 'POST' && path === '/properties/prop-changes/publish') {
       published.push(path)
       current = { ...current, listingStatus: 'pending_review', reviewIssues: [] }
@@ -76,7 +82,15 @@ test('an owner sees what a reviewer asked to change and can resubmit', async ({ 
   await expect(page.getByText('Nearly there, two things to fix.')).toBeVisible()
   await expect(page.getByText('Add interior photos of the kitchen')).toBeVisible()
   await expect(page.getByText('State the monthly service charge')).toBeVisible()
-  await page.getByRole('button', { name: 'Edit & Resubmit' }).click()
+  // Fix what was asked: the service charge goes in the description.
+  await page.getByRole('button', { name: 'Edit listing' }).click()
+  const dialog = page.getByRole('dialog')
+  const description = dialog.getByLabel('Description')
+  await description.fill(`${await description.inputValue()} Service charge: GHS 150 a month.`)
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(edits.at(-1)?.description).toContain('Service charge: GHS 150 a month.')
+  await page.getByRole('button', { name: 'Resubmit for review' }).click()
   await expect(page.getByText('Pending Review').first()).toBeVisible()
   expect(published).toHaveLength(1)
 })
