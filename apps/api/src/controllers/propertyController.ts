@@ -273,14 +273,15 @@ export const propertyController = {
     // which must show true ordering.
     let served: typeof items = items
     if (sponsoredPlacement && !ownOnly && !isAdmin) {
+      const withIds = items.map((p) => ({
+        ...p,
+        id: (p as { id?: string; _id?: Types.ObjectId }).id ?? String((p as { _id?: Types.ObjectId })._id),
+      }))
       const placements = await getSponsoredPlacements(sponsoredPlacement, {
         city: typeof q.city === 'string' ? q.city : undefined,
+        onPage: withIds.map((p) => p.id),
       })
       if (placements.length > 0) {
-        const withIds = items.map((p) => ({
-          ...p,
-          id: (p as { id?: string; _id?: Types.ObjectId }).id ?? String((p as { _id?: Types.ObjectId })._id),
-        }))
         served = applySponsoredPlacements(withIds, placements) as typeof items
         recordImpressions(
           (served as unknown as { sponsorshipId?: string }[])
@@ -493,14 +494,21 @@ export const propertyController = {
 
   getFavoritesMe: async (req: Request, res: Response) => {
     const { Favorite } = await import('../models/Favorite.js')
-    const favorites = await Favorite.find({ userId: req.user!.userId }).lean()
+    const favorites = await Favorite.find({ userId: req.user!.userId }).sort({ createdAt: -1 }).lean()
     const propertyIds = favorites.map((f) => f.propertyId)
     // Only published listings — a draft/pending property must not be readable via favorites.
-    const properties = await Property.find({ _id: { $in: propertyIds }, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
+    const found = await Property.find({ _id: { $in: propertyIds }, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
+    // Most recently saved first.
+    const byId = new Map(found.map((p) => [(p._id as Types.ObjectId).toString(), p]))
+    const properties = propertyIds.map((id) => byId.get(id)).filter((p): p is (typeof found)[number] => Boolean(p))
+    const items = properties.map((p) => ({ ...(p.landlordId === req.user!.userId ? p : publicPropertyView(p)), id: (p._id as Types.ObjectId).toString() }))
 
     success(res, {
-      items: properties.map((p) => ({ ...(p.landlordId === req.user!.userId ? p : publicPropertyView(p)), id: (p._id as Types.ObjectId).toString() })),
-      total: properties.length,
+      // Web (favoritesStore) and mobile read propertyIds for the heart state;
+      // it was missing, so saved listings never showed as saved anywhere.
+      propertyIds: items.map((p) => p.id),
+      items,
+      total: items.length,
     })
   },
 

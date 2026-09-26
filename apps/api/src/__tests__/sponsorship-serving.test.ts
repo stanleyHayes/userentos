@@ -164,8 +164,9 @@ describe('serving sponsored listings (spec §9)', () => {
 describe('sponsored serving takes no viewer identifiers', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('chooses placements from the placement and the request city only', () => {
-    expectTypeOf(getSponsoredPlacements).parameters.toEqualTypeOf<[SponsoredPlacementName, ({ city?: string; limit?: number } | undefined)?]>()
+  it('chooses placements from the placement, the request city and the listings on the page only', () => {
+    // onPage is the organic result ids for this request, not anything about the viewer.
+    expectTypeOf(getSponsoredPlacements).parameters.toEqualTypeOf<[SponsoredPlacementName, ({ city?: string; limit?: number; onPage?: string[] } | undefined)?]>()
     // Runtime arity too, in case the types are loosened with a cast.
     expect(getSponsoredPlacements.length).toBe(1)
   })

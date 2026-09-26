@@ -57,10 +57,16 @@ import { PUBLICLY_VISIBLE_STATUSES as SERVABLE_LISTING_STATUSES } from '../prope
  * Rotation is least-shown first: among campaigns that qualify, the one with
  * the fewest impressions serves, so every advertiser gets a turn rather than
  * the earliest buyer taking the slot for good.
+ *
+ * `onPage` narrows candidates to listings already in the organic results for
+ * this request. A sponsored listing is only ever hoisted from the page, so a
+ * campaign whose listing isn't on it can't serve; without this, the three
+ * least-shown campaigns could be off-page on every request, never gain an
+ * impression, and hold every slot for good.
  */
 export async function getSponsoredPlacements(
   placement: SponsoredPlacementName,
-  opts: { city?: string; limit?: number } = {},
+  opts: { city?: string; limit?: number; onPage?: string[] } = {},
 ): Promise<SponsoredPlacement[]> {
   const now = new Date()
   const limit = Math.min(opts.limit ?? 3, 10)
@@ -72,9 +78,11 @@ export async function getSponsoredPlacements(
     endAt: { $gte: now },
   }).select('_id propertyId placement').sort({ 'metrics.impressions': 1, createdAt: 1 }).lean()
 
-  if (campaigns.length === 0) return []
+  const page = opts.onPage ? new Set(opts.onPage) : null
+  const candidates = page ? campaigns.filter((c) => page.has(c.propertyId)) : campaigns
+  if (candidates.length === 0) return []
 
-  const propertyIds = campaigns.map((c) => c.propertyId)
+  const propertyIds = candidates.map((c) => c.propertyId)
   const filter: Record<string, unknown> = {
     _id: { $in: propertyIds },
     listingStatus: { $in: SERVABLE_LISTING_STATUSES },
@@ -88,7 +96,7 @@ export async function getSponsoredPlacements(
   const servable = await Property.find(filter).select('_id').lean()
   const servableIds = new Set(servable.map((p) => String(p._id)))
 
-  return campaigns
+  return candidates
     .filter((c) => servableIds.has(c.propertyId))
     .slice(0, limit)
     .map((c) => ({

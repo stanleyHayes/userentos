@@ -50,7 +50,7 @@ describe('sponsored listings are opt-in per request', () => {
 
     expect(status).toBe(200)
     expect(body.data.items[0]).toMatchObject({ id: 'c', sponsored: true, sponsorshipId: 'camp-1' })
-    expect(mocks.getSponsoredPlacements).toHaveBeenCalledExactlyOnceWith('search_top', { city: 'Accra' })
+    expect(mocks.getSponsoredPlacements).toHaveBeenCalledExactlyOnceWith('search_top', { city: 'Accra', onPage: ['a', 'b', 'c'] })
     expect(mocks.recordImpressions).toHaveBeenCalledExactlyOnceWith(['camp-1'])
   })
 

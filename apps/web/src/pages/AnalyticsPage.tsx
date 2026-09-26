@@ -678,10 +678,10 @@ function PublicRegistryAnalytics() {
             accent="#2563eb"
           />
           <StatCard
-            label="Unique Viewers"
+            label="Daily Unique Viewers"
             value={String(data.uniqueViewers ?? 0)}
             icon={<Globe2 size={18} />}
-            sub="Distinct IP hashes"
+            sub="Each viewer counted once a day"
             accent="#7c3aed"
           />
           <StatCard

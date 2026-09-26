@@ -102,7 +102,7 @@ function UpgradePrompt({ planName }: { planName?: string }) {
             Storefront analytics is not in your plan
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted dark:text-gray-400">
-            Upgrade to see storefront views, unique visitors, which listings are being opened and
+            Upgrade to see storefront views, daily unique visitors, which listings are being opened and
             how many people click through to contact you
             {planName ? `. Your ${planName} plan does not include the traffic report.` : '.'}
           </p>
@@ -151,7 +151,7 @@ function AnalyticsReport({ data }: { data: StorefrontAnalytics }) {
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Storefront views" metric={headline.views} days={days} icon={<Eye size={18} />} accent="#2563eb" />
-        <MetricCard label="Unique visitors" metric={headline.uniqueVisitors} days={days} icon={<Users size={18} />} accent="#7c3aed" />
+        <MetricCard label="Daily unique visitors" metric={headline.uniqueVisitors} days={days} icon={<Users size={18} />} accent="#7c3aed" />
         <MetricCard label="Listing impressions" metric={headline.listingImpressions} days={days} icon={<LayoutGrid size={18} />} accent="#0d9488" />
         <MetricCard label="Contact clicks" metric={headline.contactClicks} days={days} icon={<PhoneCall size={18} />} accent="#c9a227" />
       </div>

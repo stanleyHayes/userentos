@@ -20,6 +20,7 @@ const { User } = await import('../models/User.js')
 const { Property } = await import('../models/Property.js')
 const { Agreement } = await import('../models/Agreement.js')
 const { TenantProfile } = await import('../models/TenantProfile.js')
+const { Business } = await import('../models/Business.js')
 const { SIGNATURE_CONSENT_STATEMENT, agreementTermsHash } = await import('../services/agreementEvidence.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: agreementsRouter } = await import('../routes/agreements.js')
@@ -69,6 +70,7 @@ describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
     await Promise.all([
       User.deleteMany({ _id: { $in: [landlordId, tenantId] } }), TenantProfile.deleteMany({ userId: tenantId }),
       Property.deleteOne({ _id: propertyId }), Agreement.deleteMany({ propertyId }),
+      Business.deleteMany({ ownerId: landlordId }),
     ])
     await mongoose.disconnect()
   })
@@ -118,6 +120,9 @@ describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
   })
 
   it('activates once both parties sign the current version and hides the counterparty device data', async () => {
+    // An approved business in the lease's city: the old code sent it a
+    // "a tenant just moved in" notice on activation.
+    await Business.create({ ownerId: landlordId, name: 'Nearby Movers', category: 'moving', phone: '0240000000', city: 'Accra', approvalStatus: 'approved' })
     const { data: current } = await call(`/${agreementId}`, asLandlord)
     expect((await sign(asLandlord, { signatureName: 'Sig Landlord', termsHash: current.termsHash, consent: true })).status).toBe(200)
     const done = await sign(asTenant, { signatureName: 'Sig Tenant', termsHash: current.termsHash, consent: true })
@@ -127,9 +132,10 @@ describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
 
     const stored = (await Agreement.findById(agreementId).lean())!
     expect(stored.signatureEvidence.map((e) => [e.role, e.agreementVersion])).toEqual([['landlord', 1], ['landlord', 2], ['tenant', 2]])
-    // Timestamped for the weekly per-city business count; no business is told
-    // about this lease itself.
+    // No local business is told about a lease going live.
     expect(stored.activatedAt).toBeInstanceOf(Date)
+    // The old notice was fire-and-forget after the response; give it time to land.
+    await new Promise((resolve) => setTimeout(resolve, 300))
     const { notify } = await import('../services/notify.js')
     expect(vi.mocked(notify)).not.toHaveBeenCalledWith(expect.objectContaining({ category: 'promotion' }))
 

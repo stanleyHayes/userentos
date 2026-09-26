@@ -261,8 +261,10 @@ export const agreementController = {
       error(res, 'This property is already occupied under another agreement', 409)
       return
     }
-    // activatedAt feeds only the weekly per-city lease count businesses get
-    // (services/newLeaseDigest.ts); nothing is sent about this lease itself.
+    // Nothing about a lease going live is sent to local businesses: the
+    // per-lease "a tenant just moved in" notice (and a later weekly count, a
+    // marketing nudge that store declarations would have to list) were both
+    // removed. activatedAt is only the record of when the lease went live.
     const activated = await Agreement.findOneAndUpdate({ _id: signed._id, status: { $in: SIGNABLE } }, { $set: { status: 'active', activatedAt: new Date() } }, { returnDocument: 'after' })
     if (activated) {
       /*

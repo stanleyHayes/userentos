@@ -29,7 +29,6 @@ import { acquireCronLock } from './cronLock.js'
 import { retentionCutoff } from '../config/retention.js'
 import { payoutsOffered, reconcileUncertainPayouts } from './payouts/reconcile.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
-import { sendWeeklyNewLeaseDigest } from './newLeaseDigest.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
 import { retryUnprocessedWebhooks, reconcilePendingTransactions } from './marketplace/reconcile.js'
@@ -729,18 +728,6 @@ export function startScheduler() {
       if (expired > 0) logger.info(`[Cron] Expired ${expired} finished sponsorship campaign(s).`)
     } catch (err) {
       logger.error(`[Cron] Sponsorship expiry failed: ${(err as Error).message}`)
-    }
-  }, { timezone: GHANA_TZ })
-
-  // Weekly new-lease count for approved local businesses, Monday 09:00. An
-  // aggregate per city (only at 5+ leases), never a per-lease signal.
-  cron.schedule('0 9 * * 1', async () => {
-    if (!(await acquireCronLock('new-lease-digest', LOCK_TTL_DAILY))) return
-    try {
-      const result = await sendWeeklyNewLeaseDigest()
-      if (result.notified > 0) logger.info(`[Cron] New-lease digest: ${result.notified} business(es) in ${result.cities} city(ies).`)
-    } catch (err) {
-      logger.error(`[Cron] New-lease digest failed: ${(err as Error).message}`)
     }
   }, { timezone: GHANA_TZ })
 

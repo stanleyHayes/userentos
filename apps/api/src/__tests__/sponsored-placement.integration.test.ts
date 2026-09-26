@@ -39,7 +39,7 @@ describe.skipIf(!hasTestMongo)('sponsored listings on the public browse', () => 
   beforeAll(async () => {
     await mongoose.connect(uri)
     await Property.collection.insertMany(cities.map((city, i) => ({
-      _id: propertyIds[i], landlordId, title: `Sponsored fixture ${i}`, description: 'Fixture', type: 'apartment', status: 'available', listingStatus: 'published',
+      _id: propertyIds[i], landlordId, title: `Sponsored fixture ${i}`, description: 'Fixture', type: i === 8 ? 'house' : 'apartment', status: 'available', listingStatus: 'published',
       address: { street: `${i} Fixture Road`, city, region: 'Fixture' }, rentAmount: 1000 + i, rentDurationMonths: 12, advanceMonths: 1,
       images: [], videos: [], rules: [], amenities: [], bedrooms: 1, bathrooms: 1, furnished: false, parkingSpaces: 0, createdAt: new Date(Date.now() - i * 1000),
     })))
@@ -97,6 +97,16 @@ describe.skipIf(!hasTestMongo)('sponsored listings on the public browse', () => 
     const { items } = await browse(`city=${encodeURIComponent(accra)}&placement=search_top`)
 
     expect(items.filter((p) => p.sponsored).map((p) => p.sponsorshipId)).toContain(accraCampaigns[3])
+  })
+
+  it('serves an on-page campaign even when the least-shown ones are not on the page', async () => {
+    // The only Kumasi house carries the newest Kumasi campaign; the three
+    // least-shown (oldest) campaigns are on apartments this filter hides.
+    const { items } = await browse(`city=${encodeURIComponent(kumasi)}&type=house&placement=search_top`)
+
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ id: String(propertyIds[8]), sponsored: true, sponsorshipId: String(campaignIds[8]) })
+    await expect.poll(async () => (await impressions())[String(campaignIds[8])], { timeout: 3000 }).toBe(1)
   })
 
   it('refuses a placement nothing serves', async () => {

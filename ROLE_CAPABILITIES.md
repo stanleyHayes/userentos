@@ -90,9 +90,8 @@ Per-user-type capabilities and their shipped status as of 2026-07-29.
 - ✅ Dashboard analytics: profile/listing views, inquiry totals + 30-day trend, wins, conversion
 
 - ✅ Order/booking requests with participant, scheduling, and fulfillment status ledger
-- ✅ New-mover-only offers, restricted to tenants with a lease signed in the business city within 30 days
-- ✅ Idempotent new-mover notifications to businesses when a nearby agreement activates
-- ✅ Wallet-paid featured subscription with 30-day placement and automatic expiry
+- ✅ New-mover offers, shown to everyone with a "For new movers" tag (not targeted using anyone's lease)
+- ✅ Wallet-paid 30-day placement, labelled "Sponsored" and shown only where a page asks for it (web Local Services), with automatic expiry
 - ✅ Product stock quantities and image catalogs
 
 ## 🏦 Financier
