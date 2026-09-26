@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 import type { Types } from 'mongoose'
 import { Router, type Request, type Response } from 'express'
 import { Property } from '../models/Property.js'
@@ -9,9 +8,12 @@ import { param } from '../utils/params.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
+import { visitorHash } from '../utils/visitorHash.js'
 
+// Keyed and rotated daily (utils/visitorHash.ts): an unsalted SHA-256 of an
+// IPv4 address can be reversed by hashing all 2^32 of them.
 function hashIp(ip: string): string {
-  return crypto.createHash('sha256').update(ip).digest('hex')
+  return visitorHash(`ip:${ip}`)
 }
 
 function clientIp(req: Request): string {

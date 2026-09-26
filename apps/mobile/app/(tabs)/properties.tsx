@@ -7,12 +7,15 @@ import { neuCard, neuInset } from '../../lib/neu'
 import { formatCurrency } from '../../lib/format'
 import { api } from '../../lib/api'
 import { PropertyGridSkeleton } from '../../components/Skeleton'
+import { SponsoredBadge } from '../../components/SponsoredBadge'
 import { useAuthStore } from '../../stores/authStore'
 
 interface Property {
   id: string; title: string; description: string; type: string
   status: string; address: { street: string; city: string; region: string }
   rentAmount: number; amenities: string[]; images?: string[]
+  /** Paid placement. The API sets it only when asked with placement=search_top, which this app does not send. */
+  sponsored?: boolean
 }
 
 const statusFilters = [
@@ -46,6 +49,9 @@ export default function PropertiesScreen() {
       const st = status ?? statusFilter
       if (q.trim()) params.append('search', q.trim())
       if (st) params.append('status', st)
+      // No placement=search_top: the apps show no paid placements (Google Play
+      // "Contains ads: No"). Adding it here would serve sponsored listings,
+      // already labelled below, and requires changing the store answers first.
       const queryStr = params.toString()
       const data = await api.get<{ items: Property[] }>(`/properties${queryStr ? `?${queryStr}` : ''}`)
       setProperties(data.items)
@@ -90,6 +96,7 @@ export default function PropertiesScreen() {
         <View style={s.cardBody}>
           <View style={s.cardHeader}>
             <Text style={[s.cardTitle, { color: c.primaryDark }]} numberOfLines={1}>{item.title}</Text>
+            {item.sponsored && <View style={s.sponsoredGap}><SponsoredBadge label="Sponsored listing" /></View>}
             <View style={[s.badge, { backgroundColor: statusColor + '20' }]}>
               <Text style={[s.badgeText, { color: statusColor }]}>{item.status.replace('_', ' ')}</Text>
             </View>
@@ -200,6 +207,7 @@ const s = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: 8 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  sponsoredGap: { marginRight: 6 },
   badgeText: { fontSize: 10, fontFamily: 'Outfit_700Bold', textTransform: 'capitalize' },
   location: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
   locationText: { fontSize: 12, fontFamily: 'Outfit_400Regular' },

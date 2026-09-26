@@ -11,6 +11,7 @@ import { neuCard, neuInset } from '../lib/neu'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
 import { ReportContentModal, type ReportTarget } from '../components/ReportContentModal'
+import { SponsoredBadge } from '../components/SponsoredBadge'
 
 type Category = 'furniture' | 'appliances' | 'internet' | 'moving' | 'cleaning' | 'other'
 type ListingType = 'product' | 'service' | 'discount'
@@ -40,12 +41,16 @@ interface Listing {
   price?: number
   promoText?: string
   isActive: boolean
+  /** Tagged "For new movers"; shown to everyone. */
+  newMoverOnly?: boolean
   createdAt: string
 }
 
 interface BusinessEntry {
   business: Business
   listings: Listing[]
+  /** Paid placement, labelled Sponsored. Only sent for placement=directory, which this app does not ask for. */
+  isFeatured?: boolean
 }
 
 interface Review {
@@ -80,6 +85,15 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** New-mover offers are shown to everyone, tagged; nobody's lease decides who sees them. */
+function NewMoverTag({ c }: { c: ReturnType<typeof useThemeColors> }) {
+  return (
+    <View style={[s.newMoverTag, { backgroundColor: c.primary + '15' }]}>
+      <Text style={[s.newMoverText, { color: c.primary }]}>For new movers</Text>
+    </View>
+  )
+}
+
 export default function LocalServicesScreen() {
   const c = useThemeColors()
   const user = useAuthStore((st) => st.user)
@@ -103,6 +117,10 @@ export default function LocalServicesScreen() {
       if (category !== 'all') parts.push(`category=${encodeURIComponent(category)}`)
       if (params.city) parts.push(`city=${encodeURIComponent(params.city)}`)
       if (params.search) parts.push(`search=${encodeURIComponent(params.search)}`)
+      // No placement=directory: the apps show businesses in organic order and
+      // no paid placements (Google Play "Contains ads: No"). Cards already
+      // label isFeatured, so enabling it later is this one parameter — after
+      // the store answers change.
       const qs = parts.length ? `?${parts.join('&')}` : ''
       return api.get<{ items: BusinessEntry[] }>(`/businesses${qs}`)
     },
@@ -253,6 +271,7 @@ function BusinessCard({
           {business.isVerified && (
             <Ionicons name="shield-checkmark" size={16} color="#10b981" />
           )}
+          {entry.isFeatured && <SponsoredBadge label="Sponsored business" />}
         </View>
         <View style={[s.catBadge, { backgroundColor: c.primary + '15' }]}>
           <Text style={[s.catText, { color: c.primary }]}>{CATEGORY_LABELS[business.category]}</Text>
@@ -281,6 +300,7 @@ function BusinessCard({
             <View key={l.id} style={s.listingRow}>
               <Ionicons name={TYPE_ICONS[l.type]} size={14} color={c.primary} />
               <Text style={[s.listingTitle, { color: c.text }]} numberOfLines={1}>{l.title}</Text>
+              {l.newMoverOnly && <NewMoverTag c={c} />}
               {l.type === 'discount' && l.promoText ? (
                 <Text style={s.promoText} numberOfLines={1}>{l.promoText}</Text>
               ) : l.price != null ? (
@@ -355,6 +375,7 @@ function BusinessDetail({
   return (
     <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={s.modalBadgeRow}>
+        {entry.isFeatured && <SponsoredBadge label="Sponsored business" />}
         <View style={[s.catBadge, { backgroundColor: c.primary + '15' }]}>
           <Text style={[s.catText, { color: c.primary }]}>{CATEGORY_LABELS[business.category]}</Text>
         </View>
@@ -405,6 +426,7 @@ function BusinessDetail({
             <View style={s.listingRow}>
               <Ionicons name={TYPE_ICONS[l.type]} size={15} color={c.primary} />
               <Text style={[s.listingTitle, { color: c.text }]} numberOfLines={1}>{l.title}</Text>
+              {l.newMoverOnly && <NewMoverTag c={c} />}
               {l.type === 'discount' && l.promoText ? (
                 <Text style={s.promoText} numberOfLines={1}>{l.promoText}</Text>
               ) : l.price != null ? (
@@ -704,6 +726,8 @@ const s = StyleSheet.create({
   name: { fontSize: 15, fontFamily: 'Outfit_700Bold', flexShrink: 1 },
   catBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   catText: { fontSize: 10, fontFamily: 'Outfit_700Bold' },
+  newMoverTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, flexShrink: 0 },
+  newMoverText: { fontSize: 9, fontFamily: 'Outfit_700Bold' },
   cityRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   city: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
   desc: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },

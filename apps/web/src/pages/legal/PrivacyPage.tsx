@@ -96,6 +96,7 @@ export function PrivacyPage() {
                 <><strong>For legitimate interests that do not override your rights:</strong> keeping the service secure, preventing fraud and abuse, reviewing listings and reported content, fixing errors, and producing aggregated statistics about the rental market.</>,
               ])}
               <p className="mt-3">We do not sell your personal data and we do not use it for third-party advertising.</p>
+              <p className="mt-3">Some listings and businesses are paid placements and are labelled Sponsored. We choose them only from the page you are on and the filters you set, not from your profile or history, and we count how often each is shown in total without recording who saw it. The RentOS mobile apps do not show paid placements.</p>
             </>
           ),
         },

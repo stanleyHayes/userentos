@@ -1,10 +1,18 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { SPONSORED_PLACEMENTS, type SponsoredPlacementName } from '../services/marketplace/sponsoredPlacements.js'
 
-/** An admin-configured sponsorship product (spec §9). */
+/**
+ * An admin-configured sponsorship product (spec §9).
+ *
+ * `placement` is limited to what a public surface serves (SPONSORED_PLACEMENTS).
+ * 'homepage', 'category' and 'city' were sellable but nothing read them, so a
+ * buyer paid for a placement that could never deliver. `targeting` is still
+ * never read by serving; only the request's own city narrows a placement.
+ */
 export interface ISponsorshipProduct extends Document {
   name: string
   description?: string
-  placement: 'search_top' | 'homepage' | 'category' | 'city'
+  placement: SponsoredPlacementName
   durationDays: number
   price: number
   targeting: { cities?: string[]; regions?: string[]; propertyTypes?: string[] }
@@ -15,7 +23,7 @@ export interface ISponsorshipProduct extends Document {
 const sponsorshipProductSchema = new Schema<ISponsorshipProduct>({
   name: { type: String, required: true },
   description: String,
-  placement: { type: String, required: true, enum: ['search_top', 'homepage', 'category', 'city'], default: 'search_top' },
+  placement: { type: String, required: true, enum: SPONSORED_PLACEMENTS, default: 'search_top' },
   durationDays: { type: Number, required: true, min: 1, default: 7 },
   price: { type: Number, required: true, min: 0 },
   targeting: { cities: [String], regions: [String], propertyTypes: [String] },

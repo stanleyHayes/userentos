@@ -6,7 +6,8 @@ import { api } from '@/lib/api'
    ================================================================ */
 
 export type SponsorshipStatus = 'pending_payment' | 'active' | 'paused' | 'expired' | 'cancelled'
-export type SponsorshipPlacement = 'search_top' | 'homepage' | 'category' | 'city'
+/** Only placements the API serves can be sold (apps/api services/marketplace/sponsoredPlacements.ts). */
+export type SponsorshipPlacement = 'search_top'
 
 export interface SponsorshipCampaign {
   id: string

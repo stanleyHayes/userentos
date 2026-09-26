@@ -1,4 +1,15 @@
 import { test, expect, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// Config contract, no Expo web needed: the Play "Advertising ID: No" answer
+// must be guaranteed by the build, not by whichever SDKs happen to be linked.
+// Expo writes tools:node="remove" for every blocked permission. Still confirm
+// on the EAS release AAB (`bundletool dump manifest`) before answering.
+test('the Android build blocks the advertising-ID permission', () => {
+  const appJson = JSON.parse(readFileSync(resolve(__dirname, '../../apps/mobile/app.json'), 'utf8'))
+  expect(appJson.expo.android.blockedPermissions).toContain('com.google.android.gms.permission.AD_ID')
+})
 
 const mobileUrl = process.env.MOBILE_WEB_URL
 const user = { id: '507f1f77bcf86cd799439061', email: 'store@rentos.test', firstName: 'Store', lastName: 'Fixture', phone: '0241234567', roles: ['tenant'], activeRole: 'tenant', isVerified: true }

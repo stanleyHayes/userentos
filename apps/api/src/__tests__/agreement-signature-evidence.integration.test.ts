@@ -127,6 +127,11 @@ describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
 
     const stored = (await Agreement.findById(agreementId).lean())!
     expect(stored.signatureEvidence.map((e) => [e.role, e.agreementVersion])).toEqual([['landlord', 1], ['landlord', 2], ['tenant', 2]])
+    // Timestamped for the weekly per-city business count; no business is told
+    // about this lease itself.
+    expect(stored.activatedAt).toBeInstanceOf(Date)
+    const { notify } = await import('../services/notify.js')
+    expect(vi.mocked(notify)).not.toHaveBeenCalledWith(expect.objectContaining({ category: 'promotion' }))
 
     const landlordView = (await call(`/${agreementId}`, asLandlord)).data.signatureEvidence
     const tenantEntry = landlordView.find((e) => e.role === 'tenant')!

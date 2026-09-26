@@ -26,9 +26,11 @@ export interface IStorefrontEvent extends Document {
   propertyId?: string
   /** Which contact button was used. Always set for `contact_click`. */
   channel?: StorefrontContactChannel
-  /** Client-generated per-tab id. Optional: crawlers and no-JS clients send none. */
-  sessionId?: string
-  /** SHA-256 of the session id, or of the request IP when there is no session. */
+  /**
+   * Keyed, daily-rotating digest (utils/visitorHash.ts) of the client's per-tab
+   * session id, or of the request IP when there is none. The session id itself
+   * is not stored: keeping it next to its digest made the digest pointless.
+   */
   visitorHash: string
   createdAt: Date
 }
@@ -39,7 +41,6 @@ const storefrontEventSchema = new Schema<IStorefrontEvent>(
     type: { type: String, required: true, enum: ['view', 'listing_impression', 'contact_click'] },
     propertyId: { type: String },
     channel: { type: String, enum: ['phone', 'email', 'whatsapp'] },
-    sessionId: { type: String },
     visitorHash: { type: String, required: true },
   },
   // Events are written once and never edited, so an updatedAt on every row is

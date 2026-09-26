@@ -405,7 +405,7 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-muted">
           <input type="checkbox" checked={form.newMoverOnly} onChange={(event) => setForm((f) => ({ ...f, newMoverOnly: event.target.checked }))} />
-          Show only to tenants who signed a lease in this city within 30 days
+          Tag as a new-mover offer (shown to everyone, labelled "For new movers"; check eligibility when a customer redeems it)
         </label>
         {form.type === 'discount' && (
           <TextField id="listing-promo" label="Promo text" value={form.promoText} onChange={(e) => setForm((f) => ({ ...f, promoText: e.target.value }))} fullWidth placeholder="e.g. 15% off for new renters" slotProps={{ inputLabel: { shrink: true } }} />

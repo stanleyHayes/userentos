@@ -3,7 +3,8 @@ import { ttlSeconds } from '../config/retention.js'
 
 /**
  * Anonymous pageview record for the public property registry. IPs are stored
- * as a SHA-256 hash so we can compute "unique viewers" without retaining PII.
+ * only as a keyed, daily-rotating hash (utils/visitorHash.ts) so we can compute
+ * "unique viewers" without retaining PII.
  */
 export interface IRegistryPageView extends Document {
   path: string

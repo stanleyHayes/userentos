@@ -46,18 +46,24 @@ export default function HomeScreen() {
 
   async function load() {
     try {
-      const [data, favs, props, recs, agreementsRes] = await Promise.all([
+      // Saved properties are loaded by id (as saved-properties.tsx does), not
+      // by filtering the whole public listing: that pulled every listing just
+      // to find a handful, and missed saved ones beyond the first page.
+      const saved = api.get<{ propertyIds: string[] }>('/properties/favorites/me')
+        .then((favs) => Promise.all((favs.propertyIds ?? []).slice(0, 5).map((id) =>
+          api.get<PropertyItem>(`/properties/${id}`).catch(() => null))))
+        .then((rows) => rows.filter((p): p is PropertyItem => p !== null))
+        .catch(() => [] as PropertyItem[])
+      const [data, savedItems, recs, agreementsRes] = await Promise.all([
         api.get<Record<string, number>>('/analytics/me'),
-        api.get<{ propertyIds: string[] }>('/properties/favorites/me').catch(() => ({ propertyIds: [] })),
-        api.get<{ items: PropertyItem[] }>('/properties').catch(() => ({ items: [] })),
+        saved,
         // { items, total } — not a bare array. Read as an array this was always
         // empty, so "Recommended for You" never showed anything.
         api.get<{ items: PropertyItem[] }>('/properties/recommendations/for-me').catch(() => ({ items: [] })),
         api.get<{ items: AgreementItem[] }>('/agreements').catch(() => ({ items: [] })),
       ])
       setAnalytics(data)
-      const favIds: string[] = favs.propertyIds ?? []
-      setSavedProperties(props.items.filter((p) => favIds.includes(p.id ?? p._id ?? '')))
+      setSavedProperties(savedItems)
       setRecommendations((recs.items ?? []).slice(0, 4))
       const active = (agreementsRes.items ?? []).find((a) => a.status === 'active')
       setActiveAgreement(active ?? null)

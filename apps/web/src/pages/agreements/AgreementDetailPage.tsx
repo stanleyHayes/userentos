@@ -73,6 +73,9 @@ export function AgreementDetailPage() {
   const { data: agreementProperty } = useProperty(agreement?.propertyId ?? '')
   const propertyCity = agreementProperty?.address?.city ?? ''
   const isTenantView = user?.activeRole === 'tenant'
+  // No `placement`: this widget is chosen by the tenant's lease city, so it
+  // stays in organic order. Boosting paid businesses here would make lease
+  // data an advertising input (and change the store privacy answers).
   const { data: localBusinessData } = useBusinesses({ city: propertyCity }, { enabled: isTenantView && !!propertyCity })
   const localBusinesses = (localBusinessData?.items ?? []).slice(0, 4)
 

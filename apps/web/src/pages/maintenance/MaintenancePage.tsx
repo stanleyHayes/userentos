@@ -96,7 +96,9 @@ export function MaintenancePage() {
   const { data, isLoading } = useMaintenanceRequests()
   const items = useMemo(() => data?.items ?? [], [data])
 
-  const { data: propertiesData } = useProperties(isLandlord ? { mine: true } : undefined)
+  // Only landlords pick from their own list; a tenant's choices come from
+  // their agreements, so fetching the public listing for them was wasted.
+  const { data: propertiesData } = useProperties({ mine: true }, { enabled: isLandlord })
   const { data: agreementsData } = useAgreements()
   // For landlords: own properties. For tenants: properties they have agreements with.
   const propertiesForCreate = useMemo(() => {
