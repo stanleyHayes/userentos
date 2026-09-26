@@ -1,7 +1,7 @@
-import { useId, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useId, useState } from 'react'
 import { ArrowRight, MapPin, RotateCw } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
+import { PlatformLink } from '@/components/PlatformLink'
 import { buttonVariants } from '@/components/ui/buttonVariants'
 import { useSplashFinished } from '@/lib/splash'
 import { cn } from '@/lib/utils'
@@ -16,23 +16,6 @@ interface Props {
   onRetry?: () => void
   /** A retry is in flight. */
   retrying?: boolean
-}
-
-/**
- * Where the main site lives. On a storefront host every relative path would
- * stay on that host, so onward links name the platform explicitly.
- */
-function platformOrigin(): string {
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.localhost')) {
-    return `${window.location.protocol}//localhost${window.location.port ? `:${window.location.port}` : ''}`
-  }
-  return ((import.meta.env.VITE_SITE_URL as string | undefined) || 'https://userentos.com').replace(/\/$/, '')
-}
-
-function PlatformLink({ to, external, className, children, ...rest }: { to: string; external: boolean; className: string; children: ReactNode; 'aria-label'?: string }) {
-  return external
-    ? <a href={`${platformOrigin()}${to}`} className={className} {...rest}>{children}</a>
-    : <Link to={to} className={className} {...rest}>{children}</Link>
 }
 
 const COPY: Record<Reason, { title: string; body: string }> = {

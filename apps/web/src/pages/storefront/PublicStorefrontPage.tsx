@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { PlatformLink } from '@/components/PlatformLink'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency } from '@/lib/utils'
@@ -25,6 +26,10 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   const slug = slugOverride ?? slugFromPath
   const { data: storefront, isLoading, isError, error, refetch, isFetching, errorUpdateCount } = useStorefront(slug)
   const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
+  // On {slug}.userentos.com or a custom domain a router link would stay on
+  // the seller's host, where "/" is this storefront and the rest of the app
+  // sits behind a separate sign-in.
+  const onStorefrontHost = Boolean(slugOverride)
 
   // Per-host SEO (spec §4.1). index.html carries the platform's own tags, so
   // without this a storefront was served "RentOS Ghana — National Digital
@@ -68,7 +73,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
       <StorefrontUnavailable
         slug={slug}
         reason={missing ? 'missing' : 'unreachable'}
-        onStorefrontHost={Boolean(slugOverride)}
+        onStorefrontHost={onStorefrontHost}
         onRetry={() => { void refetch() }}
         retrying={retrying}
       />
@@ -147,7 +152,13 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((property) => (
-              <Link key={property.id} to={`/properties/${property.id}`}>
+              // The public listing page: /properties/:id is behind sign-in,
+              // so a visitor clicking a listing was sent to a login screen.
+              <PlatformLink
+                key={property.id}
+                to={`/registry/${property.id}`}
+                external={onStorefrontHost}
+              >
                 <Card className="group h-full overflow-hidden p-0 transition-all hover:-translate-y-1 hover:shadow-xl">
                   <div className="relative h-44 overflow-hidden bg-surface">
                     {property.images?.[0] ? (
@@ -176,14 +187,15 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
+              </PlatformLink>
             ))}
           </div>
         )}
 
         {!storefront.branding?.hideRentosBranding && (
           <p className="mt-10 text-center text-xs text-muted dark:text-gray-600">
-            Powered by <Link to="/" className="font-semibold text-primary hover:underline dark:text-blue-400">RentOS</Link>
+            Powered by{' '}
+            <PlatformLink to="/" external={onStorefrontHost} className="font-semibold text-primary hover:underline dark:text-blue-400">RentOS</PlatformLink>
           </p>
         )}
       </main>
