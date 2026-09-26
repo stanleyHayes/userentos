@@ -9,6 +9,7 @@ import { asyncHandler } from '../middleware/errorHandler.js'
 import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 import { visitorHash } from '../utils/visitorHash.js'
+import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 
 // Keyed and rotated daily (utils/visitorHash.ts): an unsalted SHA-256 of an
 // IPv4 address can be reversed by hashing all 2^32 of them.
@@ -90,6 +91,7 @@ router.get(
 
     const filter: Record<string, unknown> = {
       listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
+      landlordId: { $nin: await closedAccountIds() },
     }
 
     if (city) {
@@ -249,7 +251,7 @@ router.get(
     }
 
     const doc = await Property.findOne({ _id: id, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
-    if (!doc) {
+    if (!doc || await isClosedAccount(doc.landlordId)) {
       error(res, 'Property not found', 404)
       return
     }

@@ -18,10 +18,8 @@ import { MoveOut } from '../models/MoveOut.js'
 import { notify, notifyRentReminder } from './notify.js'
 import { runSavingsAutoDebit } from './payments/savingsAutoDebit.js'
 import { logger } from '../utils/logger.js'
-import { AuditLog } from '../models/AuditLog.js'
-import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
-import { retentionCutoff } from '../config/retention.js'
+import { scheduleRetentionJobs } from './retentionJobs.js'
 import { payoutsOffered, reconcileUncertainPayouts } from './payouts/reconcile.js'
 import { recoverPayoutRefunds } from './payouts/refund.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
@@ -640,7 +638,6 @@ export function startScheduler() {
     }
   }, { timezone: GHANA_TZ })
 
-  // ─── Data retention: purge audit logs older than 2 years ───
   // Marketplace webhook dead-letter retry and settlement reconciliation
   // (spec §8.4). Runs every 15 minutes: a webhook that failed mid-processing,
   // or never arrived at all, otherwise leaves a real payment stuck at pending
@@ -712,27 +709,8 @@ export function startScheduler() {
     }
   }, { timezone: GHANA_TZ })
 
-  cron.schedule('0 3 * * *', async () => {
-    if (!(await acquireCronLock('audit-purge', LOCK_TTL_DAILY))) return
-    try {
-      const result = await AuditLog.deleteMany({ createdAt: { $lt: retentionCutoff('auditLog') } })
-      if ((result.deletedCount ?? 0) > 0) {
-        logger.info(`[Scheduler] Purged ${result.deletedCount} audit logs older than 2 years`)
-      }
-    } catch (err) {
-      logger.error('[Scheduler] Audit log purge error:', err)
-    }
-  }, { timezone: GHANA_TZ })
+  // ─── Data retention (purge at 3am) and account erasure (4am), with catch-up ───
+  scheduleRetentionJobs(GHANA_TZ)
 
-  // ─── Account erasure: retry incomplete cleanup after the disclosed delay ───
-  cron.schedule('0 4 * * *', async () => {
-    if (!(await acquireCronLock('gdpr-delete', LOCK_TTL_DAILY))) return
-    try {
-      await purgeExpiredAccounts()
-    } catch {
-      logger.error('[Scheduler] Account erasure scan failed; retry scheduled for the next run')
-    }
-  }, { timezone: GHANA_TZ })
-
-  logger.info('[Scheduler] Started. Auto-debit at 8am, reminders + arrears at 9am, subscription lifecycle at 10am Ghana time. Payment reconcile every 5min. Audit purge at 3am. GDPR cleanup at 4am.')
+  logger.info('[Scheduler] Started. Auto-debit at 8am, reminders + arrears at 9am, subscription lifecycle at 10am Ghana time. Payment reconcile every 5min.')
 }

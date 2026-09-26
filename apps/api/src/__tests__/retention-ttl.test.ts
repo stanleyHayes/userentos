@@ -9,6 +9,7 @@ import { StoreNotification } from '../models/StoreNotification.js'
 import { ComplaintLog } from '../models/ComplaintLog.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
 import { ValuationLog } from '../models/ValuationLog.js'
+import { verifyTtlIndexes } from '../services/retentionIndexes.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 type AnyModel = { schema: mongoose.Schema; collection: mongoose.Collection; createIndexes(): Promise<unknown> }
@@ -53,5 +54,28 @@ describe.skipIf(!hasTestMongo)('the server accepts the TTL indexes', () => {
     for (const [keys, options] of expected) {
       expect(indexes.find((index) => JSON.stringify(index.key) === JSON.stringify(keys))).toMatchObject({ expireAfterSeconds: options!.expireAfterSeconds })
     }
+  })
+
+  it('reports a live TTL index whose period drifted from the schema, and one that is missing', async () => {
+    const name = `TtlVerify${new mongoose.Types.ObjectId().toHexString()}`
+    const schema = new mongoose.Schema({ createdAt: Date, seenAt: Date }, { collection: name.toLowerCase(), autoIndex: false })
+    schema.index({ createdAt: 1 }, { expireAfterSeconds: 100 })
+    schema.index({ seenAt: 1 }, { expireAfterSeconds: 50 })
+    const model = mongoose.model(name, schema)
+    try {
+      await model.collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: 999 })
+      expect(await verifyTtlIndexes([model])).toEqual([
+        { model: name, key: '{"createdAt":1}', expectedSeconds: 100, actualSeconds: 999, problem: 'wrong_period' },
+        { model: name, key: '{"seenAt":1}', expectedSeconds: 50, problem: 'missing' },
+      ])
+    } finally {
+      await model.collection.drop().catch(() => undefined)
+      mongoose.deleteModel(name)
+    }
+  })
+
+  it('finds no drift once the schema TTL indexes are built', async () => {
+    await RegistryPageView.createIndexes()
+    expect(await verifyTtlIndexes([RegistryPageView as never])).toEqual([])
   })
 })

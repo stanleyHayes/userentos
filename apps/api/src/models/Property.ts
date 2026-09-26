@@ -23,6 +23,8 @@ export interface IProperty extends Document {
   rentDurationMonths: number
   advanceMonths: number
   images: string[]
+  /** Storage id of each uploaded photo, so the file can be erased with the listing. */
+  imageAssets: { url: string; publicId: string }[]
   videos: string[]
   rules: string[]
   amenities: string[]
@@ -108,6 +110,7 @@ const propertySchema = new Schema<IProperty>({
   rentDurationMonths: { type: Number, required: true },
   advanceMonths: { type: Number, required: true },
   images: [String],
+  imageAssets: { type: [{ _id: false, url: { type: String, required: true }, publicId: { type: String, required: true } }], default: [] },
   videos: [String],
   rules: [String],
   amenities: [String],

@@ -6,7 +6,8 @@ import { DocumentModel, type IDocument } from '../models/Document.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
-import { eraseDocumentFile } from '../services/documentErasure.js'
+import { eraseDocumentFile, documentStorageAsset } from '../services/documentErasure.js'
+import { recordErasure, completeErasure } from '../services/erasureLedger.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
 import { isAdminStaff } from '../utils/accessControl.js'
 
@@ -180,8 +181,13 @@ router.delete('/:id', authenticate, async (req, res) => {
   if (!doc) { error(res, 'Document not found', 404); return }
   if (doc.ownerId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
+  // Ledger first, so a restored backup cannot bring the file record back;
+  // the record stays if the file host does not confirm the deletion.
+  const asset = documentStorageAsset(doc)
+  const entryId = await recordErasure({ subjectId: doc.ownerId, scope: 'document', source: 'owner', recordIds: [String(doc._id)], storageAssets: asset ? [asset] : [] })
   await eraseDocumentFile(doc)
   await doc.deleteOne()
+  await completeErasure(entryId)
   await AuditLog.create({
     userId: req.user!.userId,
     action: 'delete',

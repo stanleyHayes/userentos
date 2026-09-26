@@ -27,7 +27,7 @@ All categories below can be associated with a signed-in account. Apple manifest 
 ### Changes since 13 September (25 September 2026)
 
 - **Regulated financial features are off in production by default** (`REGULATED_FEATURES`, see [regulated-features.md](regulated-features.md)). While they are off, the app shows no rent payment, wallet, savings, loans, investments, insurance, financing, payroll or credit score screens, and the API refuses those requests. So no Payment information, Credit information or the financial parts of Other financial information are collected. Answer the store forms for the configuration you actually ship. If you enable a feature, update the forms in the same release that discloses it.
-- **Consent evidence.** Accepting the Terms and Privacy Policy stores the document versions, time, IP address, user agent and 18+ confirmation, for account security and to prove consent. Apple: Other data types. Play: Other info. Account deletion erases these fields.
+- **Consent evidence.** Accepting the Terms and Privacy Policy stores the document versions, time, IP address, user agent and 18+ confirmation, for account security and to prove consent. Apple: Other data types. Play: Other info. Account deletion removes the IP address and user agent from the account record, but the same consent event, with IP address and user agent, is also written to the security log (`consent.accept`), which is kept for 2 years and is not removed when the account is deleted.
 - **Ghana Card / national ID numbers** are encrypted at rest (AES-256-GCM). Landlords with approved profile access see only whether ID was reviewed and the last four digits, never document or selfie images.
 - **Shared tenant passports** no longer include the tenant's email or exact lifetime payment total.
 - **Reports** can now be made on listings, reviews, business and service-provider profiles as well as messages and users. Objectionable text in messages and reviews is filtered on submission, and borderline text creates an automated report.
@@ -58,6 +58,14 @@ Resulting answers, for the configuration above:
 
 If a mobile screen ever sends a placement parameter, all of the following change in the same release: Google "Contains ads" becomes Yes (a public label on the listing), these answers must be revisited, and the privacy policy sentence "The RentOS mobile apps do not show paid placements" must be removed. The screens already render the Sponsored label, so the code change is one parameter; the declarations are the real work.
 
+### Deletion and retention (26 September 2026)
+
+- **At closure** (in-app, web, or an admin acting on an emailed request — one code path), listings and service-provider, business, storefront and agency profiles are taken down at once, custom domains are released, tenant-profile access and passport links are revoked, webhook subscriptions are deleted, the identity is scrubbed and every session is signed out.
+- **After 30 days** the remaining account data is deleted or anonymised: profile, photos, identity documents, payout destinations, sent messages, enquiries, unapproved applications, and listings and profiles (kept without photos or contact details where a tenancy, payment or booking refers to them). Photo and document files are deleted at Cloudinary with CDN invalidation.
+- **Kept**: tenancy agreements and receipts, payment and financial records, regulated-service records and moderation decisions, while the legal retention period is confirmed; and the 2-year security log. See [retention-schedule.md](retention-schedule.md).
+- **Backups**: deleted data can remain in database backups until they expire; every deletion is recorded in an erasure ledger and re-applied before a restored copy is used ([backup-restore.md](backup-restore.md)).
+- **Export** covers every collection that holds the user's personal data, or records why a collection is excluded (`apps/api/src/services/accountExport.ts`).
+
 Apple functionality purposes cover features, account security and user-requested transactions. Analytics purposes are included for records used by existing operational reports. Personalization covers saved preferences and profile-based matching. These declarations do not authorize those uses or settle their lawfulness.
 
 ## Decisions required before store submission
@@ -68,7 +76,7 @@ Apple functionality purposes cover features, account security and user-requested
 - Determine whether profile-derived/coarse location, financial documents, optional sensitive content and operational diagnostics add categories beyond this inventory. Removed religion/ethnicity form fields are not proof that every older server record or free-text input contains no sensitive data.
 - Specify required versus optional collection for every role and flow. Registration data required for an account differs from optional photo uploads, notifications, biometric enrollment and financing applications. Record the store's applicable answer for the complete distributed app.
 - Verify production transport security end to end, not just the application's HTTPS base URL. Do not claim independent security certification. Local development uses HTTP and is not release evidence.
-- Verify in-app export/deletion, the deployed public deletion URL, operational mailbox and retention exceptions. Existing engineering supports requests; backup/provider erasure and statutory retention classification remain open.
+- Verify in-app export/deletion, the deployed public deletion URL and the operational mailbox on the release build. Engineering now covers immediate take-down, erasure after 30 days, a full-coverage export, an erasure ledger replayed onto restored backups and a classification of every collection. Still open: the statutory periods for tenancy, financial, regulated and moderation records (kept meanwhile), the production backup policy, Cloudinary's backup setting and deletion at processors.
 - Generate an Xcode archive privacy report and review all SDK manifests/required-reason API declarations. App configuration does not replace SDK manifests, privacy labels or Play Console answers. Final signed release artifacts must contain the declarations.
 - Review deployed privacy policy and just-in-time disclosures against this inventory, including the new per-request AI disclosure and remaining background/indirect provider transfers. Record the accountable legal entity, Ghana data-controller registration, contact and processors using verified operational facts.
 

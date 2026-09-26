@@ -10,6 +10,7 @@ import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
+import { isClosedAccount } from '../services/closedAccounts.js'
 
 const router = Router()
 
@@ -189,8 +190,8 @@ router.patch('/:id/licence', authenticate, requireRole('admin', 'super_admin'), 
 
 // GET /api/agency/:slug — public branded agency page (+ its published listings)
 router.get('/:slug', async (req, res) => {
-  const agency = await AgencyProfile.findOne({ slug: new RegExp(`^${escapeRegex(String(req.params.slug))}$`, 'i') }).lean()
-  if (!agency) { error(res, 'Agency not found', 404); return }
+  const agency = await AgencyProfile.findOne({ slug: new RegExp(`^${escapeRegex(String(req.params.slug))}$`, 'i'), hiddenAt: { $exists: false } }).lean()
+  if (!agency || await isClosedAccount(agency.ownerId)) { error(res, 'Agency not found', 404); return }
 
   // Only listings that passed moderation are public anywhere, including here.
   const listings = await Property.find({ landlordId: agency.ownerId, status: 'available', listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } })

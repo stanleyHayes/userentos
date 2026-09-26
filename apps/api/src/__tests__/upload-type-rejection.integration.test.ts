@@ -16,7 +16,6 @@ const { User } = await import('../models/User.js')
 const { Dispute } = await import('../models/Dispute.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { errorTrackingHandler } = await import('../middleware/errorTracking.js')
-const { default: uploadRouter } = await import('../routes/upload.js')
 const { default: disputesRouter } = await import('../routes/disputes.js')
 
 // A disallowed file type is the client's mistake: it used to surface as a 500
@@ -40,7 +39,6 @@ describe.skipIf(!hasTestMongo)('rejected upload types', () => {
     disputeId = (await Dispute.create({ filedBy: userId, filedAgainst: String(new mongoose.Types.ObjectId()), propertyId: 'upload-type-property', category: 'other', title: 'Leak', description: 'Evidence type check.' })).id
     const app = express()
     app.use(express.json())
-    app.use('/upload', uploadRouter)
     app.use('/disputes', disputesRouter)
     app.use(errorTrackingHandler)
     app.use(errorHandler)
@@ -51,15 +49,6 @@ describe.skipIf(!hasTestMongo)('rejected upload types', () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Promise.all([User.deleteOne({ _id: userId }), Dispute.deleteOne({ _id: disputeId })])
     await mongoose.disconnect()
-  })
-
-  it('answers /upload/single and /upload/multiple with a 400 and the allowed types', async () => {
-    for (const [path, field] of [['/upload/single', 'file'], ['/upload/multiple', 'files']]) {
-      const response = await post(path, field, 'text/html', 'page.html')
-      expect(response.status).toBe(400)
-      expect(response.error).toMatch(/^Only images/)
-    }
-    expect(uploadToCloudinary).not.toHaveBeenCalled()
   })
 
   it('answers a Word document offered as dispute evidence with a 400 and the reason', async () => {

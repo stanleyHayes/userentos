@@ -1,8 +1,10 @@
 import { Router } from 'express'
+import { Types } from 'mongoose'
 import { z } from 'zod'
 import { authenticate } from '../middleware/auth.js'
 import { TenantProfile, calcScore } from '../models/TenantProfile.js'
 import { ProfileAccess } from '../models/ProfileAccess.js'
+import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { ownProfileView, sharedProfileView } from '../services/tenantProfileViews.js'
@@ -157,6 +159,11 @@ router.get('/:userId', authenticate, async (req, res) => {
   }
 
   const targetUserId = param(req.params.userId)
+  // A closed account's profile is never shown again, whatever access was
+  // granted before (closure also revokes it; this holds through the grace period).
+  if (!Types.ObjectId.isValid(targetUserId) || !(await User.exists({ _id: targetUserId }))) {
+    error(res, 'Profile not found', 404); return
+  }
 
   // Check if requester has approved access to this tenant's profile
   const access = await ProfileAccess.findOne({

@@ -1,6 +1,7 @@
 import { LegalPageShell } from '@/components/ui/LegalPageShell'
 import { DoodleCircle } from '@/components/ui/Doodles'
 import { LEGAL_ENTITY, PRIVACY_VERSION, DPC, legalEntityName, versionLabel } from './legalMeta'
+import { RETENTION_PERIOD_DAYS, describeRetentionDays } from '../../../../../packages/shared/retentionPeriods'
 
 /**
  * Plain-language data-protection summary. It states only what the code and
@@ -77,6 +78,19 @@ export function DataProtectionPage() {
           id: 'breach-notification',
           title: 'Data Breaches',
           content: <p>If a security breach affects your personal data, we will notify the Data Protection Commission and the people affected as the Data Protection Act requires, and keep a record of the breach and what we did about it.</p>,
+        },
+        {
+          id: 'retention',
+          title: 'Retention and Deletion',
+          content: (
+            <ul className="list-disc pl-5 space-y-2">
+              <li>Each kind of personal data has a set retention period; the <a className="underline" href="/privacy#retention">Privacy Policy</a> lists them.</li>
+              <li>Closing your account takes your listings and public profiles down at once and erases your core identity; the rest of your personal records are deleted {describeRetentionDays(RETENTION_PERIOD_DAYS.accountErasureGrace)} later.</li>
+              <li>Tenancy, payment and moderation records are kept while RentOS confirms how long the law requires them to be kept, and are not used for anything else in the meantime.</li>
+              <li>Deleted data can remain in our encrypted database backups until those backups expire. Every deletion is recorded, and applied again before any restored copy goes live.</li>
+              <li>Deleted files are removed from our file-storage provider, Cloudinary, together with the copies in its content-delivery network.</li>
+            </ul>
+          ),
         },
         {
           id: 'rights',

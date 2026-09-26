@@ -5,6 +5,7 @@ import { Worker } from '../models/Worker.js'
 import { ServiceBooking } from '../models/ServiceBooking.js'
 import { success, error } from '../utils/response.js'
 import { escapeRegex, queryBoolean } from '../utils/params.js'
+import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 
 const router = Router()
 
@@ -28,7 +29,7 @@ router.get('/', authenticate, async (req, res) => {
   const { trade, location, emergency, minRating, verified, page, limit } = parsed.data
 
   // Public directory lists admin-approved workers only (KYC gate).
-  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] }, approvalStatus: 'approved' }
+  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] }, approvalStatus: 'approved', userId: { $nin: await closedAccountIds() } }
   if (trade) filter.trades = { $in: [trade] }
   if (location) filter.location = { $regex: new RegExp(escapeRegex(location), 'i') }
   if (emergency) filter.emergencyAvailable = true
@@ -123,7 +124,7 @@ router.get('/:id', authenticate, async (req, res) => {
   // admins can view them (the owner needs access to edit while pending).
   const isOwner = worker.userId === req.user?.userId
   const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('super_admin')
-  if (worker.approvalStatus !== 'approved' && !isOwner && !isAdmin) {
+  if ((worker.approvalStatus !== 'approved' || await isClosedAccount(worker.userId)) && !isOwner && !isAdmin) {
     error(res, 'Worker not found', 404)
     return
   }
