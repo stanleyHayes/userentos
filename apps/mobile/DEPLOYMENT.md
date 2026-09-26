@@ -212,9 +212,12 @@ without Firebase configuration cannot register for push (iOS is unaffected).
    internal-distribution profile, `production` for store builds) and the
    `secret` visibility.
 
-   `app.config.ts` passes its path to `android.googleServicesFile`. For a local
-   build, putting the file at `apps/mobile/google-services.json` also works; it is
-   gitignored.
+   `app.config.ts` passes its path to `android.googleServicesFile`. Every EAS
+   build needs this variable, `eas build --local` included: EAS archives the
+   project without gitignored files, so a local `google-services.json` never
+   reaches the build. Only `npx expo run:android` and `npx expo prebuild`, which
+   read the working folder directly, also pick up the file at
+   `apps/mobile/google-services.json` (gitignored) when the variable is unset.
 3. Upload the FCM V1 service-account key so Expo's push service can send to
    Android: `eas credentials` > Android > production > Google Service Account >
    FCM V1.
