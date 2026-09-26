@@ -4,6 +4,7 @@ import { erasePersonalDocuments } from './documentErasure.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
 import { releaseStorefrontDomains } from './accountClosure.js'
 import { markAccountErasureComplete } from './erasureLedger.js'
+import { NEW_LEAD_TITLE, VIEWING_REQUESTED_TITLE, newLeadMessage, viewingRequestedMessage, legacyLeadMessage, legacyViewingMessage } from './enquiryNotices.js'
 import { RETENTION_DAYS } from '../config/retentionSchedule.js'
 import { User } from '../models/User.js'
 import { RefreshToken } from '../models/RefreshToken.js'
@@ -158,6 +159,8 @@ export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<bo
   await erasePersonalDocuments(uid)
   await eraseProperties(uid)
   await eraseDirectoryProfiles(uid)
+  // Before the leads and viewings below lose the details it matches on.
+  await scrubEnquiryNotifications(uid)
   // A per-run id, so two erased reporters' open reports on one target never
   // collide on the one-open-report index, and nothing links back to the account.
   const erasedReporter = `deleted-${randomUUID()}`
@@ -196,9 +199,10 @@ export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<bo
       $set: { contactName: ERASED_NAME, contactPhone: ERASED_CONTACT },
       $unset: { contactEmail: 1, message: 1, requesterId: 1 },
     }),
+    // Notes are free text the enquirer wrote, like a lead's message.
     () => Viewing.updateMany({ requesterId: uid }, {
       $set: { viewerName: ERASED_NAME, viewerPhone: ERASED_CONTACT },
-      $unset: { requesterId: 1 },
+      $unset: { notes: 1, requesterId: 1 },
     }),
     // Approved applications are part of the tenancy record.
     () => Application.deleteMany({ tenantId: uid, status: { $ne: 'approved' } }),
@@ -231,6 +235,34 @@ export async function eraseAccountRecords(uid: string, cutoff: Date): Promise<bo
   // Best-effort: an unmarked entry is completed by the next ledger replay.
   await markAccountErasureComplete(uid).catch(() => logger.warn(`[Account erasure] Ledger completion pending for account ${uid}`))
   return true
+}
+
+/**
+ * Agents' notifications about this person's enquiries used to quote their name
+ * and phone number (services/enquiryNotices.ts), and stay in the agent's inbox
+ * for up to two years. Each one still stored is rewritten to today's wording,
+ * matched exactly on the lead or viewing it announced. Timestamps are left
+ * alone so the rewrite does not restart the notification's retention period.
+ */
+async function scrubEnquiryNotifications(uid: string): Promise<void> {
+  const [leads, viewings] = await Promise.all([
+    Lead.find({ requesterId: uid }).select('agentId contactName contactPhone').lean(),
+    Viewing.find({ requesterId: uid }).select('agentId viewerName date time').lean(),
+  ])
+  for (const lead of leads) {
+    await Notification.updateMany(
+      { userId: lead.agentId, title: NEW_LEAD_TITLE, message: legacyLeadMessage(lead.contactName, lead.contactPhone) },
+      { $set: { message: newLeadMessage() } },
+      { timestamps: false },
+    )
+  }
+  for (const viewing of viewings) {
+    await Notification.updateMany(
+      { userId: viewing.agentId, title: VIEWING_REQUESTED_TITLE, message: legacyViewingMessage(viewing.viewerName, viewing.date, viewing.time) },
+      { $set: { message: viewingRequestedMessage(viewing.date, viewing.time) } },
+      { timestamps: false },
+    )
+  }
 }
 
 /** The affiliate profile goes once nothing is owed on it; until then it is suspended. */

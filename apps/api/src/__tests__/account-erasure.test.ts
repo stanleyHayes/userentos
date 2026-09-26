@@ -61,6 +61,7 @@ const { ContentReport } = await import('../models/ContentReport.js')
 const { DocumentModel } = await import('../models/Document.js')
 const { Employment } = await import('../models/Employment.js')
 const { PropertyExpense } = await import('../models/PropertyExpense.js')
+const { Notification } = await import('../models/Notification.js')
 const { markAccountErasureComplete } = await import('../services/erasureLedger.js')
 const { eraseAccountRecords, purgeExpiredAccounts, ACCOUNT_ERASURE_DELAY_MS } = await import('../services/accountErasure.js')
 
@@ -134,7 +135,7 @@ describe('retryable account erasure', () => {
     expect(BusinessReview.updateMany).toHaveBeenCalledWith({ authorId: uid }, { $set: { authorName: 'Deleted User' } })
     expect(BusinessInquiry.deleteMany).toHaveBeenCalledWith({ requesterId: uid })
     expect(Lead.updateMany).toHaveBeenCalledWith({ requesterId: uid }, { $set: { contactName: 'Deleted User', contactPhone: 'removed' }, $unset: { contactEmail: 1, message: 1, requesterId: 1 } })
-    expect(Viewing.updateMany).toHaveBeenCalledWith({ requesterId: uid }, { $set: { viewerName: 'Deleted User', viewerPhone: 'removed' }, $unset: { requesterId: 1 } })
+    expect(Viewing.updateMany).toHaveBeenCalledWith({ requesterId: uid }, { $set: { viewerName: 'Deleted User', viewerPhone: 'removed' }, $unset: { notes: 1, requesterId: 1 } })
     expect(Application.deleteMany).toHaveBeenCalledWith({ tenantId: uid, status: { $ne: 'approved' } })
     expect(Delegation.deleteMany).toHaveBeenCalledWith({ $or: [{ ownerId: uid }, { delegateId: uid }] })
     expect(AffiliateAttribution.updateMany).toHaveBeenCalledWith({ referredUserId: uid }, { $unset: { referredUserId: 1, sessionId: 1 } })
@@ -144,6 +145,26 @@ describe('retryable account erasure', () => {
     expect(DocumentModel.updateMany).toHaveBeenCalledWith({ accessControl: uid }, { $pull: { accessControl: uid } })
     expect(Employment.deleteMany).toHaveBeenCalledWith({ userId: uid, status: { $in: ['pending', 'declined'] } })
     expect(PropertyExpense.deleteMany).toHaveBeenCalledWith({ landlordId: uid })
+  })
+
+  it("rewrites the agent notifications that quoted the enquirer, before the enquiries lose the details they match on", async () => {
+    const rows = (value: unknown[]) => ({ select: () => ({ lean: () => Promise.resolve(value) }) })
+    vi.mocked(Lead.find).mockReturnValueOnce(rows([{ agentId: 'agent-1', contactName: 'Ama Owusu', contactPhone: '0241234567' }]) as never)
+    vi.mocked(Viewing.find).mockReturnValueOnce(rows([{ agentId: 'agent-2', viewerName: 'Ama Owusu', date: '2026-07-01', time: '10:00' }]) as never)
+    expect(await eraseAccountRecords(uid, cutoff)).toBe(true)
+    expect(Notification.updateMany).toHaveBeenCalledWith(
+      { userId: 'agent-1', title: 'New Lead', message: 'Ama Owusu is interested in your listing. Reach them at 0241234567.' },
+      { $set: { message: expect.not.stringContaining('Ama') } },
+      { timestamps: false },
+    )
+    expect(Notification.updateMany).toHaveBeenCalledWith(
+      { userId: 'agent-2', title: 'Viewing Requested', message: 'Ama Owusu requested a viewing on 2026-07-01 at 10:00.' },
+      { $set: { message: 'A viewing was requested for 2026-07-01 at 10:00. The details are in your viewings.' } },
+      { timestamps: false },
+    )
+    const scrubbed = vi.mocked(Notification.updateMany).mock.invocationCallOrder[0]
+    expect(scrubbed).toBeLessThan(vi.mocked(Lead.updateMany).mock.invocationCallOrder[0])
+    expect(scrubbed).toBeLessThan(vi.mocked(Viewing.updateMany).mock.invocationCallOrder[0])
   })
 
   it('keeps the tombstone while a payout is still in flight, so its destination survives', async () => {

@@ -11,6 +11,7 @@ import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { notify } from '../services/notify.js'
+import { NEW_LEAD_TITLE, VIEWING_REQUESTED_TITLE, newLeadMessage, viewingRequestedMessage } from '../services/enquiryNotices.js'
 import { logger } from '../utils/logger.js'
 import { round2 } from '../utils/money.js'
 
@@ -66,8 +67,8 @@ router.post('/leads/property/:propertyId', authenticate, async (req, res) => {
 
   notify({
     userId: resolved.agentId,
-    title: 'New Lead',
-    message: `${lead.contactName} is interested in your listing. Reach them at ${requester.phone}.`,
+    title: NEW_LEAD_TITLE,
+    message: newLeadMessage(),
     actionUrl: '/dashboard',
   }).catch((err) => logger.warn('[Agent] lead notify failed:', err))
 
@@ -148,8 +149,8 @@ router.post('/viewings/property/:propertyId', authenticate, async (req, res) => 
 
   notify({
     userId: resolved.agentId,
-    title: 'Viewing Requested',
-    message: `${viewing.viewerName} requested a viewing on ${parsed.data.date} at ${parsed.data.time}.`,
+    title: VIEWING_REQUESTED_TITLE,
+    message: viewingRequestedMessage(parsed.data.date, parsed.data.time),
     actionUrl: '/dashboard',
   }).catch((err) => logger.warn('[Agent] viewing notify failed:', err))
 
