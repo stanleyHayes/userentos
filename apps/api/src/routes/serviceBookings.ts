@@ -9,6 +9,7 @@ import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter
 import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
 import { recomputeWorkerRating } from '../services/workerRating.js'
 import { decideMoneyUpdate } from '../services/bookingPricing.js'
+import { queryBoolean } from '../utils/params.js'
 
 const router = Router()
 
@@ -23,7 +24,7 @@ function isAdminUser(roles?: string[]): boolean {
    ================================================================ */
 const listSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'disputed']).optional(),
-  asWorker: z.coerce.boolean().optional(),
+  asWorker: queryBoolean(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })

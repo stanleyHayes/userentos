@@ -8,6 +8,7 @@ import { mlClient } from '../services/mlClient.js'
 import { basetenClient } from '../services/ml/baseten.js'
 import { listValuations, recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
 import { Property } from '../models/Property.js'
+import { blankToUndefined, queryBoolean } from '../utils/params.js'
 
 const router = Router()
 
@@ -19,9 +20,9 @@ const comparablesSchema = z.object({
   type: z.string().min(1),
   bedrooms: z.coerce.number().int().min(0),
   bathrooms: z.coerce.number().int().min(0).default(1),
-  furnished: z.coerce.boolean().default(false),
+  furnished: queryBoolean().default(false),
   amenities: z.array(z.string()).default([]),
-  floorArea: z.coerce.number().positive().optional(),
+  floorArea: z.preprocess(blankToUndefined, z.coerce.number().positive().optional()),
   excludeId: z.string().optional(),
 })
 
