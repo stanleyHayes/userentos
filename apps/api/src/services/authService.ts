@@ -16,6 +16,7 @@ import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from '../utils/totp.j
 import QRCode from 'qrcode'
 import { disconnectUser } from './socket.js'
 import { recordAuditEntry } from '../utils/audit.js'
+import { ROLE_DEFAULT_PERMISSIONS } from '../types/index.js'
 
 interface RegisterData {
   email: string
@@ -124,6 +125,10 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, config.bcryptRounds)
+    // Employer and financier routes are permission-gated; without their role
+    // defaults a self-registered account could do nothing until an admin
+    // granted permissions by hand. Other self-service roles need none.
+    const permissions = role === 'employer' || role === 'financier' ? [...(ROLE_DEFAULT_PERMISSIONS[role] ?? [])] : []
     const user = await this.userRepo.create({
       email,
       phone,
@@ -132,6 +137,7 @@ export class AuthService {
       passwordHash,
       roles: [role],
       activeRole: role,
+      permissions,
       consents: consent,
     })
     this.auditConsent(user._id.toString(), consent, 'register')
@@ -156,7 +162,7 @@ export class AuthService {
       }
     }
 
-    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email, roles: [role], permissions: user.permissions || [], activeRole: role }
+    const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, userId: user._id.toString(), email, roles: [role], permissions, activeRole: role }
     const token = this.signAccessToken(payload)
     const refreshToken = await this.createRefreshToken(user._id.toString(), user.sessionVersion ?? 0, deviceLabel, ipAddress)
 
