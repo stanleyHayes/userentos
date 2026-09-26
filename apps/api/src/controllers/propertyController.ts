@@ -428,7 +428,7 @@ export const propertyController = {
             userId: (admin._id as Types.ObjectId).toString(),
             title: 'Property Pending Review',
             message: `"${property.title}" has been submitted for review.`,
-            actionUrl: `/admin/properties`,
+            actionUrl: '/admin/property-reviews',
           })
         }
       })

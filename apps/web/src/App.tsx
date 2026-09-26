@@ -227,6 +227,8 @@ export default function App() {
             <Route path="/properties/:id" element={<PropertyDetailPage />} />
             <Route path="/agreements" element={<AgreementsPage />} />
             <Route path="/agreements/:id" element={<AgreementDetailPage />} />
+            {/* Move-out notifications (and the agreement page's own links) open this. */}
+            <Route path="/agreements/:id/move-out" element={<AgreementDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/savings" element={<SavingsPage />} />
             <Route path="/disputes" element={<DisputesPage />} />
@@ -239,6 +241,9 @@ export default function App() {
             <Route path="/government/simulation" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PolicySimulationPage /></RequireRole>} />
             <Route path="/government/reviews" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><PropertyReviewPage /></RequireRole>} />
             <Route path="/admin/property-reviews" element={<RequireRole roles={['admin', 'government', 'legal_officer']}><PropertyReviewPage /></RequireRole>} />
+            {/* Older admin notifications still carry these URLs. */}
+            <Route path="/admin/properties" element={<RequireRole roles={['admin']}><Navigate to="/admin/property-reviews" replace /></RequireRole>} />
+            <Route path="/admin/move-outs" element={<RequireRole roles={['admin']}><Navigate to="/agreements" replace /></RequireRole>} />
             <Route path="/government/housing-demand" element={<RequireRole roles={['government', 'legal_officer', 'admin']}><HousingDemandPage /></RequireRole>} />
             <Route path="/credit-score" element={<CreditScorePage />} />
             <Route path="/my-profile" element={<TenantProfilePage />} />
