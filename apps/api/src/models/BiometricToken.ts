@@ -25,6 +25,8 @@ export interface IBiometricToken extends Document {
   revokedReason?: string
   /** Set once, when a rotated token was presented again (see /exchange). */
   replayDetectedAt?: Date
+  /** Set when a just-rotated token was answered once within the grace window. */
+  graceUsedAt?: Date
 }
 
 const schema = new Schema<IBiometricToken>({
@@ -40,6 +42,7 @@ const schema = new Schema<IBiometricToken>({
   revokedAt: { type: Date },
   revokedReason: { type: String },
   replayDetectedAt: { type: Date },
+  graceUsedAt: { type: Date },
 }, { timestamps: true })
 
 schema.index({ userId: 1, deviceId: 1 })

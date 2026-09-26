@@ -10,7 +10,7 @@ import { disconnectUser, disconnectSession } from './socket.js'
  * again is refused without revoking anything: most likely the client retried
  * after losing the response that carried its successor, not a stolen copy.
  */
-export const ROTATION_GRACE_MS = 30_000
+export const ROTATION_GRACE_MS = 60_000
 
 /**
  * Access tokens carry roles/permissions as claims, so an admin changing them
@@ -37,7 +37,7 @@ export async function revokeAccountSessions(userId: string, reason: string): Pro
  * biometric credentials. The RevokedSession row is written first, so a
  * rotation racing this call either sees it or is caught by that revocation.
  */
-export async function revokeDeviceSession(sid: string, reason: string): Promise<void> {
+export async function revokeDeviceSession(sid: string, reason: string, { notify = true }: { notify?: boolean } = {}): Promise<void> {
   await recordRevokedSession(sid, reason)
-  disconnectSession(sid)
+  disconnectSession(sid, { notify })
 }

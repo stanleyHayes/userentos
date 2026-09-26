@@ -24,6 +24,8 @@ export interface IRefreshToken extends Document {
   revokedReason?: string
   /** Set once, when a rotated token was presented again (see AuthService.refresh). */
   replayDetectedAt?: Date
+  /** Set when a just-rotated token was answered once within the grace window. */
+  graceUsedAt?: Date
 }
 
 const schema = new Schema<IRefreshToken>({
@@ -40,6 +42,7 @@ const schema = new Schema<IRefreshToken>({
   revokedAt: { type: Date },
   revokedReason: { type: String },
   replayDetectedAt: { type: Date },
+  graceUsedAt: { type: Date },
 }, { timestamps: true })
 
 schema.index({ userId: 1, revokedAt: 1 })

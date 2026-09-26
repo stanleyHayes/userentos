@@ -73,8 +73,8 @@ it('revoke-all advances only biometric generation before record cleanup', async 
 })
 it('replay advances biometric generation before cleanup', async () => {
   // The claim finds no live token; a rotated one from the current generation is then claimed as replay.
-  vi.mocked(BiometricToken.findOneAndUpdate).mockResolvedValueOnce(null).mockResolvedValueOnce({ ...record, _id: 'rotated' } as never)
-  vi.mocked(BiometricToken.findOne).mockResolvedValue({ ...record, _id: 'rotated', revokedAt: new Date(Date.now() - 60_000), revokedReason: 'rotated' } as never)
+  vi.mocked(BiometricToken.findOneAndUpdate).mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce({ ...record, _id: 'rotated' } as never)
+  vi.mocked(BiometricToken.findOne).mockResolvedValue({ ...record, _id: 'rotated', revokedAt: new Date(Date.now() - 120_000), revokedReason: 'rotated' } as never)
   vi.mocked(User.exists).mockResolvedValue({ _id: 'fixture' } as never)
   expect((await exchange()).status).toBe(401)
   expect(User.updateOne).toHaveBeenCalledWith({ _id: 'fixture' }, { $inc: { biometricVersion: 1 } })

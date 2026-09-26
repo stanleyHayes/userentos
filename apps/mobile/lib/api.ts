@@ -3,6 +3,7 @@ import { isProviderCheckout } from '../../../packages/shared/checkoutRequests'
 import { AiConsentDeclined, AI_SHARING_VERSION, confirmAiSharing, needsAiConsent } from './aiConsent'
 import { requestRefreshCredentials } from './refreshCredentials'
 import { createSessionRequests } from './sessionRequests'
+import { pendingCredentialChange } from './credentialChange'
 import Constants from 'expo-constants'
 import { biometricCredentialVersion, saveBiometricCredential } from './credentialStorage'
 import { useAuthStore } from '../stores/authStore'
@@ -70,6 +71,7 @@ const sessionRequest = createSessionRequests({
   session: () => ({ version: useAuthStore.getState().sessionVersion, token: useAuthStore.getState().token }),
   refresh: attemptRefresh,
   logout: () => useAuthStore.getState().logout(),
+  pendingCredentialChange,
 })
 
 class ApiClient {

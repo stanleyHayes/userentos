@@ -74,3 +74,22 @@ test('a transient refresh failure releases its slot for a later retry', async ()
   expect(refreshes).toBe(2)
   expect(logouts).toBe(0)
 })
+test('a 401 during a password change waits for the renewed pair instead of refreshing or signing out', async () => {
+  let token = 'before-change', refreshes = 0, loggedOut = 0
+  let finishChange!: () => void
+  const change = new Promise<void>(resolve => { finishChange = () => { token = 'renewed'; resolve() } })
+  const request = createSessionRequests({
+    session: () => ({ version: 1, token }),
+    refresh: async () => { refreshes++; return false },
+    logout: () => { loggedOut++ },
+    pendingCredentialChange: () => change,
+  })
+  const seen: (string | null)[] = []
+  const racing = request(async value => { seen.push(value); return value === 'renewed' ? ok() : unauthorized() }, true)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  finishChange()
+  expect(await racing).toBe('ok')
+  expect(seen).toEqual(['before-change', 'renewed'])
+  expect(refreshes).toBe(0)
+  expect(loggedOut).toBe(0)
+})

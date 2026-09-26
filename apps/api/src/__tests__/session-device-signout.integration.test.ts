@@ -76,10 +76,13 @@ describe.skipIf(!hasTestMongo)('per-device sign-out', () => {
     const socketA = await realtime.open(a.token)
     const socketB = await realtime.open(b.token)
     const seenB = recordEvents(socketB)
-    const ended = Promise.all([nextEvent(socketA, 'session:revoked'), nextEvent(socketA, 'disconnect')])
+    const seenA = recordEvents(socketA)
+    const ended = nextEvent(socketA, 'disconnect')
 
     await service.logout(a.refreshToken)
     await ended
+    // The device signed itself out, so its socket closes without 'session:revoked'.
+    expect(seenA).not.toContain('session:revoked')
     expect(await accepts(a.token)).toBe(false)
     expect(await accepts(a.token, true)).toBe(false)
     expect((await realtime.open(a.token, true)).connected).toBe(false)

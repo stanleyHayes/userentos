@@ -75,7 +75,7 @@ describe.skipIf(!hasTestMongo)('refresh and biometric replay scope', () => {
 
     it('revokes every session once for a rotated token presented again; a second presentation is inert', async () => {
       const userId = await account()
-      const stolen = await refreshToken(userId, { revokedAt: ago(60_000), revokedReason: 'rotated' })
+      const stolen = await refreshToken(userId, { revokedAt: ago(120_000), revokedReason: 'rotated' })
       expect(await service.refresh(stolen)).toMatchObject({ status: 401 })
       expect((await generation(userId)).session).toBe(1)
       expect(await RefreshToken.findOne({ tokenHash: hashRefreshToken(stolen) }).lean()).toMatchObject({ revokedReason: 'replay_detected', replayDetectedAt: expect.any(Date) })
@@ -85,19 +85,37 @@ describe.skipIf(!hasTestMongo)('refresh and biometric replay scope', () => {
       expect((await service.refresh(signedInAgain)).data).toBeDefined()
     })
 
-    it('refuses a token rotated inside the grace window without revoking (a retry after a lost response)', async () => {
+    it('answers a token rotated inside the grace window once, with a fresh pair, and retires its successor', async () => {
       const userId = await account()
       const first = await refreshToken(userId)
       const rotated = await service.refresh(first)
       expect(rotated.data).toBeDefined()
+      // A retry after a lost response, or a second tab: signed in, not signed out.
+      const retried = await service.refresh(first)
+      expect(retried.data?.refreshToken).toBeDefined()
+      expect(retried.data!.refreshToken).not.toBe(rotated.data!.refreshToken)
+      expect((await generation(userId)).session).toBe(0)
+      // The successor it replaced is dead, quietly.
+      expect(await service.refresh(rotated.data!.refreshToken)).toMatchObject({ status: 401 })
+      expect((await generation(userId)).session).toBe(0)
+      expect((await service.refresh(retried.data!.refreshToken)).data).toBeDefined()
+      // Only once: a second retry is refused, still without revoking anything.
       expect(await service.refresh(first)).toMatchObject({ status: 401 })
       expect((await generation(userId)).session).toBe(0)
-      expect((await service.refresh(rotated.data!.refreshToken)).data).toBeDefined()
+    })
+
+    it('does not re-issue within the grace window once that session has signed out', async () => {
+      const userId = await account()
+      const first = await refreshToken(userId)
+      const rotated = await service.refresh(first)
+      await service.logout(rotated.data!.refreshToken)
+      expect(await service.refresh(first)).toMatchObject({ status: 401 })
+      expect((await generation(userId)).session).toBe(0)
     })
 
     it('does not count a rotated token from a generation that is already revoked', async () => {
       const userId = await account()
-      const evicted = await refreshToken(userId, { revokedAt: ago(60_000), revokedReason: 'rotated' })
+      const evicted = await refreshToken(userId, { revokedAt: ago(120_000), revokedReason: 'rotated' })
       await service.logoutAll(userId)
       const signedInAgain = await refreshToken(userId, { sessionVersion: 1 })
       expect(await service.refresh(evicted)).toMatchObject({ status: 401 })
@@ -111,7 +129,7 @@ describe.skipIf(!hasTestMongo)('refresh and biometric replay scope', () => {
       const stale = await refreshToken(userId, { sessionVersion: 0 })
       expect(await service.refresh(stale)).toMatchObject({ status: 401 })
       expect(await RefreshToken.findOne({ tokenHash: hashRefreshToken(stale) }).lean()).toMatchObject({ revokedReason: 'session_revoked' })
-      await RefreshToken.updateOne({ tokenHash: hashRefreshToken(stale) }, { $set: { revokedAt: ago(60_000) } })
+      await RefreshToken.updateOne({ tokenHash: hashRefreshToken(stale) }, { $set: { revokedAt: ago(120_000) } })
       expect(await service.refresh(stale)).toMatchObject({ status: 401 })
       expect((await generation(userId)).session).toBe(1)
     })
@@ -151,7 +169,7 @@ describe.skipIf(!hasTestMongo)('refresh and biometric replay scope', () => {
 
     it('revokes biometric sessions once for a rotated token presented again; a second presentation is inert', async () => {
       const userId = await account()
-      const stolen = await biometricToken(userId, { revokedAt: ago(60_000), revokedReason: 'rotated' })
+      const stolen = await biometricToken(userId, { revokedAt: ago(120_000), revokedReason: 'rotated' })
       const other = await biometricToken(userId, { deviceId: 'device-0002' })
       expect((await exchange(stolen)).status).toBe(401)
       expect(await generation(userId)).toEqual({ session: 0, biometric: 1 })
@@ -162,16 +180,29 @@ describe.skipIf(!hasTestMongo)('refresh and biometric replay scope', () => {
       expect((await exchange(enrolledAgain, 'device-0003')).status).toBe(200)
     })
 
-    it('refuses a token rotated inside the grace window without revoking', async () => {
+    it('answers a token rotated inside the grace window once on the same device and retires its successor', async () => {
       const userId = await account()
       const first = await biometricToken(userId, { familyId: 'bio-family' })
       const response = await exchange(first)
       expect(response.status).toBe(200)
       const { data } = await response.json() as { data: { token: string; refreshToken: string } }
       expect(jwt.decode(data.token)).toMatchObject({ sid: 'bio-family', biometricVersion: 0 })
+      const retried = await exchange(first)
+      expect(retried.status).toBe(200)
+      const { data: again } = await retried.json() as { data: { token: string; refreshToken: string } }
+      expect(jwt.decode(again.token)).toMatchObject({ sid: 'bio-family' })
+      expect((await exchange(data.refreshToken)).status).toBe(401)
       expect((await exchange(first)).status).toBe(401)
       expect((await generation(userId)).biometric).toBe(0)
-      expect((await exchange(data.refreshToken)).status).toBe(200)
+      expect((await exchange(again.refreshToken)).status).toBe(200)
+    })
+
+    it('does not re-issue a just-rotated token presented from another device', async () => {
+      const userId = await account()
+      const first = await biometricToken(userId, { familyId: 'bio-family-2' })
+      expect((await exchange(first)).status).toBe(200)
+      expect((await exchange(first, 'device-9999')).status).toBe(401)
+      expect((await generation(userId)).biometric).toBe(0)
     })
 
     it("does not let a presentation from another device burn the real device's token", async () => {

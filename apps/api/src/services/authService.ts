@@ -352,9 +352,19 @@ export class AuthService {
     const tokenHash = hashRefreshToken(plainRefreshToken)
 
     // Rotate atomically: only the first concurrent request can claim the token.
-    const record = await RefreshToken.findOneAndUpdate(
+    let record = await RefreshToken.findOneAndUpdate(
       { tokenHash, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
       { $set: { revokedAt: new Date(), revokedReason: 'rotated', lastUsedAt: new Date() } },
+      { returnDocument: 'after' },
+    )
+    // A token rotated moments ago is almost always a retry whose response was
+    // lost, or a second tab that read storage before the first wrote the new
+    // pair. Answer it once with a fresh pair in the same session and retire
+    // the successor it was rotated into, rather than signing the device out.
+    const regranted = !record
+    if (!record) record = await RefreshToken.findOneAndUpdate(
+      { tokenHash, revokedReason: 'rotated', revokedAt: { $gt: new Date(Date.now() - ROTATION_GRACE_MS) }, graceUsedAt: { $exists: false }, familyId: { $exists: true }, expiresAt: { $gt: new Date() } },
+      { $set: { graceUsedAt: new Date() } },
       { returnDocument: 'after' },
     )
 
@@ -373,6 +383,13 @@ export class AuthService {
       return user ? { error: 'Invalid or expired refresh token', status: 401 } : { error: 'User not found', status: 404 }
     }
 
+    if (regranted) {
+      await RefreshToken.updateMany(
+        { familyId: record.familyId, _id: { $ne: record._id }, revokedAt: { $exists: false }, createdAt: { $gte: record.revokedAt } },
+        { $set: { revokedAt: new Date(), revokedReason: 'superseded' } },
+      )
+    }
+
     // Tokens issued before session families existed start one here.
     const familyId = record.familyId ?? crypto.randomUUID()
     const payload: AuthPayload = { sessionVersion: user.sessionVersion ?? 0, sid: familyId, userId: user._id.toString(), email: user.email, roles: user.roles, permissions: user.permissions || [], activeRole: user.activeRole }
@@ -383,6 +400,9 @@ export class AuthService {
     // time for that revocation or the record is visible here.
     if (record.familyId && await isSessionRevoked(record.familyId)) {
       await RefreshToken.updateOne({ tokenHash: hashRefreshToken(newRefreshToken) }, { $set: { revokedAt: new Date(), revokedReason: 'logout' } })
+      // Refused, so it was never really rotated: presenting it again later
+      // must not look like replay (which would sign out every device).
+      await RefreshToken.updateOne({ _id: record._id }, { $set: { revokedReason: 'session_revoked' } })
       return { error: 'Invalid or expired refresh token', status: 401 }
     }
 
@@ -458,7 +478,9 @@ export class AuthService {
     const tokenHash = hashRefreshToken(plainRefreshToken)
     const record = await RefreshToken.findOne({ tokenHash })
     if (record?.familyId) {
-      await revokeDeviceSession(record.familyId, 'logout')
+      // Only the device itself holds this token, and it is signing itself out:
+      // close its sockets quietly, or the web client shows a 'signed out' warning.
+      await revokeDeviceSession(record.familyId, 'logout', { notify: false })
       await RefreshToken.updateMany(
         { familyId: record.familyId, revokedAt: { $exists: false } },
         { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
