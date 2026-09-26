@@ -1,4 +1,4 @@
-import { reconciliationEvidence } from './payments/reconciliationEvidence.js'
+import { reconcileStalePayments } from './payments/reconcilePayments.js'
 import { recoverPaymentWalletCredits } from './payments/paymentWalletCredit.js'
 import { recoverPaidSubscriptions } from './payments/paidSubscription.js'
 import { recoverApplePurchases } from './storeBilling/recoverApplePurchases.js'
@@ -7,7 +7,6 @@ import { expireSubscription } from './subscriptionExpiry.js'
 import { recoverGooglePurchases } from './storeBilling/recoverPurchases.js'
 import cron from 'node-cron'
 import { Types } from 'mongoose'
-import { SavingsPlan } from '../models/SavingsPlan.js'
 import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { Agreement } from '../models/Agreement.js'
 import { Property } from '../models/Property.js'
@@ -17,17 +16,14 @@ import { MaintenanceRequest } from '../models/MaintenanceRequest.js'
 import { FinancingContract } from '../models/FinancingContract.js'
 import { MoveOut } from '../models/MoveOut.js'
 import { notify, notifyRentReminder } from './notify.js'
-import { getProvider } from './payments/index.js'
-import { finalizePayment } from './payments/finalize.js'
-import { creditWallet, debitWallet } from './payments/walletLedger.js'
-import { round2 } from '../utils/money.js'
-import type { ProviderId } from './payments/types.js'
+import { runSavingsAutoDebit } from './payments/savingsAutoDebit.js'
 import { logger } from '../utils/logger.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { purgeExpiredAccounts } from './accountErasure.js'
 import { acquireCronLock } from './cronLock.js'
 import { retentionCutoff } from '../config/retention.js'
 import { payoutsOffered, reconcileUncertainPayouts } from './payouts/reconcile.js'
+import { recoverPayoutRefunds } from './payouts/refund.js'
 import { expireFinishedCampaigns } from './marketplace/sponsorshipServing.js'
 import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
@@ -71,6 +67,15 @@ async function batchPropertyTitles<T extends { propertyId: string }>(
   return titleMap
 }
 
+/**
+ * Stop every cron task and wait (bounded) for runs already under way, so a
+ * deploy does not cut a job off between a provider call and recording its
+ * outcome. Called by gracefulShutdown.
+ */
+export async function stopScheduler(timeoutMs: number): Promise<void> {
+  await cron.shutdown(timeoutMs)
+}
+
 export function startScheduler() {
   cron.schedule('*/5 * * * *', async () => {
     try {
@@ -106,77 +111,18 @@ export function startScheduler() {
       logger.error('[Scheduler] Google purchase recovery failed; retry scheduled for the next run')
     }
   }, { timezone: GHANA_TZ })
-  // Auto-debit: runs every day at 8am
+  // Auto-debit: runs every day at 8am. Each plan's period is claimed before
+  // any money moves, so overlapping runs debit it once (savingsAutoDebit.ts).
   cron.schedule('0 8 * * *', async () => {
     // Moving money between stored-value balances is itself the regulated activity.
     if (!isRegulatedFeatureEnabled('wallet')) return
     if (!(await acquireCronLock('auto-debit', LOCK_TTL_DAILY))) return
     logger.info('[Scheduler] Running auto-debit check...')
-    const plans = await SavingsPlan.find({ status: 'active', autoDebit: true })
-
-    // Per-plan error isolation — one bad plan must never skip everyone's debit.
-    for (const plan of plans) {
-      try {
-        const now = new Date()
-
-        // Frequency check FIRST — a monthly plan must not get a daily
-        // "insufficient balance" notification when no debit is even due.
-        if (plan.lastAutoDebitAt) {
-          const diffDays = (now.getTime() - new Date(plan.lastAutoDebitAt).getTime()) / (1000 * 60 * 60 * 24)
-          if (plan.frequency === 'daily' && diffDays < 1) continue
-          if (plan.frequency === 'weekly' && diffDays < 7) continue
-          if (plan.frequency === 'monthly' && diffDays < 28) continue
-        }
-
-        // Atomic guarded debit (no negative balance, no double-spend)
-        const debited = await debitWallet(plan.userId, plan.contributionAmount, {
-          type: 'savings_contribution',
-          reference: `AUTODEBIT-${Date.now()}`,
-          description: `Auto-debit: ${plan.frequency} savings contribution`,
-        })
-        if (!debited) {
-          notify({
-            userId: plan.userId,
-            title: 'Auto-debit Failed',
-            message: `Insufficient wallet balance for your ${plan.frequency} savings contribution of GHS ${plan.contributionAmount.toFixed(2)}.`,
-            actionUrl: '/savings',
-          }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
-          continue
-        }
-
-        // Credit the plan; on failure refund the debit.
-        try {
-          const updated = await SavingsPlan.findByIdAndUpdate(
-            plan._id,
-            {
-              $inc: { currentAmount: round2(plan.contributionAmount) },
-              $set: { lastAutoDebitAt: now.toISOString() },
-            },
-            { returnDocument: 'after' },
-          )
-          if (updated && updated.status !== 'completed' && updated.currentAmount >= updated.targetAmount) {
-            await SavingsPlan.updateOne({ _id: plan._id }, { $set: { status: 'completed' } })
-            notify({
-              userId: plan.userId,
-              title: 'Savings Goal Reached!',
-              message: `Your savings plan has reached its target of GHS ${plan.targetAmount.toFixed(2)}!`,
-              actionUrl: '/savings',
-              category: 'savings',
-            }).catch((err) => logger.warn('[Scheduler] notify failed:', err))
-          }
-        } catch (err) {
-          await creditWallet(plan.userId, plan.contributionAmount, {
-            type: 'refund',
-            reference: `AUTODEBIT-REV-${Date.now()}`,
-            description: 'Reversal of failed auto-debit',
-          })
-          throw err
-        }
-
-        logger.info(`[Scheduler] Auto-debited GHS ${plan.contributionAmount} for user ${plan.userId}`)
-      } catch (err) {
-        logger.error(`[Scheduler] Auto-debit failed for plan ${plan._id}:`, err)
-      }
+    try {
+      const result = await runSavingsAutoDebit()
+      if (result.debited || result.failed) logger.info('[Scheduler] Auto-debit', result)
+    } catch (err) {
+      logger.error('[Scheduler] Auto-debit run failed:', err)
     }
   }, { timezone: GHANA_TZ })
 
@@ -575,29 +521,15 @@ export function startScheduler() {
   )
 
   // ─── Payment status reconciliation: every 5 minutes ───
-  // Catches missed webhooks. Looks at processing/pending payments older than
-  // 2 minutes that have a providerRef, requests verified financial facts, and
-  // applies the result through the same finalize path used by webhooks.
+  // Catches missed webhooks: asks the provider about every non-terminal
+  // payment by its saved correlator, with per-payment backoff, and applies the
+  // answer through the same finalize path used by webhooks
+  // (services/payments/reconcilePayments.ts).
   cron.schedule('*/5 * * * *', async () => {
     if (!(await acquireCronLock('payment-reconcile', LOCK_TTL_RECONCILE))) return
     try {
-      const cutoff = new Date(Date.now() - 2 * 60 * 1000)
-      const stale = await Payment.find({
-        status: { $in: ['pending', 'processing'] },
-        providerRef: { $exists: true, $ne: null },
-        createdAt: { $lt: cutoff },
-      }).limit(100)
-      for (const payment of stale) {
-        if (!payment.providerRef) continue
-        try {
-          const provider = getProvider(payment.method as ProviderId, payment.collectionSource)
-          const event = await reconciliationEvidence(provider, payment)
-          await Payment.updateOne({ _id: payment._id }, { $set: { lastProviderCheckAt: new Date().toISOString() } })
-          if (event) await finalizePayment(event, { source: 'reconciliation', providerSource: provider.source })
-        } catch (err) {
-          logger.warn(`[Scheduler] reconcile ${payment.reference} failed:`, (err as Error).message)
-        }
-      }
+      const result = await reconcileStalePayments()
+      if (result.settled || result.failed || result.errors) logger.info('[Scheduler] Payment reconciliation', result)
     } catch (err) {
       logger.error('[Scheduler] Payment reconciliation error:', err)
     }
@@ -617,6 +549,18 @@ export function startScheduler() {
     } catch (err) {
       logger.error('[Scheduler] Payout reconciliation error:', err)
     }
+  }, { timezone: GHANA_TZ })
+
+  // ─── Payout refund recovery: every 5 minutes ───
+  // A failed, declined or reversed payout captures its refund in the same
+  // write that makes it terminal; this applies any the finalizer could not
+  // (services/payouts/refund.ts). Runs regardless of feature gates: money
+  // owed back must be returned even after a feature is switched off.
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverPayoutRefunds()
+      if (result.completed || result.deferred) logger.info('[Scheduler] Payout refund recovery', result)
+    } catch { logger.error('[Scheduler] Payout refund recovery failed; retry scheduled') }
   }, { timezone: GHANA_TZ })
 
   // ─── Daily 10:00 Ghana time: subscription lifecycle ───
