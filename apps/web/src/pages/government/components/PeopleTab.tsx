@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Users, UserCheck, ShieldCheck, FileText } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { COLORS, num, tooltipStyle } from './analytics-constants'
+import { COLORS, num, shareOf, tooltipStyle } from './analytics-constants'
 import { EmptyState } from './PanelEmptyState'
 import { KPICard } from './KPICard'
 import { PieCard } from './PieCard'
@@ -11,6 +11,7 @@ import { StatusBreakdownCard } from './StatusBreakdownCard'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- large dynamic analytics object from API; fully typing is excessively verbose
 export function PeopleTab({ users, tp, credit, apps, rev: _rev }: any) {
+  const verifiedShare = shareOf(users.verified, users.total)
   const creditBrackets = credit.brackets ?? {}
   const creditData = Object.entries(creditBrackets).map(([name, value]) => ({ name, value: value as number }))
 
@@ -36,11 +37,11 @@ export function PeopleTab({ users, tp, credit, apps, rev: _rev }: any) {
                 <span className="text-xs text-muted">Verified</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-primary-dark dark:text-white">{num(users.verified)}</span>
-                  <Badge variant="success" className="text-[10px]">{users.total > 0 ? Math.round((users.verified / users.total) * 100) : 0}%</Badge>
+                  <Badge variant="success" className="text-[10px]">{Math.round(verifiedShare * 100)}%</Badge>
                 </div>
               </div>
               <div className="h-3 rounded-full bg-surface dark:bg-[#0c0e1a] overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${users.total > 0 ? (users.verified / users.total) * 100 : 0}%` }} />
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${verifiedShare * 100}%` }} />
               </div>
               <QuickRow label="Unverified" value={num(users.unverified)} />
             </div>

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { listingStatusLabel } from '@/pages/properties/components/propertyStatusMaps'
 import toast from 'react-hot-toast'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
@@ -124,11 +125,11 @@ function QueueCard({ property, onDecide, onHistory }: {
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <div className="flex items-start justify-between gap-2">
-            <Link to={`/properties/${property.id}`} className="font-bold text-primary-dark hover:underline dark:text-white">
+            <Link to={`/properties/${property.id}`} className="min-w-0 font-bold text-primary-dark [overflow-wrap:anywhere] hover:underline dark:text-white">
               {property.title}
             </Link>
             <Badge variant={open ? 'warning' : property.listingStatus === 'approved' ? 'success' : 'danger'}>
-              {property.listingStatus.replace('_', ' ')}
+              {listingStatusLabel[property.listingStatus] ?? property.listingStatus.replace(/_/g, ' ')}
             </Badge>
           </div>
           <p className="mt-1 text-sm font-semibold text-primary dark:text-blue-400">

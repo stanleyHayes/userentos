@@ -241,7 +241,15 @@ export const analyticsController = {
       auditLogsAgg,
     ] = await Promise.all([
       // Users
-      User.aggregate<{ _id: string[]; count: number }>([{ $group: { _id: '$roles', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      // An admin approval sets both flags; a change of identity details clears both.
+      User.aggregate<{ _id: string[]; count: number; verified: number }>([
+        { $group: {
+          _id: '$roles',
+          count: { $sum: 1 },
+          verified: { $sum: { $cond: [{ $or: [{ $eq: ['$isVerified', true] }, { $eq: ['$verificationStatus', 'verified'] }] }, 1, 0] } },
+        } },
+        { $sort: { count: -1 } },
+      ]),
       // Properties — $facet grouped counts; $push-ing whole collections into one
       // result doc hits the 16MB BSON cap at modest volume.
       Property.aggregate([
@@ -489,10 +497,16 @@ export const analyticsController = {
       }
     }
 
+    const totalUsers = usersAgg.reduce((s, u) => s + (u.count ?? 0), 0)
+    const verifiedUsers = usersAgg.reduce((s, u) => s + (u.verified ?? 0), 0)
+
     const result = {
       // ── USERS ──
       users: {
-        total: usersAgg.reduce((s, u) => s + (u.count ?? 0), 0),
+        total: totalUsers,
+        // The government dashboards read these; without them they showed "NaN%".
+        verified: verifiedUsers,
+        unverified: totalUsers - verifiedUsers,
         byRole: usersByRole,
       },
 

@@ -16,6 +16,13 @@ export function num(v: unknown): string {
   return Number(v ?? 0).toLocaleString()
 }
 
+/** part ÷ whole as 0–1. Missing or non-numeric counts give 0, never NaN. */
+export function shareOf(part: unknown, whole: unknown): number {
+  const p = Number(part)
+  const w = Number(whole)
+  return Number.isFinite(p) && Number.isFinite(w) && w > 0 ? Math.min(1, Math.max(0, p / w)) : 0
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024

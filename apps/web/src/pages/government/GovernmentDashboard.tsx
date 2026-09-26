@@ -12,6 +12,7 @@ import {
   Star,
 } from 'lucide-react'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
+import { shareOf } from './components/analytics-constants'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 
 const COLORS = ['#1e3a5f', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6', '#ec4899']
@@ -26,6 +27,7 @@ export function GovernmentDashboard() {
 
   // Extract nested data with fallbacks
   const users = a?.users ?? {}
+  const verifiedShare = shareOf(users.verified, users.total)
   const properties = a?.properties ?? {}
   const agreements = a?.agreements ?? {}
   const payments = a?.payments ?? {}
@@ -242,11 +244,11 @@ export function GovernmentDashboard() {
                 <svg className="w-28 h-28 -rotate-90" viewBox="0 0 64 64">
                   <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" strokeWidth="5" className="text-border dark:text-[#252a3a]" />
                   <circle cx="32" cy="32" r="26" fill="none" stroke="#10b981" strokeWidth="5" strokeLinecap="round"
-                    strokeDasharray={`${(users.total > 0 ? (users.verified / users.total) : 0) * 163.4} 163.4`}
+                    strokeDasharray={`${verifiedShare * 163.4} 163.4`}
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold font-display text-accent">{users.total > 0 ? Math.round((users.verified / users.total) * 100) : 0}%</span>
+                  <span className="text-xl font-extrabold font-display text-accent">{Math.round(verifiedShare * 100)}%</span>
                   <span className="text-[9px] text-muted">verified</span>
                 </div>
               </div>

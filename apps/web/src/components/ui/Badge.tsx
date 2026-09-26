@@ -2,8 +2,11 @@ import { type HTMLAttributes } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+// A badge is a one-line label: it never wraps, and in a row beside a title it
+// keeps its width so the title wraps instead ("pending review" used to break
+// across two lines next to a long property name).
 const badgeVariants = cva(
-  'surface-badge inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+  'surface-badge inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium',
   {
     variants: {
       variant: {
