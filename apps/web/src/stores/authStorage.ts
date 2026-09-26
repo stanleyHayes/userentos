@@ -7,7 +7,9 @@ import type { User } from '@/types'
  * a tab that had not yet applied another tab's token rotation wrote the old,
  * already-rotated refresh token back, and its next use signed the account out.
  * A tab writes the credential key only when its own credentials changed (login,
- * logout, a refresh commit); profile-only changes go to the profile key.
+ * logout, a refresh commit); profile-only changes go to the profile key, and
+ * also to the credential key only while the stored session has no user at all.
+ * Reading a signed-out session removes any profile record left behind.
  * `rentos-auth` keeps its full shape (user included) for legacy tabs and specs.
  */
 export const AUTH_KEY = 'rentos-auth'
@@ -57,11 +59,19 @@ export function createAuthStorage<S extends PersistedAuth>(getStorage: () => Pic
   const writeProfile = (state: PersistedAuth) => {
     if (state.user) storage.setItem(PROFILE_KEY, JSON.stringify({ sessionId: state.sessionId ?? null, user: state.user } satisfies ProfileRecord))
   }
+  // A sign-out written by a tab on the previous bundle, or one that raced this
+  // tab's profile write, can leave the record (address, Ghana Card number)
+  // behind. Only while signed out: a signed-in blob may be the first half of a
+  // login whose profile write is still to come.
+  const dropSignedOutProfile = () => {
+    if (storage.getItem(PROFILE_KEY) !== null) storage.removeItem(PROFILE_KEY)
+  }
 
   return {
     getItem: (name) => {
       const raw = storage.getItem(name)
       if (raw === null) {
+        dropSignedOutProfile()
         syncedCredentials = credentialsOf({})
         syncedUser = null
         return null
@@ -76,6 +86,7 @@ export function createAuthStorage<S extends PersistedAuth>(getStorage: () => Pic
         isAuthenticated: stored.state.isAuthenticated ?? false,
         sessionId: stored.state.sessionId ?? null,
       }
+      if (!state.isAuthenticated) dropSignedOutProfile()
       // A profile written for this session supersedes the copy in the credential
       // blob; a missing or foreign one (legacy state, seeds) falls back to it.
       const profile = readJson<ProfileRecord>(PROFILE_KEY)
@@ -96,6 +107,13 @@ export function createAuthStorage<S extends PersistedAuth>(getStorage: () => Pic
         // Never let a profile change land on a session this tab has not caught up with.
         const stored = readJson<StorageValue<Partial<PersistedAuth>>>(name)?.state
         if (stored?.isAuthenticated && sameSession(stored, state)) writeProfile(state)
+        else if (stored?.isAuthenticated && !stored.user && (stored.sessionId ?? null) === (state.sessionId ?? null) && credentialsOf(stored) === syncedCredentials) {
+          // A session stored without a user (legacy or seeded) gets the verified
+          // one in both keys. Its stored credentials are the ones this tab holds,
+          // so the whole-blob write cannot put a rotated token back.
+          storage.setItem(name, JSON.stringify(value))
+          writeProfile(state)
+        }
       }
       syncedUser = state.user
     },

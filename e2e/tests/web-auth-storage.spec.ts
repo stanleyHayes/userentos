@@ -108,6 +108,47 @@ test('a login writes both keys and a logout or clear removes the profile', () =>
   expect([...shared.keys()]).toEqual([])
 })
 
+test('reading a signed-out or missing session removes a leftover profile record', () => {
+  const { tab, shared, profile } = browser()
+  const current = tab()
+  current.set(signedIn('session-1'))
+  // A tab still on the previous bundle signs out: it rewrites the blob only.
+  shared.set(AUTH_KEY, JSON.stringify({ state: signedOut, version: 0 }))
+  expect(profile()?.user.id).toBe('user-1')
+  current.hydrate()
+  expect(profile()).toBeNull()
+  expect(current.state).toMatchObject({ isAuthenticated: false, user: null })
+  current.set(signedIn('session-2'))
+  shared.delete(AUTH_KEY)
+  tab().hydrate()
+  expect([...shared.keys()]).toEqual([])
+})
+
+test('a verified profile for a signed-in session stored without a user reaches storage', () => {
+  const { tab, shared, credentials, profile } = browser()
+  // Legacy or hand-seeded state: signed in with no user, so startup verification fetches one.
+  const userless = { user: null, token: 'seed-access', refreshToken: 'seed-refresh', isAuthenticated: true, sessionId: 'session-1' }
+  shared.set(AUTH_KEY, JSON.stringify({ state: userless, version: 0 }))
+  const verifier = tab()
+  verifier.hydrate()
+  verifier.set({ user: kwame })
+  expect(credentials()).toMatchObject({ token: 'seed-access', refreshToken: 'seed-refresh', sessionId: 'session-1', user: { id: 'user-1' } })
+  expect(profile()).toMatchObject({ sessionId: 'session-1', user: { id: 'user-1' } })
+  const reader = tab()
+  reader.hydrate()
+  expect(reader.state).toMatchObject({ token: 'seed-access', user: { id: 'user-1' } })
+  // A tab behind a rotation of that session writes nothing.
+  shared.set(AUTH_KEY, JSON.stringify({ state: userless, version: 0 }))
+  shared.delete(PROFILE_KEY)
+  const stale = tab(), rotating = tab()
+  stale.hydrate()
+  rotating.hydrate()
+  rotating.set({ token: 'access-2', refreshToken: 'refresh-2' })
+  stale.set({ user: kwame })
+  expect(credentials()).toMatchObject({ token: 'access-2', refreshToken: 'refresh-2', user: null })
+  expect(profile()).toBeNull()
+})
+
 test('blocked site data leaves persistence off instead of failing the import', () => {
   expect(createAuthStorage(() => { throw new DOMException('Access is denied for this document.', 'SecurityError') })).toBeUndefined()
 })
@@ -125,6 +166,8 @@ test('legacy blobs, seeds and foreign or unreadable profiles fall back to the cr
     shared.set(PROFILE_KEY, JSON.stringify(foreign))
     reader.hydrate()
     expect(reader.state.user).toMatchObject({ id: 'user-1', firstName: 'Seeded' })
+    // Kept while signed in: it may be the second write of a login in progress.
+    expect(JSON.parse(shared.get(PROFILE_KEY)!)).toEqual(foreign)
   }
   shared.set(PROFILE_KEY, '{unreadable')
   reader.hydrate()
