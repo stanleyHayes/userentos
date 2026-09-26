@@ -27,6 +27,11 @@ function resolveBaseUrl(): string {
 
 const BASE_URL = resolveBaseUrl()
 
+/** Absolute API URL, for links opened outside the app (download-token files). */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`
+}
+
 /** Biometric sessions rotate through /auth/biometric/exchange (device-bound). */
 async function attemptBiometricRefresh(refreshToken: string, version: number): Promise<boolean> {
   const credentialVersion = biometricCredentialVersion()
@@ -106,9 +111,9 @@ class ApiClient {
   patch<T>(path: string, body: unknown) { return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }) }
   put<T>(path: string, body: unknown) { return this.request<T>(path, { method: 'PUT', body: JSON.stringify(body) }) }
   delete<T>(path: string) { return this.request<T>(path, { method: 'DELETE' }) }
-  async upload<T>(path: string, formData: FormData): Promise<T> {
+  async upload<T>(path: string, formData: FormData, options: Pick<RequestInit, 'signal'> = {}): Promise<T> {
     return await sessionRequest(token => fetch(`${BASE_URL}${path}`, {
-      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData,
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData, signal: options.signal,
     }), !path.startsWith('/auth/')) as T
   }
 }
