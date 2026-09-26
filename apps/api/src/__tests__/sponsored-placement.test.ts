@@ -5,6 +5,8 @@ import type { AddressInfo } from 'node:net'
 
 const mocks = vi.hoisted(() => ({ listProperties: vi.fn(), getSponsoredPlacements: vi.fn(), recordImpressions: vi.fn() }))
 vi.mock('../container.js', () => ({ propertyService: { listProperties: mocks.listProperties } }))
+// Listing now drops closed accounts' listings; no database in this unit test.
+vi.mock('../services/closedAccounts.js', () => ({ closedAccountIds: async () => [], isClosedAccount: async () => false }))
 vi.mock('../services/marketplace/sponsorshipServing.js', async original => ({
   ...await original<typeof import('../services/marketplace/sponsorshipServing.js')>(),
   getSponsoredPlacements: mocks.getSponsoredPlacements,

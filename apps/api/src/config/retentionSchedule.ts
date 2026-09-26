@@ -180,6 +180,12 @@ export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
     basis: 'Security of the account.', decision: 'engineering_default',
   },
   {
+    id: 'account.signedOutSessions', models: ['RevokedSession'], personalData: false,
+    data: 'Random ids of device sessions that signed out, so their short-lived access tokens stop working.',
+    trigger: 'expiresAt', periodDays: 0, action: 'delete', enforcedBy: 'ttl', ttlField: 'expiresAt',
+    onAccountClosure: 'Holds no account id; expires on its own about 16 minutes after sign-out.', basis: 'Security of the account.', decision: 'engineering_default',
+  },
+  {
     id: 'account.invitations', models: ['Invitation'], personalData: true,
     data: 'Invited email address and role.', trigger: 'expiresAt', periodDays: 0, action: 'delete', enforcedBy: 'ttl', ttlField: 'expiresAt',
     onAccountClosure: 'Not linked to the invitee account; expires on its own.', basis: 'Only needed until accepted or expired.', decision: 'engineering_default',

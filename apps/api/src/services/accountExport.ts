@@ -238,6 +238,7 @@ export const EXPORT_SOURCES: readonly ExportSource[] = [
 /** Collections deliberately not in the export, and why. */
 export const EXPORT_EXCLUSIONS: Readonly<Record<string, string>> = {
   AppleTransactionRevocation: 'Keyed by a hash of the App Store transaction with no account id; the purchase itself is exported under applePurchases.',
+  RevokedSession: 'A random session id and an expiry, with no account id; deleted about 16 minutes after sign-out. Sign-in sessions are exported under sessions.',
   RegistryPageView: 'Hashed IP address with no account id; it cannot be attributed to an account.',
   StorefrontEvent: 'A visitor hash with no account id; it cannot be attributed to an account.',
   ComplaintLog: 'Redacted complaint text with no account id.',
