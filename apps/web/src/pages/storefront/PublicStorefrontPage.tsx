@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { PlatformLink } from '@/components/PlatformLink'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { GridSkeleton } from '@/components/ui/Skeleton'
@@ -25,7 +26,15 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   const { slug: slugFromPath } = useParams<{ slug: string }>()
   const slug = slugOverride ?? slugFromPath
   const { data: storefront, isLoading, isError, error, refetch, isFetching, errorUpdateCount } = useStorefront(slug)
-  const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
+  const {
+    data: properties, isLoading: loadingProperties, fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useStorefrontProperties(slug)
+  // Offset pages can overlap when a listing is added between loads.
+  const items = useMemo(() => {
+    const byId = new Map((properties?.pages ?? []).flatMap((page) => page.items).map((p) => [p.id, p]))
+    return [...byId.values()]
+  }, [properties])
+  const listingCount = properties?.pages[0]?.total ?? items.length
   // On {slug}.userentos.com or a custom domain a router link would stay on
   // the seller's host, where "/" is this storefront and the rest of the app
   // sits behind a separate sign-in.
@@ -81,7 +90,6 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   }
 
   const brandColor = storefront.branding?.primaryColor
-  const items = properties?.items ?? []
 
   return (
     <div className="min-h-screen bg-surface/40 dark:bg-[#0a0d16]">
@@ -128,7 +136,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
             </div>
           </div>
 
-          <Badge variant="success" className="shrink-0">{items.length} listing{items.length === 1 ? '' : 's'}</Badge>
+          <Badge variant="success" className="shrink-0">{listingCount} listing{listingCount === 1 ? '' : 's'}</Badge>
         </div>
       </header>
 
@@ -189,6 +197,14 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
                 </Card>
               </PlatformLink>
             ))}
+          </div>
+        )}
+
+        {hasNextPage && (
+          <div className="mt-6 flex justify-center">
+            <Button variant="outline" onClick={() => { void fetchNextPage() }} disabled={isFetchingNextPage} aria-busy={isFetchingNextPage}>
+              {isFetchingNextPage ? 'Loading…' : 'Load more listings'}
+            </Button>
           </div>
         )}
 
