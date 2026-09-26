@@ -29,12 +29,19 @@ const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | '
 }
 
 const listingStatusVariant: Record<string, 'default' | 'warning' | 'success' | 'danger'> = {
-  draft: 'default', pending_review: 'warning', approved: 'success', rejected: 'danger',
+  draft: 'default', pending_review: 'warning', in_review: 'warning', changes_requested: 'warning',
+  approved: 'success', published: 'success', rejected: 'danger', suspended: 'danger',
+  archived: 'default', withdrawn: 'default',
 }
 
 const listingStatusLabel: Record<string, string> = {
-  draft: 'Draft', pending_review: 'Pending Review', approved: 'Approved', rejected: 'Rejected',
+  draft: 'Draft', pending_review: 'Pending Review', in_review: 'In Review', changes_requested: 'Changes Requested',
+  approved: 'Approved', published: 'Published', rejected: 'Rejected', suspended: 'Suspended',
+  archived: 'Archived', withdrawn: 'Withdrawn',
 }
+
+// Listings the owner can (re)submit for review from the card.
+const SUBMITTABLE = ['draft', 'rejected', 'changes_requested']
 
 const REGIONS = ['Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central', 'Northern', 'Volta', 'Upper East', 'Upper West', 'Bono', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North']
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
@@ -456,7 +463,7 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
             )}
 
             {/* Publish button for draft properties */}
-            {isOwner && p.listingStatus === 'draft' && (
+            {isOwner && SUBMITTABLE.includes(p.listingStatus) && (
               <div className="mt-3 pt-3 border-t border-border/50 dark:border-[#252a3a]/50">
                 <Button
                   size="sm"
@@ -464,7 +471,7 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); publishMutation.mutate() }}
                   disabled={publishMutation.isPending}
                 >
-                  <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                  <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : p.listingStatus === 'draft' ? 'Publish' : 'Resubmit'}
                 </Button>
                 {publishMutation.isError && (
                   <p className="text-[10px] text-danger mt-1">{publishMutation.error instanceof Error ? publishMutation.error.message : 'Publish failed'}</p>
@@ -522,13 +529,13 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
             <span className="flex items-center gap-1 text-xs text-muted dark:text-gray-500"><Bath size={13} /> {p.bathrooms ?? 1} bath</span>
             {p.furnished && <Badge variant="muted" className="text-[10px]">Furnished</Badge>}
             {(p.parkingSpaces ?? 0) > 0 && <Badge variant="muted" className="text-[10px]">Parking</Badge>}
-            {isOwner && p.listingStatus === 'draft' && (
+            {isOwner && SUBMITTABLE.includes(p.listingStatus) && (
               <Button
                 size="sm"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); publishMutation.mutate() }}
                 disabled={publishMutation.isPending}
               >
-                <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : p.listingStatus === 'draft' ? 'Publish' : 'Resubmit'}
               </Button>
             )}
             <span className="ml-auto flex items-center gap-1 text-[10px] text-muted dark:text-gray-600"><Eye size={11} />{p.views ?? 0} views</span>

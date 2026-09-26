@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { listingStatusLabel } from '@/pages/properties/components/propertyStatusMaps'
+import { listingStatusLabel, REJECT_REASONS } from '@/pages/properties/components/propertyStatusMaps'
 import toast from 'react-hot-toast'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
@@ -28,16 +28,6 @@ const STATUS_TABS = [
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
 ] as const
-
-/** Reason codes offered on rejection — the API requires one. */
-const REJECT_REASONS = [
-  { value: 'incomplete_details', label: 'Incomplete details' },
-  { value: 'poor_media', label: 'Photos unusable or missing' },
-  { value: 'suspected_duplicate', label: 'Suspected duplicate listing' },
-  { value: 'not_compliant', label: 'Breaches rental law or policy' },
-  { value: 'suspected_fraud', label: 'Suspected fraud' },
-  { value: 'other', label: 'Other (explain below)' },
-]
 
 type Decision = 'approve' | 'reject' | 'request_changes'
 
