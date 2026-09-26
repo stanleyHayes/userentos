@@ -126,12 +126,20 @@ export function DisputeDetailPage() {
       window.open(item.url, '_blank', 'noopener,noreferrer')
       return
     }
+    // Opened now, while the click still counts: Safari and iOS block a
+    // window.open that comes after an await. It is pointed at the file once
+    // the token arrives. ('noopener' would return no handle to point.)
+    const tab = window.open('', '_blank')
+    if (tab) tab.opener = null
     try {
       const apiBase = import.meta.env.VITE_API_URL || '/api'
       const path = `/disputes/${dispute!.id}/evidence/${item.documentId}`
       const { token } = await api.post<{ token: string }>(`${path}/link`, {})
-      window.open(`${apiBase}${path}?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer')
+      const url = new URL(`${apiBase}${path}?token=${encodeURIComponent(token)}`, window.location.href).href
+      if (tab) tab.location.href = url
+      else window.location.assign(url)
     } catch (err) {
+      tab?.close()
       toast.error(err instanceof Error ? err.message : 'Could not open this file')
     }
   }
