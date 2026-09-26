@@ -1,5 +1,44 @@
 import { test, expect } from '@playwright/test'
-import { registerSessionPush } from '../../apps/mobile/lib/pushSession'
+import { registerSessionPush, rememberRegisteredPushToken, takeRegisteredPushToken } from '../../apps/mobile/lib/pushSession'
+import { signOutDevice } from '../../apps/mobile/lib/signOut'
+
+test.describe('sign-out removes this phone push registration', () => {
+  test.beforeEach(() => { takeRegisteredPushToken() })
+
+  test('the logout request carries the registered push token and starts before the session is cleared', async () => {
+    rememberRegisteredPushToken('ExponentPushToken[phone]')
+    const calls: string[] = []
+    signOutDevice({
+      refreshToken: 'refresh-1',
+      takePushToken: takeRegisteredPushToken,
+      post: async (path, body) => { calls.push(`${path} ${JSON.stringify(body)}`) },
+      clearSession: () => { calls.push('clear') },
+    })
+    expect(calls).toEqual(['/auth/logout {"refreshToken":"refresh-1","pushToken":"ExponentPushToken[phone]"}', 'clear'])
+    // One sign-out uses it; the next account registers its own.
+    expect(takeRegisteredPushToken()).toBeNull()
+  })
+
+  test('without a registered token the logout sends only the refresh token', () => {
+    const bodies: Record<string, string>[] = []
+    signOutDevice({ refreshToken: 'refresh-1', takePushToken: takeRegisteredPushToken, post: async (_path, body) => { bodies.push(body) }, clearSession: () => {} })
+    expect(bodies).toEqual([{ refreshToken: 'refresh-1' }])
+  })
+
+  test('a session without a refresh token unregisters the push token with the still-valid bearer', () => {
+    rememberRegisteredPushToken('ExponentPushToken[phone]')
+    const calls: string[] = []
+    signOutDevice({ refreshToken: null, takePushToken: takeRegisteredPushToken, post: async (path, body) => { calls.push(`${path} ${body.token}`) }, clearSession: () => { calls.push('clear') } })
+    expect(calls).toEqual(['/push/unregister ExponentPushToken[phone]', 'clear'])
+  })
+
+  test('an offline phone still signs out locally', async () => {
+    let cleared = false
+    signOutDevice({ refreshToken: 'refresh-1', takePushToken: () => 'token', post: async () => { throw new Error('offline') }, clearSession: () => { cleared = true } })
+    expect(cleared).toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+})
 
 for (const stop of ['logout', 'effect cleanup']) test(`push token acquisition finishing after ${stop} cannot register`, async () => {
   let active = true

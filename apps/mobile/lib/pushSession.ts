@@ -52,3 +52,22 @@ export function onPushOptIn(listener: () => void): () => void {
 export function notifyPushOptIn(): void {
   for (const listener of [...optInListeners]) listener()
 }
+
+/**
+ * The push token this device last registered for the signed-in account. The
+ * sign-out request carries it: once logout() has run there is no session left
+ * to call /push/unregister with, and the server would keep sending this
+ * account's notifications to the phone.
+ */
+let registeredToken: string | null = null
+
+export function rememberRegisteredPushToken(token: string): void {
+  registeredToken = token
+}
+
+/** Returns the remembered token and forgets it; one sign-out uses it. */
+export function takeRegisteredPushToken(): string | null {
+  const token = registeredToken
+  registeredToken = null
+  return token
+}

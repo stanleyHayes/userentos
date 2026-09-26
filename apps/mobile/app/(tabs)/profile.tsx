@@ -7,6 +7,8 @@ import { neuCard } from '../../lib/neu'
 import { useAuthStore } from '../../stores/authStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { api } from '../../lib/api'
+import { signOutDevice } from '../../lib/signOut'
+import { takeRegisteredPushToken } from '../../lib/pushSession'
 import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
 import { isPathAvailable } from '../../../../packages/shared/regulatedFeatures'
 
@@ -31,13 +33,15 @@ export default function ProfileScreen() {
         text: 'Logout',
         style: 'destructive',
         onPress: () => {
-          // Revoke the server-side refresh token first — otherwise it stays
-          // valid until natural expiry even after "logout".
-          const refreshToken = useAuthStore.getState().refreshToken
-          if (refreshToken) {
-            api.post('/auth/logout', { refreshToken }).catch(() => {})
-          }
-          logout()
+          // Revoke the server-side session (and this phone's push
+          // registration) first — otherwise it stays valid until natural
+          // expiry even after "logout".
+          signOutDevice({
+            refreshToken: useAuthStore.getState().refreshToken,
+            takePushToken: takeRegisteredPushToken,
+            post: (path, body) => api.post(path, body),
+            clearSession: logout,
+          })
           router.replace('/auth/login')
         },
       },
