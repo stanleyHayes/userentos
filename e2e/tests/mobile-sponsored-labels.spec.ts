@@ -48,11 +48,11 @@ async function signIn(page: Page) {
   return requests
 }
 
-test('home loads saved properties by id, never the whole listing', async ({ page }) => {
+test('home shows saved properties from the favourites endpoint, never the whole listing', async ({ page }) => {
   const requests = await signIn(page)
   await expect(page.getByText('Saved Properties', { exact: true })).toBeVisible()
   await expect(page.getByText(organic.title, { exact: true }).first()).toBeVisible()
-  expect(requests.some((u) => u.pathname === `/api/properties/${organic.id}`)).toBe(true)
+  expect(requests.some((u) => u.pathname === '/api/properties/favorites/me')).toBe(true)
   expect(requests.filter((u) => u.pathname === '/api/properties')).toEqual([])
 })
 

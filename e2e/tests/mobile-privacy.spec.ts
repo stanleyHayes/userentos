@@ -55,7 +55,8 @@ test('the personal-data export opens as a file download link, not share-sheet te
   // Linking.openURL opens a new tab on web; on a phone, the browser.
   const opened = context.waitForEvent('page')
   await page.getByRole('button', { name: 'Export my personal data', exact: true }).click()
-  expect((await opened).url()).toContain('/api/users/me/export.json?token=download-token')
+  // The new tab starts blank and then navigates to the download.
+  await (await opened).waitForURL(/\/api\/users\/me\/export\.json\?token=download-token/)
   expect(requested).toContain('POST /api/users/me/export-link')
   expect(requested).not.toContain('GET /api/users/me/export')
   await expect(page.getByText(/downloading in your browser/)).toBeVisible()
