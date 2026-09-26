@@ -28,7 +28,7 @@ async function openProperty(page: Page, user: typeof tenant) {
     else if (path === '/api/users/me') data = user
     else if (path === '/api/chat/unread-count') data = { count: 0 }
     else if (path === '/api/properties' && request.method() === 'GET') data = { items: [property], total: 1 }
-    else if (path === `/api/properties/${propertyId}/qualify`) data = { qualified: true, checks: [], passedCount: 0, totalCount: 0 }
+    else if (path === `/api/properties/${propertyId}/qualify`) data = { qualified: true, issues: [], propertyId }
     else if (path === `/api/properties/${propertyId}`) data = property
     else if (path === `/api/reviews/property/${propertyId}`) data = { reviews, page: 1, pageSize: 10, totalPages: 1 }
     else if (path === '/api/reports') { await route.fulfill({ status: 201, json: { success: true, data: { id: 'report-1', status: 'open' } } }); return }
@@ -181,8 +181,8 @@ test('a worker reports an abusive review on their job as a worker_review keyed b
 
 const worker = {
   id: '507f1f77bcf86cd799439056', userId: '507f1f77bcf86cd799439057', name: 'Yaw Plumber', trades: ['plumbing'], skills: ['leaks'], bio: 'Twenty years of pipes.',
-  location: 'Accra', serviceRadius: 10, hourlyRate: 80, fixedRates: {}, rating: 4.5, reviewCount: 3, completedJobs: 12, verificationLevel: 'basic',
-  emergencyAvailable: false, yearsExperience: 20, availability: { monday: true },
+  location: 'Accra', serviceRadiusKm: 10, hourlyRate: 80, fixedRates: [], rating: 4.5, reviewCount: 3, completedJobs: 12, verificationLevel: 'basic',
+  emergencyAvailable: false, availability: { monday: ['09:00-17:00'], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] },
 }
 const workerApi = (path: string) => {
   if (path === '/api/workers') return { items: [worker] }

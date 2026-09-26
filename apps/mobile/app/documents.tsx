@@ -122,7 +122,13 @@ export default function DocumentsScreen() {
                     )}
                   </View>
                   {isOwn && (
-                    <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(doc)} disabled={deleting === doc.id}>
+                    <TouchableOpacity
+                      style={s.deleteBtn}
+                      onPress={() => handleDelete(doc)}
+                      disabled={deleting === doc.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${doc.name}`}
+                    >
                       {deleting === doc.id ? (
                         <ActivityIndicator size="small" color={c.danger} />
                       ) : (
