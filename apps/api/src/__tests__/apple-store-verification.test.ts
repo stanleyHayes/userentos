@@ -3,10 +3,18 @@ import { Environment, Status, Type, VerificationException, VerificationStatus } 
 import { verifyAppleNotification, normalizeAppleSubscription, verifyAppleSubscription, normalizeAppleTransaction, verifyAppleTransaction } from '../services/storeBilling/appleStore.js'
 const mocks = vi.hoisted(() => ({ read: vi.fn(), client: vi.fn(), verifier: vi.fn(), get: vi.fn(), decode: vi.fn(), statuses: vi.fn(), renewal: vi.fn(), notification: vi.fn() }))
 vi.mock('node:fs/promises', () => ({ readFile: mocks.read }))
+// Each instance keeps its environment, so a mock implementation written as a
+// `function` can answer per environment through `this`.
 vi.mock('@apple/app-store-server-library', async original => ({ ...await original<object>(),
-  AppStoreServerAPIClient: class { constructor(...args: unknown[]) { mocks.client(...args) } getTransactionInfo = mocks.get; getAllSubscriptionStatuses = mocks.statuses },
-  SignedDataVerifier: class { constructor(...args: unknown[]) { mocks.verifier(...args) } verifyAndDecodeTransaction = mocks.decode; verifyAndDecodeRenewalInfo = mocks.renewal; verifyAndDecodeNotification = mocks.notification },
+  AppStoreServerAPIClient: class { environment: unknown; constructor(...args: unknown[]) { mocks.client(...args); this.environment = args[4] } getTransactionInfo = mocks.get; getAllSubscriptionStatuses = mocks.statuses },
+  SignedDataVerifier: class { environment: unknown; constructor(...args: unknown[]) { mocks.verifier(...args); this.environment = args[2] } verifyAndDecodeTransaction = mocks.decode; verifyAndDecodeRenewalInfo = mocks.renewal; verifyAndDecodeNotification = mocks.notification },
 }))
+type InEnvironment = { environment: Environment }
+// Production has never heard of the transaction; the sandbox holds it.
+async function onlyInSandbox(this: InEnvironment) {
+  if (this.environment === Environment.PRODUCTION) throw { httpStatusCode: 404, apiError: 4040010 }
+  return { signedTransactionInfo: 'sandbox-jws' }
+}
 const accountToken = '123e4567-e89b-42d3-a456-426614174000'
 const now = new Date('2026-09-13T12:00:00Z')
 const expected = { transactionId: '123456', accountToken, bundleId: 'gh.rentos.mobile', environment: Environment.PRODUCTION }
@@ -69,10 +77,41 @@ describe('Apple authenticated provider and signature boundary', () => {
     await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('configuration')
     expect(mocks.get).not.toHaveBeenCalled()
   })
-  it('never falls back to sandbox in production', async () => {
+  it('keeps the sandbox-only mode out of production', async () => {
     vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('APPLE_STORE_ENVIRONMENT', 'Sandbox')
-    await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('test_purchase')
+    await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('configuration')
     expect(mocks.get).not.toHaveBeenCalled()
+  })
+  it('falls back to the sandbox only when production has no such transaction, and labels it test', async () => {
+    mocks.get.mockImplementation(onlyInSandbox)
+    mocks.decode.mockResolvedValue({ ...fixture(), environment: Environment.SANDBOX })
+    expect(await verifyAppleTransaction('123456', accountToken)).toMatchObject({ environment: 'test', transactionId: '123456' })
+    expect(mocks.get.mock.contexts.map(client => (client as InEnvironment).environment)).toEqual([Environment.PRODUCTION, Environment.SANDBOX])
+    expect(mocks.client).toHaveBeenCalledWith('private-key', 'KEY1234567', accountToken, 'gh.rentos.mobile', Environment.SANDBOX)
+    expect(mocks.verifier).toHaveBeenCalledWith([Buffer.from('root-certificate')], true, Environment.SANDBOX, 'gh.rentos.mobile', 1234567890)
+    expect(mocks.decode).toHaveBeenCalledWith('sandbox-jws')
+    expect((mocks.decode.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+  })
+  it('never turns a production outage or a bad production signature into a sandbox lookup', async () => {
+    mocks.get.mockRejectedValueOnce({ httpStatusCode: 503 })
+    await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('provider_unavailable')
+    expect(mocks.get).toHaveBeenCalledOnce()
+    mocks.decode.mockRejectedValueOnce(new Error('untrusted signature'))
+    await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('invalid_purchase')
+    expect(mocks.get.mock.contexts.map(client => (client as InEnvironment).environment)).toEqual([Environment.PRODUCTION, Environment.PRODUCTION])
+  })
+  it('rejects a transaction that neither environment knows', async () => {
+    mocks.get.mockRejectedValue({ httpStatusCode: 404 })
+    await expect(verifyAppleTransaction('123456', accountToken)).rejects.toThrow('invalid_purchase')
+    expect(mocks.get).toHaveBeenCalledTimes(2)
+    expect(mocks.decode).not.toHaveBeenCalled()
+  })
+  it('asks only the sandbox in the development sandbox mode', async () => {
+    vi.stubEnv('APPLE_STORE_ENVIRONMENT', 'Sandbox')
+    mocks.decode.mockResolvedValue({ ...fixture(), environment: Environment.SANDBOX })
+    expect((await verifyAppleTransaction('123456', accountToken)).environment).toBe('test')
+    expect(mocks.client).toHaveBeenCalledOnce()
+    expect(mocks.client).toHaveBeenCalledWith('private-key', 'KEY1234567', accountToken, 'gh.rentos.mobile', Environment.SANDBOX)
   })
   it.each([404, 401, 429, 500])('sanitizes provider status %s', async status => {
     mocks.get.mockRejectedValue({ httpStatusCode: status, message: 'private-key', response: 'signed-jws' })
@@ -141,8 +180,22 @@ describe('Apple current chain verification boundary', () => {
     mocks.statuses.mockResolvedValue(statusFixture(Status.REVOKED))
     expect(await verifyAppleSubscription('123456', accountToken)).toMatchObject({ accessEligible: false, status: Status.REVOKED })
   })
-  it.each([{ bundleId: 'other' }, { appAppleId: 1 }, { environment: Environment.SANDBOX }, { data: [] }])('rejects an unrelated or missing status response', async change => {
+  it.each([{ bundleId: 'other' }, { appAppleId: 1 }, { appAppleId: undefined }, { environment: Environment.SANDBOX }, { data: [] }])('rejects an unrelated or missing status response', async change => {
     mocks.statuses.mockResolvedValue({ ...statusFixture(), ...change })
+    await expect(verifyAppleSubscription('123456', accountToken)).rejects.toThrow('invalid_purchase')
+  })
+  it('follows a sandbox chain with the sandbox client, where Apple sends no appAppleId', async () => {
+    mocks.get.mockImplementation(onlyInSandbox)
+    mocks.decode.mockImplementation(async (signed: string) => ({ ...fixture(), environment: Environment.SANDBOX, transactionId: signed === 'latest-jws' ? '123457' : '123456' }))
+    mocks.statuses.mockResolvedValue({ ...statusFixture(), environment: Environment.SANDBOX, appAppleId: undefined })
+    mocks.renewal.mockResolvedValue({ ...renewalFixture(), environment: Environment.SANDBOX })
+    expect(await verifyAppleSubscription('123456', accountToken)).toMatchObject({ environment: 'test', transactionId: '123457', accessEligible: true })
+    expect((mocks.statuses.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+    expect((mocks.renewal.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+  })
+  it('rejects a production status answer for a sandbox chain', async () => {
+    mocks.get.mockImplementation(onlyInSandbox)
+    mocks.decode.mockResolvedValue({ ...fixture(), environment: Environment.SANDBOX })
     await expect(verifyAppleSubscription('123456', accountToken)).rejects.toThrow('invalid_purchase')
   })
   it('rejects ambiguous duplicate chains', async () => {
@@ -165,6 +218,8 @@ describe('Apple current chain verification boundary', () => {
   })
 })
 
+// A JWS-shaped string whose unverified payload claims an environment.
+function claiming(environment: string) { return `header.${Buffer.from(JSON.stringify({ data: { environment } })).toString('base64url')}.signature` }
 function notificationFixture() { return { notificationUUID: '123e4567-e89b-42d3-a456-426614174002', notificationType: 'DID_RENEW', version: '2.0', signedDate: now.getTime(), data: { bundleId: expected.bundleId, appAppleId: 1234567890, environment: Environment.PRODUCTION, signedTransactionInfo: 'notification-transaction' } } }
 describe('Apple signed notification verification', () => {
   beforeEach(() => { mocks.notification.mockResolvedValue(notificationFixture()) })
@@ -181,9 +236,21 @@ describe('Apple signed notification verification', () => {
     expect(await verifyAppleNotification('envelope-jws', now)).toMatchObject({ notificationType: 'TEST', transaction: null })
     expect(mocks.decode).not.toHaveBeenCalled()
   })
-  it.each([{ bundleId: 'other.app' }, { appAppleId: 1 }, { environment: Environment.SANDBOX }, { signedTransactionInfo: undefined }])('rejects missing or mismatched notification data', async change => {
+  it.each([{ bundleId: 'other.app' }, { appAppleId: 1 }, { appAppleId: undefined }, { environment: Environment.SANDBOX }, { signedTransactionInfo: undefined }])('rejects missing or mismatched notification data', async change => {
     mocks.notification.mockResolvedValue({ ...notificationFixture(), data: { ...notificationFixture().data, ...change } })
     await expect(verifyAppleNotification('envelope-jws', now)).rejects.toThrow('invalid_purchase')
+  })
+  it('verifies a sandbox notification with the sandbox verifier, where Apple sends no appAppleId', async () => {
+    mocks.notification.mockImplementation(async function (this: InEnvironment) { return { ...notificationFixture(), data: { ...notificationFixture().data, environment: this.environment, appAppleId: undefined } } })
+    mocks.decode.mockImplementation(async function (this: InEnvironment) { return { ...fixture(), environment: this.environment } })
+    expect(await verifyAppleNotification(claiming('Sandbox'), now)).toMatchObject({ environment: 'test', transaction: { originalTransactionId: '123400', environment: 'test' } })
+    expect((mocks.notification.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+  })
+  it('cannot use a forged environment claim to accept a production payload in the sandbox', async () => {
+    // The unsigned claim picks the sandbox verifier; the signed payload says Production.
+    await expect(verifyAppleNotification(claiming('Sandbox'), now)).rejects.toThrow('invalid_purchase')
+    expect((mocks.notification.mock.contexts[0] as InEnvironment).environment).toBe(Environment.SANDBOX)
+    expect(mocks.decode).not.toHaveBeenCalled()
   })
   it.each([{ version: '1.0' }, { notificationUUID: 'not-uuid' }, { signedDate: now.getTime() + 301000 }, { summary: {} }, { externalPurchaseToken: {} }, { appData: {} }])('rejects invalid or unsupported envelope shape', async change => {
     mocks.notification.mockResolvedValue({ ...notificationFixture(), ...change })

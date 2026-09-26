@@ -4,6 +4,7 @@ import { envOptional } from '../../utils/env.js'
 import { completeApplePurchase } from './completeApplePurchase.js'
 import { StoreVerificationError } from './googlePlay.js'
 import { StorePurchaseConflict } from './purchaseJournal.js'
+import { appleRecoveryScope, appleStoreMode } from './storeEnvironments.js'
 import { decryptStoreToken } from './tokenVault.js'
 
 import { appleTransactionHash, appleTokenContext } from './applePurchaseJournal.js'
@@ -12,21 +13,21 @@ const MINUTE = 60_000
 /** Bounded recovery and lifecycle polling. Each row has an expiring fenced lease,
  * so overlapping workers do not own the same attempt and a crash can recover.
  * Polling is a fallback; real-time notifications still need to trigger immediate verification.
+ * Sandbox rows are polled only for accounts still allowed to hold them.
  */
 export async function recoverApplePurchases(limit = 20) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid recovery batch size')
-  const applicationId = envOptional('APPLE_STORE_BUNDLE_ID')
-  const mode = envOptional('APPLE_STORE_ENVIRONMENT')
-  if (!applicationId || !['Production', 'Sandbox'].includes(mode ?? '') || (mode === 'Sandbox' && process.env.NODE_ENV === 'production')
-    || !envOptional('APPLE_STORE_PRIVATE_KEY_FILE') || !envOptional('STORE_BILLING_ENCRYPTION_KEY')) return { processed: 0, failed: 0, skipped: true }
-  const environment = mode === 'Sandbox' ? 'test' as const : 'production' as const
+  const mode = appleStoreMode()
+  const scope = appleRecoveryScope()
+  if (!mode || !scope || !envOptional('APPLE_STORE_PRIVATE_KEY_FILE') || !envOptional('STORE_BILLING_ENCRYPTION_KEY')) return { processed: 0, failed: 0, skipped: true }
+  const { applicationId } = mode
   let processed = 0
   let failed = 0
   for (let index = 0; index < limit; index++) {
     const now = new Date()
     const leaseId = randomUUID()
     const purchase = await ApplePurchase.findOneAndUpdate({
-      applicationId, environment,
+      applicationId, ...scope,
       $and: [
         { $or: [{ entitlementState: { $in: ['pending', 'prepared'] } }, { providerStatus: { $in: [1, 3, 4] } }] },
         { $or: [{ recoveryNextAttemptAt: { $exists: false } }, { recoveryNextAttemptAt: { $lte: now } }] },
@@ -37,7 +38,7 @@ export async function recoverApplePurchases(limit = 20) {
     processed++
     let errorCode: string | undefined
     try {
-      const token = decryptStoreToken(purchase.originalTransactionCiphertext, appleTokenContext(applicationId, environment, purchase.originalTransactionHash, purchase.userId))
+      const token = decryptStoreToken(purchase.originalTransactionCiphertext, appleTokenContext(applicationId, purchase.environment, purchase.originalTransactionHash, purchase.userId))
       if (appleTransactionHash(token) !== purchase.originalTransactionHash) throw new Error('Invalid stored token')
       await completeApplePurchase(purchase.userId, token)
     } catch (error) {

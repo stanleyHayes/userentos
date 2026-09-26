@@ -157,6 +157,43 @@ services:
       - key: ML_API_KEY
         sync: false
 
+      # ─── In-app subscriptions (App Store / Google Play) ───
+      # File paths point at Render secret files (/etc/secrets/<name>).
+      - key: GOOGLE_PLAY_PACKAGE_NAME
+        sync: false
+      - key: GOOGLE_PLAY_SERVICE_ACCOUNT_FILE
+        sync: false
+      - key: GOOGLE_PLAY_PUBSUB_AUDIENCE
+        sync: false
+      - key: GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PLAY_PUBSUB_SUBSCRIPTION
+        sync: false
+      # 64 hex chars; encrypts stored purchase tokens. Back it up: losing it
+      # makes every stored token unreadable.
+      - key: STORE_BILLING_ENCRYPTION_KEY
+        sync: false
+      - key: APPLE_STORE_BUNDLE_ID
+        sync: false
+      - key: APPLE_STORE_APP_ID
+        sync: false
+      - key: APPLE_STORE_KEY_ID
+        sync: false
+      - key: APPLE_STORE_ISSUER_ID
+        sync: false
+      - key: APPLE_STORE_PRIVATE_KEY_FILE
+        sync: false
+      # Production (Sandbox is refused here). Sandbox purchases are still
+      # verified after a production miss, for the accounts listed below.
+      - key: APPLE_STORE_ENVIRONMENT
+        sync: false
+      - key: APPLE_STORE_ROOT_CA_FILES
+        sync: false
+      # Comma-separated user IDs that may hold free test purchases (Apple
+      # sandbox, Google license testing): the App Review demo landlord only.
+      - key: STORE_SANDBOX_ALLOWED_USER_IDS
+        sync: false
+
       # ─── Lending (defaults shown) ───
       - key: LOAN_INTEREST_RATE
         value: 15

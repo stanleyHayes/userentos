@@ -75,6 +75,25 @@ describe('Apple notification HTTP processing', () => {
     mocks.create.mockRejectedValueOnce(new Error('database unavailable'))
     expect((await send()).status).toBe(503)
   })
+  it('reconciles a sandbox chain only while its owner is allowlisted, and otherwise acknowledges it', async () => {
+    const reviewer = '64f0000000000000000000aa'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('APPLE_STORE_BUNDLE_ID', 'gh.rentos.mobile')
+    vi.stubEnv('APPLE_STORE_ENVIRONMENT', 'Production')
+    vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', reviewer)
+    try {
+      mocks.verify.mockResolvedValue({ ...event, environment: 'test' })
+      mocks.find.mockReturnValue({ select: () => ({ lean: async () => ({ userId: reviewer }) }) })
+      expect((await send()).status).toBe(204)
+      expect(mocks.find).toHaveBeenCalledWith(expect.objectContaining({ environment: 'test' }))
+      expect(mocks.complete).toHaveBeenCalledWith(reviewer, '123456')
+      mocks.complete.mockClear(); mocks.create.mockClear()
+      vi.stubEnv('STORE_SANDBOX_ALLOWED_USER_IDS', '')
+      expect((await send()).status).toBe(204)
+      expect(mocks.complete).not.toHaveBeenCalled()
+      expect(mocks.create).toHaveBeenCalledWith({ subscription: '["apple","gh.rentos.mobile","test"]', messageId: 'delivery' })
+    } finally { vi.unstubAllEnvs() }
+  })
   it('rejects unsigned/client-augmented bodies and invalid signatures', async () => {
     expect((await send({ signedPayload: 'private-jws', userId: 'victim' })).status).toBe(400)
     expect(mocks.verify).not.toHaveBeenCalled()

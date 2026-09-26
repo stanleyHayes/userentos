@@ -4,6 +4,7 @@ import { StoreNotification } from '../../models/StoreNotification.js'
 import { appleNotificationInput, verifyAppleNotification } from './appleStore.js'
 import { appleTransactionHash } from './applePurchaseJournal.js'
 import { completeApplePurchase } from './completeApplePurchase.js'
+import { appleEnvironmentsFor } from './storeEnvironments.js'
 
 export class AppleNotificationError extends Error {
   constructor(public readonly status: number) { super('Apple notification could not be processed') }
@@ -25,7 +26,10 @@ export async function processAppleNotification(body: unknown) {
     const purchase = await ApplePurchase.findOne({ applicationId: event.applicationId, environment: event.environment, originalTransactionHash: appleTransactionHash(event.transaction.originalTransactionId) }).select('userId').lean()
     // Delivery can precede device registration. Retry rather than inventing an owner.
     if (!purchase) throw new AppleNotificationError(503)
-    await completeApplePurchase(purchase.userId, event.transaction.transactionId)
+    // A sandbox chain whose owner may no longer hold test purchases grants
+    // nothing (every reader skips it), so acknowledge instead of reconciling.
+    const retired = event.environment === 'test' && !appleEnvironmentsFor(purchase.userId).includes('test')
+    if (!retired) await completeApplePurchase(purchase.userId, event.transaction.transactionId)
   }
   try { await StoreNotification.create(delivery) } catch (error) {
     if ((error as { code?: number }).code !== 11000) throw error

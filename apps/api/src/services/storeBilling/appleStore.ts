@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Environment, SignedDataVerifier, Type, Status, VerificationException, VerificationStatus } from '@apple/app-store-server-library'
 import { envOptional } from '../../utils/env.js'
 import { StoreVerificationError } from './googlePlay.js'
+import { appleStoreMode } from './storeEnvironments.js'
 
 export const appleTransactionIdInput = z.string().regex(/^\d{1,32}$/)
 const epoch = z.number().int().nonnegative().max(8_640_000_000_000_000)
@@ -41,33 +42,42 @@ export function normalizeAppleTransaction(raw: unknown, expected: { transactionI
   }
 }
 
-async function clients() {
-  const bundleId = envOptional('APPLE_STORE_BUNDLE_ID')
+type AppleContext = { bundleId: string; environment: Environment; appId: number; client: BoundedAppleClient; verifier: SignedDataVerifier }
+
+/** Production mode holds a production and a sandbox context, in that order:
+ * App Review and TestFlight purchases exist only in Apple's sandbox. Whether a
+ * sandbox purchase may grant access is decided per account (storeEnvironments.ts).
+ */
+async function clients(): Promise<AppleContext[]> {
+  const mode = appleStoreMode()
   const keyId = envOptional('APPLE_STORE_KEY_ID')
   const issuerId = envOptional('APPLE_STORE_ISSUER_ID')
   const privateKeyFile = envOptional('APPLE_STORE_PRIVATE_KEY_FILE')
-  const environmentName = envOptional('APPLE_STORE_ENVIRONMENT')
   const appId = Number(envOptional('APPLE_STORE_APP_ID'))
-  if (!bundleId || !keyId || !issuerId || !privateKeyFile || !['Production', 'Sandbox'].includes(environmentName ?? '') || !Number.isSafeInteger(appId) || appId <= 0) throw new StoreVerificationError('configuration')
-  if (environmentName === 'Sandbox' && process.env.NODE_ENV === 'production') throw new StoreVerificationError('test_purchase')
-  const environment = environmentName === 'Production' ? Environment.PRODUCTION : Environment.SANDBOX
+  if (!mode || !keyId || !issuerId || !privateKeyFile || !Number.isSafeInteger(appId) || appId <= 0) throw new StoreVerificationError('configuration')
+  const bundleId = mode.applicationId
   try {
     const paths = z.array(z.string().min(1)).min(1).max(8).parse(JSON.parse(envOptional('APPLE_STORE_ROOT_CA_FILES') ?? '[]'))
     const [key, roots] = await Promise.all([readFile(privateKeyFile, 'utf8'), Promise.all(paths.map(path => readFile(path)))])
-    return {
+    return (mode.sandboxOnly ? [Environment.SANDBOX] : [Environment.PRODUCTION, Environment.SANDBOX]).map(environment => ({
       bundleId, environment, appId,
       client: new BoundedAppleClient(key, keyId, issuerId, bundleId, environment),
       verifier: new SignedDataVerifier(roots, true, environment, bundleId, appId),
-    }
+    }))
   } catch { throw new StoreVerificationError('configuration') }
+}
+// Apple omits appAppleId outside production; its own verifier skips it there too.
+function sameApp(context: AppleContext, appAppleId: number | null | undefined) {
+  return context.environment !== Environment.PRODUCTION || appAppleId === context.appId
 }
 
 /** Request the transaction from Apple, then independently verify its signed JWS.
- * No fallback between production and sandbox, and no client-selected endpoint.
+ * The endpoint is never client-selected: production first, then the sandbox
+ * only when production has no such transaction (Apple's documented order).
  */
 export async function verifyAppleTransaction(transactionId: string, expectedAccountToken: string) {
   if (!appleTransactionIdInput.safeParse(transactionId).success || !z.uuid().safeParse(expectedAccountToken).success) throw new StoreVerificationError('invalid_purchase')
-  return verifyTransactionWithClients(transactionId, expectedAccountToken, await clients())
+  return (await locateTransaction(transactionId, expectedAccountToken)).anchor
 }
 
 async function decodeSigned<T>(signed: string | undefined, decode: (value: string) => Promise<T>): Promise<T> {
@@ -76,17 +86,29 @@ async function decodeSigned<T>(signed: string | undefined, decode: (value: strin
     throw new StoreVerificationError((error instanceof AppleVerificationTimeout || (error instanceof VerificationException && error.status === VerificationStatus.RETRYABLE_VERIFICATION_FAILURE)) ? 'provider_unavailable' : 'invalid_purchase')
   }
 }
-async function verifyTransactionWithClients(transactionId: string, expectedAccountToken: string, context: Awaited<ReturnType<typeof clients>>) {
+class AppleTransactionNotFound extends Error {}
+async function verifyTransactionWithClients(transactionId: string, expectedAccountToken: string, context: AppleContext) {
   const { client, verifier, bundleId, environment } = context
   let signed: string | undefined
   try {
     signed = (await client.getTransactionInfo(transactionId)).signedTransactionInfo
   } catch (error) {
     const status = (error as { httpStatusCode?: number }).httpStatusCode
-    throw new StoreVerificationError(status === 404 ? 'invalid_purchase' : 'provider_unavailable')
+    if (status === 404) throw new AppleTransactionNotFound()
+    throw new StoreVerificationError('provider_unavailable')
   }
   const decoded = await decodeSigned(signed, value => verifier.verifyAndDecodeTransaction(value))
   return normalizeAppleTransaction(decoded, { transactionId, accountToken: expectedAccountToken, bundleId, environment })
+}
+// Only a 404 (TransactionIdNotFound) moves on to the next environment. An
+// outage or a bad signature stops here, so it never becomes a sandbox lookup.
+async function locateTransaction(transactionId: string, expectedAccountToken: string) {
+  for (const context of await clients()) {
+    try { return { context, anchor: await verifyTransactionWithClients(transactionId, expectedAccountToken, context) } } catch (error) {
+      if (!(error instanceof AppleTransactionNotFound)) throw error
+    }
+  }
+  throw new StoreVerificationError('invalid_purchase')
 }
 
 const subscriptionStatus = z.union([z.literal(Status.ACTIVE), z.literal(Status.EXPIRED), z.literal(Status.BILLING_RETRY), z.literal(Status.BILLING_GRACE_PERIOD), z.literal(Status.REVOKED)])
@@ -97,7 +119,7 @@ const renewalSchema = z.object({
   gracePeriodExpiresDate: epoch.optional(),
 })
 const statusResponseSchema = z.object({
-  bundleId: z.string(), appAppleId: z.number().int().positive(), environment: z.enum([Environment.PRODUCTION, Environment.SANDBOX]),
+  bundleId: z.string(), appAppleId: z.number().int().positive().nullish(), environment: z.enum([Environment.PRODUCTION, Environment.SANDBOX]),
   data: z.array(z.object({ subscriptionGroupIdentifier: z.string().min(1), lastTransactions: z.array(z.object({
     originalTransactionId: appleTransactionIdInput, status: subscriptionStatus,
     signedTransactionInfo: z.string().min(1).max(100_000), signedRenewalInfo: z.string().min(1).max(100_000),
@@ -124,14 +146,14 @@ export function normalizeAppleSubscription(transaction: ReturnType<typeof normal
  */
 export async function verifyAppleSubscription(transactionId: string, expectedAccountToken: string) {
   if (!appleTransactionIdInput.safeParse(transactionId).success || !z.uuid().safeParse(expectedAccountToken).success) throw new StoreVerificationError('invalid_purchase')
-  const context = await clients()
-  const anchor = await verifyTransactionWithClients(transactionId, expectedAccountToken, context)
+  // The chain's status lives in the environment that holds its transaction.
+  const { context, anchor } = await locateTransaction(transactionId, expectedAccountToken)
   let raw: unknown
   try { raw = await context.client.getAllSubscriptionStatuses(transactionId) } catch (error) {
     throw new StoreVerificationError((error as { httpStatusCode?: number }).httpStatusCode === 404 ? 'invalid_purchase' : 'provider_unavailable')
   }
   const response = statusResponseSchema.safeParse(raw)
-  if (!response.success || response.data.bundleId !== context.bundleId || response.data.appAppleId !== context.appId || response.data.environment !== context.environment) throw new StoreVerificationError('invalid_purchase')
+  if (!response.success || response.data.bundleId !== context.bundleId || !sameApp(context, response.data.appAppleId) || response.data.environment !== context.environment) throw new StoreVerificationError('invalid_purchase')
   const matches = response.data.data.flatMap(group => group.lastTransactions.filter(item => item.originalTransactionId === anchor.originalTransactionId).map(item => ({ ...item, groupId: group.subscriptionGroupIdentifier })))
   if (matches.length !== 1) throw new StoreVerificationError('invalid_purchase')
   const item = matches[0]
@@ -146,10 +168,19 @@ export const appleNotificationInput = z.object({ signedPayload: z.string().min(1
 const notificationSchema = z.object({
   notificationUUID: z.uuid(), notificationType: z.string().min(1).max(100), subtype: z.string().max(100).optional(),
   version: z.literal('2.0'), signedDate: epoch,
-  data: z.object({ bundleId: z.string().min(1), appAppleId: z.number().int().positive(), environment: z.enum([Environment.PRODUCTION, Environment.SANDBOX]), signedTransactionInfo: z.string().min(1).max(100_000).optional() }),
+  data: z.object({ bundleId: z.string().min(1), appAppleId: z.number().int().positive().nullish(), environment: z.enum([Environment.PRODUCTION, Environment.SANDBOX]), signedTransactionInfo: z.string().min(1).max(100_000).optional() }),
   // These payload families require their own handling, not subscription access.
   summary: z.never().optional(), externalPurchaseToken: z.never().optional(), appData: z.never().optional(),
 })
+
+/** Pick the verifier from the payload's unverified environment claim. This only
+ * routes: that verifier checks the signature and rejects any other environment.
+ * (A production verifier rejects a sandbox payload as the wrong app, because
+ * sandbox notifications carry no appAppleId, so trying each in turn cannot tell.)
+ */
+function claimedEnvironment(signed: string): unknown {
+  try { return (JSON.parse(Buffer.from(signed.split('.')[1] ?? '', 'base64url').toString('utf8')) as { data?: { environment?: unknown } }).data?.environment } catch { return undefined }
+}
 
 /** Authenticate the envelope and nested transaction. Notification delivery is not
  * account authorization or a current entitlement decision: consumers must find
@@ -157,12 +188,14 @@ const notificationSchema = z.object({
  */
 export async function verifyAppleNotification(signedPayload: string, now = new Date()) {
   if (!appleNotificationInput.safeParse({ signedPayload }).success || !Number.isFinite(now.getTime())) throw new StoreVerificationError('invalid_purchase')
-  const context = await clients()
+  const contexts = await clients()
+  const claimed = claimedEnvironment(signedPayload)
+  const context = contexts.find(item => item.environment === claimed) ?? contexts[0]
   const decoded = await decodeSigned(signedPayload, value => context.verifier.verifyAndDecodeNotification(value))
   const parsed = notificationSchema.safeParse(decoded)
   if (!parsed.success) throw new StoreVerificationError('invalid_purchase')
   const event = parsed.data
-  if (event.signedDate > now.getTime() + 300_000 || event.data.bundleId !== context.bundleId || event.data.appAppleId !== context.appId || event.data.environment !== context.environment) throw new StoreVerificationError('invalid_purchase')
+  if (event.signedDate > now.getTime() + 300_000 || event.data.bundleId !== context.bundleId || !sameApp(context, event.data.appAppleId) || event.data.environment !== context.environment) throw new StoreVerificationError('invalid_purchase')
   const metadata = { notificationId: event.notificationUUID, notificationType: event.notificationType, subtype: event.subtype ?? null,
     applicationId: context.bundleId, environment: context.environment === Environment.PRODUCTION ? 'production' as const : 'test' as const,
     signedAt: new Date(event.signedDate).toISOString() }

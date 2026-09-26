@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto'
 import { ApplePurchase } from '../../models/ApplePurchase.js'
 import { User } from '../../models/User.js'
 import { appleTransactionIdInput, verifyAppleSubscription, verifyAppleTransaction } from './appleStore.js'
+import { StoreVerificationError } from './googlePlay.js'
 import { StorePurchaseAccessError, StorePurchaseConflict } from './purchaseJournal.js'
+import { appleEnvironmentsFor } from './storeEnvironments.js'
 import { encryptStoreToken } from './tokenVault.js'
 
 export function appleTransactionHash(transactionId: string) {
@@ -22,6 +24,9 @@ export async function recordApplePurchase(userId: string, transactionId: string)
   const user = await User.findOne(accountFilter).select('+storeAccountToken').lean()
   if (!user?.storeAccountToken) throw new StorePurchaseAccessError('account_binding')
   const anchor = await verifyAppleTransaction(transactionId, user.storeAccountToken)
+  // A sandbox purchase (App Review, TestFlight) is free: journal it only for an
+  // account allowed to hold one, so it can never grant anyone else access.
+  if (!appleEnvironmentsFor(userId).includes(anchor.environment)) throw new StoreVerificationError('test_purchase')
   const identity = { applicationId: anchor.applicationId, environment: anchor.environment, originalTransactionHash: appleTransactionHash(anchor.originalTransactionId) }
   const previous = await ApplePurchase.findOne(identity).lean()
   if (previous && previous.userId !== userId) throw new StorePurchaseAccessError('ownership')
