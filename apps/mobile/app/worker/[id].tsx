@@ -108,7 +108,7 @@ export default function WorkerDetailScreen() {
   const availabilityDays = Object.entries(worker.availability ?? {})
     .filter(([, v]) => Array.isArray(v) && v.length > 0)
     .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1, 3))
-  const fixedRates = (worker.fixedRates ?? []).filter((r) => r.service && r.price != null)
+  const fixedRates = (Array.isArray(worker.fixedRates) ? worker.fixedRates : []).filter((r) => r.service && r.price != null)
 
   return (
     <View style={[s.container, { backgroundColor: c.background }]}>
