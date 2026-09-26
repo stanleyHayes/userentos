@@ -74,6 +74,14 @@ function connectSocket(token: string): Socket {
     logout()
     useToastStore.getState().addToast('You have been signed out. Please sign in again.', 'info')
   })
+  // Closed from another device: the device that closed it shows its own
+  // confirmation (the server closes its sockets without this notice).
+  socket.on('account:closed', () => {
+    const { isAuthenticated, token: current, logout } = useAuthStore.getState()
+    if (!isAuthenticated || current !== (created.auth as { token?: string }).token) return
+    logout()
+    useToastStore.getState().addToast('Your account was closed from another device.', 'info')
+  })
 
   socket.on('connect_error', (err) => {
     console.warn('[Socket] Connection error:', err.message)

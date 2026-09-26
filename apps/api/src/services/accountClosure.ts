@@ -17,6 +17,7 @@ import { WebhookSubscription } from '../models/WebhookSubscription.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { rememberLegacyAvatar } from './avatarStorage.js'
 import { revokeAccountSessions } from './sessionRevocation.js'
+import { disconnectSession } from './socket.js'
 import { recordErasure } from './erasureLedger.js'
 import { hostingProvider } from './hosting/index.js'
 import { recordAuditEntry } from '../utils/audit.js'
@@ -50,6 +51,8 @@ export interface CloseAccountOptions {
   requestedAt?: Date
   /** False on a replay onto a restored copy; see HostOptions. */
   contactHost?: boolean
+  /** The requesting device's session (its access token's sid), closed quietly. */
+  sid?: string
 }
 
 const CLOSED_REASON = 'Account closed'
@@ -163,6 +166,10 @@ export async function closeAccount(userId: string, options: CloseAccountOptions)
   if (options.source !== 'ledger_replay') {
     await recordErasure({ subjectId: userId, scope: 'account', source: options.source, requestedAt })
   }
+  // Before the account changes: the socket watcher tells every open socket of
+  // a closed account 'account:closed' and signs it out, which would cut off
+  // the requesting device before it shows its own confirmation.
+  if (options.sid) disconnectSession(options.sid, { notify: false })
   try {
     await finishClosure(user, userId, requestedAt, options)
   } catch (err) {
@@ -209,7 +216,7 @@ async function finishClosure(user: InstanceType<typeof User>, userId: string, re
   user.deletedAt = requestedAt
   await user.save()
 
-  await endClosedAccountSessions(userId)
+  await endClosedAccountSessions(userId, options.sid)
 
   await recordAuditEntry({
     userId: options.actorId,
@@ -226,8 +233,10 @@ async function finishClosure(user: InstanceType<typeof User>, userId: string, re
  * refresh and biometric credentials; biometric enrolments go entirely.
  * Idempotent.
  */
-async function endClosedAccountSessions(userId: string): Promise<void> {
-  await revokeAccountSessions(userId, 'gdpr_deletion')
+async function endClosedAccountSessions(userId: string, requestingSid?: string): Promise<void> {
+  // Other devices are told the account was closed and sign out; the device
+  // that closed it shows its own confirmation, so its sockets close quietly.
+  await revokeAccountSessions(userId, 'gdpr_deletion', { notice: 'account:closed', quietSid: requestingSid })
   await BiometricToken.deleteMany({ userId })
 }
 

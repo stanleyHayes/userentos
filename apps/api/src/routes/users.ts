@@ -52,7 +52,7 @@ router.delete('/me', authenticate, async (req, res) => {
   const userId = req.user!.userId
   let closed: boolean
   try {
-    closed = await closeAccount(userId, { source: 'self_service', actorId: userId, ipAddress: req.ip })
+    closed = await closeAccount(userId, { source: 'self_service', actorId: userId, ipAddress: req.ip, sid: req.user!.sid })
   } catch (err) {
     if (!(err instanceof AccountClosureIncompleteError)) throw err
     error(res, CLOSURE_INCOMPLETE_MESSAGE, 503); return

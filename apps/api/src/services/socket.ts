@@ -63,15 +63,16 @@ const DEFAULT_OPTIONS: Required<RealtimeOptions> = {
 }
 
 /**
- * A client signs out on 'session:revoked'. A suspended account keeps a
- * restricted HTTP session, so its sockets get 'account:suspended' instead.
+ * A client signs out on 'session:revoked', or on 'account:closed' (with that
+ * reason shown) when the account itself was closed. A suspended account keeps
+ * a restricted HTTP session, so its sockets get 'account:suspended' instead.
  */
-type Ending = { event: 'session:revoked' } | { event: 'account:suspended'; suspendedAt: Date }
+type Ending = { event: 'session:revoked' | 'account:closed' } | { event: 'account:suspended'; suspendedAt: Date }
 
 function endSocket(socket: Socket, ending: Ending): void {
   if (!socket.connected) return
   if (ending.event === 'account:suspended') socket.emit('account:suspended', { suspendedAt: ending.suspendedAt.toISOString() })
-  else socket.emit('session:revoked')
+  else socket.emit(ending.event)
   socket.disconnect(true)
 }
 
@@ -98,8 +99,10 @@ async function revalidateSockets(sockets: Iterable<Socket>): Promise<void> {
     const signedOut = new Set(revoked.map(row => row.sid))
     for (const socket of batch) {
       const account = byId.get(socket.data.userId)
-      if (!account
-        || (account.sessionVersion ?? 0) !== socket.data.sessionVersion
+      if (!account) {
+        // Closed (the soft-delete hook hides it) or erased.
+        endSocket(socket, { event: 'account:closed' })
+      } else if ((account.sessionVersion ?? 0) !== socket.data.sessionVersion
         || (socket.data.biometricVersion !== undefined && (account.biometricVersion ?? 0) !== socket.data.biometricVersion)
         || (socket.data.sid && signedOut.has(socket.data.sid))) {
         endSocket(socket, { event: 'session:revoked' })
@@ -486,9 +489,12 @@ export function getOnlineUserIds(): string[] {
 }
 
 /** Tell every local socket in a room it was signed out, then close it. */
-function revokeRoom(room: string, notify: boolean): void {
+/** What a revoked client is told before its sockets close, or nothing. */
+export type RevocationNotice = 'session:revoked' | 'account:closed' | false
+
+function revokeRoom(room: string, notice: RevocationNotice): void {
   if (!io) return
-  if (notify) io.to(room).emit('session:revoked')
+  if (notice) io.to(room).emit(notice)
   io.in(room).disconnectSockets(true)
 }
 
@@ -497,13 +503,13 @@ function revokeRoom(room: string, notify: boolean): void {
  * 'session:revoked' sent first; pass notify: false when the caller has already
  * told them something else (suspension keeps a restricted session).
  */
-export function disconnectUser(userId: string, { notify = true }: { notify?: boolean } = {}): void {
-  revokeRoom(`session:${userId}`, notify)
+export function disconnectUser(userId: string, { notify = true, notice = 'session:revoked' }: { notify?: boolean; notice?: Exclude<RevocationNotice, false> } = {}): void {
+  revokeRoom(`session:${userId}`, notify && notice)
 }
 
 /** Disconnect tagged biometric sessions while preserving ordinary logins. */
 export function disconnectBiometricUser(userId: string): void {
-  revokeRoom(`biometric:${userId}`, true)
+  revokeRoom(`biometric:${userId}`, 'session:revoked')
 }
 
 /**
@@ -512,5 +518,5 @@ export function disconnectBiometricUser(userId: string): void {
  * replacement token pair and must not sign itself out.
  */
 export function disconnectSession(sid: string, { notify = true }: { notify?: boolean } = {}): void {
-  revokeRoom(`sid:${sid}`, notify)
+  revokeRoom(`sid:${sid}`, notify && 'session:revoked')
 }

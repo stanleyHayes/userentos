@@ -19,10 +19,13 @@ export const ROTATION_GRACE_MS = 60_000
  * credentials and push enrolments go with them, mirroring
  * AuthService.revokeAllSessions (which is private to the auth service).
  */
-export async function revokeAccountSessions(userId: string, reason: string): Promise<void> {
+export async function revokeAccountSessions(userId: string, reason: string, { notice = 'session:revoked', quietSid }: { notice?: 'session:revoked' | 'account:closed'; quietSid?: string } = {}): Promise<void> {
   const now = new Date()
   await User.updateOne({ _id: userId }, { $inc: { sessionVersion: 1 } })
-  disconnectUser(userId)
+  // The device that asked for this is already handling it (it shows its own
+  // result, e.g. "Your account is closed"): close its sockets without a notice.
+  if (quietSid) disconnectSession(quietSid, { notify: false })
+  disconnectUser(userId, { notice })
   await Promise.all([
     DeviceToken.deleteMany({ userId }),
     RefreshToken.updateMany({ userId, revokedAt: { $exists: false } }, { $set: { revokedAt: now, revokedReason: reason } }),

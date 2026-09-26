@@ -17,6 +17,7 @@ import { DeviceToken } from '../models/DeviceToken.js'
 import { RevokedSession } from '../models/RevokedSession.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 import { accepts, nextEvent, recordEvents, startRealtime, type Realtime } from './sessionTestKit.js'
+import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn(), notifyWelcome: vi.fn().mockResolvedValue(true) }))
 vi.mock('../utils/audit.js', () => ({ recordAuditEntry: vi.fn().mockResolvedValue(undefined) }))
@@ -68,6 +69,24 @@ describe.skipIf(!hasTestMongo)('per-device sign-out', () => {
     sids.push(sidOf(tokens.token))
     return tokens
   }
+
+  it('account closure: the device that closed it disconnects quietly, the others are told the account was closed', async () => {
+    const userId = await account('closure')
+    const a = await signIn(userId)
+    const b = await signIn(userId)
+    const socketA = await realtime.open(a.token)
+    const socketB = await realtime.open(b.token)
+    const seenA = recordEvents(socketA)
+    const seenB = recordEvents(socketB)
+    const ended = Promise.all([nextEvent(socketA, 'disconnect'), nextEvent(socketB, 'disconnect')])
+    await revokeAccountSessions(userId, 'gdpr_deletion', { notice: 'account:closed', quietSid: sidOf(a.token) })
+    await ended
+    // A shows its own "Your account is closed"; a sign-out notice first would log it out mid-flow.
+    expect(seenA).not.toContain('account:closed')
+    expect(seenA).not.toContain('session:revoked')
+    expect(seenB).toContain('account:closed')
+    expect(seenB).not.toContain('session:revoked')
+  })
 
   it("logout rejects that device's access token and closes only its socket", async () => {
     const userId = await account('logout')

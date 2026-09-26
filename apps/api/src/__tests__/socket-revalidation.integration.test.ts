@@ -81,10 +81,10 @@ describe.skipIf(!hasTestMongo)('socket revalidation', () => {
       expect(ordinary.connected).toBe(true)
     })
 
-    it('closes a socket whose account was hard-deleted', async () => {
+    it('closes a socket whose account was hard-deleted, telling it the account was closed', async () => {
       const userId = await account()
       const client = await realtime.open(token(userId))
-      const revoked = nextEvent(client, 'session:revoked')
+      const revoked = nextEvent(client, 'account:closed')
       await User.deleteOne({ _id: userId })
       await revoked
     })
@@ -129,10 +129,10 @@ describe.skipIf(!hasTestMongo)('socket revalidation', () => {
     beforeAll(async () => { realtime = await startRealtime({ watchChanges: false, revalidateIntervalMs: 200, packetRecheckMs: HOUR }) })
     afterAll(async () => { await realtime.close() })
 
-    it('closes a socket within the sweep interval after a hard delete', async () => {
+    it('closes a socket within the sweep interval after a hard delete, telling it the account was closed', async () => {
       const userId = await account()
       const client = await realtime.open(token(userId))
-      const revoked = nextEvent(client, 'session:revoked')
+      const revoked = nextEvent(client, 'account:closed')
       await User.deleteOne({ _id: userId })
       await revoked
     })

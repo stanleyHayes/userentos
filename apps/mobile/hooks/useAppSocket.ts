@@ -54,6 +54,14 @@ export function useAppSocket() {
       if (useAuthStore.getState().token === token) useAuthStore.getState().logout()
     })
     socket.on('session:revoked', revoked)
+    // The account was closed from another device (this one would have closed
+    // its own quietly): sign out and say why.
+    const closed = guard.wrap(() => {
+      if (useAuthStore.getState().token !== token) return
+      useAuthStore.getState().logout()
+      useNotificationStore.getState().pushToast({ title: 'Your account was closed', body: 'It was closed from another device. Your listings and profiles have been taken down.', type: 'system', persistent: true })
+    })
+    socket.on('account:closed', closed)
 
     const handleUnreadUpdate = guard.wrap((data: {
       conversationId: string
@@ -111,6 +119,7 @@ export function useAppSocket() {
       socket.off('unread:update', handleUnreadUpdate)
       socket.off('account:suspended', suspended)
       socket.off('session:revoked', revoked)
+      socket.off('account:closed', closed)
       socket.off('notification:new', handleNotification)
       subscription.remove()
     }
