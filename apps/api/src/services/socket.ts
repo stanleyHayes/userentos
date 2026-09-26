@@ -126,7 +126,8 @@ export function initSocket(httpServer: HttpServer): Server {
     // Conversation rooms — only a participant may join, otherwise any client could
     // join any chat:<id> room and receive every message (eavesdropping / IDOR).
     const joinedConversations = new Set<string>()
-    socket.on('join:conversation', async (conversationId: string) => {
+    socket.on('join:conversation', async (conversationId: unknown) => {
+      if (typeof conversationId !== 'string') return
       try {
         const convo = await Conversation.findById(conversationId).select('participants').lean()
         const otherId = convo?.participants.find(id => id !== userId)
@@ -137,20 +138,28 @@ export function initSocket(httpServer: HttpServer): Server {
       } catch { /* ignore malformed conversation ids */ }
     })
 
-    socket.on('leave:conversation', (conversationId: string) => {
+    socket.on('leave:conversation', (conversationId: unknown) => {
+      if (typeof conversationId !== 'string') return
       void socket.leave(`chat:${conversationId}`)
       joinedConversations.delete(conversationId)
     })
 
     // Typing indicators — only broadcast into rooms this socket has actually joined.
-    socket.on('typing:start', ({ conversationId }: { conversationId: string }) => {
-      if (!joinedConversations.has(conversationId)) return
-      socket.to(`chat:${conversationId}`).emit('typing:start', { userId, conversationId })
+    // Payloads come straight from the client: socket.io calls listeners outside
+    // any try/catch, so a throw here (destructuring a missing payload) used to
+    // exit the whole API process.
+    const typingConversation = (payload: unknown): string | null => {
+      const id = (payload as { conversationId?: unknown } | null | undefined)?.conversationId
+      return typeof id === 'string' && joinedConversations.has(id) ? id : null
+    }
+    socket.on('typing:start', (payload: unknown) => {
+      const conversationId = typingConversation(payload)
+      if (conversationId) socket.to(`chat:${conversationId}`).emit('typing:start', { userId, conversationId })
     })
 
-    socket.on('typing:stop', ({ conversationId }: { conversationId: string }) => {
-      if (!joinedConversations.has(conversationId)) return
-      socket.to(`chat:${conversationId}`).emit('typing:stop', { userId, conversationId })
+    socket.on('typing:stop', (payload: unknown) => {
+      const conversationId = typingConversation(payload)
+      if (conversationId) socket.to(`chat:${conversationId}`).emit('typing:stop', { userId, conversationId })
     })
 
     // Online status — only for users the requester actually chats with.
