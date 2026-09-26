@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import { MongoClient, ObjectId } from 'mongodb'
 import { acceptance } from '../fixtures/legalAcceptance'
 
@@ -22,7 +23,10 @@ test('suspended accounts retain only their own existing tenancy obligations', as
     const propertyId = new ObjectId().toString()
     await db.collection('agreements').insertMany(agreementIds.map((_id, index) => ({
       _id, propertyId, landlordId: landlord.user.id, tenantId: index === 2 ? other.user.id : tenant.user.id,
-      status: index === 1 ? 'draft' : 'active', startDate: '2026-09-01', endDate: '2027-08-31', rentAmount: 1000,
+      // Rent is only payable on a lease the tenant signed (the signature field holds
+      // when). The second one has ended, so during suspension it is refused even
+      // though it is the tenant's own.
+      status: index === 1 ? 'expired' : 'active', tenantSignature: '2026-08-25', startDate: '2026-09-01', endDate: '2027-08-31', rentAmount: 1000,
       securityDeposit: 0, advanceMonths: 0, terms: [], specialConditions: [], complianceFlags: [], version: 1,
       renewalStatus: 'none', createdAt: new Date(), updatedAt: new Date(),
     })))
@@ -47,14 +51,16 @@ test('suspended accounts retain only their own existing tenancy obligations', as
     expect(methods.status()).toBe(200)
     expect((await methods.json()).data.mode).toBe('simulated')
     const paymentData = { rentPeriod: { startDate: '2026-09-01', endDate: '2026-09-30' }, agreementId: agreementIds[0].toString(), method: 'mtn_momo', phone: '0241234567', amount: 1000 }
-    const created = await request.post('/api/payments', { headers, data: paymentData })
+    // A checkout needs an Idempotency-Key (428 without one); a fresh key per attempt.
+    const checkoutHeaders = () => ({ ...headers, 'Idempotency-Key': randomUUID() })
+    const created = await request.post('/api/payments', { headers: checkoutHeaders(), data: paymentData })
     expect(created.status()).toBe(201)
     const payment = (await created.json()).data.payment
     expect((await request.get(`/api/payments/${payment.id}`, { headers })).status()).toBe(200)
     expect((await request.get(`/api/payments/${foreignPaymentId}`, { headers })).status()).toBe(403)
     const payments = (await (await request.get('/api/payments', { headers })).json()).data.items
     expect(payments.map((item: { id: string }) => item.id)).toEqual([payment.id])
-    for (const agreementId of agreementIds.slice(1)) expect((await request.post('/api/payments', { headers, data: { ...paymentData, agreementId: agreementId.toString() } })).status()).toBe(403)
+    for (const agreementId of agreementIds.slice(1)) expect((await request.post('/api/payments', { headers: checkoutHeaders(), data: { ...paymentData, agreementId: agreementId.toString() } })).status()).toBe(403)
     expect((await request.post('/api/agreements', { headers, data: {} })).status()).toBe(403)
     expect((await request.post(`/api/agreements/${agreementIds[0]}/sign`, { headers, data: {} })).status()).toBe(403)
 
