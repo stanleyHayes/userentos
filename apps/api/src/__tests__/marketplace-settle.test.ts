@@ -12,6 +12,9 @@ vi.mock('../models/MarketplaceTransaction.js', () => ({ MarketplaceTransaction: 
 const redeem = vi.fn()
 vi.mock('../services/marketplace/coupons.js', () => ({ redeemForTransaction: redeem }))
 
+const financialAlert = vi.fn()
+vi.mock('../services/payments/alerts.js', () => ({ financialAlert }))
+
 const { applySuccessfulCharge, BINDING_KEY } = await import('../services/marketplace/settle.js')
 
 type Txn = {
@@ -27,6 +30,7 @@ type Txn = {
   verifiedAt?: Date
   processorFeeAmount?: number
   settlementStatus?: string
+  failureReason?: string
 }
 
 const txn = (o: Partial<Txn> = {}): Txn => ({
@@ -114,13 +118,40 @@ describe('applying a successful charge (one path for webhook and verify)', () =>
     expect(txnUpdate).not.toHaveBeenCalled()
   })
 
-  it('never settles a failed row, even for a charge that matches it exactly', async () => {
+  it('never settles a failed row from a charge that was not initialized for it', async () => {
     // The exploit: a client-chosen reference that Paystack had already seen
     // was refused at initialization, the row was kept as failed, and /verify
     // then found the OTHER charge's success and marked the order paid.
     const t = txn({ status: 'failed' })
-    await expect(settle(t, charge(t), 'verify')).resolves.toEqual({ applied: false, reason: 'not_settleable' })
+    await expect(settle(t, charge(t, { metadata: { purpose: 'wallet_deposit' } }), 'verify')).resolves.toEqual({ applied: false, reason: 'binding_mismatch' })
+    await expect(settle(t, charge(t, { amount: 1 }), 'verify')).resolves.toEqual({ applied: false, reason: 'amount_mismatch' })
+    const legacy = txn({ status: 'failed', providerBound: undefined, reference: 'DEP-1700000000000-ABCD' })
+    await expect(settle(legacy, charge(legacy, { metadata: undefined }), 'verify')).resolves.toEqual({ applied: false, reason: 'binding_mismatch' })
     expect(txnUpdate).not.toHaveBeenCalled()
+    expect(t.status).toBe('failed')
+  })
+
+  it('takes a late success on a checkout it had closed: failed to paid once, with an alert', async () => {
+    // The buyer finished paying on the Paystack page they still had open.
+    const t = txn({ status: 'failed', failureReason: 'abandoned' })
+    await expect(settle(t, charge(t))).resolves.toEqual({ applied: true })
+    expect(t.status).toBe('paid')
+    expect(txnUpdate).toHaveBeenCalledWith(
+      { _id: 'txn-1', status: 'failed', lateSuccessAt: { $exists: false } },
+      expect.objectContaining({ $set: expect.objectContaining({ status: 'paid', lateSuccessAt: expect.any(Date) }), $unset: { openOrderKey: 1, failureReason: 1 } }),
+      { returnDocument: 'after' },
+    )
+    expect(financialAlert).toHaveBeenCalledWith('marketplace_late_success', { type: 'MarketplaceTransaction', id: 'txn-1' }, expect.objectContaining({ reference: 'MKT-1', previousFailureReason: 'abandoned' }))
+  })
+
+  it('a success that loses to the checkout being closed is still applied, as a late success', async () => {
+    // Read as pending, closed as abandoned before the paid transition ran.
+    txnUpdate.mockResolvedValueOnce(null)
+    const t = txn()
+    await expect(settle(t, charge(t))).resolves.toEqual({ applied: true })
+    expect(txnUpdate).toHaveBeenCalledTimes(2)
+    expect(txnUpdate.mock.calls[1][0]).toEqual({ _id: 'txn-1', status: 'failed', lateSuccessAt: { $exists: false } })
+    expect(financialAlert).toHaveBeenCalledWith('marketplace_late_success', expect.anything(), expect.anything())
   })
 
   it('refuses a charge that was not initialized for this transaction', async () => {

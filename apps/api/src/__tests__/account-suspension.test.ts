@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { User } from '../models/User.js'
 import { disconnectUser } from '../services/socket.js'
 import { suspendAccount } from '../services/accountSuspension.js'
+import { suspendedAccess } from '../services/suspendedAccess.js'
 vi.mock('../models/User.js', () => ({ User: { exists: vi.fn(), updateOne: vi.fn() } }))
 vi.mock('../services/socket.js', () => ({ disconnectUser: vi.fn(), getIO: () => ({ to: () => ({ emit: vi.fn() }) }) }))
 beforeEach(() => { vi.resetAllMocks() })
@@ -32,5 +33,15 @@ describe('account suspension enforcement', () => {
     expect(await suspendAccount('user', 'another-report', 'reason')).toBe(true)
     expect(User.exists).toHaveBeenLastCalledWith(expect.objectContaining({ suspendedAt: { $exists: true } }))
     expect(disconnectUser).toHaveBeenCalledOnce()
+  })
+})
+describe('suspended access to rent payments', () => {
+  const id = 'a'.repeat(24)
+  it('lets a suspended payer cancel a stuck payment of their own, as they may still start one', () => {
+    expect(suspendedAccess('POST', '/api/payments')).toBe(true)
+    expect(suspendedAccess('POST', `/api/payments/${id}/cancel`)).toBe(true)
+    expect(suspendedAccess('POST', `/api/payments/${id}/receipt`)).toBe(true)
+    expect(suspendedAccess('POST', `/api/payments/${id}/refund`)).toBe(false)
+    expect(suspendedAccess('POST', '/api/payments/not-an-id/cancel')).toBe(false)
   })
 })

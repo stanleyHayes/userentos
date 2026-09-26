@@ -76,14 +76,29 @@ export interface IMarketplaceTransaction extends Document {
   /** Cumulative GHS refunded by the provider, and the refund events already applied. */
   refundedAmount?: number
   refundEventIds?: string[]
-  /** The buyer is owed a refund (e.g. a second charge for an order already paid). Admin-issued. */
+  /**
+   * The buyer is owed a refund: a second charge for an order already paid, or
+   * a charge for an order no longer awaiting payment. Admin-issued. A charge
+   * flagged this way never paid for its order, so refunding it leaves the
+   * order alone.
+   */
   refundStatus?: 'required' | 'refunded' | 'waived'
   refundReason?: string
   /** The reference of the transaction that had already paid this order. */
   duplicateOf?: string
+  /** A verified success that arrived after this checkout had been closed as failed. */
+  lateSuccessAt?: Date
+  /** An admin reviewed the late success (routes/adminPayments.ts). */
+  lateSuccessAcknowledgedAt?: Date
   /** Status to restore when a chargeback is resolved in the platform's favour. */
   preDisputeStatus?: MarketplaceTransactionStatus
   disputedAt?: Date
+  /** An admin reviewed the open chargeback; cleared when a new one opens. */
+  disputeAcknowledgedAt?: Date
+  /** Last manual resolution by an admin (routes/adminPayments.ts). */
+  resolvedBy?: string
+  resolvedAt?: Date
+  resolutionNote?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -135,8 +150,14 @@ const marketplaceTransactionSchema = new Schema<IMarketplaceTransaction>({
   refundStatus: { type: String, enum: ['required', 'refunded', 'waived'] },
   refundReason: String,
   duplicateOf: String,
+  lateSuccessAt: Date,
+  lateSuccessAcknowledgedAt: Date,
   preDisputeStatus: { type: String, enum: ['initialized', 'pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'disputed'] },
   disputedAt: Date,
+  disputeAcknowledgedAt: Date,
+  resolvedBy: String,
+  resolvedAt: Date,
+  resolutionNote: String,
 }, { timestamps: true })
 
 // A replayed key returns the buyer's original transaction; another buyer's

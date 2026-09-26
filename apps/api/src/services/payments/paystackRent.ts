@@ -21,6 +21,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { envOr } from '../../utils/env.js'
 import { logger } from '../../utils/logger.js'
 import { toMinorUnits } from '../marketplace/split.js'
+import { CollectionRefusedError } from './types.js'
 import type {
   CollectionInput,
   InitiateResult,
@@ -66,7 +67,7 @@ interface Envelope<T> { status: boolean; message: string; data: T }
 
 /** Paystack answered, with an HTTP status: tells "no such transaction" apart from an outage. */
 class PaystackRequestError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly providerMessage?: string) {
     super(message)
   }
 }
@@ -74,6 +75,17 @@ class PaystackRequestError extends Error {
 /** Only an explicit answer that the reference is unknown means no charge exists. */
 export function isPaystackNotFound(err: unknown): boolean {
   return err instanceof PaystackRequestError && (err.status === 404 || (err.status === 400 && /not found/i.test(err.message)))
+}
+
+/**
+ * Paystack answered /charge with a refusal: a 4xx, or status:false. No charge
+ * was created. A 5xx, a 408 or no answer at all (a timeout) proves nothing.
+ */
+function refusedCharge(err: unknown): CollectionRefusedError | null {
+  if (!(err instanceof PaystackRequestError) || err.status >= 500 || err.status === 408) return null
+  // Credential and rate-limit answers are ours to fix, not the payer's.
+  const payerFacing = err.status !== 401 && err.status !== 403 && err.status !== 429
+  return new CollectionRefusedError(payerFacing ? err.providerMessage : undefined, err.message, { cause: err })
 }
 
 async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
@@ -92,7 +104,7 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
     throw new Error(`Paystack ${path} returned non-JSON (${res.status}): ${text.slice(0, 200)}`)
   }
   if (!res.ok || payload.status === false) {
-    throw new PaystackRequestError(res.status, `Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
+    throw new PaystackRequestError(res.status, `Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`, payload.message || undefined)
   }
   return payload.data
 }
@@ -180,24 +192,34 @@ function makePaystackProvider(id: Exclude<ProviderId, 'bank_transfer'>): Payment
     },
 
     async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
-      const data = await call<ChargeResponse>('/charge', {
-        method: 'POST',
-        body: {
-          // The payer's own address when we know it: Paystack keys customers
-          // on email and sends the receipt there, so a shared fallback would
-          // file every tenant's rent under one customer and send nobody a
-          // receipt. The platform address is only a last resort.
-          email: input.payerEmail?.trim() || envOr('PAYSTACK_COLLECTION_EMAIL', 'payments@userentos.com'),
-          amount: String(toMinorUnits(input.amount)),
-          currency: 'GHS',
-          reference: input.reference,
-          mobile_money: {
-            phone: toLocalGhanaMsisdn(input.phone),
-            provider: PAYSTACK_PROVIDER[id],
+      let data: ChargeResponse
+      try {
+        data = await call<ChargeResponse>('/charge', {
+          method: 'POST',
+          body: {
+            // The payer's own address when we know it: Paystack keys customers
+            // on email and sends the receipt there, so a shared fallback would
+            // file every tenant's rent under one customer and send nobody a
+            // receipt. The platform address is only a last resort.
+            email: input.payerEmail?.trim() || envOr('PAYSTACK_COLLECTION_EMAIL', 'payments@userentos.com'),
+            amount: String(toMinorUnits(input.amount)),
+            currency: 'GHS',
+            reference: input.reference,
+            mobile_money: {
+              phone: toLocalGhanaMsisdn(input.phone),
+              provider: PAYSTACK_PROVIDER[id],
+            },
+            metadata: { narration: input.narration, rentos_reference: input.reference },
           },
-          metadata: { narration: input.narration, rentos_reference: input.reference },
-        },
-      })
+        })
+      } catch (err) {
+        throw refusedCharge(err) ?? err
+      }
+      // Failed on the spot (e.g. the network rejected the number): as final as a refusal.
+      if ((data.status ?? '').toLowerCase() === 'failed') {
+        const reason = data.message || data.display_text
+        throw new CollectionRefusedError(reason, `Paystack /charge failed the charge: ${reason ?? 'no reason given'}`)
+      }
 
       return {
         // Paystack echoes our reference; keep its own id only if it differs.

@@ -45,10 +45,17 @@ const MAX_PAYLOAD = 256 * 1024
  * in different spaces, and a transfer's success and later reversal share its
  * id, so the event name is part of the key. A body with no usable id falls
  * back to its own hash, so two different events can never collide.
+ *
+ * A refund is keyed on its own id or refund_reference, never on
+ * transaction_reference: that names the CHARGE, which every partial refund of
+ * it shares, so a second partial refund would be taken for a redelivery of
+ * the first and never applied.
  */
 export function paystackEventId(body: PaystackEventBody, raw: string): string {
   const data = body.data ?? {}
-  const id = data.id ?? data.transaction_reference ?? (data as { transfer_code?: string }).transfer_code ?? data.reference
+  const id = body.event?.startsWith('refund.')
+    ? data.id ?? data.refund_reference
+    : data.id ?? data.transaction_reference ?? (data as { transfer_code?: string }).transfer_code ?? data.reference
   const token = id === undefined || id === null || id === '' ? `sha256:${createHash('sha256').update(raw).digest('hex')}` : String(id)
   return `${body.event ?? 'unknown'}:${token}`
 }
@@ -157,7 +164,8 @@ async function applyChargeEvent(body: PaystackEventBody, raw: string, eventId: s
   if (!claimed) return
   try {
     if (body.event === 'charge.success') {
-      // Never take the webhook's word for it: re-verify, then the shared rules.
+      // Never take the webhook's word for it: re-verify, then the shared rules,
+      // which also take a late success on a checkout we already closed.
       const verified = await verifyTransaction(reference)
       const outcome = await applySuccessfulCharge(claimed, verified, 'webhook')
       if (!outcome.applied && ['amount_mismatch', 'currency_mismatch', 'binding_mismatch', 'reference_mismatch'].includes(outcome.reason)) {

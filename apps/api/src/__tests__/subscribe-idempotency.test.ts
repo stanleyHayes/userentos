@@ -5,6 +5,7 @@ import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { User } from '../models/User.js'
 import { Payment } from '../models/Payment.js'
 import { isMethodAvailable } from '../services/payments/index.js'
+import { CollectionRefusedError } from '../services/payments/types.js'
 
 vi.mock('../models/SubscriptionPackage.js', () => ({
   SubscriptionPackage: { findById: vi.fn(), findOne: vi.fn() },
@@ -13,7 +14,7 @@ vi.mock('../models/User.js', () => ({
   User: { findById: vi.fn() },
 }))
 vi.mock('../models/Payment.js', () => ({
-  Payment: { findOne: vi.fn(), create: vi.fn(), updateOne: vi.fn(), findById: vi.fn() },
+  Payment: { findOne: vi.fn(), create: vi.fn(), updateOne: vi.fn(), findById: vi.fn(), findOneAndUpdate: vi.fn() },
 }))
 vi.mock('../models/Property.js', () => ({
   Property: { countDocuments: vi.fn() },
@@ -219,6 +220,26 @@ describe('subscriptionController.subscribe idempotency', () => {
     await subscriptionController.subscribe(makeReq('key-1'), res as unknown as Response)
     expect(res.statusCode).toBe(409)
     expect(Payment.create).not.toHaveBeenCalled()
+  })
+  it('fails a checkout the provider refused outright and frees the subscriber\'s checkout slot', async () => {
+    vi.mocked(Payment.findOne).mockReturnValue({ lean: async () => null } as never)
+    vi.mocked(Payment.create).mockResolvedValue({ _id: { toString: () => 'pay-new' } } as never)
+    vi.mocked(Payment.findOneAndUpdate).mockReturnValue({ lean: async () => ({ _id: 'pay-new', status: 'failed' }) } as never)
+    initiateCollection.mockRejectedValueOnce(new CollectionRefusedError('Invalid phone number', 'Paystack /charge failed (400): Invalid phone number'))
+
+    const res = makeRes()
+    await subscriptionController.subscribe(makeReq('key-refused'), res as unknown as Response)
+
+    expect(res.statusCode).toBe(422)
+    expect((res.body as unknown as { code: string }).code).toBe('PAYMENT_REFUSED')
+    expect(res.body.error).toContain('Invalid phone number')
+    expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'pay-new', status: { $in: ['pending', 'processing'] } },
+      { $set: { status: 'failed', providerStatus: 'failed', failureReason: 'provider_refused: Invalid phone number' }, $unset: { openCollectionKey: 1, collectionInitiationUncertainAt: 1 } },
+      { returnDocument: 'after' },
+    )
+    // Not left uncertain: nothing will ever settle it.
+    expect(Payment.updateOne).not.toHaveBeenCalled()
   })
   it('rejects a different-package winner of a duplicate-key race', async () => {
     const lean = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce({ ...existingPayment, purposeMeta: { packageId: 'other' } })

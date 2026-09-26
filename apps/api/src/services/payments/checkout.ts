@@ -10,7 +10,9 @@
  *   rent period or subscription — another device, cleared storage, a new key —
  *   gets 409 with the payment already under way, enforced by a unique index on
  *   Payment.openCollectionKey rather than by a read that two requests can both
- *   pass.
+ *   pass. A payment the provider refused outright fails at once and frees the
+ *   slot; a bank transfer, a direct-rail collection or an interrupted
+ *   initiation can be cancelled by the payer (POST /api/payments/:id/cancel).
  */
 import type { Request, Response } from 'express'
 import type { Types } from 'mongoose'
@@ -36,6 +38,22 @@ export function requireIdempotencyKey(req: Request, res: Response, explicit?: st
 export function isDuplicateKey(err: unknown, field?: string): boolean {
   const failure = err as { code?: number; keyPattern?: Record<string, unknown> }
   return failure?.code === 11000 && (!field || !!failure.keyPattern?.[field])
+}
+
+/**
+ * 422 for a collection the provider refused outright. The payment is already
+ * failed and its obligation freed, so the payer can correct the details (a
+ * new payload, so a new key) and pay again straight away.
+ */
+export function respondCollectionRefused<T extends { _id: unknown }>(res: Response, refused: T, reason: string | undefined) {
+  res.status(422).json({
+    success: false,
+    error: reason
+      ? `The payment provider refused this payment: ${reason}. Check the details and try again.`
+      : 'The payment provider could not take this payment right now. Try again shortly or choose another method.',
+    code: 'PAYMENT_REFUSED',
+    data: { payment: { ...refused, id: (refused._id as Types.ObjectId).toString() } },
+  })
 }
 
 /** 409 carrying the payment already in flight for this obligation, so the client can resume it. */

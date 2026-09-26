@@ -344,6 +344,21 @@ registry.registerPath({
   },
   responses: {
     200: { description: 'Payment initiated', content: { 'application/json': { schema: PaymentSchema } } },
+    409: { description: 'PAYMENT_IN_PROGRESS: another payment for this rent period is in flight (returned in data.payment)' },
+    422: { description: 'PAYMENT_REFUSED: the provider refused the charge outright; the payment is failed and the rent period is free to pay again' },
+    428: { description: 'IDEMPOTENCY_KEY_REQUIRED: send an Idempotency-Key header' },
+  },
+})
+
+registry.registerPath({
+  method: 'post', path: '/payments/{id}/cancel', tags: ['Payments'],
+  summary: 'Cancel your own unconfirmed payment',
+  description: 'Payer only. Allowed for a pending or processing bank transfer, direct telco-rail collection, or interrupted initiation; not for a payment held for an amount or currency mismatch. Marks it failed and frees its rent period or subscription checkout. A transfer that still lands later completes the payment and alerts an admin.',
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: 'Payment cancelled', content: { 'application/json': { schema: PaymentSchema } } },
+    404: { description: 'No payment of yours with that id' },
+    409: { description: 'Already final, still being confirmed by the provider, or changed concurrently' },
   },
 })
 

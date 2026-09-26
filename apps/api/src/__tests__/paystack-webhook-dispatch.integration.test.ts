@@ -38,7 +38,7 @@ const { ServiceBooking } = await import('../models/ServiceBooking.js')
 const { Sponsorship } = await import('../models/Sponsorship.js')
 const { AffiliateCommission } = await import('../models/Affiliate.js')
 const { BINDING_KEY } = await import('../services/marketplace/settle.js')
-const { retryUnprocessedWebhooks } = await import('../services/payments/paystackEvents.js')
+const { retryUnprocessedWebhooks, paystackEventId } = await import('../services/payments/paystackEvents.js')
 const { parseRefundEvent } = await import('../services/payments/refunds.js')
 const { default: paystackRoutes } = await import('../routes/paystackWebhooks.js')
 const { default: marketplaceRoutes } = await import('../routes/marketplaceWebhooks.js')
@@ -49,6 +49,19 @@ it('parses the documented Paystack refund payload: the charge is named by transa
     .toEqual({ transactionReference: 'MKT-123', refundId: '3018284', amount: 50, currency: 'GHS' })
   expect(parseRefundEvent({ event: 'refund.processed', data: { transaction: { reference: 'PAY-9' }, amount: 100 } })).toMatchObject({ transactionReference: 'PAY-9', amount: 1 })
   expect(parseRefundEvent({ event: 'refund.processed', data: { transaction_reference: 'X', amount: -5 } }).amount).toBeNaN()
+})
+
+it('keys a refund event on the refund, never on the charge every partial refund of it shares', () => {
+  const refund = (data: Record<string, unknown>) => { const body = { event: 'refund.processed', data }; return paystackEventId(body, JSON.stringify(body)) }
+  expect(refund({ id: 77, transaction_reference: 'MKT-1' })).toBe('refund.processed:77')
+  expect(refund({ refund_reference: 'RF-1', transaction_reference: 'MKT-1', amount: 100 })).toBe('refund.processed:RF-1')
+  expect(refund({ refund_reference: 'RF-2', transaction_reference: 'MKT-1', amount: 100 })).toBe('refund.processed:RF-2')
+  // Neither id: the body's own hash, so two different refunds still differ.
+  const [a, b] = [refund({ transaction_reference: 'MKT-1', amount: 100 }), refund({ transaction_reference: 'MKT-1', amount: 200 })]
+  expect(a).toMatch(/^refund\.processed:sha256:[0-9a-f]{64}$/)
+  expect(a).not.toBe(b)
+  // Other families keep their own ids.
+  expect(paystackEventId({ event: 'charge.success', data: { reference: 'PAY-1' } }, '{}')).toBe('charge.success:PAY-1')
 })
 
 describe.skipIf(!hasTestMongo)('the one Paystack webhook', () => {
@@ -205,6 +218,48 @@ describe.skipIf(!hasTestMongo)('the one Paystack webhook', () => {
       expect(alerts('marketplace_charge_refused')).toHaveLength(1)
     })
 
+    const verifiedFor = (t: { _id: unknown; reference: string }, amount = 100) => ({ status: 'success', amount, currency: 'GHS', reference: t.reference, fees: 1.5, metadata: { [BINDING_KEY]: String(t._id) }, raw: {} })
+
+    it('a success on a checkout we had closed settles the order once, as a late success', async () => {
+      const buyer = id(); users.push(buyer)
+      const booking = await ServiceBooking.create({ requesterId: buyer, requesterRole: 'tenant', workerId: `worker-${tag}`, description: 'Fix the tap', status: 'completed', paymentStatus: 'pending' })
+      // Closed as abandoned when the buyer started a new checkout; they then paid on the page they still had open.
+      const t = await order({ status: 'failed', failureReason: 'abandoned', bookingId: String(booking._id) })
+      paystack.verifyTransaction.mockResolvedValue(verifiedFor(t))
+      const statuses = (await Promise.all([1, 2, 3].map((i) => deliver(chargeSuccess(t.reference, 10000, `${t.reference}-late-${i}`))))).map((r) => r.status)
+      expect(statuses.every((s) => s === 200)).toBe(true)
+
+      const saved = await MarketplaceTransaction.findById(t._id).lean()
+      expect(saved).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date), settlementStatus: 'pending' })
+      expect(saved?.failureReason).toBeUndefined()
+      expect(saved?.refundStatus).toBeUndefined()
+      expect(await ServiceBooking.findById(booking._id).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 100 })
+      expect(alerts('marketplace_late_success')).toHaveLength(1)
+    })
+
+    it('a late success for an order another charge already paid is kept for refund, leaving the order alone', async () => {
+      const owner = id(); users.push(owner)
+      const campaign = await Sponsorship.create({ propertyId: `prop-${tag}`, ownerId: owner, productId: 'featured', placement: 'search', startAt: new Date(), endAt: new Date(Date.now() + 86_400_000), spend: 100, status: 'active' })
+      const platform = { sponsorshipId: String(campaign._id), sellerId: undefined, platformFeePercent: 100, platformFeeAmount: 100, sellerExpectedAmount: 0 }
+      const first = await order({ ...platform, status: 'paid', verifiedAt: new Date() })
+      const late = await order({ ...platform, status: 'failed', failureReason: 'expired' })
+      paystack.verifyTransaction.mockResolvedValue(verifiedFor(late))
+      expect((await deliver(chargeSuccess(late.reference))).status).toBe(200)
+
+      expect(await MarketplaceTransaction.findById(late._id).lean()).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date), refundStatus: 'required', duplicateOf: first.reference })
+      expect((await Sponsorship.findById(campaign._id).lean())?.status).toBe('active')
+      expect(alerts('marketplace_late_success')).toHaveLength(1)
+      expect(alerts('marketplace_duplicate_charge')).toHaveLength(1)
+    })
+
+    it('never revives a closed checkout on a charge that is not its own', async () => {
+      const t = await order({ status: 'failed', failureReason: 'abandoned' })
+      paystack.verifyTransaction.mockResolvedValue({ ...verifiedFor(t), metadata: { purpose: 'wallet_deposit' } })
+      expect((await deliver(chargeSuccess(t.reference))).status).toBe(200)
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('failed')
+      expect(alerts('marketplace_charge_refused')).toHaveLength(1)
+    })
+
     it('closes a failed checkout conditionally, freeing its order', async () => {
       const t = await order({ openOrderKey: `booking:failed-${tag}` })
       expect((await deliver({ event: 'charge.failed', data: { id: `${t.reference}-f`, reference: t.reference, status: 'failed' } })).status).toBe(200)
@@ -225,8 +280,53 @@ describe.skipIf(!hasTestMongo)('the one Paystack webhook', () => {
       const statuses = (await Promise.all(Array.from({ length: 5 }, () => deliver(refund(t.reference, 10000, `${t.reference}-r1`))))).map((r) => r.status)
       expect(statuses.every((s) => s === 200)).toBe(true)
       expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'refunded', refundedAmount: 100, refundEventIds: [`refund:${t.reference}-r1`] })
-      expect((await ServiceBooking.findById(booking._id).lean())?.paymentStatus).toBe('refunded')
+      const refunded = await ServiceBooking.findById(booking._id).lean()
+      expect(refunded?.paymentStatus).toBe('refunded')
+      // The worker's earnings must not keep counting money that went back.
+      expect(refunded?.paymentAmount).toBeUndefined()
       expect((await AffiliateCommission.findOne({ sourceRef: t.reference }).lean())?.status).toBe('reversed')
+    })
+
+    it('refunding a flagged duplicate charge leaves the order as its first payment set it', async () => {
+      const buyer = id(), owner = id(); users.push(buyer, owner)
+      const booking = await ServiceBooking.create({ requesterId: buyer, requesterRole: 'tenant', workerId: `worker-${tag}`, description: 'Paint the wall', status: 'completed', paymentStatus: 'paid', paymentAmount: 100 })
+      const firstBooking = await order({ status: 'paid', bookingId: String(booking._id), verifiedAt: new Date() })
+      const dupBooking = await order({ status: 'paid', bookingId: String(booking._id), refundStatus: 'required', duplicateOf: firstBooking.reference })
+      const campaign = await Sponsorship.create({ propertyId: `prop-${tag}`, ownerId: owner, productId: 'featured', placement: 'search', startAt: new Date(), endAt: new Date(Date.now() + 86_400_000), spend: 100, status: 'active' })
+      const platform = { sponsorshipId: String(campaign._id), sellerId: undefined, platformFeePercent: 100, platformFeeAmount: 100, sellerExpectedAmount: 0 }
+      const firstCampaign = await order({ ...platform, status: 'paid', verifiedAt: new Date() })
+      const dupCampaign = await order({ ...platform, status: 'paid', refundStatus: 'required', duplicateOf: firstCampaign.reference })
+
+      await deliver(refund(dupBooking.reference, 10000, `${dupBooking.reference}-r`))
+      await deliver(refund(dupCampaign.reference, 10000, `${dupCampaign.reference}-r`))
+
+      expect(await MarketplaceTransaction.findById(dupBooking._id).lean()).toMatchObject({ status: 'refunded', refundStatus: 'refunded' })
+      expect(await MarketplaceTransaction.findById(dupCampaign._id).lean()).toMatchObject({ status: 'refunded', refundStatus: 'refunded' })
+      expect(await ServiceBooking.findById(booking._id).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 100 })
+      expect((await Sponsorship.findById(campaign._id).lean())?.status).toBe('active')
+    })
+
+    it('refunding one charge while another still holds the buyer\'s money for the order leaves the order paid', async () => {
+      const buyer = id(); users.push(buyer)
+      const booking = await ServiceBooking.create({ requesterId: buyer, requesterRole: 'tenant', workerId: `worker-${tag}`, description: 'Fix the roof', status: 'completed', paymentStatus: 'paid', paymentAmount: 100 })
+      // The admin refunded the first charge instead of the flagged second one.
+      const first = await order({ status: 'paid', bookingId: String(booking._id), verifiedAt: new Date() })
+      await order({ status: 'paid', bookingId: String(booking._id), refundStatus: 'required', duplicateOf: first.reference })
+      await deliver(refund(first.reference, 10000, `${first.reference}-r`))
+      expect((await MarketplaceTransaction.findById(first._id).lean())?.status).toBe('refunded')
+      expect(await ServiceBooking.findById(booking._id).lean()).toMatchObject({ paymentStatus: 'paid', paymentAmount: 100 })
+    })
+
+    it('two partial refunds of one charge that carry no refund id are both applied', async () => {
+      const t = await order({ status: 'paid' })
+      // No data.id: only refund_reference tells them apart.
+      const partial = (amount: number, refundReference: string) => ({ event: 'refund.processed', data: { refund_reference: refundReference, status: 'processed', transaction_reference: t.reference, amount, currency: 'GHS' } })
+      expect((await deliver(partial(3000, `${t.reference}-RF1`))).status).toBe(200)
+      expect((await deliver(partial(7000, `${t.reference}-RF2`))).status).toBe(200)
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'refunded', refundedAmount: 100, refundEventIds: [`refund:${t.reference}-RF1`, `refund:${t.reference}-RF2`] })
+      // And a redelivery of either changes nothing.
+      expect((await deliver(partial(7000, `${t.reference}-RF2`))).status).toBe(200)
+      expect((await MarketplaceTransaction.findById(t._id).lean())?.refundedAmount).toBe(100)
     })
 
     it('partial refunds accumulate: partially_refunded, then refunded, and a refunded sponsorship stops serving', async () => {

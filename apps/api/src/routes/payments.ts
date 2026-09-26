@@ -34,6 +34,8 @@ router.get('/methods', authenticate, (_req, res) => {
 
 router.get('/', authenticate, asyncHandler(paymentController.list))
 router.post('/', authenticate, asyncHandler(paymentController.create))
+// The way out of the one-in-flight rule for a payment nothing will settle soon.
+router.post('/:id/cancel', authenticate, asyncHandler(paymentController.cancel))
 router.post('/:id/receipt', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
   try { success(res, await issueRentReceipt(param(req.params.id), req.user!.userId)) }

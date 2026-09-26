@@ -7,7 +7,7 @@ vi.mock('../services/marketplace/paystack.js', async (orig) => ({ ...(await orig
 import { WebhookEvent } from '../models/WebhookEvent.js'
 import { MarketplaceTransaction } from '../models/MarketplaceTransaction.js'
 import { TransactionNotFoundError } from '../services/marketplace/paystack.js'
-import { retryUnprocessedWebhooks, reconcilePendingTransactions, MAX_WEBHOOK_ATTEMPTS, ABANDONED_AFTER_MS } from '../services/marketplace/reconcile.js'
+import { retryUnprocessedWebhooks, reconcilePendingTransactions, reconcileCheckout, MAX_WEBHOOK_ATTEMPTS, ABANDONED_AFTER_MS } from '../services/marketplace/reconcile.js'
 import { BINDING_KEY } from '../services/marketplace/settle.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
@@ -87,9 +87,18 @@ describe.skipIf(!hasTestMongo)('marketplace dead-letter retry and settlement rec
     it('never recovers a failed row whose reference succeeded elsewhere on the account', async () => {
       const t = await txn({ status: 'failed' })
       await storedCharge(t)
-      paystack.verifyTransaction.mockResolvedValue(success(t))
+      // A charge that carries no binding to this row belongs to something else.
+      paystack.verifyTransaction.mockResolvedValue({ ...success(t), metadata: { purpose: 'wallet_deposit' } })
       await retryUnprocessedWebhooks(50, mine())
       expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('failed')
+    })
+
+    it('recovers a closed checkout\'s own late charge as a late success', async () => {
+      const t = await txn({ status: 'failed', failureReason: 'abandoned' })
+      const eventId = await storedCharge(t)
+      paystack.verifyTransaction.mockResolvedValue(success(t))
+      expect((await retryUnprocessedWebhooks(50, mine())).recovered).toBe(1)
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date), processedEventIds: [eventId] })
     })
 
     it('records the error, hands the claim back, and gives up after the attempt ceiling', async () => {
@@ -168,6 +177,27 @@ describe.skipIf(!hasTestMongo)('marketplace dead-letter retry and settlement rec
       })
       await reconcilePendingTransactions(30, 50, { scope })
       expect((await MarketplaceTransaction.findById(t._id).lean())?.status).toBe('paid')
+    })
+
+    it('a success found for a checkout closed while it was being checked is applied as a late success', async () => {
+      const t = await txn({ openOrderKey: `booking:closing-${tag}` })
+      paystack.verifyTransaction.mockImplementation(async () => {
+        // A new checkout for the order closes this one as abandoned mid-check.
+        await MarketplaceTransaction.updateOne({ _id: t._id }, { $set: { status: 'failed', failureReason: 'abandoned' }, $unset: { openOrderKey: 1 } })
+        return success(t)
+      })
+      expect(await reconcilePendingTransactions(30, 50, { scope })).toEqual({ examined: 1, corrected: 1 })
+      const saved = await MarketplaceTransaction.findById(t._id).lean()
+      expect(saved).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date) })
+      expect(saved?.failureReason).toBeUndefined()
+    })
+
+    it('reconcileCheckout applies the late-success rule to a checkout already closed', async () => {
+      const t = await txn({ status: 'failed', failureReason: 'expired' })
+      paystack.verifyTransaction.mockResolvedValue(success(t))
+      const row = await MarketplaceTransaction.findById(t._id)
+      expect(await reconcileCheckout(row!)).toBe('paid')
+      expect(await MarketplaceTransaction.findById(t._id).lean()).toMatchObject({ status: 'paid', lateSuccessAt: expect.any(Date) })
     })
   })
 })

@@ -1,4 +1,4 @@
-import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { cancelByPayer, isPayerCancellable, recordCollectionInitiation, recordRefusedCollection, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
 import { captureReceiptContext } from '../services/payments/receiptContext.js'
 import { rentPeriodError } from '../services/payments/rentPeriod.js'
 import { Request, Response } from 'express'
@@ -9,8 +9,9 @@ import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
-import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress } from '../services/payments/checkout.js'
-import type { ProviderId } from '../services/payments/types.js'
+import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
+import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
+import { recordAudit } from '../utils/audit.js'
 import { round2 } from '../utils/money.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 import { isSignedTenancy } from '../services/tenancyRelationship.js'
@@ -161,9 +162,28 @@ export const paymentController = {
         if (await replayed(amount)) return
         if (isDuplicateKey(err, 'openCollectionKey') && await inFlight()) return
       }
+      // A clear refusal frees the rent period for the corrected retry now.
+      if (payment && err instanceof CollectionRefusedError) {
+        const refused = await recordRefusedCollection(payment._id.toString(), err.reason).catch(() => null)
+        if (refused) { respondCollectionRefused(res, refused, err.reason); return }
+      }
       if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw err
     }
+  },
+
+  /** The payer calls off their own bank transfer, direct-rail or interrupted payment (see PAYER_CANCELLABLE). */
+  cancel: async (req: Request, res: Response) => {
+    const payment = await Payment.findById(param(req.params.id)).lean()
+    if (!payment || payment.tenantId !== req.user!.userId) { error(res, 'Payment not found', 404); return }
+    if (!['pending', 'processing'].includes(payment.status)) { error(res, `This payment is already ${payment.status}`, 409); return }
+    if (!isPayerCancellable(payment)) {
+      error(res, 'This payment is still being confirmed with the provider and cannot be cancelled. It resolves on its own shortly.', 409); return
+    }
+    const cancelled = await cancelByPayer(String(payment._id), req.user!.userId)
+    if (!cancelled) { error(res, 'This payment changed while you were cancelling it. Refresh to see where it stands.', 409); return }
+    void recordAudit(req, 'payment.cancelled_by_payer', 'Payment', String(payment._id), { reference: payment.reference, method: payment.method, purpose: payment.purpose })
+    success(res, { ...cancelled, id: String(cancelled._id), payerCancellable: false }, 'Payment cancelled')
   },
 
   list: async (req: Request, res: Response) => {
@@ -211,7 +231,7 @@ export const paymentController = {
         } },
       ]),
     ])
-    const items = payments.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
+    const items = payments.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString(), payerCancellable: p.tenantId === userId && isPayerCancellable(p) }))
     const s = summaryAgg[0] ?? {}
     success(res, {
       items,
@@ -243,6 +263,6 @@ export const paymentController = {
       return
     }
 
-    success(res, { ...payment, id: (payment._id as Types.ObjectId).toString() })
+    success(res, { ...payment, id: (payment._id as Types.ObjectId).toString(), payerCancellable: payment.tenantId === userId && isPayerCancellable(payment) })
   },
 }

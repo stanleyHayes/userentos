@@ -33,7 +33,9 @@ const { User } = await import('../models/User.js')
 const { Payment } = await import('../models/Payment.js')
 const { Wallet } = await import('../models/Wallet.js')
 const { WalletCredit } = await import('../models/WalletCredit.js')
+const { MarketplaceTransaction } = await import('../models/MarketplaceTransaction.js')
 const { reconcileStalePayments, NOT_REACHED_FAIL_AFTER_MS } = await import('../services/payments/reconcilePayments.js')
+const { applyDisputeEvent } = await import('../services/payments/refunds.js')
 const { default: adminPaymentRoutes } = await import('../routes/adminPayments.js')
 
 describe.skipIf(!hasTestMongo)('stuck payment recovery', () => {
@@ -72,6 +74,7 @@ describe.skipIf(!hasTestMongo)('stuck payment recovery', () => {
     await new Promise<void>((resolve) => fakeServer.close(() => resolve()))
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
     await Payment.deleteMany({ tenantId })
+    await MarketplaceTransaction.deleteMany({ buyerId: tenantId })
     await Wallet.deleteMany({ userId: { $in: landlords } })
     await WalletCredit.deleteMany({ userId: { $in: landlords } })
     await User.deleteMany({ _id: { $in: [admin, outsider] } })
@@ -161,6 +164,68 @@ describe.skipIf(!hasTestMongo)('stuck payment recovery', () => {
 
       expect((await resolve(recovery._id, { action: 'recovery_resolved', note: 'Landlord repaid by transfer' })).status).toBe(200)
       expect((await Payment.findById(recovery._id).lean())?.refundRecovery).toBe('resolved')
+    })
+
+    const asAdmin = () => auth(admin, ['admin'], ['payments:process'])
+    const resolve = (id: unknown, body: unknown) => fetch(`${base}/${String(id)}/resolve`, { method: 'POST', headers: asAdmin(), body: JSON.stringify(body) })
+    const attention = async (kind: string) => (await (await fetch(`${base}/attention?kind=${kind}`, { headers: asAdmin() })).json()).data as { items: Array<{ id: string; attention: string[] }>; orders: Array<{ id: string; attention: string[] }> }
+
+    it('lists a late success on a payment an admin had already marked failed, until it is acknowledged', async () => {
+      const p = await payment({ failureReason: 'amount_mismatch: provider reported 50, expected 100' })
+      expect((await resolve(p._id, { action: 'mark_failed', note: 'Customer says they never paid' })).status).toBe(200)
+      // Then the full amount turns up after all.
+      paid(p.reference)
+      expect((await resolve(p._id, { action: 'recheck' })).status).toBe(200)
+      expect(await Payment.findById(p._id).lean()).toMatchObject({ status: 'completed', lateSuccessAt: expect.any(Date), resolvedAt: expect.any(Date) })
+      expect((await attention('late_success')).items.find((i) => i.id === String(p._id))?.attention).toEqual(['late_success'])
+
+      expect((await resolve(p._id, { action: 'acknowledge_late_success', note: 'Landlord credited; no second payment' })).status).toBe(200)
+      expect((await attention('late_success')).items.find((i) => i.id === String(p._id))).toBeUndefined()
+      expect((await resolve(p._id, { action: 'acknowledge_late_success', note: 'again' })).status).toBe(409)
+    })
+
+    it('an acknowledged chargeback leaves the queue until a new one opens', async () => {
+      const p = await payment({ status: 'completed' })
+      await applyDisputeEvent({ event: 'charge.dispute.create', data: { transaction: { reference: p.reference } } })
+      expect((await attention('disputed')).items.find((i) => i.id === String(p._id))?.attention).toEqual(['disputed'])
+      // Acknowledging a late success that does not exist changes nothing.
+      expect((await resolve(p._id, { action: 'acknowledge_late_success', note: 'wrong flag' })).status).toBe(409)
+      expect((await resolve(p._id, { action: 'acknowledge_dispute', note: 'Evidence sent to Paystack' })).status).toBe(200)
+      expect((await attention('disputed')).items.find((i) => i.id === String(p._id))).toBeUndefined()
+      expect((await Payment.findById(p._id).lean())?.disputeStatus).toBe('open')
+
+      await applyDisputeEvent({ event: 'charge.dispute.resolve', data: { resolution: 'merchant-accepted', transaction: { reference: p.reference } } })
+      await applyDisputeEvent({ event: 'charge.dispute.create', data: { transaction: { reference: p.reference } } })
+      expect((await attention('disputed')).items.find((i) => i.id === String(p._id))?.attention).toEqual(['disputed'])
+    })
+
+    it('resolves marketplace orders: a duplicate-charge refund, a chargeback and a late success', async () => {
+      const order = (fields: Record<string, unknown>) => MarketplaceTransaction.create({ reference: `MKT-${tag}-${++n}`, buyerId: tenantId, buyerEmail: 'b@rentos.test', sellerId: `seller-${tag}`, purpose: 'service_booking', grossAmount: 100, platformFeePercent: 5, platformFeeAmount: 5, sellerExpectedAmount: 95, status: 'paid', providerBound: true, ...fields })
+      const duplicate = await order({ refundStatus: 'required', duplicateOf: `MKT-${tag}-first`, refundReason: 'Order already paid' })
+      const unneeded = await order({ refundStatus: 'required', refundReason: 'Booking was no longer awaiting payment' })
+      const chargeback = await order({ status: 'disputed', disputedAt: new Date() })
+      const late = await order({ lateSuccessAt: new Date() })
+      expect((await attention('refund_required')).orders.find((o) => o.id === String(duplicate._id))?.attention).toEqual(['refund_required'])
+      expect((await attention('disputed')).orders.find((o) => o.id === String(chargeback._id))?.attention).toEqual(['disputed'])
+      expect((await attention('late_success')).orders.find((o) => o.id === String(late._id))?.attention).toEqual(['late_success'])
+
+      const issued = await resolve(duplicate._id, { action: 'refund_issued', note: 'Refunded through the Paystack dashboard', type: 'order' })
+      expect(issued.status).toBe(200)
+      expect(await MarketplaceTransaction.findById(duplicate._id).lean()).toMatchObject({ refundStatus: 'refunded', resolvedBy: String(admin), resolutionNote: 'Refunded through the Paystack dashboard' })
+      // An order id alone is found too.
+      expect((await resolve(unneeded._id, { action: 'refund_waived', note: 'Buyer asked to keep it as credit' })).status).toBe(200)
+      expect((await MarketplaceTransaction.findById(unneeded._id).lean())?.refundStatus).toBe('waived')
+      expect((await resolve(duplicate._id, { action: 'refund_issued', note: 'again', type: 'order' })).status).toBe(409)
+
+      expect((await resolve(chargeback._id, { action: 'acknowledge_dispute', note: 'Evidence sent', type: 'order' })).status).toBe(200)
+      expect((await attention('disputed')).orders.find((o) => o.id === String(chargeback._id))).toBeUndefined()
+      expect((await resolve(late._id, { action: 'acknowledge_late_success', note: 'Order was unpaid; nothing to refund' })).status).toBe(200)
+      expect((await attention('late_success')).orders.find((o) => o.id === String(late._id))).toBeUndefined()
+
+      // Payment-only actions, and the wrong type, are refused.
+      expect((await resolve(late._id, { action: 'mark_failed', note: 'not for orders' })).status).toBe(400)
+      const p = await payment({ status: 'completed' })
+      expect((await resolve(p._id, { action: 'refund_issued', note: 'wrong collection', type: 'order' })).status).toBe(404)
     })
 
     it('rechecks a payment with the provider through the sweep\'s own path', async () => {

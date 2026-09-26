@@ -1,4 +1,4 @@
-import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { recordCollectionInitiation, recordRefusedCollection, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
 import { resolveFreeSubscription, resolvePackageEntitlements } from '../services/entitlements.js'
 import { assignSubscription } from '../services/assignSubscription.js'
 import { effectiveStoreSubscription } from '../services/storeBilling/activeEntitlements.js'
@@ -14,8 +14,8 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
-import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress } from '../services/payments/checkout.js'
-import type { ProviderId } from '../services/payments/types.js'
+import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
+import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
 import { currentPaidSubscription } from '../services/payments/paidSubscription.js'
 
@@ -276,6 +276,11 @@ export const subscriptionController = {
       if (!payment && isDuplicateKey(err)) {
         if (await replayed()) return
         if (isDuplicateKey(err, 'openCollectionKey') && await inFlight()) return
+      }
+      // A clear refusal created no charge: free the subscriber's checkout now.
+      if (payment && err instanceof CollectionRefusedError) {
+        const refused = await recordRefusedCollection(payment._id.toString(), err.reason).catch(() => null)
+        if (refused) { respondCollectionRefused(res, refused, err.reason); return }
       }
       // A timeout may follow provider acceptance. Keep the original key and
       // payment available for reconciliation; never downgrade a raced webhook.

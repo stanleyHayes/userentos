@@ -425,6 +425,12 @@ export interface Payment {
   failureReason?: string
   /** ISO timestamp of last reconciliation poll. */
   lastProviderCheckAt?: string
+  /**
+   * The viewer paid it and may cancel it (POST /payments/:id/cancel): an
+   * unconfirmed bank transfer, direct-rail collection or interrupted
+   * initiation, which otherwise holds the rent period against a new payment.
+   */
+  payerCancellable?: boolean
   createdAt: string
 }
 

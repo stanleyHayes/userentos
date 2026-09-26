@@ -6,6 +6,7 @@ import {
   paystackRentProviders,
   paystackMtnProvider,
 } from '../services/payments/paystackRent.js'
+import { CollectionRefusedError } from '../services/payments/types.js'
 
 const KEY = 'sk_test_reviewkey'
 
@@ -126,6 +127,38 @@ describe('initiating a collection', () => {
     vi.stubGlobal('fetch', okFetch({ reference: 'PAY-4', status: 'pay_offline', display_text: 'Dial *170# to approve' }))
     const r = await paystackMtnProvider.initiateCollection({ amount: 10, phone: '0551234987', reference: 'PAY-4', narration: 'Rent' })
     expect(r.instructions).toBe('Dial *170# to approve')
+  })
+
+  const answer = (status: number, body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status }))
+  const initiate = () => paystackMtnProvider.initiateCollection({ amount: 10, phone: '0200000000', reference: 'PAY-R', narration: 'Rent' })
+
+  it('reports a clear refusal as CollectionRefusedError, in the provider\'s own words', async () => {
+    // No charge was created, so the payment can fail at once and free its obligation.
+    vi.stubGlobal('fetch', answer(400, { status: false, message: 'Invalid phone number' }))
+    const refused = await initiate().catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(CollectionRefusedError)
+    expect((refused as InstanceType<typeof CollectionRefusedError>).reason).toBe('Invalid phone number')
+    // A charge the network failed on the spot is as final.
+    vi.stubGlobal('fetch', okFetch({ reference: 'PAY-R', status: 'failed', message: 'Declined by the network' }))
+    expect(await initiate().catch((err: unknown) => (err as InstanceType<typeof CollectionRefusedError>).reason)).toBe('Declined by the network')
+  })
+
+  it('keeps our own credential and rate-limit problems out of the payer\'s reason', async () => {
+    vi.stubGlobal('fetch', answer(401, { status: false, message: 'Invalid key' }))
+    const refused = await initiate().catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(CollectionRefusedError)
+    expect((refused as InstanceType<typeof CollectionRefusedError>).reason).toBeUndefined()
+  })
+
+  it.each([
+    ['a server error', () => answer(500, { status: false, message: 'Server error' })],
+    ['a gateway timeout answer', () => answer(408, { status: false, message: 'Timeout' })],
+    ['no answer at all', () => vi.fn().mockRejectedValue(new Error('ETIMEDOUT'))],
+  ])('never treats %s as a refusal: the charge may exist', async (_label, fetchMock) => {
+    vi.stubGlobal('fetch', fetchMock())
+    const failure = await initiate().catch((err: unknown) => err)
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).not.toBeInstanceOf(CollectionRefusedError)
   })
 })
 

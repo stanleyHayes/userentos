@@ -73,11 +73,14 @@ router.get('/me/earnings', authenticate, async (req, res) => {
   const active = bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress')
 
   const totalEarned = completed.reduce((s, b) => s + price(b), 0)
-  const totalPaid = completed.reduce((s, b) => s + (b.paymentAmount ?? 0), 0)
+  // A refunded payment went back to the buyer. A full marketplace refund
+  // clears paymentAmount; bookings refunded before that still carry it.
+  const paidAmount = (b: (typeof bookings)[number]) => (b.paymentStatus === 'refunded' ? 0 : b.paymentAmount ?? 0)
+  const totalPaid = completed.reduce((s, b) => s + paidAmount(b), 0)
   // Pending payout: agreed price not yet marked paid (partial counts the remainder).
   const pendingPayout = completed
     .filter((b) => b.paymentStatus !== 'paid')
-    .reduce((s, b) => s + Math.max(0, price(b) - (b.paymentAmount ?? 0)), 0)
+    .reduce((s, b) => s + Math.max(0, price(b) - paidAmount(b)), 0)
 
   // Per-job-type breakdown (completed only)
   const byTypeMap = new Map<string, { jobs: number; total: number }>()

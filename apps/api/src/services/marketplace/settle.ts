@@ -20,6 +20,14 @@
  * now settles a transaction only if the row is still awaiting payment, the
  * charge was taken in GHS against this exact reference, and it carries this
  * transaction's id in the metadata the server sent when it initialized it.
+ *
+ * One exception to "still awaiting payment": a checkout we closed (failed)
+ * can still be paid. The buyer may finish on the Paystack page they already
+ * had open after the checkout was closed as abandoned or expired, or retry a
+ * failed card on it. That charge is a late success: the row moves failed to
+ * paid once, an admin is alerted, and the order is settled by the same rules
+ * as any other charge, so an order already paid another way flags this charge
+ * for refund instead.
  */
 import type { Types } from 'mongoose'
 import { Sponsorship } from '../../models/Sponsorship.js'
@@ -48,11 +56,11 @@ export type SettleOutcome =
   | { applied: true }
   | { applied: false; reason: RefusalReason }
 
-/** Only a row still waiting on the provider can be paid. A failed row stays failed. */
+/** Only a row still waiting on the provider can be paid, bar a late success on a failed one. */
 export const SETTLEABLE_STATUSES = ['initialized', 'pending'] as const
 
 /** Statuses in which a transaction has taken the buyer's money for its order. */
-const PAID_STATUSES: MarketplaceTransactionStatus[] = ['paid', 'partially_refunded', 'disputed']
+export const PAID_STATUSES: MarketplaceTransactionStatus[] = ['paid', 'partially_refunded', 'disputed']
 
 /** Metadata key carrying our transaction id through the provider and back. */
 export const BINDING_KEY = 'rentosTransactionId'
@@ -72,6 +80,21 @@ export function chargeRefusal(transaction: SettleSubject, verified: VerifiedChar
   if (verified.status !== 'success') return 'not_successful'
   if (transaction.status === 'paid') return 'already_paid'
   if (!(SETTLEABLE_STATUSES as readonly string[]).includes(transaction.status)) return 'not_settleable'
+  return chargeMismatch(transaction, verified)
+}
+
+/**
+ * chargeRefusal, except that a closed ('failed') checkout may take a late
+ * success. The charge must still be this row's own: the same reference, GHS,
+ * the binding and the amount owed.
+ */
+export function settleRefusal(transaction: SettleSubject, verified: VerifiedCharge): RefusalReason | null {
+  if (transaction.status === 'failed' && verified.status === 'success') return chargeMismatch(transaction, verified)
+  return chargeRefusal(transaction, verified)
+}
+
+/** Why the charge's own facts do not match this transaction, whatever its status. */
+function chargeMismatch(transaction: SettleSubject, verified: VerifiedCharge): RefusalReason | null {
   if (verified.reference !== transaction.reference) return 'reference_mismatch'
   if (verified.currency !== 'GHS' || (transaction.currency ?? 'GHS') !== 'GHS') return 'currency_mismatch'
 
@@ -95,7 +118,7 @@ export async function applySuccessfulCharge(
   verified: VerifiedCharge,
   source: 'webhook' | 'verify' | 'reconcile',
 ): Promise<SettleOutcome> {
-  const refusal = chargeRefusal(transaction, verified)
+  const refusal = settleRefusal(transaction, verified)
   if (refusal) {
     if (refusal !== 'already_paid') {
       logger.error(
@@ -107,19 +130,46 @@ export async function applySuccessfulCharge(
 
   // Conditional on the status the checks above saw, so a webhook and a /verify
   // poll racing each other settle the order exactly once. The checkout is
-  // closed in the same write, freeing the order's open-checkout slot.
-  const settled = await MarketplaceTransaction.findOneAndUpdate(
-    { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES } },
-    { $set: { status: 'paid', verifiedAt: new Date(), processorFeeAmount: verified.fees, settlementStatus: 'pending' }, $unset: { openOrderKey: 1 } },
+  // closed in the same write, freeing the order's open-checkout slot. A late
+  // success moves failed to paid, once.
+  const verifiedAt = new Date()
+  const transition = (late: boolean) => MarketplaceTransaction.findOneAndUpdate(
+    late ? { _id: transaction._id, status: 'failed', lateSuccessAt: { $exists: false } } : { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES } },
+    {
+      $set: { status: 'paid', verifiedAt, processorFeeAmount: verified.fees, settlementStatus: 'pending', ...(late ? { lateSuccessAt: verifiedAt } : {}) },
+      $unset: { openOrderKey: 1, ...(late ? { failureReason: 1 } : {}) },
+    },
     { returnDocument: 'after' },
   )
+  let late = transaction.status === 'failed'
+  let settled = await transition(late)
+  if (!settled && !late) {
+    // Closed as abandoned or expired while this success was on its way.
+    settled = await transition(true)
+    late = !!settled
+  }
   if (!settled) return { applied: false, reason: 'already_paid' }
+  const previousFailureReason = late ? transaction.failureReason : undefined
   // Keep the caller's copy in step: the routes answer from it.
   transaction.status = 'paid'
   transaction.verifiedAt = settled.verifiedAt
   transaction.processorFeeAmount = verified.fees
   transaction.settlementStatus = 'pending'
+  if (late) {
+    transaction.lateSuccessAt = settled.lateSuccessAt
+    transaction.failureReason = undefined
+    financialAlert('marketplace_late_success', { type: 'MarketplaceTransaction', id: String(transaction._id) }, {
+      reference: transaction.reference, previousFailureReason, bookingId: transaction.bookingId, sponsorshipId: transaction.sponsorshipId, source,
+    })
+  }
 
+  await settleOrder(transaction, source)
+  logger.info(`[${source}] ${transaction.reference} paid${late ? ' (late success)' : ''} — platform fee ${transaction.platformFeeAmount}`)
+  return { applied: true }
+}
+
+/** Mark the order this charge paid for as paid, or flag the charge for refund when the order was not waiting for it. */
+async function settleOrder(transaction: IMarketplaceTransaction, source: string): Promise<void> {
   // A campaign is created 'pending_payment' and only serving status 'active'
   // is ever shown, so this is what makes a bought sponsorship actually run.
   // Guarded on the current status so a replay cannot revive one an admin has
@@ -131,7 +181,7 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (activated) logger.info(`[${source}] sponsorship ${transaction.sponsorshipId} activated by ${transaction.reference}`)
-    else await flagIfDuplicate(transaction, { sponsorshipId: transaction.sponsorshipId }, source)
+    else await flagRefundRequired(transaction, { sponsorshipId: transaction.sponsorshipId }, source)
   }
 
   /*
@@ -149,12 +199,12 @@ export async function applySuccessfulCharge(
       { returnDocument: 'after' },
     )
     if (settledBooking) logger.info(`[${source}] booking ${transaction.bookingId} marked paid by ${transaction.reference}`)
-    else await flagIfDuplicate(transaction, { bookingId: transaction.bookingId }, source)
+    else await flagRefundRequired(transaction, { bookingId: transaction.bookingId }, source)
   }
 
   // The coupon's use is recorded here and nowhere else — once, because only
-  // the caller that won the paid transition above reaches this line. The
-  // payment is already final, so a failure here is logged, never thrown.
+  // the caller that won the paid transition reaches this line. The payment
+  // is already final, so a failure here is logged, never thrown.
   if (transaction.couponCode && transaction.discountAmount > 0) {
     try {
       const coupon = await redeemForTransaction(transaction)
@@ -163,34 +213,38 @@ export async function applySuccessfulCharge(
       logger.error(`[${source}] coupon redemption failed for ${transaction.reference}: ${(err as Error).message}`)
     }
   }
-
-  logger.info(`[${source}] ${transaction.reference} paid — platform fee ${transaction.platformFeeAmount}`)
-  return { applied: true }
 }
 
 /**
- * A verified charge for an order another transaction had already paid: the
- * buyer paid twice. The money is real, so this transaction stays paid, but it
- * is flagged refundStatus 'required' for an admin to refund through the
- * provider — never automatically — and the order itself is left as the first
- * payment set it. Best-effort, like the coupon count: the payment is final.
+ * A verified charge for an order that was not waiting for it: another
+ * transaction had already paid it (the buyer paid twice), the worker marked
+ * the booking paid in cash, or the campaign was no longer awaiting payment
+ * (cancelled, expired or already running). The money is real, so this
+ * transaction stays paid, but it is flagged refundStatus 'required' for an
+ * admin to refund through the provider — never automatically — and the order
+ * itself is left as it was. duplicateOf names the earlier transaction when
+ * there is one. Best-effort, like the coupon count: the payment is final.
  */
-async function flagIfDuplicate(transaction: IMarketplaceTransaction, order: { bookingId?: string; sponsorshipId?: string }, source: string): Promise<void> {
+async function flagRefundRequired(transaction: IMarketplaceTransaction, order: { bookingId?: string; sponsorshipId?: string }, source: string): Promise<void> {
   try {
     const earlier = await MarketplaceTransaction.findOne(
       { ...order, _id: { $ne: transaction._id as Types.ObjectId }, status: { $in: PAID_STATUSES } },
       { reference: 1 },
       { sort: { verifiedAt: 1 } },
     ).lean()
-    if (!earlier) return
+    const refundReason = earlier
+      ? `Order already paid by ${earlier.reference}`
+      : `${order.bookingId ? 'Booking' : 'Campaign'} was no longer awaiting payment`
     const flagged = await MarketplaceTransaction.updateOne(
       { _id: transaction._id, refundStatus: { $exists: false } },
-      { $set: { refundStatus: 'required', duplicateOf: earlier.reference, refundReason: `Order already paid by ${earlier.reference}` } },
+      { $set: { refundStatus: 'required', refundReason, ...(earlier ? { duplicateOf: earlier.reference } : {}) } },
     )
     if (flagged.modifiedCount) {
-      financialAlert('marketplace_duplicate_charge', { type: 'MarketplaceTransaction', id: String(transaction._id) }, { reference: transaction.reference, duplicateOf: earlier.reference, ...order, source })
+      financialAlert(earlier ? 'marketplace_duplicate_charge' : 'marketplace_order_already_settled', { type: 'MarketplaceTransaction', id: String(transaction._id) }, {
+        reference: transaction.reference, refundReason, ...(earlier ? { duplicateOf: earlier.reference } : {}), ...order, source,
+      })
     }
   } catch (err) {
-    logger.error(`[${source}] duplicate-charge check failed for ${transaction.reference}: ${(err as Error).message}`)
+    logger.error(`[${source}] refund check failed for ${transaction.reference}: ${(err as Error).message}`)
   }
 }

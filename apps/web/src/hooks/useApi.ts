@@ -302,6 +302,18 @@ export function useCreatePayment() {
   })
 }
 
+/** Call off the payer's own unconfirmed payment, freeing its rent period for another method. */
+export function useCancelPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<Payment>(`/payments/${id}/cancel`, {}),
+    onSuccess: (payment) => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['payment', payment.id] })
+    },
+  })
+}
+
 // Savings / RentGuard
 export function useWallet() {
   return useQuery({
