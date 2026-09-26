@@ -171,6 +171,27 @@ export function refreshCurrentSession(rejectedToken: string | null): Promise<boo
   return promise
 }
 
+export interface SessionPair { token: string; refreshToken: string }
+
+/**
+ * A password or two-factor change signs every other session out and returns
+ * a fresh pair for this device. Run it under the refresh lock so a 401 racing
+ * the change waits for the new pair instead of refreshing with the revoked
+ * one (which would sign this device out too), then store the pair.
+ */
+export async function renewSessionWith(request: () => Promise<SessionPair | null>): Promise<void> {
+  const origin = useAuthStore.getState()
+  const generation = sessionGeneration
+  const run = async () => {
+    const pair = await request()
+    const current = useAuthStore.getState()
+    if (!pair?.token || !pair.refreshToken || generation !== sessionGeneration || current.user?.id !== origin.user?.id || !current.isAuthenticated) return
+    useAuthStore.setState({ token: pair.token, refreshToken: pair.refreshToken })
+  }
+  if (navigator.locks) await navigator.locks.request(`rentos-auth-refresh:${origin.sessionId ?? 'legacy'}`, run)
+  else await run()
+}
+
 /** Storage events can lag behind another tab's login/logout or token rotation. */
 function matchesStoredSession(origin: AuthState): boolean {
   try {

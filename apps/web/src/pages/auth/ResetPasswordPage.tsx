@@ -36,7 +36,7 @@ export function ResetPasswordPage() {
           <CheckCircle size={32} className="text-accent" />
         </div>
         <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white">Password Reset</h1>
-        <p className="text-sm text-muted dark:text-gray-400 mt-3">Your password has been reset successfully.</p>
+        <p className="text-sm text-muted dark:text-gray-400 mt-3">Your password has been reset, and every device signed in to your account has been signed out. Sign in with your new password.</p>
         <Link to="/login" className="inline-flex items-center justify-center gap-2 mt-6 h-12 px-7 rounded-full bg-gradient-to-r from-[#1e3a5f] to-[#2d5a8e] dark:from-blue-600 dark:to-blue-500 text-white font-semibold text-sm hover:opacity-90 shadow-lg shadow-primary/20 hover:shadow-md hover:-translate-y-[1px] transition-all">
           Sign In <ArrowRight size={16} />
         </Link>
