@@ -31,6 +31,19 @@ const DOCUMENT_TYPES: Record<IDocument['type'], true> = {
 }
 const isDocumentType = (value: unknown): value is IDocument['type'] => typeof value === 'string' && Object.hasOwn(DOCUMENT_TYPES, value)
 
+/*
+ * Dispute evidence is filed through POST /disputes/:id/evidence, which links
+ * the file to the dispute and stores it privately. It belongs to the dispute
+ * record, not to the party who filed it: this generic API must not delete it
+ * (the other party and the mediator would lose it), version it (the copy would
+ * be a public file), or create a record that claims to be it. A document the
+ * owner files under the 'evidence' category on the Documents page has no
+ * dispute link and stays theirs to manage.
+ */
+const DISPUTE_EVIDENCE_REFUSAL = 'Dispute evidence is part of the dispute record and cannot be changed or deleted here'
+const isDisputeEvidence = (doc: Pick<IDocument, 'linkedEntityType' | 'type' | 'storageDeliveryType'>) =>
+  doc.linkedEntityType === 'dispute' || (doc.type === 'evidence' && doc.storageDeliveryType === 'authenticated')
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -70,6 +83,7 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   // after the upload left an orphaned file with no record pointing at it.
   const docType: unknown = type || 'other'
   if (!isDocumentType(docType)) { error(res, 'Invalid document type', 400); return }
+  if (linkedEntityType === 'dispute') { error(res, 'Upload dispute evidence from the dispute page', 400); return }
 
   const resourceType = req.file.mimetype.startsWith('image/') ? 'image' as const
     : req.file.mimetype.startsWith('video/') ? 'video' as const
@@ -116,6 +130,7 @@ router.post('/:id/version', authenticate, upload.single('file'), async (req, res
   const existing = await DocumentModel.findById(param(req.params.id))
   if (!existing) { error(res, 'Document not found', 404); return }
   if (existing.ownerId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
+  if (isDisputeEvidence(existing)) { error(res, DISPUTE_EVIDENCE_REFUSAL, 403); return }
 
   const resourceType = req.file.mimetype.startsWith('image/') ? 'image' as const
     : req.file.mimetype.startsWith('video/') ? 'video' as const
@@ -180,6 +195,7 @@ router.delete('/:id', authenticate, async (req, res) => {
   const doc = await DocumentModel.findById(param(req.params.id))
   if (!doc) { error(res, 'Document not found', 404); return }
   if (doc.ownerId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
+  if (isDisputeEvidence(doc)) { error(res, DISPUTE_EVIDENCE_REFUSAL, 403); return }
 
   // Ledger first, so a restored backup cannot bring the file record back;
   // the record stays if the file host does not confirm the deletion.

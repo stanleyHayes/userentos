@@ -36,6 +36,8 @@ export function DocumentsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const perPage = 12
+  // Dispute evidence belongs to the dispute record; the server refuses to delete it.
+  const canDelete = (doc: Document) => doc.ownerId === user?.id && doc.linkedEntityType !== 'dispute'
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents'],
@@ -196,7 +198,7 @@ export function DocumentsPage() {
                 <DocumentGridCard
                   key={doc.id}
                   doc={doc}
-                  isOwner={doc.ownerId === user?.id}
+                  isOwner={canDelete(doc)}
                   menuOpen={activeMenu === doc.id}
                   onToggleMenu={() => setActiveMenu(activeMenu === doc.id ? null : doc.id)}
                   onVersions={() => { setVersionTarget(doc); setActiveMenu(null) }}
@@ -213,7 +215,7 @@ export function DocumentsPage() {
                 <DocumentListItem
                   key={doc.id}
                   doc={doc}
-                  isOwner={doc.ownerId === user?.id}
+                  isOwner={canDelete(doc)}
                   menuOpen={activeMenu === doc.id}
                   onToggleMenu={() => setActiveMenu(activeMenu === doc.id ? null : doc.id)}
                   onVersions={() => { setVersionTarget(doc); setActiveMenu(null) }}

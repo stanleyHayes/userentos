@@ -14,7 +14,12 @@ const doc = (id: string, name: string, type: string, ownerId: string) => ({
 })
 
 test('documents list, search and upload use the server document types', async ({ page }) => {
-  const documents = [doc('lease-1', 'Tenancy 2026', 'rental_agreement', tenant.id), doc('receipt-1', 'March rent', 'receipt', '507f1f77bcf86cd799439202')]
+  const documents = [
+    doc('lease-1', 'Tenancy 2026', 'rental_agreement', tenant.id),
+    doc('receipt-1', 'March rent', 'receipt', '507f1f77bcf86cd799439202'),
+    // Filed on a dispute: owned by this user, but part of the dispute record.
+    { ...doc('evidence-1', 'Leaking pipe', 'evidence', tenant.id), linkedEntityType: 'dispute' },
+  ]
   const uploads: string[] = []
   await signInWithMockedApi(page, tenant, ({ method, path, body }) => {
     if (method === 'GET' && path === '/documents') return { data: { items: documents, total: documents.length } }
@@ -29,7 +34,9 @@ test('documents list, search and upload use the server document types', async ({
   await expect(page.getByRole('heading', { name: 'Tenancy 2026' })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByText('Lease Agreement', { exact: true })).toBeVisible()
   await expect(page.locator('a[href="https://res.cloudinary.test/lease-1.pdf"]')).toHaveCount(1)
-  // Delete is offered on the document this user owns, not the shared one.
+  // Delete is offered on the document this user owns, not the shared one,
+  // and not on dispute evidence (the server refuses to delete it).
+  await expect(page.getByRole('heading', { name: 'Leaking pipe' })).toBeVisible()
   await expect(page.locator('button.text-danger')).toHaveCount(1)
 
   // Searching by category label used to crash the page on undefined.toLowerCase().

@@ -10,6 +10,8 @@ export interface Document {
   mimeType: string
   fileSize: number
   fileUrl: string
+  /** 'dispute' for evidence filed on a dispute: part of that record, so never deletable here. */
+  linkedEntityType?: string
   createdAt: string
 }
 
