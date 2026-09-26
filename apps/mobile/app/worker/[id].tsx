@@ -36,6 +36,11 @@ interface WorkerDetail {
   portfolio?: string[]
 }
 
+// The booking `type` POST /service-bookings accepts. It is a job category, not
+// the worker's trade — sending a trade or free text failed validation.
+const BOOKING_TYPES = ['maintenance', 'cleaning', 'repair', 'installation', 'inspection', 'emergency', 'other'] as const
+type BookingType = (typeof BOOKING_TYPES)[number]
+
 export default function WorkerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const c = useThemeColors()
@@ -44,7 +49,7 @@ export default function WorkerDetailScreen() {
   const user = useAuthStore((s) => s.user)
   const [bookingModal, setBookingModal] = useState(false)
   const [description, setDescription] = useState('')
-  const [type, setType] = useState('')
+  const [type, setType] = useState<BookingType>('maintenance')
   const [scheduledDate, setScheduledDate] = useState('')
   const [estimatedCost, setEstimatedCost] = useState('')
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none')
@@ -60,10 +65,10 @@ export default function WorkerDetailScreen() {
     mutationFn: () =>
       api.post('/service-bookings', {
         workerId: id,
-        type: type || worker?.trades[0] || 'general',
-        description,
+        type,
+        description: description.trim(),
         scheduledDate: scheduledDate || undefined,
-        estimatedCost: estimatedCost ? Number(estimatedCost) : undefined,
+        estimatedCost: Number(estimatedCost) > 0 ? Number(estimatedCost) : undefined,
         requesterRole: user?.activeRole ?? 'tenant',
         recurrence,
       }),
@@ -71,14 +76,14 @@ export default function WorkerDetailScreen() {
       qc.invalidateQueries({ queryKey: ['bookings'] })
       setBookingModal(false)
       setDescription('')
-      setType('')
+      setType('maintenance')
       setScheduledDate('')
       setEstimatedCost('')
       setRecurrence('none')
       Alert.alert('Booking Sent', 'Your service request has been sent to the worker.')
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to send booking. Please try again.')
+    onError: (err) => {
+      Alert.alert('Error', (err as Error).message || 'Failed to send booking. Please try again.')
     },
   })
 
@@ -243,13 +248,24 @@ export default function WorkerDetailScreen() {
             </View>
             <ScrollView>
               <Text style={[s.label, { color: c.text }]}>Service Type</Text>
-              <TextInput
-                style={[s.input, neuInset(c), { color: c.text }]}
-                placeholder="e.g. plumbing repair"
-                placeholderTextColor={c.muted}
-                value={type}
-                onChangeText={setType}
-              />
+              <View style={s.typeRow} accessibilityRole="radiogroup">
+                {BOOKING_TYPES.map((value) => {
+                  const selected = type === value
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      onPress={() => setType(value)}
+                      style={[s.typeChip, { backgroundColor: selected ? c.primary : c.surface }]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                    >
+                      <Text style={[s.typeChipText, { color: selected ? '#fff' : c.text }]}>
+                        {value.charAt(0).toUpperCase() + value.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
               <Text style={[s.label, { color: c.text }]}>Description</Text>
               <TextInput
                 style={[s.input, s.textarea, neuInset(c), { color: c.text }]}
@@ -285,8 +301,9 @@ export default function WorkerDetailScreen() {
             <TouchableOpacity
               style={[s.submitBtn, { backgroundColor: c.primary }]}
               onPress={() => {
-                if (!description.trim()) {
-                  Alert.alert('Required', 'Please enter a description.')
+                // The API requires at least 5 characters.
+                if (description.trim().length < 5) {
+                  Alert.alert('Required', 'Please describe the work needed (at least 5 characters).')
                   return
                 }
                 bookingMutation.mutate()
@@ -343,6 +360,9 @@ const s = StyleSheet.create({
   label: { fontSize: 13, fontFamily: 'Outfit_600SemiBold', marginTop: spacing.md, marginBottom: 4 },
   input: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, fontFamily: 'Outfit_400Regular' },
   textarea: { height: 80, textAlignVertical: 'top' },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  typeChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  typeChipText: { fontSize: 12, fontFamily: 'Outfit_500Medium' },
   submitBtn: { marginTop: spacing.lg, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   submitBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Outfit_700Bold' },
 })
