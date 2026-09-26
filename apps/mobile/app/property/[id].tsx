@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { DetailSkeleton } from '../../components/Skeleton'
 import { AITextInput } from '../../components/AITextInput'
 import { ReportContentModal, type ReportTarget } from '../../components/ReportContentModal'
+import { RejectListingModal } from '../../components/RejectListingModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -140,7 +141,6 @@ export default function PropertyDetailScreen() {
 
   // Government reject modal
   const [showRejectModal, setShowRejectModal] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
   const [reviewing, setReviewing] = useState(false)
 
   // Agreements/tenants
@@ -280,25 +280,24 @@ export default function PropertyDetailScreen() {
       Alert.alert('Cannot Publish', msg)} finally { setPublishing(false) }
   }
 
-  async function handleReviewAction(action: 'approve' | 'reject') {
-    if (action === 'reject' && !rejectReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for rejection.')
-      return
-    }
+  async function handleApprove() {
     setReviewing(true)
     try {
-      await api.post(`/properties/${id}/review`, {
-        action,
-        ...(action === 'reject' ? { reason: rejectReason.trim() } : {}),
-      })
-      setShowRejectModal(false)
-      setRejectReason('')
-      Alert.alert('Done', action === 'approve' ? 'Property listing approved.' : 'Property listing rejected.')
+      await api.post(`/properties/${id}/review`, { action: 'approve' })
+      Alert.alert('Done', 'Property listing approved.')
       await load()
     } catch (err) {
-      const _err = err as { message?: string }
       Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to process review')
     } finally { setReviewing(false) }
+  }
+
+  // Rejection goes through RejectListingModal, which collects the reason code
+  // the API requires — the old body sent only a free-text `reason`, so every
+  // rejection failed validation.
+  async function handleRejected() {
+    setShowRejectModal(false)
+    Alert.alert('Done', 'Property listing rejected.')
+    await load()
   }
 
   async function submitReview() {
@@ -794,7 +793,7 @@ export default function PropertyDetailScreen() {
           <View style={{ gap: 10 }}>
             <TouchableOpacity
               style={[s.primaryBtn, { backgroundColor: '#10b981', opacity: reviewing ? 0.6 : 1 }]}
-              onPress={() => handleReviewAction('approve')}
+              onPress={handleApprove}
               disabled={reviewing}
             >
               {reviewing ? (
@@ -1436,55 +1435,11 @@ export default function PropertyDetailScreen() {
       </Modal>
 
       {/* Reject Modal (Government) */}
-      <Modal visible={showRejectModal} animationType="slide" transparent>
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: c.white }]}>
-            <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Reject Listing</Text>
-              <TouchableOpacity onPress={() => setShowRejectModal(false)}>
-                <Ionicons name="close" size={24} color={c.muted} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[s.modalSubtitle, { color: c.muted }]}>
-              Provide a reason for rejecting "{property.title}"
-            </Text>
-
-            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
-              <AITextInput
-                label="Rejection Reason *"
-                aiContext="property listing rejection reason"
-                value={rejectReason}
-                onChangeText={setRejectReason}
-                placeholder="Explain why this listing is being rejected..."
-                numberOfLines={4}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
-                <TouchableOpacity
-                  style={[s.outlineBtn, { borderColor: c.border, flex: 1 }]}
-                  onPress={() => setShowRejectModal(false)}
-                >
-                  <Text style={[s.outlineBtnText, { color: c.muted }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: c.danger, flex: 1, opacity: reviewing ? 0.6 : 1 }]}
-                  onPress={() => handleReviewAction('reject')}
-                  disabled={reviewing}
-                >
-                  {reviewing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={s.primaryBtnText}>Reject Listing</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ height: spacing.lg }} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <RejectListingModal
+        listing={showRejectModal ? { id, title: property.title } : null}
+        onClose={() => setShowRejectModal(false)}
+        onRejected={handleRejected}
+      />
     </ScrollView>
   )
 }
