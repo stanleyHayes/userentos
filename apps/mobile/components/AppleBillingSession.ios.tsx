@@ -8,12 +8,8 @@ import { useAuthStore } from '../stores/authStore'
 import { useAppleBillingStore, type AppleOffer } from '../stores/appleBillingStore'
 
 import { appleStoreOffers, type AppleStoreMapping } from '../lib/appleStoreOffers'
-let connectionWork = Promise.resolve()
-function serializeConnection(action: () => Promise<unknown>) {
-  const next = connectionWork.then(action)
-  connectionWork = next.then(() => {}, () => {})
-  return next
-}
+import { serializeConnection } from '../lib/storeConnection'
+import { mapStoreError, restoreSummary } from '../lib/storeErrors'
 
 /** Lives with the signed-in session, so navigating away from checkout does not
  * remove purchase listeners. Apple transaction identifiers are never stored in app storage.
@@ -48,6 +44,8 @@ export default function AppleBillingSession() {
       } catch (error) { fail(error instanceof Error ? error.message : 'Could not finish verifying your purchase. Tap Restore purchases to retry; do not purchase again.') }
       finally { pending.delete(purchase.id) }
     }
+    /** `explicit`: the user tapped Restore. The silent restore on start and
+     * on every foreground reports neither "nothing found" nor its failures. */
     async function restore(explicit = true) {
       if (!sdk || !current()) return
       set({ busy: true, error: '' })
@@ -56,8 +54,9 @@ export default function AppleBillingSession() {
         if (!current()) return
         const purchases = await loadAppleRestorations(sdk)
         for (const purchase of purchases) await complete(purchase)
-        if (!purchases.length) set({ message: 'No App Store purchases were found for this store account.' })
-      } catch { fail('Could not restore App Store purchases. Please try again.') }
+        const summary = restoreSummary(purchases.length, explicit, 'App Store')
+        if (summary) set({ message: summary })
+      } catch { if (explicit) fail('Could not restore App Store purchases. Please try again.') }
       finally { set({ busy: false }) }
     }
     async function reload() {
@@ -98,7 +97,11 @@ export default function AppleBillingSession() {
         sdk = await import('expo-iap')
         if (!current()) return
         const updated = sdk.purchaseUpdatedListener(purchase => { void complete(purchase) })
-        const errors = sdk.purchaseErrorListener(error => { set({ busy: false, error: error.code === 'user-cancelled' ? '' : 'App Store could not complete checkout. Restore purchases if needed.' }) })
+        const errors = sdk.purchaseErrorListener(error => {
+          const outcome = mapStoreError(error.code, 'App Store')
+          if (outcome.kind === 'restore') { set({ busy: false, error: '' }); void restore(); return }
+          set({ busy: false, error: outcome.kind === 'error' ? outcome.message : '', ...(outcome.kind === 'pending' ? { message: outcome.message } : {}) })
+        })
         cleanup = () => { updated.remove(); errors.remove(); void serializeConnection(() => sdk!.endConnection()).catch(() => {}) }
         await reload()
         await restore(false)
