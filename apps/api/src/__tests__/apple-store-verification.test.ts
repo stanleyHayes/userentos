@@ -264,13 +264,17 @@ function claiming(environment: string) { return `header.${Buffer.from(JSON.strin
 function notificationFixture() { return { notificationUUID: '123e4567-e89b-42d3-a456-426614174002', notificationType: 'DID_RENEW', version: '2.0', signedDate: now.getTime(), data: { bundleId: expected.bundleId, appAppleId: 1234567890, environment: Environment.PRODUCTION, signedTransactionInfo: 'notification-transaction' } } }
 describe('Apple signed notification verification', () => {
   beforeEach(() => { mocks.notification.mockResolvedValue(notificationFixture()) })
-  it('verifies the envelope and nested transaction without granting access or exposing account tokens', async () => {
+  it('verifies the envelope and nested transaction without granting access or naming an owner', async () => {
+    mocks.decode.mockResolvedValue({ ...fixture(), appAccountToken: accountToken.toUpperCase() })
     const result = await verifyAppleNotification('envelope-jws', now)
     expect(mocks.notification).toHaveBeenCalledWith('envelope-jws')
     expect(mocks.decode).toHaveBeenCalledWith('notification-transaction')
     expect(result).toMatchObject({ notificationType: 'DID_RENEW', transaction: { originalTransactionId: '123400' } })
     expect(result.transaction).not.toHaveProperty('accessEligible')
-    expect(JSON.stringify(result)).not.toContain(accountToken)
+    // The signed account token appears once, normalized, and nowhere else.
+    const { appAccountToken, ...facts } = result.transaction!
+    expect(appAccountToken).toBe(accountToken)
+    expect(JSON.stringify({ ...result, transaction: facts }).toLowerCase()).not.toContain(accountToken)
   })
   it('accepts a signed test notification without a transaction', async () => {
     mocks.notification.mockResolvedValue({ ...notificationFixture(), notificationType: 'TEST', data: { ...notificationFixture().data, signedTransactionInfo: undefined } })

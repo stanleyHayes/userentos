@@ -209,5 +209,7 @@ export async function verifyAppleNotification(signedPayload: string, now = new D
   // This checks payload structure and application identity. Account ownership is
   // deliberately deferred until immutable-owner lookup and provider recheck.
   const facts = normalizeAppleTransaction(transaction, { transactionId: transaction.transactionId ?? '', accountToken: transaction.appAccountToken ?? '', bundleId: context.bundleId, environment: context.environment }, now)
-  return { ...metadata, transaction: facts }
+  // Only for deciding whether a journal row can still appear (appleNotifications.ts).
+  // It never names the owner of a chain; the journal does.
+  return { ...metadata, transaction: { ...facts, appAccountToken: (transaction.appAccountToken ?? '').toLowerCase() } }
 }
