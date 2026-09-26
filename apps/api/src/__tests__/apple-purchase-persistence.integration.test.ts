@@ -16,10 +16,11 @@ import { recordApplePurchase, appleTransactionHash, appleTokenContext } from '..
 import { StorePurchaseConflict } from '../services/storeBilling/purchaseJournal.js'
 import { verifyAppleTransaction, verifyAppleSubscription, verifyAppleNotification } from '../services/storeBilling/appleStore.js'
 import { decryptStoreToken } from '../services/storeBilling/tokenVault.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/storeBilling/appleStore.js', async original => ({ ...await original<object>(), verifyAppleTransaction: vi.fn(), verifyAppleSubscription: vi.fn(), verifyAppleNotification: vi.fn() }))
-const localUri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('Apple journal real-Mongo ownership and concurrency', () => {
+const localUri = testMongoUri
+describe.skipIf(!hasTestMongo)('Apple journal real-Mongo ownership and concurrency', () => {
   const userId = new mongoose.Types.ObjectId()
   const otherId = new mongoose.Types.ObjectId()
   const originalId = BigInt(`0x${userId}`).toString()

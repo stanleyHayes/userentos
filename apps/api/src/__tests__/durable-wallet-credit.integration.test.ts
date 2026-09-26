@@ -4,9 +4,10 @@ import { Wallet } from '../models/Wallet.js'
 import { WalletCredit } from '../models/WalletCredit.js'
 import { applyWalletCredit, prepareWalletCredit } from '../services/payments/durableWalletCredit.js'
 import { debitWallet } from '../services/payments/walletLedger.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('durable standalone wallet credit', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('durable standalone wallet credit', () => {
   const users: string[] = []
   beforeAll(async () => { await mongoose.connect(uri); await Promise.all([Wallet.init(), WalletCredit.init()]) })
   afterAll(async () => { await Wallet.deleteMany({ userId: { $in: users } }); await WalletCredit.deleteMany({ userId: { $in: users } }); await mongoose.disconnect() })

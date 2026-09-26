@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/avatarStorage.js', () => ({ rememberLegacyAvatar: vi.fn(), uploadAvatar: vi.fn(), eraseAvatars: vi.fn() }))
 vi.mock('../services/documentErasure.js', () => ({ erasePersonalDocuments: vi.fn() }))
@@ -15,9 +16,9 @@ const { PaymentStreak } = await import('../models/PaymentStreak.js')
 const { default: usersRouter } = await import('../routes/users.js')
 const { eraseAccountRecords } = await import('../services/accountErasure.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('account deletion keeps a minimal tombstone', () => {
+describe.skipIf(!hasTestMongo)('account deletion keeps a minimal tombstone', () => {
   const userId = String(new mongoose.Types.ObjectId())
   let server: Server
   let base = ''

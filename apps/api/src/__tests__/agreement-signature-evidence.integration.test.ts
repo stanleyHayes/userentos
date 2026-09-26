@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({
   notify: vi.fn().mockResolvedValue(undefined),
@@ -23,11 +24,11 @@ const { SIGNATURE_CONSENT_STATEMENT, agreementTermsHash } = await import('../ser
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: agreementsRouter } = await import('../routes/agreements.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 type Evidence = { role: string; userId: string; signatureName: string; signedAt: string; ipAddress?: string; userAgent?: string; termsHash: string; agreementVersion: number; consentStatement: string; consentVersion: number }
 type View = { id: string; status: string; version: number; termsHash: string; signatureConsentStatement?: string; signatureEvidence: Evidence[]; landlordSignature?: string; tenantSignature?: string }
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('electronic signature evidence', () => {
+describe.skipIf(!hasTestMongo)('electronic signature evidence', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const tenantId = String(new mongoose.Types.ObjectId())
   let propertyId = ''

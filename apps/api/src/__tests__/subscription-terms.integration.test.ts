@@ -4,8 +4,9 @@ import { Payment } from '../models/Payment.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { PlanEntitlement } from '../models/PlanEntitlement.js'
 import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('immutable subscription purchase terms', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('immutable subscription purchase terms', () => {
   const ids: mongoose.Types.ObjectId[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await Payment.deleteMany({ _id: { $in: ids } }); await SubscriptionPackage.deleteMany({ _id: { $in: ids } }); await PlanEntitlement.deleteMany({ planId: { $in: ids.map(String) } }); await mongoose.disconnect() })

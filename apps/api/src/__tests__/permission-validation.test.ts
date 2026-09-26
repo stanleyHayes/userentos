@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { User } from '../models/User.js'
 import { config } from '../config/index.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 const base = { email: 'perm@rentos.test', phone: '0240004001', firstName: 'Per', lastName: 'Mission', passwordHash: 'fixture', roles: ['admin'], activeRole: 'admin' }
 const permissionError = async (doc: mongoose.Document) => (await doc.validate().then(() => null, (err: mongoose.Error.ValidationError) => err))?.errors.permissions
@@ -29,8 +30,8 @@ describe('User.permissions accepts only known permissions on write', () => {
   })
 })
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('PATCH /users/:id/permissions with legacy permission strings', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('PATCH /users/:id/permissions with legacy permission strings', () => {
   const targetId = String(new mongoose.Types.ObjectId())
   let server: Server
   let url = ''

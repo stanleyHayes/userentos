@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({
   notify: vi.fn().mockResolvedValue(undefined),
@@ -25,9 +26,9 @@ const { default: agreementsRouter } = await import('../routes/agreements.js')
 const { default: creditRouter } = await import('../routes/credit.js')
 const { default: disputesRouter } = await import('../routes/disputes.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('tenancy relationships require a tenant-signed lease', () => {
+describe.skipIf(!hasTestMongo)('tenancy relationships require a tenant-signed lease', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const victimId = String(new mongoose.Types.ObjectId())
   const adminLikeId = String(new mongoose.Types.ObjectId())

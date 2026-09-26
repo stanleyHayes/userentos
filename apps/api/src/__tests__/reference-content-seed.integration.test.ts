@@ -3,10 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BlogPost } from '../models/BlogPost.js'
 import { BLOG_POSTS } from '../data/referenceData.js'
 import { seedReviewedReferenceContent } from '../data/seedReferenceContent.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 const slugs = ['rent-advance-cap', 'micro-loans-rent-gap', 'investing-rent-savings']
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('reviewed reference content seeding', () => {
+describe.skipIf(!hasTestMongo)('reviewed reference content seeding', () => {
   const seededAt = new Date('2026-08-13T16:14:26Z')
   beforeAll(async () => {
     await mongoose.connect(uri)

@@ -9,9 +9,10 @@ import { User } from '../models/User.js'
 import { AgencyProfile } from '../models/AgencyProfile.js'
 import { Property } from '../models/Property.js'
 import router from '../routes/agency.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('agency REAC licence and public page', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('agency REAC licence and public page', () => {
   const landlordId = new mongoose.Types.ObjectId()
   const adminId = new mongoose.Types.ObjectId()
   const owner = String(landlordId)

@@ -12,11 +12,12 @@ import { DeductionMandate } from '../models/DeductionMandate.js'
 import { PayrollRun } from '../models/PayrollRun.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 import router from '../routes/employers.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('employee consent to payroll links', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('employee consent to payroll links', () => {
   const tag = new mongoose.Types.ObjectId().toString()
   const owners = [`owner-a-${tag}`, `owner-b-${tag}`]
   const employerIds: string[] = []

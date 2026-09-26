@@ -10,9 +10,10 @@ import { User } from '../models/User.js'
 import { ServiceBooking } from '../models/ServiceBooking.js'
 import { resolveQuote } from '../services/marketplace/pricing.js'
 import router from '../routes/serviceBookings.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('service booking price lock', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('service booking price lock', () => {
   const customer = new mongoose.Types.ObjectId(), worker = new mongoose.Types.ObjectId()
   const bookingId = new mongoose.Types.ObjectId()
   let server: Server, url: string

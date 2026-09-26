@@ -7,10 +7,11 @@ import { BlogPost } from '../models/BlogPost.js'
 import { reloadRegulatedFeatures } from '../config/regulatedFeatures.js'
 import { seedReviewedReferenceContent } from '../data/seedReferenceContent.js'
 import router from '../routes/blog.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 const slugs = ['rentguard-savings-guide', 'rent-dispute-guide']
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('blog posts about regulated services', () => {
+describe.skipIf(!hasTestMongo)('blog posts about regulated services', () => {
   let server: Server
   const base = () => `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/blog`
   const seededAt = new Date('2026-08-13T16:14:26Z')

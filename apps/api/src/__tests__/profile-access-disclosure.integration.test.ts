@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 
@@ -12,9 +13,9 @@ const { User } = await import('../models/User.js')
 const { ProfileAccess } = await import('../models/ProfileAccess.js')
 const { default: profileAccessRouter } = await import('../routes/profileAccess.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('profile access disclosure', () => {
+describe.skipIf(!hasTestMongo)('profile access disclosure', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const otherLandlordId = String(new mongoose.Types.ObjectId())
   const tenantId = String(new mongoose.Types.ObjectId())

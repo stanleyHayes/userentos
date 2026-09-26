@@ -4,14 +4,15 @@ import { Property } from '../models/Property.js'
 import { PropertyRepository } from '../repositories/index.js'
 import { PropertyService } from '../services/propertyService.js'
 import { EntitlementError, requireQuota } from '../services/entitlements.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/entitlements.js', async importOriginal => ({
   ...await importOriginal<typeof import('../services/entitlements.js')>(), requireQuota: vi.fn(),
 }))
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 const data = { title: 'Quota fixture', description: 'Test property', type: 'apartment', address: { street: '1 Test St', city: 'Accra', region: 'Greater Accra' }, rentAmount: 1500, rentDurationMonths: 12, advanceMonths: 6 }
 const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() }
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('atomic property quota admission', () => {
+describe.skipIf(!hasTestMongo)('atomic property quota admission', () => {
   const owners: string[] = []
   const repo = new PropertyRepository()
   const service = new PropertyService(repo, logger as never)

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 
@@ -12,9 +13,9 @@ const { User } = await import('../models/User.js')
 const { MoveOut } = await import('../models/MoveOut.js')
 const { default: moveOutRouter } = await import('../routes/moveOut.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('move-out dispute guards', () => {
+describe.skipIf(!hasTestMongo)('move-out dispute guards', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const tenantId = String(new mongoose.Types.ObjectId())
   const agreementId = String(new mongoose.Types.ObjectId())

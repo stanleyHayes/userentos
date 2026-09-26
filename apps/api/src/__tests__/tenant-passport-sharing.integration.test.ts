@@ -10,9 +10,10 @@ import { User } from '../models/User.js'
 import { CreditScore } from '../models/CreditScore.js'
 import { Payment } from '../models/Payment.js'
 import router from '../routes/tenantPassport.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('tenant passport sharing', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('tenant passport sharing', () => {
   const _id = new mongoose.Types.ObjectId()
   const tenantId = String(_id)
   const email = `passport-${tenantId}@rentos.test`

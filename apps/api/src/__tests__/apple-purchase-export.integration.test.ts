@@ -8,8 +8,9 @@ import { config } from '../config/index.js'
 import { User } from '../models/User.js'
 import { ApplePurchase } from '../models/ApplePurchase.js'
 import router from '../routes/users.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('Apple purchase personal export', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('Apple purchase personal export', () => {
   const owner = String(new mongoose.Types.ObjectId()), outsider = String(new mongoose.Types.ObjectId())
   let server: Server
   beforeAll(async () => {

@@ -11,8 +11,9 @@ import { Notification } from '../models/Notification.js'
 import { Achievement } from '../models/Achievement.js'
 import { PaymentStreak } from '../models/PaymentStreak.js'
 import router from '../routes/users.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('account activity export', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('account activity export', () => {
   const ids = [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()]
   const [owner, outsider] = ids.map(String)
   let server: Server

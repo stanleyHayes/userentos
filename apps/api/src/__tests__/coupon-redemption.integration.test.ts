@@ -12,9 +12,10 @@ import { MarketplaceTransaction } from '../models/MarketplaceTransaction.js'
 import { redeemForTransaction } from '../services/marketplace/coupons.js'
 import { applySuccessfulCharge, BINDING_KEY } from '../services/marketplace/settle.js'
 import commerce from '../routes/marketplaceCommerce.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('coupon redemption', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('coupon redemption', () => {
   const tag = new mongoose.Types.ObjectId().toString().slice(-10).toUpperCase()
   const attacker = new mongoose.Types.ObjectId()
   const codes: string[] = []

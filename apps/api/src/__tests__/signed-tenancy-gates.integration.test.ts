@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(true) }))
 
@@ -18,9 +19,9 @@ const { default: maintenanceRouter } = await import('../routes/maintenance.js')
 const { default: capabilitiesRouter } = await import('../routes/capabilities.js')
 const { default: passportRouter } = await import('../routes/tenantPassport.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('drafts naming a tenant are not tenancies', () => {
+describe.skipIf(!hasTestMongo)('drafts naming a tenant are not tenancies', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const tenantId = String(new mongoose.Types.ObjectId())
   const financierId = String(new mongoose.Types.ObjectId())

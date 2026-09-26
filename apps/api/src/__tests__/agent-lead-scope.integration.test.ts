@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 
@@ -14,9 +15,9 @@ const { Lead } = await import('../models/Lead.js')
 const { Viewing } = await import('../models/Viewing.js')
 const { default: agentRouter } = await import('../routes/agent.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('viewing requests only advance the requester\'s own lead', () => {
+describe.skipIf(!hasTestMongo)('viewing requests only advance the requester\'s own lead', () => {
   const agentId = String(new mongoose.Types.ObjectId())
   const prospectId = String(new mongoose.Types.ObjectId())
   const otherId = String(new mongoose.Types.ObjectId())

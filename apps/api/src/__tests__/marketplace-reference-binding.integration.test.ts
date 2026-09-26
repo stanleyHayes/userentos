@@ -33,9 +33,10 @@ import { PaymentAccount } from '../models/PaymentAccount.js'
 import { ServiceBooking } from '../models/ServiceBooking.js'
 import { MarketplaceTransaction } from '../models/MarketplaceTransaction.js'
 import router from '../routes/marketplacePayments.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('marketplace provider references', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('marketplace provider references', () => {
   const buyer = new mongoose.Types.ObjectId(), other = new mongoose.Types.ObjectId(), seller = new mongoose.Types.ObjectId()
   const bookingId = new mongoose.Types.ObjectId()
   const tag = String(buyer).slice(-8)

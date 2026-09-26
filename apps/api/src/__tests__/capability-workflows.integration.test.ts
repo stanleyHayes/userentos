@@ -12,9 +12,10 @@ import { Payment } from '../models/Payment.js'
 import { CapabilityRecord } from '../models/CapabilityRecord.js'
 import { creditWallet } from '../services/payments/walletLedger.js'
 import router from '../routes/capabilities.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('capability workflows', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('capability workflows', () => {
   const business = new mongoose.Types.ObjectId(), developer = new mongoose.Types.ObjectId()
   const admin = new mongoose.Types.ObjectId(), government = new mongoose.Types.ObjectId()
   const ids = [business, developer, admin, government]

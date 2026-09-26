@@ -14,11 +14,12 @@ import { FinancingContract } from '../models/FinancingContract.js'
 import { Wallet } from '../models/Wallet.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 import router from '../routes/financing.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('rent-advance financing compliance', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('rent-advance financing compliance', () => {
   const financier = String(new mongoose.Types.ObjectId())
   const pendingFinancier = String(new mongoose.Types.ObjectId())
   const users: string[] = []

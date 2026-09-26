@@ -9,6 +9,7 @@ import { StoreNotification } from '../models/StoreNotification.js'
 import { ComplaintLog } from '../models/ComplaintLog.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
 import { ValuationLog } from '../models/ValuationLog.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 type AnyModel = { schema: mongoose.Schema; collection: mongoose.Collection; createIndexes(): Promise<unknown> }
 const ttl = (model: AnyModel, field: string) =>
@@ -40,8 +41,8 @@ describe('retention periods come from config/retention.ts', () => {
   })
 })
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('the server accepts the TTL indexes', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('the server accepts the TTL indexes', () => {
   beforeAll(() => mongoose.connect(uri))
   afterAll(() => mongoose.disconnect())
 

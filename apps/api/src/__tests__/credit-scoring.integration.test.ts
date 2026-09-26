@@ -14,11 +14,12 @@ import { Application } from '../models/Application.js'
 import { CreditScore } from '../models/CreditScore.js'
 import { AuditLog } from '../models/AuditLog.js'
 import creditRouter from '../routes/credit.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 type Factors = { paymentHistory: number; savingsConsistency: number; agreementCompliance: number; disputeRecord: number }
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('credit scoring and access', () => {
+describe.skipIf(!hasTestMongo)('credit scoring and access', () => {
   const tenantId = String(new mongoose.Types.ObjectId())
   const landlordId = String(new mongoose.Types.ObjectId())
   const strangerId = String(new mongoose.Types.ObjectId())

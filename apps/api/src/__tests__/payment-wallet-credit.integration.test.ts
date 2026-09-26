@@ -9,8 +9,9 @@ import { Wallet } from '../models/Wallet.js'
 import { WalletCredit } from '../models/WalletCredit.js'
 import { finalizePayment } from '../services/payments/finalize.js'
 import { recoverPaymentWalletCredit, paymentCreditIntent } from '../services/payments/paymentWalletCredit.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('payment confirmation wallet credit recovery', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('payment confirmation wallet credit recovery', () => {
   const ids: mongoose.Types.ObjectId[] = [], users: string[] = []
   beforeAll(async () => { await mongoose.connect(uri); await Promise.all([Wallet.init(), WalletCredit.init()]) })
   afterAll(async () => { await Payment.deleteMany({ _id: { $in: ids } }); await Wallet.deleteMany({ userId: { $in: users } }); await WalletCredit.deleteMany({ userId: { $in: users } }); await mongoose.disconnect() })

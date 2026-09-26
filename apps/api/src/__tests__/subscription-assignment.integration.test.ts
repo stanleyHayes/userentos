@@ -5,8 +5,9 @@ import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { assignSubscription } from '../services/assignSubscription.js'
 import { expireSubscription } from '../services/subscriptionExpiry.js'
 import { resolveEntitlements } from '../services/entitlements.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('subscription assignment and saved-term expiry', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('subscription assignment and saved-term expiry', () => {
   const ids: string[] = [], plans: string[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await User.deleteMany({ _id: { $in: ids } }); await SubscriptionPackage.deleteMany({ _id: { $in: plans } }); await mongoose.disconnect() })

@@ -9,11 +9,12 @@ import { StorePurchase } from '../models/StorePurchase.js'
 import { recordGooglePurchase, StorePurchaseConflict, storeTokenContext } from '../services/storeBilling/purchaseJournal.js'
 import { decryptStoreToken } from '../services/storeBilling/tokenVault.js'
 import { purchaseTokenHash, verifyGoogleSubscription } from '../services/storeBilling/googlePlay.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/storeBilling/googlePlay.js', async importOriginal => ({ ...await importOriginal<object>(), verifyGoogleSubscription: vi.fn() }))
-const localUri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const localUri = testMongoUri
 // Explicit opt-in only; never bind this suite to a developer/production DB.
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('store journal real-Mongo concurrency', () => {
+describe.skipIf(!hasTestMongo)('store journal real-Mongo concurrency', () => {
   const userId = new mongoose.Types.ObjectId()
   const mappingId = new mongoose.Types.ObjectId()
   const packageId = new mongoose.Types.ObjectId().toString()

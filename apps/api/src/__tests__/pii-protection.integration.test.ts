@@ -11,10 +11,11 @@ import { ProfileAccess } from '../models/ProfileAccess.js'
 import usersRouter from '../routes/users.js'
 import tenantProfileRouter from '../routes/tenantProfile.js'
 import { encryptLegacyPii } from '../scripts/encryptPiiFields.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('national ID protection at rest and in responses', () => {
+describe.skipIf(!hasTestMongo)('national ID protection at rest and in responses', () => {
   const tenantId = String(new mongoose.Types.ObjectId())
   const landlordId = String(new mongoose.Types.ObjectId())
   const legacyId = String(new mongoose.Types.ObjectId())

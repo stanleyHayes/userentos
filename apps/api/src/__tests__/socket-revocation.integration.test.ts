@@ -8,10 +8,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { User } from '../models/User.js'
 import { config } from '../config/index.js'
 import { initSocket, disconnectBiometricUser, disconnectUser } from '../services/socket.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 vi.mock('../models/Conversation.js', () => ({ Conversation: { find: () => ({ select: () => ({ lean: async () => [] }) }) } }))
 vi.mock('../services/userBlocks.js', () => ({ blockedContacts: async () => new Set(), contactBlocked: async () => false }))
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('live socket revocation', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('live socket revocation', () => {
   const owners = [new mongoose.Types.ObjectId().toString(), new mongoose.Types.ObjectId().toString()]
   const clients: ClientSocket[] = []
   let http: HttpServer, server: Server, base: string

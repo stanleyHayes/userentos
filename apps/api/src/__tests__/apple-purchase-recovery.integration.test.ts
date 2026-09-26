@@ -5,9 +5,10 @@ import { recoverApplePurchases } from '../services/storeBilling/recoverApplePurc
 import { completeApplePurchase } from '../services/storeBilling/completeApplePurchase.js'
 import { encryptStoreToken } from '../services/storeBilling/tokenVault.js'
 import { appleTokenContext, appleTransactionHash } from '../services/storeBilling/applePurchaseJournal.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 vi.mock('../services/storeBilling/completeApplePurchase.js', () => ({ completeApplePurchase: vi.fn() }))
-const localUri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('Apple recovery real-Mongo leases', () => {
+const localUri = testMongoUri
+describe.skipIf(!hasTestMongo)('Apple recovery real-Mongo leases', () => {
   const userId = new mongoose.Types.ObjectId().toString()
   const app = `gh.rentos.recovery${userId}`
   const token = BigInt(`0x${userId}`).toString()

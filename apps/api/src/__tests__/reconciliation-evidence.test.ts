@@ -5,6 +5,7 @@ import { makeSimulator } from '../services/payments/simulator.js'
 import type { PaymentProvider } from '../services/payments/types.js'
 import { Payment } from '../models/Payment.js'
 import { finalizePayment } from '../services/payments/finalize.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 const now = new Date('2026-09-13T12:00:00Z')
 const facts = { reference: 'PAY-VERIFIED', status: 'completed', amount: 99, currency: 'GHS', paidAt: '2026-09-12T12:00:00Z' }
@@ -26,8 +27,8 @@ it('never treats status-only adapters or unfamiliar simulator references as sett
   expect(await makeSimulator('mtn_momo').queryStatus('LIVE-REFERENCE')).toBe('pending')
 })
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('underpaid reconciliation', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('underpaid reconciliation', () => {
   const ids: mongoose.Types.ObjectId[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await Payment.deleteMany({ _id: { $in: ids } }); await mongoose.disconnect() })

@@ -10,10 +10,11 @@ import { Wallet } from '../models/Wallet.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import authRouter from '../routes/auth.js'
 import { TERMS_VERSION, PRIVACY_VERSION } from '../types/index.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('consent capture (real Mongo)', () => {
+describe.skipIf(!hasTestMongo)('consent capture (real Mongo)', () => {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const newEmail = `consent-new-${stamp}@rentos.test`
   const legacyEmail = `consent-legacy-${stamp}@rentos.test`

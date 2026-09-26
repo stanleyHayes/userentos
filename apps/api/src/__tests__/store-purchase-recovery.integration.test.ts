@@ -6,9 +6,10 @@ import { completeGooglePurchase } from '../services/storeBilling/completePurchas
 import { encryptStoreToken } from '../services/storeBilling/tokenVault.js'
 import { storeTokenContext } from '../services/storeBilling/purchaseJournal.js'
 import { purchaseTokenHash } from '../services/storeBilling/googlePlay.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 vi.mock('../services/storeBilling/completePurchase.js', () => ({ completeGooglePurchase: vi.fn() }))
-const localUri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('store recovery real-Mongo leases', () => {
+const localUri = testMongoUri
+describe.skipIf(!hasTestMongo)('store recovery real-Mongo leases', () => {
   const userId = new mongoose.Types.ObjectId().toString()
   const app = `gh.rentos.recovery${userId}`
   const token = `fixture-${userId}`

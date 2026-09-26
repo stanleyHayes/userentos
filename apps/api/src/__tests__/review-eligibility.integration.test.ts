@@ -10,9 +10,10 @@ import { Property } from '../models/Property.js'
 import { Agreement } from '../models/Agreement.js'
 import { Review } from '../models/Review.js'
 import router from '../routes/reviews.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('property review eligibility', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('property review eligibility', () => {
   const [landlord, stranger, drafted, halfSigned, current, former] = Array.from({ length: 6 }, () => new mongoose.Types.ObjectId())
   const users = [landlord, stranger, drafted, halfSigned, current, former]
   const propertyId = new mongoose.Types.ObjectId()

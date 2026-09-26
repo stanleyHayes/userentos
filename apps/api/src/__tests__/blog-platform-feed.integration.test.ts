@@ -14,9 +14,10 @@ import { User } from '../models/User.js'
 import { BlogPost } from '../models/BlogPost.js'
 import blog from '../routes/blog.js'
 import authoring from '../routes/authoring.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('platform blog feed', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('platform blog feed', () => {
   const author = new mongoose.Types.ObjectId(), staff = new mongoose.Types.ObjectId()
   const tag = `bpf${String(author).slice(-8)}`
   let server: Server, url: string

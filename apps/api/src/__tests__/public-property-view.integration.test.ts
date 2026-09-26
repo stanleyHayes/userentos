@@ -5,9 +5,10 @@ import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Property } from '../models/Property.js'
 import router from '../routes/properties.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('public property listings', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('public property listings', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const title = `Published fixture ${landlordId}`
   let server: Server

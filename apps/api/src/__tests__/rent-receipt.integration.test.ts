@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Payment } from '../models/Payment.js'
 import { issueRentReceipt, readRentReceipt } from '../services/payments/rentReceipt.js'
 import { recoverRentReceipt } from '../services/payments/recoverRentReceipts.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('durable rent receipt issuance', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('durable rent receipt issuance', () => {
   const ids: mongoose.Types.ObjectId[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await Payment.deleteMany({ _id: { $in: ids } }); await mongoose.disconnect() })

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 const { config } = await import('../config/index.js')
 const { User } = await import('../models/User.js')
@@ -12,9 +13,9 @@ const { default: usersRouter } = await import('../routes/users.js')
 const { default: tenantProfileRouter } = await import('../routes/tenantProfile.js')
 const { removeSpecialCategoryProfileFields } = await import('../scripts/removeSpecialCategoryProfileFields.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('religion and ethnicity are not collected or returned (Act 843 s.37)', () => {
+describe.skipIf(!hasTestMongo)('religion and ethnicity are not collected or returned (Act 843 s.37)', () => {
   const tenantId = String(new mongoose.Types.ObjectId())
   const otherId = String(new mongoose.Types.ObjectId())
   let server: Server

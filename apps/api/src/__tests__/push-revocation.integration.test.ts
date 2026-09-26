@@ -9,10 +9,11 @@ import { AuthService } from '../services/authService.js'
 import { DeviceToken } from '../models/DeviceToken.js'
 import { RefreshToken, hashRefreshToken } from '../models/RefreshToken.js'
 import { BiometricToken } from '../models/BiometricToken.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notifyWelcome: vi.fn() }))
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('push registration revocation', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('push registration revocation', () => {
   const prefix = `push-revoke-${new mongoose.Types.ObjectId()}`
   const owners: string[] = []
   const service = new AuthService({} as never, {} as never, { info: vi.fn(), warn: vi.fn() } as never)

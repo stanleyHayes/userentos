@@ -19,9 +19,10 @@ import { User } from '../models/User.js'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import router, { PENDING_CLAIM_TTL_MS } from '../routes/storefronts.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('custom domain claims', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('custom domain claims', () => {
   const squatter = new mongoose.Types.ObjectId(), owner = new mongoose.Types.ObjectId()
   const tag = String(owner).slice(-8)
   const domains = [`homes-${tag}.com`, `lapsed-${tag}.com`]

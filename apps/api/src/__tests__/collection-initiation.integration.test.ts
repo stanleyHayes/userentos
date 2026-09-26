@@ -2,9 +2,10 @@ import mongoose from 'mongoose'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Payment } from '../models/Payment.js'
 import { recordCollectionInitiation, recordUncertainCollection } from '../services/payments/collectionInitiation.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('collection initiation and webhook ordering', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('collection initiation and webhook ordering', () => {
   const ids: string[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await Payment.deleteMany({ _id: { $in: ids } }); await mongoose.disconnect() })

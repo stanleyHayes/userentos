@@ -13,12 +13,13 @@ import { Wallet } from '../models/Wallet.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 import insuranceRouter from '../routes/insurance.js'
 import providerRouter from '../routes/insuranceProviders.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../utils/audit.js', () => ({ recordAudit: vi.fn().mockResolvedValue(undefined) }))
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('insurer-owned policies and claims', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('insurer-owned policies and claims', () => {
   const holder = String(new mongoose.Types.ObjectId())
   const insurer = String(new mongoose.Types.ObjectId())
   const unlicensed = String(new mongoose.Types.ObjectId())

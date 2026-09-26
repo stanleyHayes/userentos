@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notifyDisputeFiled: vi.fn(), notifyDisputeUpdate: vi.fn() }))
 vi.mock('../services/webhooks.js', () => ({ dispatchWebhook: vi.fn() }))
@@ -17,10 +18,10 @@ const { Dispute } = await import('../models/Dispute.js')
 const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: disputesRouter } = await import('../routes/disputes.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 const uploads = path.resolve('uploads')
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('dispute evidence uploads', () => {
+describe.skipIf(!hasTestMongo)('dispute evidence uploads', () => {
   const filerId = String(new mongoose.Types.ObjectId())
   const strangerId = String(new mongoose.Types.ObjectId())
   let disputeId = ''

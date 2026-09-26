@@ -9,9 +9,10 @@ import { completeGooglePurchase } from '../services/storeBilling/completePurchas
 import { recoverGooglePurchases } from '../services/storeBilling/recoverPurchases.js'
 import { activeStoreSubscription } from '../services/storeBilling/activeEntitlements.js'
 import { acknowledgeGoogleSubscription, verifyGoogleSubscription, purchaseTokenHash } from '../services/storeBilling/googlePlay.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 vi.mock('../services/storeBilling/googlePlay.js', async original => ({ ...await original<object>(), verifyGoogleSubscription: vi.fn(), acknowledgeGoogleSubscription: vi.fn() }))
-const localUri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== localUri)('store subscription lifecycle through real Mongo', () => {
+const localUri = testMongoUri
+describe.skipIf(!hasTestMongo)('store subscription lifecycle through real Mongo', () => {
   const userId = new mongoose.Types.ObjectId()
   const mappingId = new mongoose.Types.ObjectId()
   const packageId = new mongoose.Types.ObjectId().toString()

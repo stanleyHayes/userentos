@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(true), notifyWelcome: vi.fn() }))
 vi.mock('../services/webhooks.js', () => ({ dispatchWebhook: vi.fn() }))
@@ -16,9 +17,9 @@ const { errorHandler } = await import('../middleware/errorHandler.js')
 const { default: usersRouter } = await import('../routes/users.js')
 const { default: agreementsRouter } = await import('../routes/agreements.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('staff views minimise national IDs and contact details (Act 843)', () => {
+describe.skipIf(!hasTestMongo)('staff views minimise national IDs and contact details (Act 843)', () => {
   const ids = { subject: '', gov: '', admin: '', landlord: '' }
   for (const key of Object.keys(ids) as (keyof typeof ids)[]) ids[key] = String(new mongoose.Types.ObjectId())
   const tag = ids.subject.slice(-8)

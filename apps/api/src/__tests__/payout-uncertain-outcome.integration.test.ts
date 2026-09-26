@@ -18,11 +18,12 @@ import { TransferRejectedError } from '../services/payouts/types.js'
 import router from '../routes/payouts.js'
 import { reconcileUncertainPayouts, RECONCILE_MIN_AGE_MS } from '../services/payouts/reconcile.js'
 import { reloadRegulatedFeatures } from '../config/regulatedFeatures.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 process.env.PAYMENTS_PROVIDER_MODE = 'simulated'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('payouts whose transfer outcome is unknown', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('payouts whose transfer outcome is unknown', () => {
   const payee = new mongoose.Types.ObjectId(), admin = new mongoose.Types.ObjectId()
   let server: Server, url: string
   const headers = (id: mongoose.Types.ObjectId, roles: string[]) => ({

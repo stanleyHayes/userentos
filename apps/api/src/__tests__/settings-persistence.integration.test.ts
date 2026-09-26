@@ -7,8 +7,9 @@ import { beforeAll, afterAll, beforeEach, afterEach, describe, it, expect, vi } 
 import { config } from '../config/index.js'
 import { User } from '../models/User.js'
 import router from '../routes/settings.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('settings persistence', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('settings persistence', () => {
   const id = new mongoose.Types.ObjectId()
   let server: Server, url: string
   const token = jwt.sign({ userId: String(id), roles: ['tenant'], purpose: 'session' }, config.jwtSecret, { expiresIn: '10m' })

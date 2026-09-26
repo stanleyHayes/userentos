@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(true) }))
 
@@ -15,9 +16,9 @@ const { errorHandler } = await import('../middleware/errorHandler.js')
 const { agreementTermsHash, SIGNATURE_CONSENT_STATEMENT } = await import('../services/agreementEvidence.js')
 const { default: renewalsRouter } = await import('../routes/renewals.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('renewals change an active lease only with the tenant\'s e-signature (Act 772)', () => {
+describe.skipIf(!hasTestMongo)('renewals change an active lease only with the tenant\'s e-signature (Act 772)', () => {
   const landlordId = String(new mongoose.Types.ObjectId())
   const tenantId = String(new mongoose.Types.ObjectId())
   let agreementId = ''

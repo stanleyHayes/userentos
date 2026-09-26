@@ -8,10 +8,11 @@ import { config } from '../config/index.js'
 import { User } from '../models/User.js'
 import { RefreshToken } from '../models/RefreshToken.js'
 import usersRouter from '../routes/users.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('identity edits and role changes', () => {
+describe.skipIf(!hasTestMongo)('identity edits and role changes', () => {
   const userId = String(new mongoose.Types.ObjectId())
   const adminId = String(new mongoose.Types.ObjectId())
   let server: Server

@@ -5,6 +5,7 @@ import crypto from 'node:crypto'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../services/notify.js', () => ({ notify: vi.fn().mockResolvedValue(true), notifyWelcome: vi.fn().mockResolvedValue(true) }))
 vi.mock('../services/email.js', () => ({ sendInvitationEmail: vi.fn().mockResolvedValue(true), buildInviteUrl: (t: string) => `https://app.test/invite?token=${t}` }))
@@ -21,9 +22,9 @@ const { default: invitationsRouter } = await import('../routes/invitations.js')
 const { revokeUnreviewedVerification } = await import('../scripts/revokeUnreviewedVerification.js')
 const { TERMS_VERSION, PRIVACY_VERSION } = await import('../types/index.js')
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+const uri = testMongoUri
 
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('identity verification comes only from an admin review', () => {
+describe.skipIf(!hasTestMongo)('identity verification comes only from an admin review', () => {
   const adminId = String(new mongoose.Types.ObjectId())
   const tag = adminId.slice(-8)
   const created: string[] = [adminId]

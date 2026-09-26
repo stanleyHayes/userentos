@@ -2,8 +2,9 @@ import mongoose from 'mongoose'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { LegalDocument } from '../models/LegalDocument.js'
 import { correctLegacyReceiptDocuments, LEGACY_RECEIPT_CONTENT, LEGACY_RECEIPT_TITLE, RECEIPT_LEGAL_DOCUMENT } from '../services/legal/receiptCorpus.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('receipt corpus correction with real Mongo', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('receipt corpus correction with real Mongo', () => {
   const ids: mongoose.Types.ObjectId[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await LegalDocument.deleteMany({ _id: { $in: ids } }); await mongoose.disconnect() })

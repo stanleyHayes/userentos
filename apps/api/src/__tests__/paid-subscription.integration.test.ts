@@ -5,14 +5,15 @@ import { Payment } from '../models/Payment.js'
 import { activatePaidSubscription, currentPaidSubscription, subscriptionPeriod } from '../services/payments/paidSubscription.js'
 import { resolveEntitlements } from '../services/entitlements.js'
 import { subscriptionController } from '../controllers/subscriptionController.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
 describe('paid subscription periods', () => {
   it('clamps January and leap-day anniversaries without rolling into another month', () => {
     expect(subscriptionPeriod(new Date('2026-01-31T12:34:00Z'), 'monthly').toISOString()).toBe('2026-02-28T12:34:00.000Z')
     expect(subscriptionPeriod(new Date('2024-02-29T12:34:00Z'), 'yearly').toISOString()).toBe('2025-02-28T12:34:00.000Z')
   })
 })
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('saved subscription activation', () => {
+describe.skipIf(!hasTestMongo)('saved subscription activation', () => {
   const userIds: string[] = [], paymentIds: mongoose.Types.ObjectId[] = []
   beforeAll(async () => { await mongoose.connect(uri) })
   afterAll(async () => { await User.deleteMany({ _id: { $in: userIds } }); await Payment.deleteMany({ _id: { $in: paymentIds } }); await mongoose.disconnect() })

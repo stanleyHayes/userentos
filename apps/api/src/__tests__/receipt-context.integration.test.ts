@@ -4,8 +4,9 @@ import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { Payment } from '../models/Payment.js'
 import { captureReceiptContext } from '../services/payments/receiptContext.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('payment receipt context with real Mongo', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('payment receipt context with real Mongo', () => {
   const tenantId = new mongoose.Types.ObjectId(), landlordId = new mongoose.Types.ObjectId(), propertyId = new mongoose.Types.ObjectId(), paymentId = new mongoose.Types.ObjectId()
   const agreement = { tenantId: String(tenantId), landlordId: String(landlordId), propertyId: String(propertyId) }
   beforeAll(async () => {

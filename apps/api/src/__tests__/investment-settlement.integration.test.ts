@@ -12,11 +12,12 @@ import { InvestmentProduct } from '../models/InvestmentProduct.js'
 import { Wallet } from '../models/Wallet.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 import router from '../routes/investments.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
 vi.mock('../utils/audit.js', () => ({ recordAudit: vi.fn().mockResolvedValue(undefined) }))
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('partner-settled investments', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('partner-settled investments', () => {
   const investor = String(new mongoose.Types.ObjectId())
   const admin = String(new mongoose.Types.ObjectId())
   const partnerIds: string[] = []

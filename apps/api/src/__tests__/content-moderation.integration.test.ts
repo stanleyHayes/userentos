@@ -23,9 +23,10 @@ import chat from '../routes/chat.js'
 import businesses from '../routes/businesses.js'
 import bookings from '../routes/serviceBookings.js'
 import reports from '../routes/contentReports.js'
+import { testMongoUri, hasTestMongo } from './testMongo.js'
 
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('content moderation on user-generated text', () => {
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('content moderation on user-generated text', () => {
   const [customer, owner, reporter] = [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()]
   const users = [customer, owner, reporter]
   const conversationId = new mongoose.Types.ObjectId(), businessId = new mongoose.Types.ObjectId()

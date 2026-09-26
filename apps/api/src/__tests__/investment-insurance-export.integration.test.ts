@@ -9,8 +9,9 @@ import { User } from '../models/User.js'
 import { Investment } from '../models/Investment.js'
 import { InsurancePolicy } from '../models/InsurancePolicy.js'
 import router from '../routes/users.js'
-const uri = 'mongodb://localhost:28018/rentos_compliance_e2e'
-describe.skipIf(process.env.RENTOS_TEST_MONGO_URI !== uri)('personal investment and insurance export', () => {
+import { testMongoUri, hasTestMongo } from './testMongo.js'
+const uri = testMongoUri
+describe.skipIf(!hasTestMongo)('personal investment and insurance export', () => {
   const owner = String(new mongoose.Types.ObjectId()), outsider = String(new mongoose.Types.ObjectId())
   let server: Server
   beforeAll(async () => {
