@@ -146,28 +146,40 @@ export function refreshCurrentSession(rejectedToken: string | null): Promise<boo
   // Another request may already have rotated the token while this 401 travelled.
   if (origin.token && origin.token !== rejectedToken) return Promise.resolve(true)
   if (refreshAttempt?.generation === generation) return refreshAttempt.promise
-  const performRefresh = async () => {
+  const performRefresh = async (locked: boolean) => {
     // Storage events may still be queued when this tab acquires the origin lock.
     if (localStorage.getItem(AUTH_KEY) === null) useAuthStore.getState().logout()
     else await useAuthStore.persist.rehydrate()
     const latest = useAuthStore.getState()
     if (generation !== sessionGeneration || latest.user?.id !== origin.user?.id || latest.sessionId !== origin.sessionId || latest.isAuthenticated !== origin.isAuthenticated) throw new Error('Account session changed. Please try again.')
     if (latest.token && latest.token !== rejectedToken) return true
-    const isCurrent = () => {
+    const sameSession = () => {
       const current = useAuthStore.getState()
-      return generation === sessionGeneration && current.user?.id === latest.user?.id && current.sessionId === latest.sessionId && current.token === latest.token && current.refreshToken === latest.refreshToken && current.isAuthenticated === latest.isAuthenticated
+      return generation === sessionGeneration && current.user?.id === latest.user?.id && current.sessionId === latest.sessionId && current.isAuthenticated === latest.isAuthenticated
     }
+    const replaced = () => {
+      const current = useAuthStore.getState()
+      return current.token !== latest.token || current.refreshToken !== latest.refreshToken
+    }
+    // Nothing orders the lock grant against the previous holder's storage write,
+    // so this tab may refresh with the token that holder just rotated and see
+    // the holder's pair arrive mid-flight. Only lock holders rotate a session,
+    // and the server answers a just-rotated token once, retiring the pair it was
+    // rotated into, so under the lock the answer is the newest pair and is kept.
+    // Without the lock, any change of credentials means the session moved on.
+    const isCurrent = locked ? sameSession : () => sameSession() && !replaced()
     const rotated = await tryRefreshSession(latest.refreshToken, isCurrent)
     if (localStorage.getItem(AUTH_KEY) === null) useAuthStore.getState().logout()
     else await useAuthStore.persist.rehydrate()
     if (!isCurrent()) throw new Error('Account session changed. Please try again.')
-    if (!rotated) return false
+    // Rejected, but the pair that arrived meanwhile is live: retry with it.
+    if (!rotated) return replaced()
     useAuthStore.setState(rotated)
     return true
   }
   const promise = (async () => {
-    if (navigator.locks) return await navigator.locks.request(`rentos-auth-refresh:${origin.sessionId ?? 'legacy'}`, { signal: AbortSignal.timeout(10_000) }, performRefresh)
-    return performRefresh()
+    if (navigator.locks) return await navigator.locks.request(`rentos-auth-refresh:${origin.sessionId ?? 'legacy'}`, { signal: AbortSignal.timeout(10_000) }, () => performRefresh(true))
+    return performRefresh(false)
   })().finally(() => { if (refreshAttempt?.promise === promise) refreshAttempt = null })
   refreshAttempt = { generation, promise }
   return promise

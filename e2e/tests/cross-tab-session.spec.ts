@@ -121,10 +121,11 @@ test('two tabs recover expired API requests with one refresh rotation', async ({
   await openSettings(page)
   const other = await context.newPage()
   await openSettings(other)
-  const user = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state.user)
+  const initial = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state)
   await context.route('**/api/**', route => route.fulfill({ json: { data: { items: [], total: 0 } } }))
-  await context.route('**/api/users/me', route => route.fulfill({ json: { data: user } }))
-  let requests = 0, refreshes = 0
+  await context.route('**/api/users/me', route => route.fulfill({ json: { data: initial.user } }))
+  let requests = 0
+  const presented: string[] = []
   let release!: () => void
   const gate = new Promise<void>(resolve => { release = resolve })
   await context.route('**/api/tab-refresh-fixture', route => {
@@ -132,26 +133,110 @@ test('two tabs recover expired API requests with one refresh rotation', async ({
     return route.fulfill(route.request().headers().authorization === 'Bearer shared-rotated-access' ? { json: { data: 'recovered' } } : { status: 401 })
   })
   await context.route('**/api/auth/refresh', async route => {
-    refreshes++
+    presented.push(route.request().postDataJSON().refreshToken)
     await gate
     return route.fulfill({ json: { data: { token: 'shared-rotated-access', refreshToken: 'shared-rotated-refresh' } } })
   })
-  const request = (tab: Page) => tab.evaluate(async () => {
-    const path = performance.getEntriesByType('resource').map(entry => entry.name).find(name => new URL(name).pathname === '/src/lib/api.ts')!
-    const { api } = await import(path)
+  const apiUrl = await moduleUrl(page, '/src/lib/api.ts')
+  const request = (tab: Page) => tab.evaluate(async url => {
+    const { api } = await import(url)
     return api.get('/tab-refresh-fixture')
-  })
+  }, apiUrl)
   const first = request(page)
-  await expect.poll(() => refreshes).toBe(1)
+  await expect.poll(() => presented.length).toBe(1)
   const second = request(other)
   await expect.poll(() => requests).toBe(2)
+  // While the first tab's rotation is in flight the second waits on the shared lock.
+  await expect.poll(() => page.evaluate(async () => (await navigator.locks.query()).pending?.filter(lock => lock.name?.startsWith('rentos-auth-refresh:')).length ?? 0)).toBe(1)
+  expect(presented).toHaveLength(1)
   release()
   expect(await first).toBe('recovered')
   expect(await second).toBe('recovered')
-  expect(refreshes).toBe(1)
   expect(requests).toBe(4)
-  expect((await snapshot(page)).refreshToken).toBe('shared-rotated-refresh')
-  expect((await snapshot(other)).refreshToken).toBe('shared-rotated-refresh')
+  // After the lock passes on, the second tab normally finds the rotated pair in
+  // storage. If its read beats the first tab's write reaching it, it refreshes
+  // with the original token once more, which the server's rotation grace answers.
+  expect(presented.length).toBeLessThanOrEqual(2)
+  expect(presented.every(token => token === initial.refreshToken)).toBe(true)
+  for (const tab of [page, other]) await expect.poll(() => refreshTokenIn(tab)).toEqual({ memory: 'shared-rotated-refresh', stored: 'shared-rotated-refresh' })
+  await other.close()
+})
+
+// The previous lock holder's stored pair can reach the next holder after that
+// tab has already refreshed with the token the holder rotated. Simulated here by
+// storing another tab's pair while this tab's refresh is held in flight.
+for (const answer of ['a fresh pair', 'a rejection']) test(`a refresh answered with ${answer} after another tab's rotation arrives keeps the tab signed in`, async ({ authedPage: page, context }) => {
+  await openSettings(page)
+  const other = await context.newPage()
+  await openSettings(other)
+  const initial = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state)
+  await context.route('**/api/**', route => route.fulfill({ json: { data: { items: [], total: 0 } } }))
+  await context.route('**/api/users/me', route => route.fulfill({ json: { data: initial.user } }))
+  // The server re-issues a just-rotated token once (retiring the pair it was
+  // rotated into), or refuses it when that re-issue was already spent.
+  const live = answer === 'a fresh pair' ? { token: 'regranted-access', refreshToken: 'regranted-refresh' } : { token: 'holder-access', refreshToken: 'holder-refresh' }
+  await context.route('**/api/tab-regrant-fixture', route => route.fulfill(route.request().headers().authorization === `Bearer ${live.token}` ? { json: { data: 'recovered' } } : { status: 401 }))
+  let refreshes = 0
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await context.route('**/api/auth/refresh', async route => {
+    refreshes++
+    await gate
+    return route.fulfill(answer === 'a fresh pair' ? { json: { data: live } } : { status: 401, json: { error: 'Invalid or expired refresh token' } })
+  })
+  const outcome = page.evaluate(async url => {
+    const { api } = await import(url)
+    try { return await api.get('/tab-regrant-fixture') } catch (error) { return (error as Error).message }
+  }, await moduleUrl(page, '/src/lib/api.ts'))
+  await expect.poll(() => refreshes).toBe(1)
+  await other.evaluate(async url => {
+    const { useAuthStore } = await import(url)
+    useAuthStore.setState({ token: 'holder-access', refreshToken: 'holder-refresh' })
+  }, await moduleUrl(other, '/src/stores/authStore.ts'))
+  await expect.poll(async () => (await snapshot(page)).refreshToken).toBe('holder-refresh')
+  release()
+  expect(await outcome).toBe('recovered')
+  for (const tab of [page, other]) {
+    await expect.poll(() => refreshTokenIn(tab)).toEqual({ memory: live.refreshToken, stored: live.refreshToken })
+    expect(await snapshot(tab)).toMatchObject({ isAuthenticated: true, sessionId: initial.sessionId })
+  }
+  expect(refreshes).toBe(1)
+  await other.close()
+})
+
+test('two tabs whose access token expired together end on one live refresh token', async ({ authedPage: page, context }) => {
+  await openSettings(page)
+  const other = await context.newPage()
+  await openSettings(other)
+  const initial = await page.evaluate(() => JSON.parse(localStorage.getItem('rentos-auth')!).state)
+  // Hold the real refresh endpoint until both tabs have failed with the expired token.
+  let refreshes = 0
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await context.route('**/api/auth/refresh', async route => { refreshes++; await gate; await route.continue() })
+  await page.evaluate(async url => {
+    const { useAuthStore } = await import(url)
+    useAuthStore.setState({ token: 'expired-fixture-access' })
+  }, await moduleUrl(page, '/src/stores/authStore.ts'))
+  for (const tab of [page, other]) await expect.poll(async () => (await snapshot(tab)).token).toBe('expired-fixture-access')
+  const apiUrl = await moduleUrl(page, '/src/lib/api.ts')
+  const request = (tab: Page) => tab.evaluate(async url => {
+    const { api } = await import(url)
+    return (await api.get('/users/me') as { id: string }).id
+  }, apiUrl)
+  const results = Promise.all([request(page), request(other)])
+  await expect.poll(() => refreshes).toBeGreaterThan(0)
+  release()
+  expect(await results).toEqual([initial.user.id, initial.user.id])
+  await expect.poll(async () => {
+    const [a, b] = [await snapshot(page), await snapshot(other)]
+    return a.isAuthenticated && b.isAuthenticated && a.token !== 'expired-fixture-access' && a.token === b.token && a.refreshToken === b.refreshToken && a.refreshToken === await storedRefreshToken(page) && a.refreshToken === await storedRefreshToken(other)
+  }).toBe(true)
+  const { token, refreshToken } = await snapshot(page)
+  expect(refreshToken).not.toBe(initial.refreshToken)
+  // What the tabs kept is the live pair: neither retired by a second refresh nor revoked.
+  expect((await page.request.get('/api/users/me', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(200)
+  expect((await page.request.post('/api/auth/refresh', { data: { refreshToken } })).status()).toBe(200)
   await other.close()
 })
 
