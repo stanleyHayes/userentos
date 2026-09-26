@@ -9,6 +9,6 @@ export function suspendedAccess(method: string, originalUrl: string): boolean {
   if (method === 'DELETE') return path === '/api/users/me'
   if (method === 'POST') return [
     '/api/auth/change-password', '/api/auth/logout-all', '/api/auth/mfa/setup', '/api/auth/mfa/enable', '/api/auth/mfa/disable', '/api/payments',
-  ].includes(path) || /^\/api\/agreements\/[a-f\d]{24}\/document-link$/i.test(path) || /^\/api\/payments\/[a-f\d]{24}\/receipt$/i.test(path)
+  ].includes(path) || /^\/api\/agreements\/[a-f\d]{24}\/document-link$/i.test(path) || /^\/api\/payments\/[a-f\d]{24}\/(receipt|cancel)$/i.test(path)
   return false
 }
