@@ -65,7 +65,7 @@ Remove the last bullet if a regulated feature is ever enabled, and describe that
 
 **Google Play**
 - **Financial features declaration:** answer that the app offers none while every regulated feature is off. If lending is ever enabled, file the Personal Loans declaration. The code enforces a minimum 3-month term, shows APR including fees and the total cost of credit, and names the lender.
-- **Data safety:** use [mobile-data-disclosures.md](mobile-data-disclosures.md). Data is encrypted in transit. Users can request deletion in-app and on the web.
+- **Data safety:** use [mobile-data-disclosures.md](mobile-data-disclosures.md). Data is encrypted in transit. Users can delete their account in the app (Settings → Privacy) and ask for deletion on the web (`/delete-account`). Listings and profiles come down at once and the rest of the account data is deleted after 30 days; tenancy, payment, regulated-service and moderation records and the 2-year security log are kept for legal reasons. So answer that users can request deletion and that some data is retained for legal reasons.
 - **Permissions:**
   - Photos use the system photo picker, so no storage permission.
   - Camera, microphone, storage, media and overlay permissions are blocked in `app.json`.
