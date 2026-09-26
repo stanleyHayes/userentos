@@ -19,6 +19,7 @@ import { ListSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { PaymentStatus, Payment } from '@/types'
 import { RentReceiptControl } from './RentReceiptControl'
+import { CancelPaymentControl } from './CancelPaymentControl'
 
 const statusVariant: Record<PaymentStatus, 'warning' | 'default' | 'success' | 'danger' | 'muted'> = {
   pending: 'warning',
@@ -353,6 +354,7 @@ export function PaymentsPage() {
             {['completed', 'refunded'].includes(selectedPayment.status) && (user?.id === selectedPayment.tenantId || user?.id === selectedPayment.landlordId) && (
               <RentReceiptControl key={selectedPayment.id} paymentId={selectedPayment.id} />
             )}
+            <CancelPaymentControl key={`cancel-${selectedPayment.id}`} payment={selectedPayment} onCancelled={setSelectedPayment} />
           </div>
         </Modal>
       )}
