@@ -6,6 +6,7 @@ import { User } from '../models/User.js'
 import { isSessionRevoked } from '../models/RevokedSession.js'
 import { sessionVersionFilter, biometricVersionFilter } from '../services/sessionVersion.js'
 import { suspendedAccess } from '../services/suspendedAccess.js'
+import type { DownloadScope } from '../services/authService.js'
 
 export interface AuthPayload {
   biometricVersion?: number
@@ -27,6 +28,8 @@ export interface AuthPayload {
    * auth routes that verify those purposes explicitly.
    */
   purpose?: string
+  /** Download tokens only: the one kind of file this token opens. */
+  scope?: string
 }
 
 /* eslint-disable @typescript-eslint/no-namespace */
@@ -102,8 +105,14 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
  * query param. Session tokens are deliberately NOT accepted here, so a leaked
  * download URL never yields account access. The token carries the session
  * version and sid it was minted under, so revoking that session ends it too.
+ * It also carries the scope it was minted for, and each route names the one
+ * scope it takes: a copied agreement-PDF link never opens the data export.
  */
-export async function authenticateDownload(req: Request, res: Response, next: NextFunction) {
+export function authenticateDownload(scope: DownloadScope) {
+  return (req: Request, res: Response, next: NextFunction) => verifyDownload(scope, req, res, next)
+}
+
+async function verifyDownload(scope: DownloadScope, req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization
   const bearer = header?.startsWith('Bearer ') ? header.slice(7) : undefined
   const query = typeof req.query.token === 'string' ? req.query.token : undefined
@@ -115,7 +124,7 @@ export async function authenticateDownload(req: Request, res: Response, next: Ne
 
   try {
     const payload = jwt.verify(token, config.jwtSecret) as AuthPayload
-    if (payload.purpose !== 'download') {
+    if (payload.purpose !== 'download' || payload.scope !== scope) {
       error(res, 'Invalid or expired download token', 401)
       return
     }

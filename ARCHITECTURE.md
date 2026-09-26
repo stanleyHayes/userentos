@@ -239,6 +239,7 @@ Every 5 minutes, pending payments older than 2 minutes with a `providerRef` are 
 
 ### Session revocation
 - Access tokens carry `sessionVersion`, `biometricVersion` (biometric logins) and `sid`, the session family carried through refresh rotation. Logout and per-device biometric revoke list the `sid` in the `RevokedSession` TTL collection, which `authenticate`, `optionalAuth`, download links and sockets check.
+- Download links (`signDownloadToken`, five minutes) also carry a `scope`: `agreement-document`, `passport-pdf`, `dispute-evidence` or `account-export`. `authenticateDownload(scope)` accepts only its own route's scope, so an agreement PDF link never opens the personal-data export.
 - A socket is closed, with `session:revoked` sent first, by the direct `disconnect*` calls, by a change-stream watcher on `User` and `RevokedSession` (every instance, about a second), by a 30-second batched sweep, and by a throttled (15 s) re-check before a packet is handled. Without a replica set the watcher logs once and the sweep alone applies.
 - Only a refresh or biometric token that was rotated away counts as replay, once, and not within 30 seconds of its rotation.
 

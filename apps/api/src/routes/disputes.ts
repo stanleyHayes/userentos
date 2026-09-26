@@ -72,13 +72,13 @@ router.post('/:id/evidence', authenticate, asyncHandler(authorizeEvidenceUpload)
 router.post('/:id/evidence/:documentId/link', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const found = await readableEvidence(param(req.params.id), param(req.params.documentId), req.user!.userId, req.user!.roles)
   if (found.status !== 200) { error(res, found.status === 403 ? 'Not authorized to view this dispute' : 'Evidence not found', found.status); return }
-  success(res, { token: signDownloadToken(req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
+  success(res, { token: signDownloadToken('dispute-evidence', req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
 }))
 
 // GET /disputes/:id/evidence/:documentId — the file itself, via a signed link
 // that expires in a minute. Download tokens carry no roles, so the viewer's
 // current roles are read from the account.
-router.get('/:id/evidence/:documentId', authenticateDownload, asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/evidence/:documentId', authenticateDownload('dispute-evidence'), asyncHandler(async (req: Request, res: Response) => {
   const viewer = await User.findById(req.user!.userId).select('roles').lean()
   const found = await readableEvidence(param(req.params.id), param(req.params.documentId), req.user!.userId, viewer?.roles ?? [])
   if (found.status !== 200) { error(res, found.status === 403 ? 'Not authorized to view this dispute' : 'Evidence not found', found.status); return }

@@ -137,18 +137,18 @@ describe.skipIf(!hasTestMongo)('per-device sign-out', () => {
       const req = { headers: {}, query: { token }, method: 'GET', originalUrl: '/api/agreements/x/document.pdf' } as unknown as Request
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
       const next = vi.fn()
-      await authenticateDownload(req, res as unknown as Response, next)
+      await authenticateDownload('agreement-document')(req, res as unknown as Response, next)
       return next.mock.calls.length > 0
     }
-    const beforeLogout = signDownloadToken(userId, 0, sidOf(a.token))
+    const beforeLogout = signDownloadToken('agreement-document', userId, 0, sidOf(a.token))
     expect(await downloads(beforeLogout)).toBe(true)
     await service.logout(a.refreshToken)
     expect(await downloads(beforeLogout)).toBe(false)
 
     const b = await signIn(userId)
-    const beforeLogoutAll = signDownloadToken(userId, 0, sidOf(b.token))
+    const beforeLogoutAll = signDownloadToken('agreement-document', userId, 0, sidOf(b.token))
     await service.logoutAll(userId)
     expect(await downloads(beforeLogoutAll)).toBe(false)
-    expect(await downloads(signDownloadToken(userId, 1))).toBe(true)
+    expect(await downloads(signDownloadToken('agreement-document', userId, 1))).toBe(true)
   })
 })

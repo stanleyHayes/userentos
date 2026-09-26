@@ -17,6 +17,9 @@ import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js
 import { recordErasure, completeErasure } from '../services/erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from '../services/propertyImages.js'
 
+/** The app's per-photo upload key (a UUID). */
+const UPLOAD_KEY = /^[A-Za-z0-9-]{8,64}$/
+
 // With credit reporting off no tenant has a score to meet a landlord's minimum,
 // so that criterion would silently hide every listing from everyone.
 const creditCriteriaApply = () => isRegulatedFeatureEnabled('credit_reporting')
@@ -460,10 +463,37 @@ export const propertyController = {
   uploadImages: async (req: Request, res: Response) => {
     const files = req.files as Express.Multer.File[]
     if (!files || files.length === 0) { error(res, 'No images uploaded'); return }
+    // The app sends one photo per request with its own key. A timed-out
+    // upload the server still finished is then not stored a second time
+    // when the app retries it.
+    const uploadKey = req.body?.uploadKey
+    if (uploadKey !== undefined && (typeof uploadKey !== 'string' || !UPLOAD_KEY.test(uploadKey))) { error(res, 'Invalid upload key'); return }
+    if (uploadKey !== undefined && files.length !== 1) { error(res, 'An upload key names a single photo'); return }
 
     const property = await Property.findById(param(req.params.id))
     if (!property) { error(res, 'Property not found', 404); return }
     if (property.landlordId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
+    if (uploadKey && property.imageAssets.some((asset) => asset.uploadKey === uploadKey)) {
+      success(res, { images: property.images }, 'Images uploaded'); return
+    }
+
+    if (uploadKey) {
+      const { url, publicId } = await uploadToCloudinary(files[0].buffer, { folder: 'properties', resourceType: 'image' })
+      // Only if no request with this key got there first (two copies of one
+      // retried upload can both pass the check above).
+      const stored = await Property.findOneAndUpdate(
+        { _id: property._id, 'imageAssets.uploadKey': { $ne: uploadKey } },
+        { $push: { images: url, imageAssets: { url, publicId, uploadKey } } },
+        { returnDocument: 'after', projection: { images: 1 } },
+      ).lean()
+      if (stored) { success(res, { images: stored.images }, 'Images uploaded'); return }
+      // The other copy was stored: this file never joined the listing.
+      await eraseStoredAssets([{ publicId, resourceType: 'image', deliveryType: 'upload' }])
+        .catch(() => console.warn('[Property] A duplicate listing photo could not be deleted from storage:', publicId))
+      const current = await Property.findById(property._id).select('images').lean()
+      success(res, { images: current?.images ?? [] }, 'Images uploaded')
+      return
+    }
 
     const uploaded = await Promise.all(
       files.map(async (file) => {

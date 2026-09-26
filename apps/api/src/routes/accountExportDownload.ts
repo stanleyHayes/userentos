@@ -14,13 +14,16 @@ import { buildAccountExport } from '../services/accountExport.js'
 const router = Router()
 
 // Mint a short-lived, download-only token (5 min), so the session JWT never
-// goes into a URL. The same pattern as agreement and passport PDFs.
+// goes into a URL. The same pattern as agreement and passport PDFs, but
+// scoped to the export: it opens no other download, and no other download
+// token opens the export.
 router.post('/me/export-link', authenticate, asyncHandler(async (req, res) => {
-  success(res, { token: signDownloadToken(req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
+  success(res, { token: signDownloadToken('account-export', req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
 }))
 
-// Download-purpose token only (Bearer or ?token=); a session token is refused.
-router.get('/me/export.json', authenticateDownload, asyncHandler(async (req, res) => {
+// Export-scoped download token only (Bearer or ?token=); a session token or
+// an agreement, passport or evidence link is refused.
+router.get('/me/export.json', authenticateDownload('account-export'), asyncHandler(async (req, res) => {
   const data = await buildAccountExport(req.user!.userId)
   const day = new Date().toISOString().slice(0, 10)
   res.setHeader('Cache-Control', 'no-store')

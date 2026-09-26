@@ -109,13 +109,42 @@ describe('authenticate — token purpose enforcement', () => {
 
 describe('authenticateDownload', () => {
   it('accepts a download-purpose token via query param', async () => {
+    const req = makeReq(undefined, sign({ userId: 'u1', purpose: 'download', scope: 'agreement-document' }))
+    const res = makeRes()
+    const next = vi.fn() as unknown as NextFunction
+
+    await authenticateDownload('agreement-document')(req, res as unknown as Response, next)
+
+    expect(next).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['agreement-document', 'account-export'],
+    ['passport-pdf', 'account-export'],
+    ['dispute-evidence', 'account-export'],
+    ['account-export', 'agreement-document'],
+    ['account-export', 'passport-pdf'],
+    ['account-export', 'dispute-evidence'],
+  ] as const)('refuses a %s link on the %s route', async (minted, route) => {
+    const req = makeReq(undefined, sign({ userId: 'u1', purpose: 'download', scope: minted }))
+    const res = makeRes()
+    const next = vi.fn() as unknown as NextFunction
+
+    await authenticateDownload(route)(req, res as unknown as Response, next)
+
+    expect(res.statusCode).toBe(401)
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unscoped download token (minted before scopes existed)', async () => {
     const req = makeReq(undefined, sign({ userId: 'u1', purpose: 'download' }))
     const res = makeRes()
     const next = vi.fn() as unknown as NextFunction
 
-    await authenticateDownload(req, res as unknown as Response, next)
+    await authenticateDownload('agreement-document')(req, res as unknown as Response, next)
 
-    expect(next).toHaveBeenCalledOnce()
+    expect(res.statusCode).toBe(401)
+    expect(next).not.toHaveBeenCalled()
   })
 
   it('rejects a full session token — a leaked download URL must not grant account access', async () => {
@@ -123,7 +152,7 @@ describe('authenticateDownload', () => {
     const res = makeRes()
     const next = vi.fn() as unknown as NextFunction
 
-    await authenticateDownload(req, res as unknown as Response, next)
+    await authenticateDownload('agreement-document')(req, res as unknown as Response, next)
 
     expect(res.statusCode).toBe(401)
     expect(next).not.toHaveBeenCalled()
@@ -134,7 +163,7 @@ describe('authenticateDownload', () => {
     const res = makeRes()
     const next = vi.fn() as unknown as NextFunction
 
-    await authenticateDownload(req, res as unknown as Response, next)
+    await authenticateDownload('agreement-document')(req, res as unknown as Response, next)
 
     expect(res.statusCode).toBe(401)
     expect(next).not.toHaveBeenCalled()
@@ -145,10 +174,10 @@ describe('authenticateDownload', () => {
 describe('deleted-account session invalidation', () => {
   it.each(['session', 'download'])('rejects an existing %s token after account deletion', async purpose => {
     vi.mocked(User.exists).mockResolvedValue(null)
-    const req = makeReq(sign({ ...sessionPayload, purpose }))
+    const req = makeReq(sign({ ...sessionPayload, purpose, scope: 'agreement-document' }))
     const res = makeRes()
     const next = vi.fn()
-    await (purpose === 'session' ? authenticate : authenticateDownload)(req, res as unknown as Response, next)
+    await (purpose === 'session' ? authenticate : authenticateDownload('agreement-document'))(req, res as unknown as Response, next)
     expect(res.statusCode).toBe(401)
     expect(next).not.toHaveBeenCalled()
   })
@@ -200,10 +229,10 @@ describe('suspended-account access boundaries', () => {
     expect(req.user?.suspended).toBe(true)
   })
   it('permits a download-purpose token for a tenancy PDF, subject to controller ownership', async () => {
-    const req = makeReq(undefined, sign({ ...sessionPayload, purpose: 'download' }))
+    const req = makeReq(undefined, sign({ ...sessionPayload, purpose: 'download', scope: 'agreement-document' }))
     req.method = 'GET'; req.originalUrl = '/api/agreements/507f1f77bcf86cd799439011/document.pdf?token=redacted'
     const next = vi.fn()
-    await authenticateDownload(req, makeRes() as unknown as Response, next)
+    await authenticateDownload('agreement-document')(req, makeRes() as unknown as Response, next)
     expect(next).toHaveBeenCalledOnce()
     expect(req.user?.suspended).toBe(true)
   })
@@ -212,7 +241,7 @@ describe('suspended-account access boundaries', () => {
     await optionalAuth(req, makeRes() as unknown as Response, vi.fn())
     expect(req.user).toBeUndefined()
     const res = makeRes(); const next = vi.fn()
-    await authenticateDownload(makeReq(sign({ ...sessionPayload, purpose: 'download' })), res as unknown as Response, next)
+    await authenticateDownload('agreement-document')(makeReq(sign({ ...sessionPayload, purpose: 'download', scope: 'agreement-document' })), res as unknown as Response, next)
     expect(res.statusCode).toBe(401)
     expect(next).not.toHaveBeenCalled()
   })

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { photoPart, submitListing } from '../../apps/mobile/lib/propertyPhotos'
+import { createPhotoUploadKeys, photoPart, photosToUpload, submitListing } from '../../apps/mobile/lib/propertyPhotos'
 import { listingShareContent } from '../../apps/mobile/lib/listingShare'
 import { EXPORT_LINK_PATH, exportDownloadPath } from '../../apps/mobile/lib/exportDownload'
 
@@ -68,6 +68,22 @@ test.describe('adding a listing with photos', () => {
     await expect(submitListing({ savedId: null, create: async () => { throw new Error('Validation failed') }, photos: ['file:///a.jpg'], uploadPhoto: upload })).rejects.toThrow('Validation failed')
     await expect(submitListing({ savedId: null, create: async () => ({}), photos: ['file:///a.jpg'], uploadPhoto: upload })).rejects.toThrow('not saved')
     expect(uploads).toBe(0)
+  })
+
+  test('"Retry photos" sends every photo not uploaded yet, including ones added after the failure', () => {
+    const uploaded = new Set(['file:///a.jpg', 'file:///c.jpg'])
+    // b.jpg failed; d.jpg was picked while the "photos missing" notice showed.
+    expect(photosToUpload(['file:///a.jpg', 'file:///b.jpg', 'file:///c.jpg', 'file:///d.jpg'], uploaded)).toEqual(['file:///b.jpg', 'file:///d.jpg'])
+    // A failed photo the user removed is not sent.
+    expect(photosToUpload(['file:///a.jpg', 'file:///c.jpg'], uploaded)).toEqual([])
+  })
+
+  test('a photo keeps its upload key across retries, so the server stores a slow upload it finished only once', () => {
+    let n = 0
+    const keyFor = createPhotoUploadKeys(() => `key-${++n}`)
+    expect(keyFor('file:///a.jpg')).toBe('key-1')
+    expect(keyFor('file:///b.jpg')).toBe('key-2')
+    expect(keyFor('file:///a.jpg')).toBe('key-1')
   })
 
   test('each photo part names its type', () => {

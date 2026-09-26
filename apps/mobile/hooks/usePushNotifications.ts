@@ -11,6 +11,7 @@ export function usePushNotifications() {
   const hydrated = useAuthStore((s) => s.hydrated)
   const userId = useAuthStore((s) => s.user?.id)
   const sessionVersion = useAuthStore((s) => s.sessionVersion)
+  const profilePending = useAuthStore((s) => s.profilePending)
   const router = useRouter()
   const segments = useSegments()
   // Bumped when the user grants permission from the in-context pre-prompt, so
@@ -18,8 +19,10 @@ export function usePushNotifications() {
   const [optInCount, setOptInCount] = useState(0)
 
   // Signed in and past the auth screens: the auth guard's redirect away from
-  // the login screen would otherwise replace the screen a tap opened.
-  const canOpen = hydrated && isAuthenticated && segments[0] !== 'auth'
+  // the login screen would otherwise replace the screen a tap opened. On a
+  // cold start that opened before the profile loaded, the tap also waits for
+  // it, so the screen mounts knowing the account's role.
+  const canOpen = hydrated && isAuthenticated && !profilePending && segments[0] !== 'auth'
   const canOpenRef = useRef(canOpen)
   canOpenRef.current = canOpen
   const routerRef = useRef(router)

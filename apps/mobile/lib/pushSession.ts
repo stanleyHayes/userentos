@@ -1,13 +1,23 @@
-/** OS permission/token work may finish after logout or effect cleanup. */
+/**
+ * OS permission/token work may finish after logout or effect cleanup.
+ *
+ * `remember` gets the token before the register request is sent, not after
+ * it answers: a sign-out tapped while that request is in flight must still
+ * carry the token, or a registration the server processed just before the
+ * logout would keep sending the account's pushes to the signed-out phone.
+ * Removing a token the server never registered does nothing.
+ */
 export async function registerSessionPush(
   isCurrent: () => boolean,
   acquireToken: () => Promise<string | null>,
   register: (token: string) => Promise<unknown>,
+  remember: (token: string) => void = () => {},
 ): Promise<string | null> {
   try {
     if (!isCurrent()) return null
     const token = await acquireToken()
     if (!token || !isCurrent()) return null
+    remember(token)
     await register(token)
     return isCurrent() ? token : null
   } catch {

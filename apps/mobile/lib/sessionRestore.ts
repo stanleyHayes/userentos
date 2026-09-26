@@ -1,5 +1,9 @@
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
+/** How long a cold start waits on the splash for the profile. Short: the app
+ * opens fine without it (lib/authState.ts, profilePending). */
+export const PROFILE_WAIT_MS = 3_000
+
 /**
  * Loads the profile for a session restored from the keychain, which keeps
  * only the account id and credentials (lib/sessionRecord.ts).
@@ -19,7 +23,7 @@ export async function restoreProfile<U extends { id: string }>(dependencies: {
   retryDelaysMs?: readonly number[]
   sleep?: (ms: number) => Promise<void>
 }): Promise<'loaded' | 'pending' | 'ended'> {
-  const { userId, load, current, apply, timeoutMs = 8_000, retryDelaysMs = [5_000, 15_000, 30_000, 60_000], sleep = wait } = dependencies
+  const { userId, load, current, apply, timeoutMs = PROFILE_WAIT_MS, retryDelaysMs = [5_000, 15_000, 30_000, 60_000], sleep = wait } = dependencies
   const accept = (user: U) => {
     if (!current() || user?.id !== userId) return false
     apply(user)

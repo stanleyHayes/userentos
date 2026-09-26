@@ -183,10 +183,12 @@ export default function ProfileScreen() {
 
           {/* Role + verified */}
           <View style={s.badgeRow}>
-            <View style={s.roleBadge}>
-              <Ionicons name="shield-checkmark" size={10} color="#ffffff" />
-              <Text style={s.roleText}>{user?.activeRole?.replace('_', ' ')}</Text>
-            </View>
+            {!!user?.activeRole && (
+              <View style={s.roleBadge}>
+                <Ionicons name="shield-checkmark" size={10} color="#ffffff" />
+                <Text style={s.roleText}>{user.activeRole.replace('_', ' ')}</Text>
+              </View>
+            )}
             {user?.isVerified && (
               <View style={[s.verifiedBadge]}>
                 <Ionicons name="checkmark-circle" size={10} color="#10b981" />

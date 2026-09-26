@@ -147,12 +147,12 @@ router.post('/:id/document-link', authenticate, asyncHandler(async (req: Request
   if (agreement.tenantId !== userId && agreement.landlordId !== userId) {
     error(res, 'Not a party to this agreement', 403); return
   }
-  success(res, { token: signDownloadToken(userId, req.user!.sessionVersion, req.user!.sid) })
+  success(res, { token: signDownloadToken('agreement-document', userId, req.user!.sessionVersion, req.user!.sid) })
 }))
 
 // GET /agreements/:id/document.pdf — downloadable signed Rental Agreement PDF
 // Auth: short-lived download-purpose token only (Bearer header OR ?token=).
-router.get('/:id/document.pdf', authenticateDownload, asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/document.pdf', authenticateDownload('agreement-document'), asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId
 
   const id = param(req.params.id)

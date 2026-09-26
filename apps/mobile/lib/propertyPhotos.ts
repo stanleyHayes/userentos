@@ -9,6 +9,25 @@ export function photoPart(uri: string): { uri: string; name: string; type: strin
   return { uri, name, type }
 }
 
+/**
+ * One key per picked photo, the same on every retry. The time limit only
+ * stops the phone: the server can still finish a slow upload, so a retry
+ * sends the photo again, and the server stores a key once (uploadKey).
+ */
+export function createPhotoUploadKeys(randomId: () => string): (uri: string) => string {
+  const keys = new Map<string, string>()
+  return (uri) => {
+    let key = keys.get(uri)
+    if (!key) { key = randomId(); keys.set(uri, key) }
+    return key
+  }
+}
+
+/** What "Retry photos" sends: every photo on the screen not yet uploaded, including ones added after the failure. */
+export function photosToUpload(images: readonly string[], uploaded: ReadonlySet<string>): string[] {
+  return images.filter((uri) => !uploaded.has(uri))
+}
+
 export interface ListingSubmission { propertyId: string; failed: string[] }
 
 /**

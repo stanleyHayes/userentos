@@ -498,7 +498,7 @@ async function streamPassportPdfResponse(
 // Mint a short-lived, download-only token for the PDF. This replaces putting
 // the full session JWT in ?token= URLs (which leaked into logs/history).
 const documentLinkHandler = asyncHandler(async (req: Request, res: Response) => {
-  success(res, { token: signDownloadToken(req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
+  success(res, { token: signDownloadToken('passport-pdf', req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
 })
 
 // Authenticated PDF — accepts a download-purpose token only (Bearer or ?token=).
@@ -597,7 +597,7 @@ async function isShareRevoked(userId: string, iat?: number): Promise<boolean> {
 // (`/me.pdf`) because Express 5's path-to-regexp v8 no longer treats a
 // literal `.ext` after a `:param` as a literal. The client uses these
 // canonical paths.
-router.get('/me/pdf', authenticateDownload, myPdfHandler)
+router.get('/me/pdf', authenticateDownload('passport-pdf'), myPdfHandler)
 router.post('/me/document-link', authenticate, documentLinkHandler)
 router.get('/me/json', authenticate, myJsonHandler)
 router.get('/me', authenticate, myJsonHandler)
