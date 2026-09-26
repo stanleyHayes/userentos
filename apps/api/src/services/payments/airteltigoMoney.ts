@@ -69,7 +69,8 @@ class AirtelTigoMoneyProvider implements PaymentProvider {
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     const token = await getAccessToken()
-    const providerRef = randomUUID()
+    // Saved by the caller before this request, so a timeout stays reconcilable.
+    const providerRef = input.providerRef ?? randomUUID()
     const body = {
       reference: input.reference,
       subscriber: { country: 'GH', currency: 'GHS', msisdn: input.phone },

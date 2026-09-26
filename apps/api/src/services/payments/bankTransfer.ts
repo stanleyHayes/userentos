@@ -52,7 +52,7 @@ class BankTransferProvider implements PaymentProvider {
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
     // No upstream call — generate a local correlator. The PSP echoes our
     // `reference` (from the payer's narration) when the credit lands.
-    const providerRef = `BNK-${randomUUID()}`
+    const providerRef = input.providerRef ?? `BNK-${randomUUID()}`
     return {
       providerRef,
       status: 'pending',

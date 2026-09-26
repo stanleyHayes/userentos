@@ -64,6 +64,18 @@ export function toLocalGhanaMsisdn(phone: string): string {
 
 interface Envelope<T> { status: boolean; message: string; data: T }
 
+/** Paystack answered, with an HTTP status: tells "no such transaction" apart from an outage. */
+class PaystackRequestError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
+
+/** Only an explicit answer that the reference is unknown means no charge exists. */
+export function isPaystackNotFound(err: unknown): boolean {
+  return err instanceof PaystackRequestError && (err.status === 404 || (err.status === 400 && /not found/i.test(err.message)))
+}
+
 async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: init?.method ?? 'GET',
@@ -80,7 +92,7 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
     throw new Error(`Paystack ${path} returned non-JSON (${res.status}): ${text.slice(0, 200)}`)
   }
   if (!res.ok || payload.status === false) {
-    throw new Error(`Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
+    throw new PaystackRequestError(res.status, `Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
   }
   return payload.data
 }
@@ -157,8 +169,11 @@ function makePaystackProvider(id: Exclude<ProviderId, 'bank_transfer'>): Payment
       try {
         const data = await call<{ reference?: string; status?: string; amount?: number; currency?: string; paid_at?: string }>(`/transaction/verify/${encodeURIComponent(providerRef)}`)
         if (typeof data.reference !== 'string' || typeof data.amount !== 'number' || !Number.isSafeInteger(data.amount) || data.amount <= 0 || typeof data.currency !== 'string') return null
-        return { reference: data.reference, status: mapChargeStatus(data.status), amount: data.amount / 100, currency: data.currency, paidAt: data.paid_at }
-      } catch {
+        return { reference: data.reference, status: mapChargeStatus(data.status), amount: data.amount / 100, currency: data.currency, paidAt: data.paid_at, providerStatus: data.status }
+      } catch (err) {
+        // "Never heard of it" is an answer (the charge never reached Paystack);
+        // an outage is not, and must leave the payment unresolved.
+        if (isPaystackNotFound(err)) return { notFound: true as const }
         logger.warn('[paystack-rent] Financial verification unavailable; payment remains unresolved')
         return null
       }

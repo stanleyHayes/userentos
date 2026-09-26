@@ -44,7 +44,7 @@ class SimulatorProvider implements PaymentProvider {
   }
 
   async initiateCollection(input: CollectionInput): Promise<InitiateResult> {
-    const providerRef = `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    const providerRef = input.providerRef ?? `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
     // Auto-complete after 2s (legacy behavior)
     setTimeout(() => {
       emit({
