@@ -13,9 +13,9 @@ interface DocContextMenuProps {
 export function DocContextMenu({ doc, isOwner, onVersions, onAudit, onDelete, onClose }: DocContextMenuProps) {
   return (
     <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-border/60 dark:border-[#252a3a]/60 bg-white dark:bg-[#161927] shadow-xl dark:shadow-black/40 z-40 overflow-hidden py-1">
-      {doc.url && (
+      {doc.fileUrl && (
         <a
-          href={doc.url}
+          href={doc.fileUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2.5 px-3 py-2 text-xs text-primary-dark dark:text-gray-300 hover:bg-surface dark:hover:bg-[#0c0e1a] transition-colors"

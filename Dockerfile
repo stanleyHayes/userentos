@@ -36,9 +36,6 @@ COPY --from=builder --chown=rentos:rentos /app/package.json ./package.json
 # Pricing model artifact — the API resolves it relative to its own dist/
 COPY --from=builder --chown=rentos:rentos /packages/ml-models ./packages/ml-models
 
-# Uploads directory (persistent volume recommended)
-RUN mkdir -p /app/uploads && chown -R rentos:rentos /app/uploads
-
 USER rentos
 
 ENV NODE_ENV=production

@@ -4,7 +4,8 @@ import { authenticate } from '../middleware/auth.js'
 import { Worker } from '../models/Worker.js'
 import { ServiceBooking } from '../models/ServiceBooking.js'
 import { success, error } from '../utils/response.js'
-import { escapeRegex } from '../utils/params.js'
+import { escapeRegex, queryBoolean } from '../utils/params.js'
+import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 
 const router = Router()
 
@@ -14,9 +15,9 @@ const router = Router()
 const listSchema = z.object({
   trade: z.string().optional(),
   location: z.string().optional(),
-  emergency: z.coerce.boolean().optional(),
+  emergency: queryBoolean(),
   minRating: z.coerce.number().min(0).max(5).optional(),
-  verified: z.coerce.boolean().optional(),
+  verified: queryBoolean(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
@@ -28,7 +29,7 @@ router.get('/', authenticate, async (req, res) => {
   const { trade, location, emergency, minRating, verified, page, limit } = parsed.data
 
   // Public directory lists admin-approved workers only (KYC gate).
-  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] }, approvalStatus: 'approved' }
+  const filter: Record<string, unknown> = { status: { $in: ['available', 'busy'] }, approvalStatus: 'approved', userId: { $nin: await closedAccountIds() } }
   if (trade) filter.trades = { $in: [trade] }
   if (location) filter.location = { $regex: new RegExp(escapeRegex(location), 'i') }
   if (emergency) filter.emergencyAvailable = true
@@ -123,7 +124,7 @@ router.get('/:id', authenticate, async (req, res) => {
   // admins can view them (the owner needs access to edit while pending).
   const isOwner = worker.userId === req.user?.userId
   const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('super_admin')
-  if (worker.approvalStatus !== 'approved' && !isOwner && !isAdmin) {
+  if ((worker.approvalStatus !== 'approved' || await isClosedAccount(worker.userId)) && !isOwner && !isAdmin) {
     error(res, 'Worker not found', 404)
     return
   }

@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { canCreateWorkflow, rowsToCsv, initialWorkflowStatus, ownerMaySetStatus } from '../services/capabilityLogic.js'
+import { canCreateWorkflow, rowsToCsv, initialWorkflowStatus, ownerMaySetStatus, WORKFLOW_ROLES } from '../services/capabilityLogic.js'
 
 describe('role capability workflow authorization', () => {
-  it('allows only the intended role to request provider payouts', () => {
-    expect(canCreateWorkflow('provider_payout', ['service_provider'])).toBe(true)
-    expect(canCreateWorkflow('provider_payout', ['tenant'])).toBe(false)
+  it('allows only the intended role to buy a featured listing', () => {
+    expect(canCreateWorkflow('business_subscription', ['business'])).toBe(true)
+    expect(canCreateWorkflow('business_subscription', ['tenant'])).toBe(false)
+  })
+
+  it('offers no provider payout workflow: withdrawals go through /api/payouts', () => {
+    // It debited the wallet into a record nothing ever paid out.
+    expect(Object.keys(WORKFLOW_ROLES)).not.toContain('provider_payout')
   })
 
   it('supports the dedicated developer role and delegated property roles', () => {

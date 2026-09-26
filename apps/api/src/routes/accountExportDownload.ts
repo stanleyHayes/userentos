@@ -3,7 +3,7 @@ import { authenticate, authenticateDownload } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { signDownloadToken } from '../services/authService.js'
 import { success } from '../utils/response.js'
-import { buildAccountExport } from './users.js'
+import { buildAccountExport } from '../services/accountExport.js'
 
 /**
  * The personal-data export as a file. The mobile app opens this in the

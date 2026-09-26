@@ -1,5 +1,6 @@
 import { Payment } from '../../models/Payment.js'
 import { User } from '../../models/User.js'
+import { financialAlert } from './alerts.js'
 import type { SubscriptionTerms } from './subscriptionTerms.js'
 
 export function subscriptionPeriod(start: Date, cycle: 'monthly' | 'yearly') {
@@ -57,7 +58,16 @@ export async function activatePaidSubscription(paymentId: string, now = new Date
     if (!newer) return false
     result = 'superseded'
   }
-  await Payment.updateOne({ _id: payment._id, subscriptionActivatedAt: { $exists: false } }, { $set: { subscriptionActivatedAt: now, subscriptionActivationResult: result }, $unset: { subscriptionNextAttemptAt: '' } })
+  // A superseded payment bought no coverage: the payer is owed their money
+  // back. Flagged in the same write that records the outcome, for an admin to
+  // refund through the provider (never automatically).
+  const recorded = await Payment.updateOne({ _id: payment._id, subscriptionActivatedAt: { $exists: false } }, {
+    $set: { subscriptionActivatedAt: now, subscriptionActivationResult: result, ...(result === 'superseded' ? { refundStatus: 'required', refundReason: 'Superseded by a later subscription payment; no coverage was granted' } : {}) },
+    $unset: { subscriptionNextAttemptAt: '' },
+  })
+  if (result === 'superseded' && recorded.modifiedCount) {
+    financialAlert('subscription_payment_superseded', { type: 'Payment', id: paymentId }, { reference: payment.reference, amount: payment.amount, tenantId: payment.tenantId })
+  }
   return true
 }
 

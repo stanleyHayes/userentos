@@ -5,13 +5,13 @@ import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
+import { RejectListingModal, type RejectableListing } from '../components/RejectListingModal'
 
 interface PendingProperty {
   id: string
   title: string
   address: { street: string; city: string; region: string }
   rentAmount: number
-  landlordName?: string
   createdAt: string
 }
 
@@ -21,12 +21,21 @@ export default function GovReviewsScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [actioningId, setActioningId] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<RejectableListing | null>(null)
+  const [loadError, setLoadError] = useState('')
 
   async function load() {
     try {
-      const data = await api.get<{ items: PendingProperty[] }>('/properties/pending-review')
+      // /properties/review-queue authorises by review permission (government,
+      // admin, super admin). /properties/pending-review is admin-only, so a
+      // government reviewer got a 403 here and saw "All caught up".
+      const data = await api.get<{ items: PendingProperty[] }>('/properties/review-queue')
       setProperties(data.items ?? [])
-    } catch { /* no-op */ } finally { setLoading(false) }
+      setLoadError('')
+    } catch (e) {
+      // Surface the failure — an empty "All caught up" hides a broken queue.
+      setLoadError((e as { message?: string }).message || 'Could not load the review queue.')
+    } finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
@@ -48,6 +57,9 @@ export default function GovReviewsScreen() {
             await api.post(`/properties/${id}/review`, { action: 'approve' })
             Alert.alert('Approved', 'Property has been approved and is now listed.')
             setProperties((prev) => prev.filter((p) => p.id !== id))
+            // The queue is served a page at a time: reload so listings beyond
+            // the first page move up instead of a false "All caught up".
+            void load()
           } catch (e) {
       const _err = e as { message?: string }
       Alert.alert('Error', (e as { message?: string }).message || 'Failed to approve property')
@@ -57,36 +69,11 @@ export default function GovReviewsScreen() {
     ])
   }
 
-  function handleReject(id: string) {
-    Alert.prompt(
-      'Reject Property',
-      'Please provide a reason for rejection:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async (reason?: string) => {
-            if (!reason?.trim()) {
-              Alert.alert('Error', 'A rejection reason is required.')
-              return
-            }
-            setActioningId(id)
-            try {
-              await api.post(`/properties/${id}/review`, { action: 'reject', reason: reason.trim() })
-              Alert.alert('Rejected', 'Property has been rejected.')
-              setProperties((prev) => prev.filter((p) => p.id !== id))
-            } catch (e) {
-      const _err = e as { message?: string }
-      Alert.alert('Error', (e as { message?: string }).message || 'Failed to reject property')
-    } finally { setActioningId(null) }
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'default',
-    )
+  function handleRejected(id: string) {
+    setRejecting(null)
+    setProperties((prev) => prev.filter((p) => p.id !== id))
+    Alert.alert('Rejected', 'Property has been rejected.')
+    void load()
   }
 
   function renderProperty({ item }: { item: PendingProperty }) {
@@ -115,11 +102,6 @@ export default function GovReviewsScreen() {
             <Text style={[s.detailValue, { color: c.text }]}>{formatCurrency(item.rentAmount)}/mo</Text>
           </View>
           <View style={s.detailRow}>
-            <Ionicons name="person-outline" size={14} color={c.primary} />
-            <Text style={[s.detailLabel, { color: c.muted }]}>Landlord</Text>
-            <Text style={[s.detailValue, { color: c.text }]}>{item.landlordName ?? 'Unknown'}</Text>
-          </View>
-          <View style={s.detailRow}>
             <Ionicons name="calendar-outline" size={14} color={c.secondary} />
             <Text style={[s.detailLabel, { color: c.muted }]}>Submitted</Text>
             <Text style={[s.detailValue, { color: c.text }]}>{formatDate(item.createdAt)}</Text>
@@ -144,7 +126,7 @@ export default function GovReviewsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.actionBtn, { backgroundColor: c.danger }]}
-            onPress={() => handleReject(item.id)}
+            onPress={() => setRejecting({ id: item.id, title: item.title })}
             disabled={isActioning}
             activeOpacity={0.8}
           >
@@ -169,6 +151,12 @@ export default function GovReviewsScreen() {
             <View style={s.empty}>
               <ActivityIndicator size="large" color={c.primary} />
             </View>
+          ) : loadError ? (
+            <View style={s.empty}>
+              <Ionicons name="cloud-offline-outline" size={48} color={c.danger} />
+              <Text style={[s.emptyTitle, { color: c.text }]}>Couldn't load reviews</Text>
+              <Text style={[s.emptyDesc, { color: c.muted }]}>{loadError}</Text>
+            </View>
           ) : (
             <View style={s.empty}>
               <Ionicons name="checkmark-done-circle-outline" size={48} color={c.muted} />
@@ -178,6 +166,7 @@ export default function GovReviewsScreen() {
           )
         }
       />
+      <RejectListingModal listing={rejecting} onClose={() => setRejecting(null)} onRejected={handleRejected} />
     </View>
   )
 }

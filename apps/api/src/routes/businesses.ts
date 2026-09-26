@@ -15,6 +15,7 @@ import { logger } from '../utils/logger.js'
 import { summarizeInquiryStatuses } from '../services/businessAnalytics.js'
 import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
 import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
+import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 
 const router = Router()
 
@@ -57,7 +58,7 @@ router.get('/', authenticate, async (req, res) => {
   const boostFeatured = placement === 'directory'
 
   // Public directory lists admin-approved businesses only (KYC gate).
-  const filter: Record<string, unknown> = { approvalStatus: 'approved' }
+  const filter: Record<string, unknown> = { approvalStatus: 'approved', ownerId: { $nin: await closedAccountIds() } }
   if (category) filter.category = category
   if (city) filter.city = new RegExp(`^${escapeRegex(city)}$`, 'i')
   if (search) {
@@ -208,7 +209,7 @@ router.get('/:id', authenticate, async (req, res) => {
   // admins can view them (the owner needs access to edit while pending).
   const isOwner = business.ownerId === req.user!.userId
   const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('super_admin')
-  if (business.approvalStatus !== 'approved' && !isOwner && !isAdmin) {
+  if ((business.approvalStatus !== 'approved' || await isClosedAccount(business.ownerId)) && !isOwner && !isAdmin) {
     error(res, 'Business not found', 404)
     return
   }

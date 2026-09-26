@@ -16,6 +16,8 @@ import { approveApplication, disburseContract, applyRepayment, buildCreditQuote,
 import { maxAdvanceMonthsFor } from '../services/legal/agreementCompliance.js'
 import { RENT_LAW } from '../services/legal/rentLaw.js'
 import { success, error } from '../utils/response.js'
+import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
+import { round2 } from '../utils/money.js'
 import { param } from '../utils/params.js'
 import { requireApprovedEntity } from '../middleware/entityApproval.js'
 import { requireVerifiedFinancierLicence } from '../middleware/financierLicence.js'
@@ -341,12 +343,10 @@ router.post('/contracts/:id/repay', authenticate, async (req, res) => {
   if (contract.applicantId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
   // The contract must be repayable BEFORE we touch the wallet — otherwise a debit
-  // followed by a thrown applyRepayment would burn the borrower's money.
-  // 'defaulted' accepts repayment. Refusing money from a borrower trying to
-  // cure their own default is indefensible on its own, and combined with the
-  // arrears cron — which was the only thing setting 'defaulted' — it left an
-  // automated job able to lock someone out of ever repaying their loan.
-  if (!['active', 'in_grace', 'in_arrears', 'defaulted'].includes(contract.status)) {
+  // followed by a thrown applyRepayment would burn the borrower's money. The
+  // rule is services/financing.ts applyRepayment's: a 'defaulted' contract is
+  // refused here, before any debit, rather than debited and then refunded.
+  if (!['active', 'in_grace', 'in_arrears'].includes(contract.status)) {
     error(res, `Contract is ${contract.status} — cannot accept repayment`); return
   }
 
@@ -354,44 +354,33 @@ router.post('/contracts/:id/repay', authenticate, async (req, res) => {
   if (!Number.isFinite(amount) || amount <= 0) { error(res, 'Invalid amount'); return }
 
   // Never debit more than is actually outstanding (overpayment was silently lost).
-  const round2 = (n: number) => Math.round(n * 100) / 100
   const outstanding = round2(contract.totalRepayable - contract.amountRepaid)
   if (outstanding <= 0) { error(res, 'This contract is already fully repaid'); return }
   const payAmount = Math.min(round2(amount), outstanding)
 
-  // Atomic conditional debit FIRST (no concurrent double-spend). If applying the
-  // repayment then fails, refund; if less than payAmount was applied, refund the rest.
+  // Guarded debit FIRST through the wallet ledger (balance and ledger entry in
+  // one write — no concurrent double-spend). If applying the repayment then
+  // fails, refund; if less than payAmount was applied, refund the rest. Both
+  // refunds are ledger credits too, so every balance change has its entry.
   const ref = `REPAY-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId: req.user!.userId, balance: { $gte: payAmount } },
-    { $inc: { balance: -payAmount } },
-    { returnDocument: 'after' },
-  )
-  if (!wallet) { error(res, 'Insufficient wallet balance'); return }
+  const description = `Financing repayment ${contract._id.toString().slice(-6)}`
+  const debited = await debitWallet(req.user!.userId, payAmount, { type: 'withdrawal', reference: ref, description })
+  if (!debited) { error(res, 'Insufficient wallet balance'); return }
 
   let result
   try {
     result = await applyRepayment(contract._id.toString(), payAmount, ref)
   } catch (e) {
-    await Wallet.updateOne({ userId: req.user!.userId }, { $inc: { balance: payAmount } })
+    await creditWallet(req.user!.userId, payAmount, { type: 'refund', reference: `${ref}-REV`, description: 'Reversal of failed financing repayment' })
     error(res, (e as Error).message || 'Repayment failed'); return
   }
 
   // Refund any amount that couldn't be applied (e.g. rounding remainder).
   const unused = round2(payAmount - result.applied)
   if (unused > 0) {
-    await Wallet.updateOne({ userId: req.user!.userId }, { $inc: { balance: unused } })
+    await creditWallet(req.user!.userId, unused, { type: 'refund', reference: `${ref}-UNUSED`, description: 'Unapplied part of financing repayment' })
   }
-  const finalBalance = round2(wallet.balance + unused)
-
-  await Wallet.updateOne({ userId: req.user!.userId }, { $push: { transactions: {
-    type: 'withdrawal',
-    amount: result.applied,
-    balanceAfter: finalBalance,
-    reference: ref,
-    description: `Financing repayment ${contract._id.toString().slice(-6)}`,
-    createdAt: new Date().toISOString(),
-  } } })
+  const finalBalance = (await Wallet.findOne({ userId: req.user!.userId }).select('balance').lean())?.balance ?? 0
 
   success(res, { contract: idOf(result.contract.toObject()), applied: result.applied, walletBalance: finalBalance })
 })
@@ -406,9 +395,13 @@ router.get('/portfolio', authenticate, requireRole('financier'), async (req, res
     FinancingContract.find({ financierId }).lean(),
     FinancingApplication.find({ financierId }).lean(),
   ])
-  const total = contracts.reduce((sum, c) => sum + c.principal, 0)
+  // A contract starts as 'pending_disbursement' when the application is
+  // approved: nothing has been paid out and nothing is owed yet.
+  const total = contracts.filter((c) => c.status !== 'pending_disbursement').reduce((sum, c) => sum + c.principal, 0)
   const repaid = contracts.reduce((sum, c) => sum + c.amountRepaid, 0)
-  const outstanding = contracts.reduce((sum, c) => sum + (c.totalRepayable - c.amountRepaid), 0)
+  const outstanding = contracts
+    .filter((c) => ['active', 'in_grace', 'in_arrears', 'defaulted'].includes(c.status))
+    .reduce((sum, c) => sum + Math.max(0, c.totalRepayable - c.amountRepaid), 0)
   const active = contracts.filter((c) => c.status === 'active').length
   const settled = contracts.filter((c) => c.status === 'settled').length
   const defaults = contracts.filter((c) => c.status === 'defaulted').length

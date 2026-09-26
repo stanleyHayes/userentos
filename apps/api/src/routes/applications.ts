@@ -154,16 +154,25 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
   } else {
     filter.tenantId = userId
   }
+  // Status counts cover everything the caller can see, not one page or one
+  // status tab, so the page's KPIs stay right while it pages on the server.
+  const summaryFilter = { ...filter }
   if (statusFilter) filter.status = statusFilter
 
   const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
   const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
   const skip = (page - 1) * pageSize
 
-  const [total, applications] = await Promise.all([
+  const [total, applications, byStatus] = await Promise.all([
     Application.countDocuments(filter),
     Application.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(pageSize).lean(),
+    Application.aggregate<{ _id: string; count: number }>([{ $match: summaryFilter }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
   ])
+  const summary: Record<string, number> = { total: 0 }
+  for (const row of byStatus) {
+    summary[row._id] = row.count
+    summary.total += row.count
+  }
 
   // Enrich with property titles and tenant names
   const propertyIds = [...new Set(applications.map((a) => a.propertyId))]
@@ -192,7 +201,7 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
     }
   })
 
-  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
+  success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)), summary })
 }))
 
 // ─── GET /applications/:id — single application ───

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import {
   AdminEmptyState,
   AdminLoadingState,
   AdminPageHeader,
+  AdminPagination,
   AdminStatCard,
   AdminStatGrid,
   AdminTableCard,
@@ -26,33 +27,37 @@ function label(value: string) {
 }
 
 export function AdminEmployersPage() {
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const { data, isLoading } = useAdminEmployers()
-  const items = useMemo(() => data?.items ?? [], [data?.items])
+  const [page, setPage] = useState(1)
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter((e) => {
-      return (
-        e.legalName.toLowerCase().includes(q) ||
-        (e.tradingName?.toLowerCase().includes(q) ?? false) ||
-        e.tin.toLowerCase().includes(q) ||
-        e.contactEmail.toLowerCase().includes(q)
-      )
-    })
-  }, [items, search])
+  // Search and paging run on the server (a page holds 50 employers), so wait
+  // for the typist to stop before querying.
+  useEffect(() => {
+    const next = searchInput.trim()
+    if (next === search) return
+    const timer = window.setTimeout(() => {
+      setSearch(next)
+      setPage(1)
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [searchInput, search])
 
-  const stats = useMemo(() => {
-    const verified = items.filter((e) => e.verificationStatus === 'verified').length
-    const needsReview = items.filter((e) => e.verificationStatus === 'pending' || e.verificationStatus === 'rejected').length
-    const activeEmployees = items.reduce((sum, e) => sum + e.activeEmployees, 0)
-    const activeMandates = items.reduce((sum, e) => sum + e.activeMandates, 0)
+  const params = useMemo(() => ({ page, q: search }), [page, search])
+  const { data, isLoading } = useAdminEmployers(params)
+  const filtered = data?.items ?? []
+  const totalPages = data?.totalPages ?? 1
 
-    return { verified, needsReview, activeEmployees, activeMandates }
-  }, [items])
+  // KPIs come from the server's platform-wide summary, not the loaded page.
+  const stats = {
+    verified: data?.summary?.verified ?? 0,
+    needsReview: data?.summary?.needsReview ?? 0,
+    activeEmployees: data?.summary?.activeEmployees ?? 0,
+    activeMandates: data?.summary?.activeMandates ?? 0,
+  }
 
-  const total = data?.total ?? items.length
+  const total = data?.summary?.employers ?? data?.total ?? 0
+  const matching = data?.total ?? filtered.length
 
   return (
     <div className="space-y-5">
@@ -69,7 +74,7 @@ export function AdminEmployersPage() {
         <AdminStatCard
           label="Total employers"
           value={total.toLocaleString()}
-          description={`${filtered.length.toLocaleString()} employers match the current search.`}
+          description={`${matching.toLocaleString()} employers match the current search.`}
           icon={<Building2 size={18} />}
           accent="#60a5fa"
         />
@@ -105,8 +110,8 @@ export function AdminEmployersPage() {
           <Input
             id="employer-search"
             placeholder="Search employers"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
       </AdminToolbar>
@@ -174,6 +179,13 @@ export function AdminEmployersPage() {
           </table>
         </AdminTableCard>
       )}
+
+      <AdminPagination
+        page={page}
+        totalPages={totalPages}
+        onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+      />
     </div>
   )
 }

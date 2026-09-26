@@ -8,14 +8,14 @@ import { api } from '../lib/api'
 
 const screenW = Dimensions.get('window').width
 
+// Subset of GET /analytics/platform — the API nests every metric under its
+// domain (users.total, properties.regions, …); there are no flat fields.
 interface PlatformAnalytics {
-  totalUsers?: number
-  totalProperties?: number
-  paymentVolume?: number
-  activeDisputes?: number
-  violations?: number
-  warnings?: number
-  regionalData?: Record<string, number>
+  users?: { total?: number }
+  properties?: { total?: number; regions?: Record<string, number> }
+  payments?: { completedVolume?: number }
+  disputes?: { open?: number; total?: number }
+  agreements?: { compliance?: { violations?: number; warnings?: number } }
 }
 
 interface HousingDemand {
@@ -80,7 +80,10 @@ export default function GovPanelScreen() {
     )
   }
 
-  const regional = analytics.regionalData ?? {}
+  const totalUsers = analytics.users?.total ?? 0
+  const totalProperties = analytics.properties?.total ?? 0
+  const openDisputes = analytics.disputes?.open ?? 0
+  const regional = analytics.properties?.regions ?? {}
   const regions = Object.entries(regional).sort(([, a], [, b]) => b - a)
   const maxRegional = Math.max(...regions.map(([, v]) => v), 1)
 
@@ -97,10 +100,10 @@ export default function GovPanelScreen() {
     >
       {/* KPI Strip */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kpiStrip}>
-        <KPICard icon="people" label="Total Users" value={String(analytics.totalUsers ?? 0)} color={c.primary} c={c} />
-        <KPICard icon="business" label="Properties" value={String(analytics.totalProperties ?? 0)} color={c.accent} c={c} />
-        <KPICard icon="cash" label="Payment Vol." value={formatCompact(Number(analytics.paymentVolume ?? 0))} color={c.secondary} c={c} />
-        <KPICard icon="alert-circle" label="Disputes" value={String(analytics.activeDisputes ?? 0)} color={c.danger} c={c} />
+        <KPICard icon="people" label="Total Users" value={String(totalUsers)} color={c.primary} c={c} />
+        <KPICard icon="business" label="Properties" value={String(totalProperties)} color={c.accent} c={c} />
+        <KPICard icon="cash" label="Payment Vol." value={formatCompact(Number(analytics.payments?.completedVolume ?? 0))} color={c.secondary} c={c} />
+        <KPICard icon="alert-circle" label="Disputes" value={String(openDisputes)} color={c.danger} c={c} />
       </ScrollView>
 
       {/* Compliance Overview */}
@@ -111,14 +114,14 @@ export default function GovPanelScreen() {
             <View style={[s.complianceIcon, { backgroundColor: c.danger + '20' }]}>
               <Ionicons name="warning-outline" size={20} color={c.danger} />
             </View>
-            <Text style={[s.complianceValue, { color: c.danger }]}>{analytics.violations ?? 0}</Text>
+            <Text style={[s.complianceValue, { color: c.danger }]}>{analytics.agreements?.compliance?.violations ?? 0}</Text>
             <Text style={[s.complianceLabel, { color: c.muted }]}>Violations</Text>
           </View>
           <View style={[s.complianceItem, { backgroundColor: c.warning + '10' }]}>
             <View style={[s.complianceIcon, { backgroundColor: c.warning + '20' }]}>
               <Ionicons name="alert-outline" size={20} color={c.warning} />
             </View>
-            <Text style={[s.complianceValue, { color: c.warning }]}>{analytics.warnings ?? 0}</Text>
+            <Text style={[s.complianceValue, { color: c.warning }]}>{analytics.agreements?.compliance?.warnings ?? 0}</Text>
             <Text style={[s.complianceLabel, { color: c.muted }]}>Warnings</Text>
           </View>
         </View>
@@ -211,9 +214,9 @@ export default function GovPanelScreen() {
       <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text }]}>Platform Health</Text>
         <View style={s.summaryRow}>
-          <SummaryPill label="Users" value={String(analytics.totalUsers ?? 0)} color={c.primary} c={c} />
-          <SummaryPill label="Properties" value={String(analytics.totalProperties ?? 0)} color={c.accent} c={c} />
-          <SummaryPill label="Disputes" value={String(analytics.activeDisputes ?? 0)} color={c.danger} c={c} />
+          <SummaryPill label="Users" value={String(totalUsers)} color={c.primary} c={c} />
+          <SummaryPill label="Properties" value={String(totalProperties)} color={c.accent} c={c} />
+          <SummaryPill label="Disputes" value={String(openDisputes)} color={c.danger} c={c} />
         </View>
       </View>
 

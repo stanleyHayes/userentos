@@ -32,8 +32,6 @@ services:
     depends_on:
       - mongo
       - ml-service
-    volumes:
-      - uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
@@ -84,5 +82,4 @@ services:
 
 volumes:
   mongo-data:
-  uploads:
   ml-data:

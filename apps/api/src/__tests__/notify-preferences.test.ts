@@ -150,8 +150,11 @@ describe('built-in helpers are categorised', () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync(new URL('../services/scheduler.ts', import.meta.url), 'utf8')
     expect(src).toContain("notify({ userId: payment.tenantId, title, message, actionUrl: '/payments', category: 'payment' })")
-    const at = src.indexOf("title: 'Savings Goal Reached!'")
-    expect(src.slice(at, at + 300)).toContain("category: 'savings'")
+    // The auto-debit job lives in its own service now.
+    const autoDebit = readFileSync(new URL('../services/payments/savingsAutoDebit.ts', import.meta.url), 'utf8')
+    const at = autoDebit.indexOf("title: 'Savings Goal Reached!'")
+    expect(at).toBeGreaterThan(-1)
+    expect(autoDebit.slice(at, at + 300)).toContain("category: 'savings'")
   })
 
   it('deliveryPlan maps channels exactly', () => {

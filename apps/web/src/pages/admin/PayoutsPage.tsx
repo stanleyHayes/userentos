@@ -20,10 +20,11 @@ const STATUS_TABS = [
   { label: 'Sending', value: 'processing' },
   { label: 'Paid', value: 'paid' },
   { label: 'Failed', value: 'failed' },
+  { label: 'Reversed', value: 'reversed' },
 ] as const
 
 const statusVariant: Record<string, 'warning' | 'default' | 'success' | 'danger'> = {
-  requested: 'warning', processing: 'default', paid: 'success', failed: 'danger',
+  requested: 'warning', processing: 'default', paid: 'success', failed: 'danger', reversed: 'danger',
 }
 
 /**

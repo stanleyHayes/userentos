@@ -93,20 +93,23 @@ export function InvestmentsTab() {
             return (
               <Card key={inv.id}>
                 <CardContent>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
+                  {/* Stacked on phones: amount, a long status ("Awaiting partner
+                      confirmation") and the redemption button don't fit beside
+                      the title in one row. */}
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <h4 className="text-sm font-bold text-primary-dark capitalize">{inv.type.replace('_', ' ')}{inv.partnerName ? ` · ${inv.partnerName}` : ''}</h4>
                       <p className="text-xs text-muted">
                         {inv.tenure} days · indicative {inv.interestRate}% a year (not guaranteed){inv.status === 'active' ? ` · matures ${formatDate(inv.maturityDate)}` : ''}
                       </p>
                       {inv.rejectionReason && <p className="text-xs text-muted">Reason: {inv.rejectionReason}</p>}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex max-w-full flex-wrap items-center gap-3">
+                      <div className="sm:text-right">
                         <p className="text-sm font-bold text-primary">{formatCurrency(inv.amount)}</p>
                         {inv.settledAmount != null && <p className="text-xs text-accent">Paid out {formatCurrency(inv.settledAmount)}</p>}
                       </div>
-                      <Badge variant={status.variant}>{status.label}</Badge>
+                      <Badge variant={status.variant} className="max-w-full whitespace-normal sm:whitespace-nowrap">{status.label}</Badge>
                       {inv.status === 'active' && (
                         <Button size="sm" variant="outline" onClick={() => withdrawMutation.mutate(inv.id)} disabled={withdrawMutation.isPending}>
                           Request redemption

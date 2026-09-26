@@ -12,14 +12,14 @@ import { Badge } from '@/components/ui/Badge'
 import { Download, Layers3, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type WorkflowKind = 'provider_payout' | 'business_order' | 'business_campaign' | 'business_subscription' | 'housing_benefit' | 'developer_profile' | 'offplan_listing'
+type WorkflowKind = 'business_order' | 'business_campaign' | 'business_subscription' | 'housing_benefit' | 'developer_profile' | 'offplan_listing'
 interface Workflow { id: string; kind: WorkflowKind; status: string; data: Record<string, unknown>; createdAt: string }
 
 const modules: Record<string, { title: string; kind?: WorkflowKind; exportPath?: string }[]> = {
   tenant: [{ title: 'Export rental history', exportPath: '/capabilities/tenant/rental-history.csv' }],
   landlord: [{ title: 'Developer profile', kind: 'developer_profile' }, { title: 'Off-plan listing', kind: 'offplan_listing' }],
   property_manager: [{ title: 'Developer profile', kind: 'developer_profile' }, { title: 'Off-plan listing', kind: 'offplan_listing' }],
-  service_provider: [{ title: 'MoMo payout request', kind: 'provider_payout' }],
+  // Service providers withdraw earnings through Payouts (Savings), not a workflow.
   business: [
     { title: 'Order & fulfillment', kind: 'business_order' },
     { title: 'New-mover campaign', kind: 'business_campaign' },

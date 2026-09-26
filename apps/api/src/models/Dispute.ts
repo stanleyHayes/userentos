@@ -10,7 +10,8 @@ export interface IDispute extends Document {
   status: string
   title: string
   description: string
-  evidence: { type: string; url: string; description: string; uploadedAt: string }[]
+  /** documentId: the private Document behind the file; url is the authorised download route. */
+  evidence: { type: string; url: string; documentId?: string; description: string; uploadedAt: string }[]
   mediationNotes?: string
   resolution?: string
   assignedTo?: string
@@ -30,6 +31,7 @@ const disputeSchema = new Schema<IDispute>({
   evidence: [{
     type: { type: String },
     url: String,
+    documentId: String,
     description: String,
     uploadedAt: String,
   }],

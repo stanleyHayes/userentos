@@ -8,8 +8,9 @@ import { detectStorefrontSlug, isPossibleCustomDomain } from '@/lib/subdomain'
  * A platform subdomain ({slug}.userentos.com) carries the slug in the hostname
  * and needs no request. A custom domain does not — only the server knows which
  * storefront a given domain is attached to — so that case asks
- * GET /storefronts/resolve/host, which reads the same Host header the API's
- * tenant middleware resolved.
+ * GET /storefronts/resolve/host, naming this tab's hostname. The API lives on
+ * its own host, so the request's Host header is the API's, never the domain
+ * the visitor typed.
  *
  * Returns null on the platform's own hosts, which is the overwhelmingly common
  * case, so the normal app renders with no extra request.
@@ -20,7 +21,9 @@ export function useStorefrontHost() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['storefront-host'],
-    queryFn: () => api.get<{ slug: string; name: string; canonicalUrl: string } | null>('/storefronts/resolve/host'),
+    queryFn: () => api.get<{ slug: string; name: string; canonicalUrl: string } | null>(
+      `/storefronts/resolve/host?host=${encodeURIComponent(window.location.hostname)}`,
+    ),
     // Only ask when the hostname could belong to a storefront we cannot name.
     enabled: mightBeCustomDomain,
     staleTime: Infinity,

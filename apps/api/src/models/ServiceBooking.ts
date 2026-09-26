@@ -24,7 +24,8 @@ export interface IServiceBooking extends Document {
   quoteProvided: boolean
   quoteAmount?: number
   quoteAccepted: boolean
-  paymentStatus: 'pending' | 'partial' | 'paid'
+  /** 'refunded' once the provider has refunded the whole online payment. */
+  paymentStatus: 'pending' | 'partial' | 'paid' | 'refunded'
   paymentAmount?: number
   /** Recurring jobs — on completion the next occurrence is auto-created. */
   recurrence: 'none' | 'weekly' | 'biweekly' | 'monthly'
@@ -66,7 +67,7 @@ const serviceBookingSchema = new Schema<IServiceBooking>({
   quoteProvided: { type: Boolean, default: false },
   quoteAmount: Number,
   quoteAccepted: { type: Boolean, default: false },
-  paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'partial', 'paid', 'refunded'], default: 'pending' },
   paymentAmount: Number,
   recurrence: { type: String, enum: ['none', 'weekly', 'biweekly', 'monthly'], default: 'none' },
   rating: Number,

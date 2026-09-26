@@ -10,6 +10,7 @@ import { PayoutAccount } from '../models/PayoutAccount.js'
 import { creditWallet, debitWallet } from '../services/payments/walletLedger.js'
 import { paystackPayoutProvider } from '../services/payouts/paystack.js'
 import { finalizePayout } from '../services/payouts/finalize.js'
+import { applyPayoutRefund } from '../services/payouts/refund.js'
 import { TransferRejectedError } from '../services/payouts/types.js'
 
 vi.mock('../models/Payout.js', async () => {
@@ -37,6 +38,10 @@ vi.mock('../services/payments/walletLedger.js', () => ({
 }))
 vi.mock('../services/notify.js', () => ({
   notify: vi.fn().mockResolvedValue(undefined),
+}))
+// Refunds go through the durable wallet-credit journal (services/payouts/refund.ts).
+vi.mock('../services/payouts/refund.js', () => ({
+  applyPayoutRefund: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('../utils/audit.js', () => ({
   recordAudit: vi.fn().mockResolvedValue(undefined),
@@ -83,6 +88,7 @@ describe('payouts', () => {
     vi.clearAllMocks()
     vi.mocked(debitWallet).mockResolvedValue(true)
     vi.mocked(creditWallet).mockResolvedValue(undefined)
+    vi.mocked(applyPayoutRefund).mockResolvedValue(true)
   })
 
   it('refuses a payout request when no account is set up', async () => {
@@ -113,7 +119,7 @@ describe('payouts', () => {
     expect(body.data.amount).toBe(500)
     expect(body.data.status).toBe('requested')
     // Debited up front so the same balance cannot be requested twice.
-    expect(debitWallet).toHaveBeenCalledWith('user-1', 500, expect.objectContaining({ type: 'withdrawal' }))
+    expect(debitWallet).toHaveBeenCalledWith('user-1', 500, expect.objectContaining({ type: 'withdrawal' }), expect.anything())
   })
 
   it('refunds the wallet when the payout record cannot be written', async () => {
@@ -163,7 +169,8 @@ describe('payouts', () => {
     expect(claimed.save).toHaveBeenCalled()
   })
 
-  it('declining refunds the requester', async () => {
+  it('declining claims the refund in the same write and applies it durably', async () => {
+    vi.mocked(Payout.findOne).mockReturnValue({ select: () => ({ lean: async () => ({ _id: 'payout-1', userId: 'user-1', amount: 500, reference: 'PO-TEST-1' }) }) } as never)
     vi.mocked(Payout.findOneAndUpdate).mockResolvedValue({
       _id: { toString: () => 'payout-1' },
       userId: 'user-1',
@@ -179,7 +186,27 @@ describe('payouts', () => {
     })
 
     expect(res.status).toBe(200)
-    expect(creditWallet).toHaveBeenCalledWith('user-1', 500, expect.objectContaining({ type: 'refund' }))
+    expect(Payout.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'requested', refunded: false }),
+      { $set: expect.objectContaining({ status: 'failed', refunded: true, refundIntent: expect.objectContaining({ operationKey: 'payout-refund:v1:payout-1', amount: 500, userId: 'user-1' }) }) },
+      expect.anything(),
+    )
+    expect(applyPayoutRefund).toHaveBeenCalledWith('payout-1')
+    expect(creditWallet).not.toHaveBeenCalled()
+  })
+
+  it('still declines, and queues the refund, when applying it fails', async () => {
+    vi.mocked(Payout.findOne).mockReturnValue({ select: () => ({ lean: async () => ({ _id: 'payout-1', userId: 'user-1', amount: 500, reference: 'PO-TEST-1' }) }) } as never)
+    vi.mocked(Payout.findOneAndUpdate).mockResolvedValue({
+      _id: { toString: () => 'payout-1' }, userId: 'user-1', amount: 500, reference: 'PO-TEST-1', status: 'failed', destination: ACCOUNT,
+    } as never)
+    vi.mocked(applyPayoutRefund).mockRejectedValueOnce(new Error('wallet busy'))
+
+    const res = await fetch(`${baseUrl}/payout-1/decline`, {
+      method: 'POST', headers: asAdmin(), body: JSON.stringify({ reason: 'Account mismatch' }),
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).message).toMatch(/refund is queued/)
   })
 })
 
@@ -195,6 +222,7 @@ describe('payout finalizer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(creditWallet).mockResolvedValue(undefined)
+    vi.mocked(applyPayoutRefund).mockResolvedValue(true)
   })
 
   it('settles a successful transfer without refunding', async () => {
@@ -208,6 +236,7 @@ describe('payout finalizer', () => {
 
     expect(moved).toBe(true)
     expect(creditWallet).not.toHaveBeenCalled()
+    expect(applyPayoutRefund).not.toHaveBeenCalled()
   })
 
   it('refunds the wallet when the transfer fails', async () => {
@@ -220,7 +249,13 @@ describe('payout finalizer', () => {
     }, { source: 'webhook' })
 
     expect(moved).toBe(true)
-    expect(creditWallet).toHaveBeenCalledWith('user-1', 500, expect.objectContaining({ type: 'refund' }))
+    // The refund is claimed in the terminal write, then applied durably.
+    expect(Payout.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ refunded: false }),
+      { $set: expect.objectContaining({ status: 'failed', refunded: true, refundIntent: expect.objectContaining({ operationKey: 'payout-refund:v1:payout-1', type: 'refund', reference: 'PO-TEST-1-REFUND' }) }) },
+      expect.anything(),
+    )
+    expect(applyPayoutRefund).toHaveBeenCalledWith('payout-1')
   })
 
   it('does not refund twice when the same failure webhook is replayed', async () => {
@@ -234,7 +269,7 @@ describe('payout finalizer', () => {
     }, { source: 'webhook' })
 
     expect(moved).toBe(false)
-    expect(creditWallet).not.toHaveBeenCalled()
+    expect(applyPayoutRefund).not.toHaveBeenCalled()
   })
 
   it('refuses to settle when the provider reports a different amount', async () => {
@@ -247,6 +282,11 @@ describe('payout finalizer', () => {
 
     expect(moved).toBe(false)
     expect(Payout.findOneAndUpdate).not.toHaveBeenCalled()
+    // Held for a human rather than left for nobody to notice.
+    expect(Payout.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'payout-1' }),
+      { $set: expect.objectContaining({ needsReconciliation: true, failureReason: expect.stringContaining('amount_mismatch') }) },
+    )
   })
 })
 
@@ -278,6 +318,7 @@ describe('paystack adapter', () => {
       event: 'transfer.reversed', data: { reference: 'PO-1', amount: 50000, transfer_code: 'TRF_1' },
     }))
     expect(reversed.status).toBe('failed')
+    expect(reversed.reversed).toBe(true)
     expect(reversed.failureReason).toBeTruthy()
   })
 

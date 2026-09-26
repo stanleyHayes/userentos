@@ -40,7 +40,7 @@ export function VersionHistoryModal({ doc, onClose }: VersionHistoryModalProps) 
       <div className="space-y-4">
         <div className="flex items-center justify-between p-3 rounded-xl bg-surface dark:bg-[#0c0e1a] border border-border/30 dark:border-[#252a3a]/30">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg ${CATEGORY_CONFIG[doc.category]?.bg ?? 'bg-gray-500/10'} flex items-center justify-center`}>
+            <div className={`w-9 h-9 rounded-lg ${CATEGORY_CONFIG[doc.type]?.bg ?? 'bg-gray-500/10'} flex items-center justify-center`}>
               {getFileIcon(doc.mimeType, 16)}
             </div>
             <div>

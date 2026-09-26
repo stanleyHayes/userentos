@@ -11,6 +11,8 @@ interface OwnerActionsProps {
   listingStatus: ListingStatus
   coordinates?: { lat: number; lng: number }
   rejectionReason?: string
+  /** What a reviewer asked the owner to fix ('changes_requested'). */
+  reviewIssues?: string[]
   publishErrors: { field: string; message: string }[]
   onPublish: () => void
   isPublishing: boolean
@@ -18,7 +20,7 @@ interface OwnerActionsProps {
   messagingReviewer: boolean
 }
 
-export function OwnerActions({ propertyId, listingStatus, coordinates, rejectionReason, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
+export function OwnerActions({ propertyId, listingStatus, coordinates, rejectionReason, reviewIssues, publishErrors, onPublish, isPublishing, onMessageReviewer, messagingReviewer }: OwnerActionsProps) {
   const qc = useQueryClient()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const uploadImages = useUploadPropertyImages()
@@ -55,6 +57,22 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
           <div className="rounded-xl bg-danger/10 p-3 text-sm text-danger">
             <p className="font-semibold">Rejection Reason:</p>
             <p>{rejectionReason || 'No reason provided'}</p>
+          </div>
+          <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
+            <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Edit & Resubmit'}
+          </Button>
+        </div>
+      )}
+      {listingStatus === 'changes_requested' && (
+        <div className="space-y-2">
+          <div className="rounded-xl bg-warning/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+            <p className="font-semibold">Changes requested</p>
+            {rejectionReason && <p className="mt-1">{rejectionReason}</p>}
+            {(reviewIssues?.length ?? 0) > 0 && (
+              <ul className="mt-2 list-disc space-y-0.5 pl-5">
+                {reviewIssues!.map((issue, i) => <li key={i}>{issue}</li>)}
+              </ul>
+            )}
           </div>
           <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
             <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Edit & Resubmit'}

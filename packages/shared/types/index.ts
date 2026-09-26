@@ -138,7 +138,10 @@ export interface Invitation {
 
 export type PropertyStatus = 'available' | 'occupied' | 'under_dispute' | 'maintenance_required'
 
-export type ListingStatus = 'draft' | 'pending_review' | 'approved' | 'rejected'
+// The API's full review state machine (apps/api/src/services/propertyReview.ts).
+export type ListingStatus =
+  | 'draft' | 'pending_review' | 'in_review' | 'changes_requested'
+  | 'approved' | 'rejected' | 'published' | 'suspended' | 'archived' | 'withdrawn'
 
 export type PropertyType = 'apartment' | 'house' | 'room' | 'commercial' | 'warehouse' | 'studio' | 'townhouse' | 'hostel' | 'shared_room'
 
@@ -219,6 +222,45 @@ export const LEGAL_ENTITY: LegalEntity = {
   website: 'https://userentos.com',
 }
 
+// --- Retention periods ---
+// The periods the Privacy Policy quotes, in days. Canonical home for the same
+// reason as the legal versions above: the API's retention schedule
+// (apps/api/src/config/retentionSchedule.ts) enforces exactly these numbers and
+// packages/shared/retentionPeriods.ts re-exports them for the web and mobile
+// notices, so the published text and the purge cannot drift apart.
+export const RETENTION_PERIOD_DAYS = {
+  /** Closed account: identity scrubbed at once, remaining records deleted after this. */
+  accountErasureGrace: 30,
+  /** Security and audit log, including sign-in and consent IP address and device. */
+  auditLog: 730,
+  /** In-app notifications after they are read. */
+  readNotification: 365,
+  /** In-app notifications never read, after they were last updated. */
+  unreadNotification: 730,
+  /** Rental applications that were not approved, after the last update. */
+  unapprovedApplication: 365,
+  /** Enquiries, viewing requests and service enquiries, after the last update. */
+  enquiry: 365,
+  /** Profile-access requests that were denied or revoked, after the answer. */
+  closedProfileAccess: 365,
+  /** Profile photos replaced by a newer one. */
+  replacedAvatar: 30,
+  /** Abuse reports dismissed with no action, after handling. */
+  dismissedContentReport: 365,
+  /** Raw payment-provider notifications. */
+  webhookEvent: 90,
+  /** App-store notification delivery records, after processing. */
+  storeNotification: 30,
+  /** Redacted complaint text queued for model review. */
+  complaintLog: 180,
+  /** Public registry page views (hashed IP address, browser). */
+  registryPageView: 395,
+  /** Storefront visit and click analytics. */
+  storefrontEvent: 400,
+  /** Rent valuation requests and outcomes. */
+  valuationLog: 730,
+} as const
+
 // --- Core Models ---
 
 export interface User {
@@ -254,6 +296,8 @@ export interface Property {
   status: PropertyStatus
   listingStatus: ListingStatus
   rejectionReason?: string
+  /** Set with 'changes_requested': what the reviewer asked the owner to fix. */
+  reviewIssues?: string[]
   reviewedBy?: string
   reviewedAt?: string
   publishedAt?: string
@@ -429,7 +473,10 @@ export interface Dispute {
 export interface Evidence {
   id: string
   type: 'image' | 'video' | 'document'
+  /** API download route for private files (needs a download token); older entries may hold a plain URL. */
   url: string
+  /** The private Document behind the file; open it via POST /disputes/:id/evidence/:documentId/link. */
+  documentId?: string
   description: string
   uploadedAt: string
 }

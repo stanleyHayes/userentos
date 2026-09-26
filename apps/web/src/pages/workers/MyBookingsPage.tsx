@@ -30,7 +30,7 @@ interface Booking {
   proposedFinalCost?: number
   quoteAmount?: number
   quoteAccepted: boolean
-  paymentStatus: 'pending' | 'partial' | 'paid'
+  paymentStatus: 'pending' | 'partial' | 'paid' | 'refunded'
   rating?: number
   review?: string
   createdAt: string
@@ -215,13 +215,15 @@ export function MyBookingsPage() {
             <Card key={booking._id} className="p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold uppercase', STATUS_COLORS[booking.status])}>
+                  {/* Pills never break mid-label ("IN / PROGRESS"); on a
+                      narrow row they move to the next line instead. */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                    <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap shrink-0', STATUS_COLORS[booking.status])}>
                       {STATUS_LABELS[booking.status]}
                     </span>
                     {booking.quoteAmount !== undefined && (
                       <span className={cn(
-                        'px-2 py-0.5 rounded text-[10px] font-bold uppercase',
+                        'px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap shrink-0',
                         booking.quoteAccepted
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'

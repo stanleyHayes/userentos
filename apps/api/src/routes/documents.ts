@@ -2,12 +2,14 @@ import { Router } from 'express'
 import type { Types } from 'mongoose'
 import multer from 'multer'
 import { authenticate } from '../middleware/auth.js'
-import { DocumentModel } from '../models/Document.js'
+import { DocumentModel, type IDocument } from '../models/Document.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
-import { eraseDocumentFile } from '../services/documentErasure.js'
+import { eraseDocumentFile, documentStorageAsset } from '../services/documentErasure.js'
+import { recordErasure, completeErasure } from '../services/erasureLedger.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
+import { isAdminStaff } from '../utils/accessControl.js'
 
 const router = Router()
 
@@ -22,6 +24,13 @@ const ALLOWED_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ])
 
+// The model's type enum. A Record over the union, so a type added to the model
+// without being listed here is a compile error rather than a rejected upload.
+const DOCUMENT_TYPES: Record<IDocument['type'], true> = {
+  rental_agreement: true, receipt: true, legal_notice: true, evidence: true, identity: true, other: true,
+}
+const isDocumentType = (value: unknown): value is IDocument['type'] => typeof value === 'string' && Object.hasOwn(DOCUMENT_TYPES, value)
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -29,15 +38,17 @@ const upload = multer({
     if (ALLOWED_MIMES.has(file.mimetype)) {
       cb(null, true)
     } else {
-      cb(new Error('Only images, PDF, text and Office documents are allowed'))
+      // Tagged 400 so the error handler reports the reason, not a 500.
+      cb(Object.assign(new Error('Only images, PDF, text and Office documents are allowed'), { status: 400 }))
     }
   },
 })
 
 // List documents for current user
 router.get('/', authenticate, async (req, res) => {
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  // Administrators only. Government used to get every user's documents here,
+  // Ghana Card scans included — Act 843 keeps national IDs from regulators.
+  const isAdmin = isAdminStaff(req.user!.roles)
   const filter: Record<string, unknown> = isAdmin ? {} : {
     $or: [{ ownerId: req.user!.userId }, { accessControl: req.user!.userId }],
   }
@@ -53,16 +64,12 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, upload.single('file'), async (req, res) => {
   if (!req.file) { error(res, 'No file uploaded'); return }
 
-  const { name, type, linkedEntityId, linkedEntityType, accessControl } = req.body
+  const { name, type, linkedEntityId, linkedEntityType } = req.body
 
-  let parsedAccessControl: string[]
-  try {
-    parsedAccessControl = accessControl ? JSON.parse(accessControl) : [req.user!.userId]
-    if (!Array.isArray(parsedAccessControl)) parsedAccessControl = [req.user!.userId]
-  } catch {
-    error(res, 'Invalid accessControl JSON', 400)
-    return
-  }
+  // Check the type before the file goes to Cloudinary: a Mongoose enum failure
+  // after the upload left an orphaned file with no record pointing at it.
+  const docType: unknown = type || 'other'
+  if (!isDocumentType(docType)) { error(res, 'Invalid document type', 400); return }
 
   const resourceType = req.file.mimetype.startsWith('image/') ? 'image' as const
     : req.file.mimetype.startsWith('video/') ? 'video' as const
@@ -76,7 +83,7 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   const doc = await DocumentModel.create({
     ownerId: req.user!.userId,
     name: name || req.file.originalname,
-    type: type || 'other',
+    type: docType,
     mimeType: req.file.mimetype,
     fileUrl: uploaded.url,
     storagePublicId: uploaded.publicId,
@@ -85,7 +92,10 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
     version: 1,
     linkedEntityId,
     linkedEntityType,
-    accessControl: parsedAccessControl,
+    // Never taken from the request: a client-supplied list let anyone drop a
+    // file into any other user's Documents page. No client sends it; sharing
+    // needs its own endpoint that checks who the counterparties are.
+    accessControl: [req.user!.userId],
   })
 
   await AuditLog.create({
@@ -129,7 +139,10 @@ router.post('/:id/version', authenticate, upload.single('file'), async (req, res
     parentId: existing._id.toString(),
     linkedEntityId: existing.linkedEntityId,
     linkedEntityType: existing.linkedEntityType,
-    accessControl: existing.accessControl,
+    // Owner only, like a new upload. Copying the old list let anyone who had
+    // planted a document with accessControl=[victim] keep dropping new files
+    // into that person's Documents page, one "version" at a time.
+    accessControl: [req.user!.userId],
   })
 
   await AuditLog.create({
@@ -148,8 +161,7 @@ router.get('/:id/versions', authenticate, async (req, res) => {
   const doc = await DocumentModel.findById(param(req.params.id)).lean()
   if (!doc) { error(res, 'Document not found', 404); return }
 
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  const isAdmin = isAdminStaff(req.user!.roles)
   const userId = req.user!.userId
   if (!isAdmin && doc.ownerId !== userId && !(doc.accessControl ?? []).includes(userId)) {
     error(res, 'Not authorized to view this document', 403); return
@@ -169,8 +181,13 @@ router.delete('/:id', authenticate, async (req, res) => {
   if (!doc) { error(res, 'Document not found', 404); return }
   if (doc.ownerId !== req.user!.userId) { error(res, 'Not authorized', 403); return }
 
+  // Ledger first, so a restored backup cannot bring the file record back;
+  // the record stays if the file host does not confirm the deletion.
+  const asset = documentStorageAsset(doc)
+  const entryId = await recordErasure({ subjectId: doc.ownerId, scope: 'document', source: 'owner', recordIds: [String(doc._id)], storageAssets: asset ? [asset] : [] })
   await eraseDocumentFile(doc)
   await doc.deleteOne()
+  await completeErasure(entryId)
   await AuditLog.create({
     userId: req.user!.userId,
     action: 'delete',
@@ -187,8 +204,7 @@ router.get('/:id/audit', authenticate, async (req, res) => {
   const doc = await DocumentModel.findById(param(req.params.id)).lean()
   if (!doc) { error(res, 'Document not found', 404); return }
 
-  const roles = req.user!.roles
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin') || roles.includes('government')
+  const isAdmin = isAdminStaff(req.user!.roles)
   const userId = req.user!.userId
   if (!isAdmin && doc.ownerId !== userId && !(doc.accessControl ?? []).includes(userId)) {
     error(res, 'Not authorized to view this document', 403); return

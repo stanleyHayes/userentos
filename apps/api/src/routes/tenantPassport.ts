@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import jwt from 'jsonwebtoken'
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
@@ -9,6 +9,7 @@ import { authenticate, authenticateDownload } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { publicBaseUrl } from '../utils/env.js'
 import { signDownloadToken } from '../services/authService.js'
 import { User } from '../models/User.js'
 import { CreditScore } from '../models/CreditScore.js'
@@ -511,14 +512,16 @@ const myJsonHandler = asyncHandler(async (req: Request, res: Response) => {
   success(res, data)
 })
 
-function buildPublicUrl(req: Request, token: string): string {
-  const fwdProto = req.headers['x-forwarded-proto']
-  const fwdHost = req.headers['x-forwarded-host']
-  const proto =
-    (Array.isArray(fwdProto) ? fwdProto[0] : fwdProto) ?? req.protocol
-  const host =
-    (Array.isArray(fwdHost) ? fwdHost[0] : fwdHost) ?? req.headers.host ?? ''
-  return `${proto}://${host}/passport/${token}`
+/**
+ * The web app's /passport/:token page for a share token.
+ *
+ * Built from PUBLIC_BASE_URL, never from the request: the request reaches the
+ * API's own host (api.userentos.com, which has no /passport page), so every
+ * shared link and PDF QR code 404'd, and a caller-supplied X-Forwarded-Host
+ * could choose the host a landlord was sent to. The request is not consulted.
+ */
+function buildPublicUrl(_req: Request, token: string): string {
+  return `${publicBaseUrl()}/passport/${token}`
 }
 
 // Generate a 30-day shareable URL token
@@ -539,7 +542,7 @@ const shareHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
+  if (!payload || !(await shareStillValid(payload))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -551,7 +554,7 @@ const sharedJsonHandler = asyncHandler(async (req: Request, res: Response) => {
 const sharedPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const token = param(req.params.token)
   const payload = verifyPurposeToken<SharePayload>(token, 'passport-share')
-  if (!payload || (await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))) {
+  if (!payload || !(await shareStillValid(payload))) {
     error(res, 'Invalid or expired share link', 404)
     return
   }
@@ -569,6 +572,17 @@ const revokeShareHandler = asyncHandler(async (req: Request, res: Response) => {
   )
   success(res, null, 'All passport share links have been revoked')
 })
+
+/**
+ * A share link works only while the tenant's account is open and the link
+ * was issued after their last revocation. Closing the account revokes every
+ * link, and once the account is erased there is no profile left to check —
+ * the account check covers both.
+ */
+async function shareStillValid(payload: SharePayload): Promise<boolean> {
+  if (!Types.ObjectId.isValid(payload.userId) || !(await User.exists({ _id: payload.userId }))) return false
+  return !(await isShareRevoked(payload.userId, (payload as unknown as { iat?: number }).iat))
+}
 
 /** Share tokens issued before the tenant's revocation timestamp are dead. */
 async function isShareRevoked(userId: string, iat?: number): Promise<boolean> {

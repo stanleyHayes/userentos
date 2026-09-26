@@ -15,6 +15,8 @@ export interface IAgencyProfile extends Document {
   reacLicenceNumber?: string
   reacLicenceVerifiedAt?: Date
   reacLicenceVerifiedBy?: string
+  /** Set when the owner's account is closed: the public page stops serving at once. */
+  hiddenAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -33,6 +35,7 @@ const agencyProfileSchema = new Schema<IAgencyProfile>(
     reacLicenceNumber: { type: String, trim: true },
     reacLicenceVerifiedAt: Date,
     reacLicenceVerifiedBy: String,
+    hiddenAt: Date,
   },
   { timestamps: true },
 )

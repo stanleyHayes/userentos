@@ -53,6 +53,14 @@ describe('legacy original upload identifiers', () => {
   ])('refuses ambiguous or unowned storage: %s', url => {
     expect(() => legacyDocumentAsset(url, 'ours')).toThrow()
   })
+  it('reads listing photo ids only from the properties folder when asked for it', () => {
+    expect(legacyDocumentAsset('https://res.cloudinary.com/ours/image/upload/v9/rentos/properties/front.jpg', 'ours', 'properties')).toEqual({ publicId: 'rentos/properties/front', resourceType: 'image' })
+    expect(() => legacyDocumentAsset('https://res.cloudinary.com/ours/image/upload/v9/rentos/documents/front.jpg', 'ours', 'properties')).toThrow()
+  })
+  it('deletes private (authenticated) files with their delivery type', async () => {
+    await eraseDocumentFile({ fileUrl: '/api/disputes/d/evidence/e', storagePublicId: 'rentos/evidence/e1', storageResourceType: 'image', storageDeliveryType: 'authenticated' })
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith('rentos/evidence/e1', { resource_type: 'image', type: 'authenticated', invalidate: true })
+  })
   it('does not send third-party linked files to our storage deletion API', async () => {
     await eraseDocumentFile({ fileUrl: 'https://example.org/document.pdf' })
     expect(cloudinary.uploader.destroy).not.toHaveBeenCalled()

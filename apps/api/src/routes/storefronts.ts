@@ -13,7 +13,7 @@ import { z } from 'zod'
 import type { Types } from 'mongoose'
 import { authenticate, optionalAuth, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
-import { publicLimiter } from '../middleware/rateLimit.js'
+import { trackLimiter } from '../middleware/rateLimit.js'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
@@ -27,7 +27,7 @@ import { hostingProvider } from '../services/hosting/index.js'
 import { requireEntitlement, getFeature, EntitlementError } from '../services/entitlements.js'
 import {
   validateSlug, validateDomain, newVerificationToken, checkDomainOwnership,
-  publicStorefrontScope, storefrontScope,
+  publicStorefrontScope, storefrontScope, resolveStorefrontByHost,
 } from '../services/storefront.js'
 
 const router = Router()
@@ -640,9 +640,17 @@ router.get('/me/analytics', authenticate, asyncHandler(async (req, res) => {
  *
  * Returns null for the platform's own hostnames, so the web app can call this
  * unconditionally on boot and render either the storefront or the normal app.
+ *
+ * The browser names its host in ?host=. On a split deployment the SPA calls
+ * api.userentos.com, so this request's own Host is always the API's and a
+ * custom domain never resolved. Taking the host from the caller is safe: only
+ * active domains of active storefronts map to anything, and those are public.
  */
 router.get('/resolve/host', asyncHandler(async (req, res) => {
-  const slug = req.storefrontSlug
+  const queryHost = typeof req.query.host === 'string' ? req.query.host.trim().toLowerCase() : ''
+  let slug = req.storefrontSlug
+  // 253 characters is the longest a DNS name can be.
+  if (queryHost) slug = queryHost.length <= 253 ? (await resolveStorefrontByHost(queryHost))?.slug : undefined
   if (!slug) { success(res, null); return }
 
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
@@ -658,14 +666,21 @@ router.get('/resolve/host', asyncHandler(async (req, res) => {
 }))
 
 
+const objectId = z.string().regex(/^[a-f0-9]{24}$/i)
 const trackSchema = z.object({
   type: z.enum(['view', 'listing_impression', 'contact_click']),
-  propertyId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
+  propertyId: objectId.optional(),
+  // A page's worth of listing impressions in one beacon (one per card was 24
+  // requests a page).
+  propertyIds: z.array(objectId).min(1).max(60).optional(),
   channel: z.enum(['phone', 'email', 'whatsapp']).optional(),
   sessionId: z.string().min(8).max(64).optional(),
 }).refine((body) => body.type !== 'contact_click' || body.channel !== undefined, {
   message: 'A contact click must say which channel it used',
   path: ['channel'],
+}).refine((body) => !body.propertyIds || body.type === 'listing_impression', {
+  message: 'Only listing impressions can be batched',
+  path: ['propertyIds'],
 })
 
 /**
@@ -695,7 +710,7 @@ function storefrontVisitorHash(req: Request, sessionId?: string): string {
  * from index.ts, the same way the public GETs below do it, so the owner check
  * cannot quietly stop working if the router is mounted anywhere else.
  */
-router.post('/:slug/track', publicLimiter, optionalAuth, asyncHandler(async (req, res) => {
+router.post('/:slug/track', trackLimiter, optionalAuth, asyncHandler(async (req, res) => {
   const parsed = trackSchema.safeParse(req.body ?? {})
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -707,14 +722,16 @@ router.post('/:slug/track', publicLimiter, optionalAuth, asyncHandler(async (req
   if (req.user?.userId === storefront.ownerId) { success(res, { recorded: false }); return }
 
   let recorded = true
+  const visitorHash = storefrontVisitorHash(req, parsed.data.sessionId)
+  const propertyIds = parsed.data.propertyIds ? [...new Set(parsed.data.propertyIds)] : [parsed.data.propertyId]
   try {
-    await StorefrontEvent.create({
+    await StorefrontEvent.insertMany(propertyIds.map((propertyId) => ({
       storefrontSlug: slug,
       type: parsed.data.type,
-      propertyId: parsed.data.propertyId,
+      propertyId,
       channel: parsed.data.channel,
-      visitorHash: storefrontVisitorHash(req, parsed.data.sessionId),
-    })
+      visitorHash,
+    })))
   } catch (err) {
     // Best effort, like the registry tracker: a metrics write must never be the
     // reason a public page fails.
@@ -740,6 +757,13 @@ router.get('/:slug', optionalAuth, asyncHandler(async (req, res) => {
 }))
 
 /**
+ * Fields a public listing never carries, the same set publicPropertyView strips
+ * on every other public property read: the search embedding (about 30KB of
+ * floats per listing), the reviewer's id, moderation notes and quota bookkeeping.
+ */
+const PUBLIC_LISTING_PROJECTION = '-embedding -reviewedBy -quotaSlot -reviewVersion -reviewIssues -rejectionReason'
+
+/**
  * A storefront's listings.
  *
  * Scoped on the SERVER by owner — never by a frontend filter — which is the
@@ -755,7 +779,7 @@ router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
   const filter = publicStorefrontScope(storefront) as unknown as Record<string, unknown>
 
   const [items, total] = await Promise.all([
-    Property.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Property.find(filter, PUBLIC_LISTING_PROJECTION).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Property.countDocuments(filter),
   ])
 

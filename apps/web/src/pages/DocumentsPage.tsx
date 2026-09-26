@@ -13,7 +13,7 @@ import {
   FolderOpen, Search,
 } from 'lucide-react'
 import type { Document, DocumentsResponse } from './documents/types'
-import { formatFileSize } from './documents/documentConfig'
+import { categoryOptions, formatFileSize } from './documents/documentConfig'
 import { StatCard } from './documents/components/StatCard'
 import { DocumentsToolbar } from './documents/components/DocumentsToolbar'
 import { DocumentGridCard } from './documents/components/DocumentGridCard'
@@ -56,10 +56,12 @@ export function DocumentsPage() {
     let docs = allDocuments
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      docs = docs.filter((d) => d.name.toLowerCase().includes(q) || d.category.toLowerCase().includes(q))
+      // Match the category's label too, so "lease" finds rental_agreement.
+      const categoryText = (type: string) => `${type ?? ''} ${categoryOptions.find((c) => c.value === type)?.label ?? ''}`.toLowerCase()
+      docs = docs.filter((d) => d.name.toLowerCase().includes(q) || categoryText(d.type).includes(q))
     }
     if (filterCategory !== 'all') {
-      docs = docs.filter((d) => d.category === filterCategory)
+      docs = docs.filter((d) => d.type === filterCategory)
     }
     return docs
   }, [allDocuments, searchQuery, filterCategory])
@@ -71,7 +73,7 @@ export function DocumentsPage() {
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     allDocuments.forEach((d) => {
-      counts[d.category] = (counts[d.category] ?? 0) + 1
+      counts[d.type] = (counts[d.type] ?? 0) + 1
     })
     return counts
   }, [allDocuments])
@@ -194,7 +196,7 @@ export function DocumentsPage() {
                 <DocumentGridCard
                   key={doc.id}
                   doc={doc}
-                  isOwner={doc.userId === user?.id}
+                  isOwner={doc.ownerId === user?.id}
                   menuOpen={activeMenu === doc.id}
                   onToggleMenu={() => setActiveMenu(activeMenu === doc.id ? null : doc.id)}
                   onVersions={() => { setVersionTarget(doc); setActiveMenu(null) }}
@@ -211,7 +213,7 @@ export function DocumentsPage() {
                 <DocumentListItem
                   key={doc.id}
                   doc={doc}
-                  isOwner={doc.userId === user?.id}
+                  isOwner={doc.ownerId === user?.id}
                   menuOpen={activeMenu === doc.id}
                   onToggleMenu={() => setActiveMenu(activeMenu === doc.id ? null : doc.id)}
                   onVersions={() => { setVersionTarget(doc); setActiveMenu(null) }}

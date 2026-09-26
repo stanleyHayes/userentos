@@ -81,14 +81,17 @@ export function LoansTab() {
             return (
               <Card key={loan.id}>
                 <CardContent>
-                  <div className="flex items-center justify-between mb-3 gap-3">
-                    <div>
+                  {/* Some labels are long ("Pre-qualified — awaiting lender
+                      review"), so on phones the badge goes under the title and
+                      may wrap there rather than push past the card edge. */}
+                  <div className="flex flex-col items-start gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                    <div className="min-w-0">
                       <h4 className="text-sm font-bold text-primary-dark">{formatCurrency(loan.amount)} Loan</h4>
                       <p className="text-xs text-muted">
                         {loan.tenure} months at {loan.interestRate}% a year{loan.apr != null ? ` (APR ${loan.apr}%)` : ''} · total {formatCurrency(loan.totalRepayment)} - {loan.reason}
                       </p>
                     </div>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge variant={status.variant} className="max-w-full whitespace-normal sm:whitespace-nowrap">{status.label}</Badge>
                   </div>
 
                   {(loan.decisionReason || (loan.status === 'rejected' && loan.automatedAssessment)) && (

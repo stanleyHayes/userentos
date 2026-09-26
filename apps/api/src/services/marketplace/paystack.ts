@@ -30,6 +30,14 @@ function secretKey(): string {
 
 interface Envelope<T> { status: boolean; message: string; data: T }
 
+/** Paystack answered that it has no transaction with this reference (never initialized, or long expired). */
+export class TransactionNotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TransactionNotFoundError'
+  }
+}
+
 async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: init?.method ?? 'GET',
@@ -46,7 +54,12 @@ async function call<T>(path: string, init?: { method?: string; body?: unknown })
     throw new Error(`Paystack ${path} returned non-JSON (${res.status}): ${text.slice(0, 200)}`)
   }
   if (!res.ok || payload.status === false) {
-    throw new Error(`Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`)
+    const message = `Paystack ${path} failed (${res.status}): ${payload.message || text.slice(0, 200)}`
+    // Only an explicit "not found" is an answer; any other failure is an outage and says nothing.
+    if (path.startsWith('/transaction/verify/') && (res.status === 404 || (res.status === 400 && /not found/i.test(payload.message ?? '')))) {
+      throw new TransactionNotFoundError(message)
+    }
+    throw new Error(message)
   }
   return payload.data
 }

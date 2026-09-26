@@ -22,7 +22,6 @@ export default function BecomeWorkerScreen() {
   const [location, setLocation] = useState('')
   const [hourlyRate, setHourlyRate] = useState('')
   const [serviceRadius, setServiceRadius] = useState('')
-  const [yearsExperience, setYearsExperience] = useState('')
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -32,19 +31,20 @@ export default function BecomeWorkerScreen() {
         trades,
         skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
         bio,
-        location,
-        hourlyRate: Number(hourlyRate) || 0,
-        serviceRadius: Number(serviceRadius) || 10,
-        yearsExperience: Number(yearsExperience) || 0,
-        status: 'active',
+        location: location.trim(),
+        // POST /workers wants hourlyRate positive (or absent) and the radius as
+        // serviceRadiusKm >= 1. Sending 0 for a blank rate failed validation,
+        // and serviceRadius/yearsExperience were silently dropped.
+        ...(Number(hourlyRate) > 0 ? { hourlyRate: Number(hourlyRate) } : {}),
+        ...(Number(serviceRadius) >= 1 ? { serviceRadiusKm: Number(serviceRadius) } : {}),
       }),
     onSuccess: () => {
       Alert.alert('Success', 'Your worker profile has been created!', [
         { text: 'OK', onPress: () => router.push('/workers') },
       ])
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to create worker profile. Please try again.')
+    onError: (err) => {
+      Alert.alert('Error', (err as Error).message || 'Failed to create worker profile. Please try again.')
     },
   })
 
@@ -53,8 +53,8 @@ export default function BecomeWorkerScreen() {
   }
 
   function handleSubmit() {
-    if (!name.trim() || !phone.trim() || trades.length === 0) {
-      Alert.alert('Required', 'Please fill in your name, phone, and select at least one trade.')
+    if (!name.trim() || !phone.trim() || !location.trim() || trades.length === 0) {
+      Alert.alert('Required', 'Please fill in your name, phone and location, and select at least one trade.')
       return
     }
     mutation.mutate()
@@ -129,7 +129,7 @@ export default function BecomeWorkerScreen() {
             numberOfLines={4}
           />
 
-          <Text style={[s.label, { color: c.text }]}>Location</Text>
+          <Text style={[s.label, { color: c.text }]}>Location *</Text>
           <TextInput
             style={[s.input, neuInset(c), { color: c.text }]}
             placeholder="Accra"
@@ -162,16 +162,6 @@ export default function BecomeWorkerScreen() {
               />
             </View>
           </View>
-
-          <Text style={[s.label, { color: c.text }]}>Years of Experience</Text>
-          <TextInput
-            style={[s.input, neuInset(c), { color: c.text }]}
-            placeholder="5"
-            placeholderTextColor={c.muted}
-            value={yearsExperience}
-            onChangeText={setYearsExperience}
-            keyboardType="numeric"
-          />
 
           <TouchableOpacity
             style={[s.submitBtn, { backgroundColor: c.primary }]}

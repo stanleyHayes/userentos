@@ -3,108 +3,92 @@
  *
  * The spec asks for two things the happy path cannot provide:
  *
- *  - "Add retry/dead-letter handling for failed webhook processing." A stored
- *    event previously looked identical whether it had been applied, failed
- *    halfway, or been skipped, so a transient failure (a provider timeout
- *    during re-verification) silently lost the payment forever.
+ *  - "Add retry/dead-letter handling for failed webhook processing." Stored
+ *    events that were never marked processed are re-dispatched through the
+ *    same Paystack event dispatcher the webhook uses, for every event family
+ *    (services/payments/paystackEvents.ts).
  *  - "Reconcile successful transactions against Paystack settlement
  *    information." A webhook that never arrives at all leaves a paid
  *    transaction stuck at `pending` with no other route to the truth.
  *
  * Both work by asking the provider, never by trusting stored state.
+ *
+ * The settlement sweep checks each open checkout on a backoff, earliest due
+ * first. It used to take the 50 oldest open rows every run and only resolve
+ * success or failure, so once 50 abandoned checkouts existed, a newer paid one
+ * whose webhook was missed was never looked at. Checkouts Paystack reports as
+ * abandoned, or has no record of, are now closed once they are a day old.
  */
-import { WebhookEvent } from '../../models/WebhookEvent.js'
-import { MarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
-import { verifyTransaction } from './paystack.js'
+import type { Types } from 'mongoose'
+import { MarketplaceTransaction, type IMarketplaceTransaction } from '../../models/MarketplaceTransaction.js'
+import { verifyTransaction, TransactionNotFoundError, type VerifiedTransaction } from './paystack.js'
 import { applySuccessfulCharge, chargeRefusal, SETTLEABLE_STATUSES } from './settle.js'
+import { reconcileBackoffMs } from '../payouts/reconcile.js'
 import { logger } from '../../utils/logger.js'
 
-/** Give up after this many attempts; the row stays for a human to inspect. */
-export const MAX_WEBHOOK_ATTEMPTS = 5
+export { retryUnprocessedWebhooks, MAX_WEBHOOK_ATTEMPTS, type SweepResult } from '../payments/paystackEvents.js'
 
-export interface SweepResult { examined: number; recovered: number; exhausted: number }
+/** An abandoned or unknown checkout is closed once it is this old. */
+export const ABANDONED_AFTER_MS = 24 * 60 * 60_000
 
-/**
- * Retry events that were stored but never applied.
- *
- * Selection is "has no processedAt and has attempts left" rather than a status
- * column, so an event that failed *before* any bookkeeping ran is still picked
- * up — that is exactly the case a status column would miss.
- */
-export async function retryUnprocessedWebhooks(limit = 50): Promise<SweepResult> {
-  const stale = await WebhookEvent.find({
-    provider: 'paystack',
-    processedAt: { $exists: false },
-    attempts: { $lt: MAX_WEBHOOK_ATTEMPTS },
-    reference: { $exists: true, $ne: null },
-  }).sort({ createdAt: 1 }).limit(limit)
+export type CheckoutOutcome = 'paid' | 'closed' | 'open'
 
-  let recovered = 0
-  let exhausted = 0
-
-  for (const event of stale) {
-    event.attempts = (event.attempts ?? 0) + 1
-    try {
-      const applied = await applyPaidEvent(event.reference as string, event.eventId)
-      if (applied) recovered++
-      event.processedAt = new Date()
-      event.processingError = undefined
-    } catch (err) {
-      event.processingError = (err as Error).message
-      if (event.attempts >= MAX_WEBHOOK_ATTEMPTS) {
-        exhausted++
-        logger.error(
-          `[Reconcile] Webhook ${event.eventId} (${event.reference}) exhausted ${MAX_WEBHOOK_ATTEMPTS} attempts: ${event.processingError}`,
-        )
-      }
-    }
-    await event.save()
-  }
-
-  return { examined: stale.length, recovered, exhausted }
+/** Close a checkout that will never be paid, conditionally, freeing its order for a new one. */
+async function closeCheckout(transaction: Pick<IMarketplaceTransaction, 'reference'> & { _id: Types.ObjectId }, reason: 'failed' | 'abandoned' | 'expired'): Promise<boolean> {
+  const closed = await MarketplaceTransaction.updateOne(
+    { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES } },
+    { $set: { status: 'failed', failureReason: reason }, $unset: { openOrderKey: 1 } },
+  )
+  if (closed.modifiedCount) logger.info(`[Reconcile] ${transaction.reference} closed: ${reason}`)
+  return closed.modifiedCount > 0
 }
 
 /**
- * Bring one transaction in line with the provider.
- *
- * Shared by the retry sweep and the reconciliation job so there is a single
- * definition of "what does paid mean", and it is always the provider's answer.
- * Idempotent: the event id is claimed in a conditional update, so a retry
- * cannot apply the same event twice.
+ * Settle a verified success through the shared rules. The same rules as the
+ * webhook and /verify: a FAILED row whose reference succeeded somewhere else
+ * on the shared Paystack account — a wallet deposit — must never be marked
+ * paid here.
  */
-async function applyPaidEvent(reference: string, eventId: string): Promise<boolean> {
-  const verified = await verifyTransaction(reference)
-  if (verified.status !== 'success') return false
-
-  const transaction = await MarketplaceTransaction.findOne({ reference })
-  if (!transaction) return false
-
-  /*
-   * The same rules as the webhook and /verify. This path used to check only
-   * the amount and "not already paid", so a FAILED row whose reference had
-   * succeeded somewhere else on the shared Paystack account — a wallet
-   * deposit — was marked paid here, and sponsorships and bookings it paid for
-   * were never activated because none of settle's side effects ran.
-   */
+async function applyPaidCharge(transaction: IMarketplaceTransaction, verified: VerifiedTransaction): Promise<boolean> {
   const refusal = chargeRefusal(transaction, verified)
-  if (refusal === 'already_paid' || refusal === 'not_settleable') return false
   if (refusal) {
-    const expected = transaction.grossAmount - transaction.discountAmount
-    throw new Error(
-      `${refusal.replace('_', ' ')} on ${reference}: expected ${expected} GHS, provider reported ${verified.amount} ${verified.currency ?? ''}`.trim(),
-    )
+    if (refusal !== 'already_paid' && refusal !== 'not_settleable') {
+      logger.error(`[Reconcile] refusing to settle ${transaction.reference}: ${refusal} (provider ${verified.amount} ${verified.currency ?? ''})`)
+    }
+    return false
   }
-
+  const eventId = `reconcile:${transaction.reference}`
   const claimed = await MarketplaceTransaction.findOneAndUpdate(
     { _id: transaction._id, status: { $in: SETTLEABLE_STATUSES }, processedEventIds: { $ne: eventId } },
     { $addToSet: { processedEventIds: eventId } },
     { returnDocument: 'after' },
   )
   if (!claimed) return false
-
   const outcome = await applySuccessfulCharge(claimed, verified, 'reconcile')
-  if (outcome.applied) logger.info(`[Reconcile] Recovered ${reference} — marked paid from a replayed webhook`)
+  if (outcome.applied) logger.info(`[Reconcile] Recovered ${transaction.reference} — marked paid from provider verification`)
   return outcome.applied
+}
+
+/**
+ * Bring one open checkout in line with the provider. `abandonAfterMs` is how
+ * old a checkout must be before "abandoned" or "no such transaction" closes it.
+ */
+export async function reconcileCheckout(transaction: IMarketplaceTransaction, opts: { now?: Date; abandonAfterMs?: number } = {}): Promise<CheckoutOutcome> {
+  const { now = new Date(), abandonAfterMs = ABANDONED_AFTER_MS } = opts
+  const old = now.getTime() - new Date(transaction.createdAt).getTime() >= abandonAfterMs
+  let verified: VerifiedTransaction
+  try {
+    verified = await verifyTransaction(transaction.reference)
+  } catch (err) {
+    // An outage says nothing; only an explicit "not found" is an answer.
+    if (err instanceof TransactionNotFoundError) return old && await closeCheckout(transaction as IMarketplaceTransaction & { _id: Types.ObjectId }, 'expired') ? 'closed' : 'open'
+    throw err
+  }
+  const status = (verified.status ?? '').toLowerCase()
+  if (status === 'success') return await applyPaidCharge(transaction, verified) ? 'paid' : 'open'
+  if (status === 'failed' || status === 'reversed') return await closeCheckout(transaction as IMarketplaceTransaction & { _id: Types.ObjectId }, 'failed') ? 'closed' : 'open'
+  if (status === 'abandoned' && old) return await closeCheckout(transaction as IMarketplaceTransaction & { _id: Types.ObjectId }, 'abandoned') ? 'closed' : 'open'
+  return 'open'
 }
 
 export interface ReconcileResult { examined: number; corrected: number }
@@ -113,36 +97,42 @@ export interface ReconcileResult { examined: number; corrected: number }
  * Catch transactions whose webhook never arrived.
  *
  * Only looks at transactions old enough that a webhook should already have
- * landed; anything younger is still legitimately in flight.
+ * landed; anything younger is still legitimately in flight. Each row is
+ * claimed (its next check pushed out by the backoff) before the provider is
+ * asked, so overlapping runs never double up. `scope` narrows the sweep
+ * (tests share a database).
  */
 export async function reconcilePendingTransactions(
   olderThanMinutes = 30,
   limit = 50,
+  opts: { now?: Date; scope?: Record<string, unknown> } = {},
 ): Promise<ReconcileResult> {
-  const cutoff = new Date(Date.now() - olderThanMinutes * 60_000)
+  const { now = new Date(), scope = {} } = opts
+  const due: Record<string, unknown> = {
+    ...scope,
+    status: { $in: SETTLEABLE_STATUSES },
+    createdAt: { $lt: new Date(now.getTime() - olderThanMinutes * 60_000) },
+    $or: [{ nextReconcileAt: { $exists: false } }, { nextReconcileAt: { $lte: now } }],
+  }
+  const candidates = await MarketplaceTransaction.find(due).sort({ nextReconcileAt: 1, createdAt: 1 }).limit(limit).select('_id reconcileAttempts').lean()
 
-  const pending = await MarketplaceTransaction.find({
-    status: { $in: ['initialized', 'pending'] },
-    createdAt: { $lt: cutoff },
-  }).sort({ createdAt: 1 }).limit(limit)
-
+  let examined = 0
   let corrected = 0
-  for (const transaction of pending) {
+  for (const candidate of candidates) {
+    const claimed = await MarketplaceTransaction.findOneAndUpdate(
+      { ...due, _id: candidate._id },
+      { $set: { lastReconcileAt: now, nextReconcileAt: new Date(now.getTime() + reconcileBackoffMs(candidate.reconcileAttempts ?? 0)) }, $inc: { reconcileAttempts: 1 } },
+      { returnDocument: 'after' },
+    )
+    if (!claimed) continue
+    examined++
     try {
-      const verified = await verifyTransaction(transaction.reference)
-      if (verified.status === 'success') {
-        const applied = await applyPaidEvent(transaction.reference, `reconcile:${transaction.reference}`)
-        if (applied) corrected++
-      } else if (verified.status === 'failed') {
-        transaction.status = 'failed'
-        await transaction.save()
-        corrected++
-      }
+      if (await reconcileCheckout(claimed, { now }) !== 'open') corrected++
     } catch (err) {
       // A provider outage must not abort the whole sweep.
-      logger.warn(`[Reconcile] Could not verify ${transaction.reference}: ${(err as Error).message}`)
+      logger.warn(`[Reconcile] Could not verify ${claimed.reference}: ${(err as Error).message}`)
     }
   }
 
-  return { examined: pending.length, corrected }
+  return { examined, corrected }
 }

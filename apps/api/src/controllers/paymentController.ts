@@ -8,7 +8,8 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
-import { getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress } from '../services/payments/checkout.js'
 import type { ProviderId } from '../services/payments/types.js'
 import { round2 } from '../utils/money.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
@@ -41,26 +42,25 @@ export const paymentController = {
     }
 
     // Idempotency: a retried request returns the original payment instead of
-    // creating a duplicate pending one. Scoped to the caller, and only a
-    // short-circuit when the retry carries the SAME payload — a key reused
-    // for a different agreement/amount is a conflict.
-    const idempotencyKey = req.headers['idempotency-key'] as string | undefined
-    if (idempotencyKey) {
+    // creating a duplicate pending one. Required, scoped to the caller, and
+    // only a short-circuit when the retry carries the SAME payload — a key
+    // reused for a different agreement/amount is a conflict.
+    const idempotencyKey = requireIdempotencyKey(req, res)
+    if (!idempotencyKey) return
+    const samePayload = (existing: { agreementId?: string; method: string; amount: number; rentPeriod?: { startDate: string; endDate: string } }, amount?: number) =>
+      existing.agreementId === agreementId
+      && existing.method === method
+      && existing.rentPeriod?.startDate === rentPeriod.startDate
+      && existing.rentPeriod?.endDate === rentPeriod.endDate
+      && (amount === undefined || round2(amount) === existing.amount)
+    const replayed = async (amount?: number) => {
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
-      if (existing) {
-        const samePayload = existing.agreementId === agreementId
-          && existing.method === method
-          && existing.rentPeriod?.startDate === rentPeriod.startDate
-          && existing.rentPeriod?.endDate === rentPeriod.endDate
-          && (requestedAmount === undefined || round2(requestedAmount) === existing.amount)
-        if (!samePayload) {
-          error(res, 'Idempotency-Key was already used for a different payment', 409)
-          return
-        }
-        success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-        return
-      }
+      if (!existing) return false
+      if (!samePayload(existing, amount)) { error(res, 'Idempotency-Key was already used for a different payment', 409); return true }
+      success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
+      return true
     }
+    if (await replayed(requestedAmount)) return
 
     const agreement = await Agreement.findById(agreementId)
     if (!agreement) { error(res, 'Agreement not found', 404); return }
@@ -88,6 +88,17 @@ export const paymentController = {
       return
     }
 
+    // One in-flight collection per agreement and rent period; a new one is
+    // allowed once the previous payment completes or fails.
+    const openCollectionKey = `rent:${agreementId}:${rentPeriod.startDate}:${rentPeriod.endDate}`
+    const inFlight = async () => {
+      const open = await Payment.findOne({ openCollectionKey, tenantId: req.user!.userId }).lean()
+      if (!open) return false
+      respondCollectionInProgress(res, open)
+      return true
+    }
+    if (await inFlight()) return
+
     const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 
     let payment: IPayment | undefined
@@ -102,8 +113,12 @@ export const paymentController = {
 
       const receiptContext = await captureReceiptContext(agreement)
       const provider = getProvider(method as ProviderId)
+      // Saved before the provider is called, so an interrupted initiation is still reconcilable.
+      const providerRef = collectionCorrelator(provider, reference)
       payment = await Payment.create({
         collectionSource: provider.source,
+        providerRef,
+        openCollectionKey,
         agreementId,
         tenantId: req.user!.userId,
         landlordId: agreement.landlordId,
@@ -114,13 +129,14 @@ export const paymentController = {
         purpose: 'rent',
         rentPeriod,
         ...(receiptContext ? { receiptContext } : {}),
-        ...(idempotencyKey ? { idempotencyKey } : {}),
+        idempotencyKey,
       })
 
       const result = await provider.initiateCollection({
         amount,
         phone: phone ?? '',
         reference,
+        providerRef,
         narration: `Rent payment for ${agreement.propertyId}`,
         payerEmail: req.user!.email,
       })
@@ -138,16 +154,12 @@ export const paymentController = {
         201,
       )
     } catch (err) {
-      // Lost the idempotency race — another request created it first.
-      if (idempotencyKey && (err as { code?: number }).code === 11000) {
-        const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
-        if (existing) {
-          if (existing.agreementId !== agreementId || existing.method !== method || existing.amount !== amount || existing.rentPeriod?.startDate !== rentPeriod.startDate || existing.rentPeriod?.endDate !== rentPeriod.endDate) {
-            error(res, 'Idempotency-Key was already used for a different payment', 409); return
-          }
-          success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-          return
-        }
+      // Lost a race: the same retry (idempotency key) or another checkout for
+      // this rent period (open collection key) created its payment first. The
+      // replay is checked first — both indexes can report the same collision.
+      if (!payment && isDuplicateKey(err)) {
+        if (await replayed(amount)) return
+        if (isDuplicateKey(err, 'openCollectionKey') && await inFlight()) return
       }
       if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
       throw err

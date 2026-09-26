@@ -1,51 +1,25 @@
-import { Favorite } from '../models/Favorite.js'
-import { Notification } from '../models/Notification.js'
-import { Achievement } from '../models/Achievement.js'
-import { PaymentStreak } from '../models/PaymentStreak.js'
-import { Investment } from '../models/Investment.js'
-import { InsurancePolicy } from '../models/InsurancePolicy.js'
-import { FinancingApplication } from '../models/FinancingApplication.js'
-import { FinancingContract } from '../models/FinancingContract.js'
-import { Loan } from '../models/Loan.js'
-import { CreditScore } from '../models/CreditScore.js'
-import { ApplePurchase } from '../models/ApplePurchase.js'
-import { StorePurchase } from '../models/StorePurchase.js'
-import { UserBlock } from '../models/UserBlock.js'
 import { Router } from 'express'
 import { Types } from 'mongoose'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
-import crypto from 'crypto'
 import { z } from 'zod'
 import { authenticate, requireRole, requirePermission, isSuperAdmin } from '../middleware/auth.js'
 import { User } from '../models/User.js'
 import { Wallet } from '../models/Wallet.js'
-import { WalletCredit } from '../models/WalletCredit.js'
-import { Agreement } from '../models/Agreement.js'
-import { Payment } from '../models/Payment.js'
-import { Application } from '../models/Application.js'
-import { Dispute } from '../models/Dispute.js'
-import { Review } from '../models/Review.js'
-import { Message } from '../models/Conversation.js'
-import { SavingsPlan } from '../models/SavingsPlan.js'
 import { AuditLog } from '../models/AuditLog.js'
 import { recordAudit } from '../utils/audit.js'
-import { TenantProfile } from '../models/TenantProfile.js'
 import { success, error } from '../utils/response.js'
 import { uploadAvatar, rememberLegacyAvatar } from '../services/avatarStorage.js'
+import { closeAccount, AccountClosureIncompleteError } from '../services/accountClosure.js'
+import { buildAccountExport } from '../services/accountExport.js'
+import { RETENTION_DAYS } from '../config/retentionSchedule.js'
 import { config } from '../config/index.js'
 import { notifyWelcome } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
-import { BiometricToken } from '../models/BiometricToken.js'
-import { DeviceToken } from '../models/DeviceToken.js'
-import { disconnectUser } from '../services/socket.js'
-import { RefreshToken } from '../models/RefreshToken.js'
 import { escapeRegex } from '../utils/params.js'
 import { normalizeGhanaCardId } from '../utils/ghanaCard.js'
 import { decryptPii, piiLast4, PII_FIELDS } from '../utils/piiCrypto.js'
 import { ADMIN_ROLES, PERMISSIONS, isAdminStaff } from '../utils/accessControl.js'
-import { ownProfileView } from '../services/tenantProfileViews.js'
-import { evidenceForViewer } from '../services/agreementEvidence.js'
 import { revokeAccountSessions } from '../services/sessionRevocation.js'
 
 const router = Router()
@@ -57,6 +31,7 @@ const isStaffViewer = (roles: readonly string[]) => roles.some((r) => STAFF_ROLE
 const ADMIN_USER_FIELDS = 'firstName lastName email phone roles activeRole permissions isVerified verificationStatus profileImage mfaEnabled suspendedAt suspensionReason subscriptionPackageId subscriptionEndDate invitedBy createdAt updatedAt'
 /** Regulators and legal officers: who holds which role, never how to reach them. */
 const STAFF_USER_FIELDS = 'firstName lastName roles activeRole isVerified verificationStatus createdAt'
+const CLOSURE_INCOMPLETE_MESSAGE = 'The deletion request is recorded, but closing the account did not finish. It completes automatically within a day; trying again is also safe.'
 const pick = (doc: Record<string, unknown>, fields: string) => Object.fromEntries(fields.split(' ').filter((f) => doc[f] !== undefined).map((f) => [f, doc[f]]))
 
 router.get('/me', authenticate, async (req, res) => {
@@ -65,157 +40,25 @@ router.get('/me', authenticate, async (req, res) => {
   success(res, (user as unknown as { toSafe(): Record<string, unknown> }).toSafe())
 })
 
-// Export the supported personal-data groups.
+// Subject-access export: every collection in services/accountExport.ts.
 router.get('/me/export', authenticate, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
   success(res, await buildAccountExport(req.user!.userId))
 })
 
-/** Every supported personal-data group for one account. Also served as a
- * file download (routes/accountExportDownload.ts). */
-export async function buildAccountExport(userId: string) {
-  const [
-    user,
-    tenantProfile,
-    agreements,
-    payments,
-    applications,
-    disputes,
-    reviews,
-    messages,
-    wallet,
-    savingsPlans,
-    auditLogs,
-    blockedUsers,
-    storePurchases,
-    applePurchases,
-    walletCredits,
-    financingApplications,
-    financingContracts,
-    loans,
-    creditScore,
-    investments,
-    insurancePolicies,
-    favorites,
-    notifications,
-    achievements,
-    paymentStreak,
-  ] = await Promise.all([
-    // Never export credential material — mfaSecret also carries schema-level
-    // select:false, this is defense-in-depth.
-    User.findById(userId).select('+storeAccountToken -passwordHash -mfaSecret -__v').lean(),
-    TenantProfile.findOne({ userId }).lean(),
-    Agreement.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
-    Payment.find({ $or: [{ tenantId: userId }, { landlordId: userId }] }).lean(),
-    Application.find({ tenantId: userId }).lean(),
-    Dispute.find({ $or: [{ filedBy: userId }, { filedAgainst: userId }] }).lean(),
-    Review.find({ userId }).lean(),
-    Message.find({ senderId: userId }).lean(),
-    Wallet.findOne({ userId }).lean(),
-    SavingsPlan.find({ userId }).lean(),
-    AuditLog.find({ userId }).sort({ createdAt: -1, _id: -1 }).lean(),
-    UserBlock.find({ blockerId: userId }).select('blockedId createdAt').lean(),
-    StorePurchase.find({ userId }).select('platform applicationId providerState environment acknowledged voidedOrderIds startedAt verifiedAt entitlementState createdAt updatedAt items.productId items.basePlanId items.offerId items.expiresAt items.autoRenewing items.latestOrderId items.accessEligible').lean(),
-    // Explicit public fields prevent recovery metadata and encrypted identifiers
-    // from becoming export data when the purchase journal gains new fields.
-    ApplePurchase.find({ userId }).select('applicationId environment productId subscriptionGroupId providerStatus purchasedAt originalPurchasedAt expiresAt verifiedAt revokedAt upgraded autoRenewing graceExpiresAt accessExpiresAt accessEligible entitlementState createdAt updatedAt').lean(),
-    WalletCredit.find({ userId }).select('operationKey amount type reference state appliedAt createdAt updatedAt').lean(),
-    // Personal export follows borrower identity, not privileged portfolio access.
-    FinancingApplication.find({ applicantId: userId }).select('-__v').lean(),
-    FinancingContract.find({ applicantId: userId }).select('-__v').lean(),
-    Loan.find({ userId }).select('-__v').lean(),
-    CreditScore.findOne({ userId }).select('-__v').lean(),
-    Investment.find({ userId }).select('-__v').lean(),
-    InsurancePolicy.find({ userId }).select('-__v').lean(),
-    Favorite.find({ userId }).select('-__v').lean(),
-    Notification.find({ userId }).select('-__v').lean(),
-    Achievement.find({ userId }).select('-__v').lean(),
-    PaymentStreak.findOne({ userId }).select('-__v').lean(),
-  ])
-
-  return {
-    exportedAt: new Date().toISOString(),
-    walletCredits,
-    financingApplications,
-    financingContracts,
-    loans,
-    creditScore,
-    investments,
-    insurancePolicies,
-    favorites,
-    notifications,
-    achievements,
-    paymentStreak,
-    storePurchases,
-    applePurchases,
-    // The subject's own export carries their national ID in the clear.
-    user: user ? { ...user, ghanaCardId: decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard), id: (user._id as Types.ObjectId).toString() } : null,
-    tenantProfile: tenantProfile ? ownProfileView(tenantProfile) : null,
-    // The counterparty's signing IP/device is their personal data, not ours to export.
-    agreements: agreements.map((a) => ({ ...a, signatureEvidence: evidenceForViewer(a.signatureEvidence, userId, false) })),
-    payments,
-    applications,
-    disputes,
-    reviews,
-    messages,
-    wallet,
-    savingsPlans,
-    auditLogs,
-    blockedUsers,
-  }
-}
-
-// Erase core identity now; scheduled cleanup removes related personal records after 30 days.
+// Close the account: listings and profiles come down and the identity is
+// erased now; the remaining records are deleted after the grace period.
 router.delete('/me', authenticate, async (req, res) => {
   const userId = req.user!.userId
-  const user = await User.findById(userId)
-  if (!user) { error(res, 'User not found', 404); return }
-
-  await rememberLegacyAvatar(userId, user.profileImage)
-
-  /*
-   * What the tombstone keeps until the 30-day purge deletes it (Act 843 s.26
-   * minimisation), and why:
-   *  - roles/activeRole: schema-required; they grant nothing once deletedAt is set.
-   *  - consents versions + acceptedAt + ageConfirmed: which terms governed the
-   *    processing that happened. The signing IP and device are dropped.
-   *  - suspension fields: the account was closed while suspended for abuse —
-   *    kept so the report trail survives the window.
-   *  - storeAccountToken + subscription fields: app-store refund/revocation
-   *    notifications and payment disputes still resolve to this account.
-   * Everything else that describes the person is scrambled or removed.
-   */
-  const scramble = crypto.randomBytes(8).toString('hex')
-  user.email = `deleted-${scramble}@userentos.com`
-  user.phone = `000000${scramble.slice(0, 6)}`
-  user.firstName = 'Deleted'
-  user.lastName = 'User'
-  user.passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), config.bcryptRounds)
-  user.ghanaCardId = undefined
-  user.profileImage = undefined
-  user.mfaSecret = undefined
-  user.markModified('mfaSecret')
-  user.mfaEnabled = false
-  user.set('consents.ip', undefined)
-  user.set('consents.userAgent', undefined)
-  user.set('settings', undefined)
-  user.invitedBy = undefined
-  user.permissions = []
-  user.isVerified = false
-  user.verificationStatus = 'none'
-  user.taxReportingConsent = false
-  user.deletedAt = new Date()
-  await user.save()
-  disconnectUser(userId)
-
-  // Revoke all refresh tokens
-  await RefreshToken.updateMany(
-    { userId, revokedAt: { $exists: false } },
-    { $set: { revokedAt: new Date().toISOString(), revokedReason: 'gdpr_deletion' } },
-  )
-
-  await Promise.all([BiometricToken.deleteMany({ userId }), DeviceToken.deleteMany({ userId })])
-  success(res, null, 'Account closed and core profile erased. Related personal records are scheduled for deletion after 30 days. Records needed for legal obligations or disputes may be retained. This action cannot be undone.')
+  let closed: boolean
+  try {
+    closed = await closeAccount(userId, { source: 'self_service', actorId: userId, ipAddress: req.ip })
+  } catch (err) {
+    if (!(err instanceof AccountClosureIncompleteError)) throw err
+    error(res, CLOSURE_INCOMPLETE_MESSAGE, 503); return
+  }
+  if (!closed) { error(res, 'User not found', 404); return }
+  success(res, null, `Account closed. Your listings and public profiles were taken down and your core profile erased. Related personal records are deleted after ${RETENTION_DAYS.accountErasureGrace} days. Records needed for legal obligations or disputes may be retained. This action cannot be undone.`)
 })
 
 const profilePatchSchema = z.object({
@@ -581,9 +424,19 @@ router.patch('/:id/permissions', authenticate, requirePermission('users:manage_p
   success(res, { ...pick(user.toObject() as unknown as Record<string, unknown>, ADMIN_USER_FIELDS), id: user._id.toString() }, 'Permissions updated')
 })
 
-// Delete a user
+// Delete a user: the same closure as self-service deletion — immediate
+// take-down, sessions revoked, identity scrubbed, the rest erased after the
+// grace period. Also the tool for deletion requests received by email.
+const adminDeleteSchema = z.object({
+  source: z.enum(['admin', 'email_request']).default('admin'),
+  reason: z.string().trim().max(300).optional(),
+})
+
 router.delete('/:id', authenticate, requirePermission('users:delete'), async (req, res) => {
-  const user = await User.findById(req.params.id)
+  const parsed = adminDeleteSchema.safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const id = String(req.params.id)
+  const user = Types.ObjectId.isValid(id) ? await User.findById(id) : null
   if (!user) { error(res, 'User not found', 404); return }
 
   if (user.roles.includes('super_admin')) {
@@ -596,8 +449,13 @@ router.delete('/:id', authenticate, requirePermission('users:delete'), async (re
     return
   }
 
-  await User.findByIdAndDelete(req.params.id)
-  success(res, null, 'User deleted')
+  try {
+    await closeAccount(id, { source: parsed.data.source, actorId: req.user!.userId, reason: parsed.data.reason, ipAddress: req.ip })
+  } catch (err) {
+    if (!(err instanceof AccountClosureIncompleteError)) throw err
+    error(res, CLOSURE_INCOMPLETE_MESSAGE, 503); return
+  }
+  success(res, null, `Account closed. Listings and profiles are offline now; the remaining personal data is deleted after ${RETENTION_DAYS.accountErasureGrace} days.`)
 })
 
 export default router

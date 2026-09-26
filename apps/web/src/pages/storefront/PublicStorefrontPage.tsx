@@ -1,14 +1,72 @@
-import { useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef } from 'react'
+import { useParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { PlatformLink } from '@/components/PlatformLink'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { formatCurrency } from '@/lib/utils'
 import { Building2, MapPin, Phone, Mail, BedDouble, Bath, Store } from 'lucide-react'
 import { useStorefront, useStorefrontProperties } from '@/hooks/useApi'
 import { applySeo } from '@/lib/seo'
+import { useAuthStore } from '@/stores/authStore'
 import { StorefrontUnavailable } from './StorefrontUnavailable'
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const VISITOR_KEY = 'rentos-storefront-visitor'
+
+type TrackEvent =
+  | { type: 'view'; propertyId?: string }
+  | { type: 'listing_impression'; propertyIds: string[] }
+  | { type: 'contact_click'; channel: 'phone' | 'email' }
+
+/** A random per-tab id, so "unique visitors" means something without naming anyone. */
+function visitorSessionId(): string | undefined {
+  try {
+    let id = sessionStorage.getItem(VISITOR_KEY)
+    if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(VISITOR_KEY, id) }
+    return id
+  } catch {
+    return undefined // storage blocked or no crypto: the server falls back to the IP digest
+  }
+}
+
+/**
+ * Record one traffic event for the seller's storefront analytics report, which
+ * showed zero for everyone because nothing ever called this endpoint.
+ *
+ * Fire-and-forget: a metrics write must never be why the page fails. The
+ * session token goes along when there is one, so a seller browsing their own
+ * storefront isn't counted. `keepalive` is for a click that leaves the page.
+ */
+function trackStorefront(slug: string, event: TrackEvent, keepalive = false) {
+  const token = useAuthStore.getState().token
+  void fetch(`${API_BASE}/storefronts/${encodeURIComponent(slug)}/track`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ ...event, sessionId: visitorSessionId() }),
+    keepalive,
+  }).catch(() => {})
+}
+
+/**
+ * The listings not yet counted as seen in this tab. A reload, or Back from a
+ * listing, re-renders the same cards; counting them again would inflate the
+ * report and spend the visitor's share of the public rate limit, which the
+ * listing pages they are about to open draw on too.
+ */
+function unseenThisSession(slug: string, ids: string[]): string[] {
+  const key = `rentos-storefront-seen:${slug}`
+  try {
+    const seen = new Set<string>(JSON.parse(sessionStorage.getItem(key) ?? '[]') as string[])
+    const fresh = ids.filter((id) => !seen.has(id))
+    if (fresh.length) sessionStorage.setItem(key, JSON.stringify([...seen, ...fresh]))
+    return fresh
+  } catch {
+    return ids
+  }
+}
 
 /**
  * A seller's public storefront (spec §4).
@@ -24,7 +82,19 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   const { slug: slugFromPath } = useParams<{ slug: string }>()
   const slug = slugOverride ?? slugFromPath
   const { data: storefront, isLoading, isError, error, refetch, isFetching, errorUpdateCount } = useStorefront(slug)
-  const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
+  const {
+    data: properties, isLoading: loadingProperties, fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useStorefrontProperties(slug)
+  // Offset pages can overlap when a listing is added between loads.
+  const items = useMemo(() => {
+    const byId = new Map((properties?.pages ?? []).flatMap((page) => page.items).map((p) => [p.id, p]))
+    return [...byId.values()]
+  }, [properties])
+  const listingCount = properties?.pages[0]?.total ?? items.length
+  // On {slug}.userentos.com or a custom domain a router link would stay on
+  // the seller's host, where "/" is this storefront and the rest of the app
+  // sits behind a separate sign-in.
+  const onStorefrontHost = Boolean(slugOverride)
 
   // Per-host SEO (spec §4.1). index.html carries the platform's own tags, so
   // without this a storefront was served "RentOS Ghana — National Digital
@@ -51,6 +121,26 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
     })
   }, [storefront, canonicalUrl, slugOverride])
 
+  // One storefront view per visit to this slug.
+  const storefrontSlug = storefront?.slug
+  const viewedSlug = useRef<string | null>(null)
+  useEffect(() => {
+    if (!storefrontSlug || viewedSlug.current === storefrontSlug) return
+    viewedSlug.current = storefrontSlug
+    trackStorefront(storefrontSlug, { type: 'view' })
+  }, [storefrontSlug])
+
+  // An impression for each listing card as it is rendered, "Load more"
+  // included — sent as one beacon per batch of new cards, not one per card.
+  const impressed = useRef(new Set<string>())
+  useEffect(() => {
+    if (!storefrontSlug) return
+    const fresh = items.map((p) => p.id).filter((id) => !impressed.current.has(`${storefrontSlug}:${id}`))
+    fresh.forEach((id) => impressed.current.add(`${storefrontSlug}:${id}`))
+    const unseen = unseenThisSession(storefrontSlug, fresh)
+    if (unseen.length) trackStorefront(storefrontSlug, { type: 'listing_impression', propertyIds: unseen })
+  }, [storefrontSlug, items])
+
   // Refetching a query that never loaded puts it back to pending. After a
   // failed load, keep the error page up (its button shows the retry) rather
   // than flashing the skeleton and replaying the page's entrance.
@@ -68,7 +158,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
       <StorefrontUnavailable
         slug={slug}
         reason={missing ? 'missing' : 'unreachable'}
-        onStorefrontHost={Boolean(slugOverride)}
+        onStorefrontHost={onStorefrontHost}
         onRetry={() => { void refetch() }}
         retrying={retrying}
       />
@@ -76,7 +166,6 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   }
 
   const brandColor = storefront.branding?.primaryColor
-  const items = properties?.items ?? []
 
   return (
     <div className="min-h-screen bg-surface/40 dark:bg-[#0a0d16]">
@@ -111,19 +200,27 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
                 <span className="flex items-center gap-1"><MapPin size={12} /> {storefront.contact.city}</span>
               )}
               {storefront.contact?.phone && (
-                <a href={`tel:${storefront.contact.phone}`} className="flex items-center gap-1 hover:text-white">
+                <a
+                  href={`tel:${storefront.contact.phone}`}
+                  onClick={() => trackStorefront(storefront.slug, { type: 'contact_click', channel: 'phone' })}
+                  className="flex items-center gap-1 hover:text-white"
+                >
                   <Phone size={12} /> {storefront.contact.phone}
                 </a>
               )}
               {storefront.contact?.email && (
-                <a href={`mailto:${storefront.contact.email}`} className="flex items-center gap-1 hover:text-white">
+                <a
+                  href={`mailto:${storefront.contact.email}`}
+                  onClick={() => trackStorefront(storefront.slug, { type: 'contact_click', channel: 'email' })}
+                  className="flex items-center gap-1 hover:text-white"
+                >
                   <Mail size={12} /> {storefront.contact.email}
                 </a>
               )}
             </div>
           </div>
 
-          <Badge variant="success" className="shrink-0">{items.length} listing{items.length === 1 ? '' : 's'}</Badge>
+          <Badge variant="success" className="shrink-0">{listingCount} listing{listingCount === 1 ? '' : 's'}</Badge>
         </div>
       </header>
 
@@ -147,7 +244,14 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((property) => (
-              <Link key={property.id} to={`/properties/${property.id}`}>
+              // The public listing page: /properties/:id is behind sign-in,
+              // so a visitor clicking a listing was sent to a login screen.
+              <PlatformLink
+                key={property.id}
+                to={`/registry/${property.id}`}
+                external={onStorefrontHost}
+                onClick={() => trackStorefront(storefront.slug, { type: 'view', propertyId: property.id }, onStorefrontHost)}
+              >
                 <Card className="group h-full overflow-hidden p-0 transition-all hover:-translate-y-1 hover:shadow-xl">
                   <div className="relative h-44 overflow-hidden bg-surface">
                     {property.images?.[0] ? (
@@ -176,14 +280,23 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
+              </PlatformLink>
             ))}
+          </div>
+        )}
+
+        {hasNextPage && (
+          <div className="mt-6 flex justify-center">
+            <Button variant="outline" onClick={() => { void fetchNextPage() }} disabled={isFetchingNextPage} aria-busy={isFetchingNextPage}>
+              {isFetchingNextPage ? 'Loading…' : 'Load more listings'}
+            </Button>
           </div>
         )}
 
         {!storefront.branding?.hideRentosBranding && (
           <p className="mt-10 text-center text-xs text-muted dark:text-gray-600">
-            Powered by <Link to="/" className="font-semibold text-primary hover:underline dark:text-blue-400">RentOS</Link>
+            Powered by{' '}
+            <PlatformLink to="/" external={onStorefrontHost} className="font-semibold text-primary hover:underline dark:text-blue-400">RentOS</PlatformLink>
           </p>
         )}
       </main>

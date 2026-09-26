@@ -227,6 +227,7 @@ export const paystackPayoutProvider: PayoutProvider = {
       providerRef: data.transfer_code,
       amount: typeof data.amount === 'number' ? fromMinorUnits(data.amount) : undefined,
       failureReason: status === 'failed' ? `Transfer ${data.status}` : undefined,
+      ...(data.status === 'reversed' ? { reversed: true } : {}),
     }
   },
 
@@ -257,7 +258,8 @@ export const paystackPayoutProvider: PayoutProvider = {
     }
 
     // 'transfer.reversed' means the money came back — for us that is a failure
-    // with the same consequence: refund the wallet.
+    // with the same consequence: refund the wallet. `reversed` also lets the
+    // finalizer refund a payout it had already marked paid.
     const status = event === 'transfer.success' ? 'paid' : 'failed'
 
     return {
@@ -269,6 +271,7 @@ export const paystackPayoutProvider: PayoutProvider = {
       failureReason: status === 'failed'
         ? (body.data.reason || (event === 'transfer.reversed' ? 'Transfer reversed by the provider' : 'Transfer failed'))
         : undefined,
+      ...(event === 'transfer.reversed' ? { reversed: true } : {}),
       raw: body,
     }
   },

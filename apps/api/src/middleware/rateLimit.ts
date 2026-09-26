@@ -128,6 +128,22 @@ export const publicLimiter = rateLimit({
 })
 
 /**
+ * Analytics beacons (storefront traffic events) — their own budget, so a page
+ * recording its views and impressions never spends the visitor's share of the
+ * public limit that the listing pages they open next draw on. Beacons are
+ * batched per page, so 30 a minute per IP is generous.
+ */
+export const trackLimiter = rateLimit({
+  store: store('track'),
+  windowMs: 60 * 1000,
+  limit: isProd ? 30 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  passOnStoreError: true,
+  message: { success: false, error: 'Too many requests. Please slow down.' },
+})
+
+/**
  * Write limiter — 30 requests per 1 minute per authenticated user in production.
  * Relaxed in dev/test for E2E suites that perform multiple writes in sequence.
  */

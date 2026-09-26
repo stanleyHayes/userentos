@@ -76,6 +76,13 @@ router.post('/subscriptions', authenticate, async (req, res) => {
     events,
     secret,
   })
+  // The count above is check-then-act; parallel creates could all pass it.
+  // Re-count after writing and undo this one if the cap is now exceeded.
+  if (await overSubscriptionCap(req.user!.userId)) {
+    await WebhookSubscription.deleteOne({ _id: sub._id })
+    error(res, `Subscription limit reached (max ${MAX_SUBSCRIPTIONS_PER_USER} active subscriptions)`, 409)
+    return
+  }
 
   success(res, {
     id: (sub._id as Types.ObjectId).toString(),
@@ -85,6 +92,10 @@ router.post('/subscriptions', authenticate, async (req, res) => {
     isActive: sub.isActive,
   }, 'Subscription created', 201)
 })
+
+async function overSubscriptionCap(userId: string): Promise<boolean> {
+  return (await WebhookSubscription.countDocuments({ userId, isActive: true })) > MAX_SUBSCRIPTIONS_PER_USER
+}
 
 router.delete('/subscriptions/:id', authenticate, async (req, res) => {
   const sub = await WebhookSubscription.findOne({ _id: req.params.id, userId: req.user!.userId })
@@ -98,6 +109,16 @@ router.patch('/subscriptions/:id', authenticate, async (req, res) => {
   if (!sub) { error(res, 'Subscription not found', 404); return }
 
   const { isActive, events } = req.body
+  const reactivating = isActive === true && !sub.isActive
+  // Re-activating counts against the same cap as creating: otherwise pausing
+  // ten, creating ten more and switching the first ten back on beats it.
+  if (reactivating) {
+    const activeCount = await WebhookSubscription.countDocuments({ userId: req.user!.userId, isActive: true })
+    if (activeCount >= MAX_SUBSCRIPTIONS_PER_USER) {
+      error(res, `Subscription limit reached (max ${MAX_SUBSCRIPTIONS_PER_USER} active subscriptions)`, 409)
+      return
+    }
+  }
   if (typeof isActive === 'boolean') sub.isActive = isActive
   if (events && Array.isArray(events)) {
     const invalid = events.filter((e: string) => e !== '*' && !VALID_EVENTS.includes(e as WebhookEvent))
@@ -108,6 +129,12 @@ router.patch('/subscriptions/:id', authenticate, async (req, res) => {
     sub.events = events
   }
   await sub.save()
+  if (reactivating && await overSubscriptionCap(req.user!.userId)) {
+    // Parallel re-activations each passed the check above; undo this one.
+    await WebhookSubscription.updateOne({ _id: sub._id }, { $set: { isActive: false } })
+    error(res, `Subscription limit reached (max ${MAX_SUBSCRIPTIONS_PER_USER} active subscriptions)`, 409)
+    return
+  }
   success(res, null, 'Subscription updated')
 })
 

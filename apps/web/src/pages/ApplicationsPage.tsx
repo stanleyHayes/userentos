@@ -56,10 +56,16 @@ export function ApplicationsPage() {
   const [reviewApp, setReviewApp] = useState<Application | null>(null)
   const [responseNotes, setResponseNotes] = useState('')
 
-  const queryString = statusFilter ? `?status=${statusFilter}` : ''
+  // Paged on the server: the API returns one page, so paging the client over
+  // it left everything after the first page unreachable.
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 8
   const { data, isLoading } = useQuery({
-    queryKey: ['applications', statusFilter],
-    queryFn: () => api.get<{ items: Application[] }>(`/applications${queryString}`),
+    queryKey: ['applications', statusFilter, page],
+    queryFn: () => api.get<{ items: Application[]; total: number; totalPages: number; summary?: Record<string, number> }>(
+      `/applications?${new URLSearchParams({ ...(statusFilter ? { status: statusFilter } : {}), page: String(page), pageSize: String(PAGE_SIZE) })}`,
+    ),
+    placeholderData: (prev) => prev,
   })
 
   const withdrawMutation = useMutation({
@@ -78,11 +84,13 @@ export function ApplicationsPage() {
   })
 
   const applications = data?.items ?? []
+  const total = data?.total ?? applications.length
+  // Status counts over every application, whatever page or filter is showing.
+  const summary = data?.summary ?? {}
   const statuses = ['', 'pending', 'approved', 'rejected', 'withdrawn']
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 8
-  const totalPages = Math.max(1, Math.ceil(applications.length / PAGE_SIZE))
-  const paginated = applications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.max(1, data?.totalPages ?? 1)
+  // Answering the last application on the last page empties it: step back.
+  if (data && page > totalPages) setPage(totalPages)
 
   if (isLoading) return <DetailSkeleton />
 
@@ -95,23 +103,24 @@ export function ApplicationsPage() {
         description={isTenant
           ? 'Track the status of your rental applications.'
           : 'Review and respond to tenant applications.'}
-        meta={`${applications.length} application${applications.length === 1 ? '' : 's'}`}
+        meta={`${total} application${total === 1 ? '' : 's'}`}
         icon={<FileCheck size={22} />}
       />
 
       {/* KPI Stats */}
-      {applications.length > 0 && (() => {
-        const pending = applications.filter((a) => a.status === 'pending')
-        const approved = applications.filter((a) => a.status === 'approved')
-        const rejected = applications.filter((a) => a.status === 'rejected')
-        const rate = applications.length > 0 ? Math.round((approved.length / applications.length) * 100) : 0
+      {(summary.total ?? 0) > 0 && (() => {
+        const all = summary.total ?? 0
+        const pending = summary.pending ?? 0
+        const approved = summary.approved ?? 0
+        const rejected = summary.rejected ?? 0
+        const rate = all > 0 ? Math.round((approved / all) * 100) : 0
         return (
           <div className="stagger-3d grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Total', value: String(applications.length), icon: <FileCheck size={18} />, color: '#2563eb' },
-              { label: 'Pending', value: String(pending.length), icon: <Clock size={18} />, color: '#d97706', sub: pending.length > 0 ? 'Awaiting response' : 'None pending' },
-              { label: 'Approved', value: String(approved.length), icon: <CheckCircle size={18} />, color: '#059669', sub: `${rate}% success rate` },
-              { label: 'Rejected', value: String(rejected.length), icon: <AlertTriangle size={18} />, color: '#dc2626' },
+              { label: 'Total', value: String(all), icon: <FileCheck size={18} />, color: '#2563eb' },
+              { label: 'Pending', value: String(pending), icon: <Clock size={18} />, color: '#d97706', sub: pending > 0 ? 'Awaiting response' : 'None pending' },
+              { label: 'Approved', value: String(approved), icon: <CheckCircle size={18} />, color: '#059669', sub: `${rate}% success rate` },
+              { label: 'Rejected', value: String(rejected), icon: <AlertTriangle size={18} />, color: '#dc2626' },
             ].map((kpi) => (
               <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
             ))}
@@ -152,7 +161,7 @@ export function ApplicationsPage() {
         />
       ) : (
         <div className="space-y-3">
-          {paginated.map((app) => (
+          {applications.map((app) => (
             <Card key={app.id} className="p-0 overflow-hidden">
               <div className="p-4 space-y-3">
                 {/* Top row */}
@@ -237,7 +246,7 @@ export function ApplicationsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-muted dark:text-[#64748b]">Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, applications.length)} of {applications.length}</p>
+              <p className="text-xs text-muted dark:text-[#64748b]">Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</p>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="p-2 rounded-full text-muted hover:bg-surface dark:hover:bg-[#0c0e1a] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (

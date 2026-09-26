@@ -19,6 +19,7 @@
  * happens for the current environment.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { PaymentProvider, ProviderId } from './types.js'
 import { mtnMomoProvider } from './mtnMomo.js'
 import { telecelCashProvider } from './telecelCash.js'
@@ -145,6 +146,21 @@ export function getProvider(method: ProviderId, source?: PaymentProvider['source
     return paystackRentProviders[method]
   }
   return directProviders[method]
+}
+
+/**
+ * The provider-side correlator for a new collection, generated BEFORE the
+ * provider is called and saved on the Payment, so a timeout or a crash
+ * mid-initiation still leaves something to reconcile against. The adapters
+ * send this value instead of minting their own.
+ */
+export function collectionCorrelator(provider: PaymentProvider, reference: string): string {
+  // Paystack keys the charge on our own reference.
+  if (provider.source === 'paystack') return reference
+  if (provider.source === 'simulated') return `SIM-${randomUUID()}`
+  if (provider.id === 'bank_transfer') return `BNK-${randomUUID()}`
+  // MTN requires a UUID v4 X-Reference-Id; Telecel and AirtelTigo accept one as their transaction id.
+  return randomUUID()
 }
 
 export type { PaymentProvider, ProviderId } from './types.js'

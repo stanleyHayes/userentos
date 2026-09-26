@@ -12,6 +12,7 @@ import { Property } from '../models/Property.js'
 import { embed, cosineSimilarity } from '../services/embeddings.js'
 import { getSmartRecommendations } from '../services/recommendations.js'
 import { cache } from '../services/cache.js'
+import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
@@ -42,6 +43,7 @@ router.post('/:id/publish', authenticate, asyncHandler(propertyController.publis
 router.patch('/:id', authenticate, asyncHandler(propertyController.update))
 router.delete('/:id', authenticate, asyncHandler(propertyController.delete))
 router.post('/:id/images', authenticate, upload.array('images', 10), asyncHandler(propertyController.uploadImages))
+router.delete('/:id/images', authenticate, asyncHandler(propertyController.removeImage))
 router.post('/:id/favorite', authenticate, asyncHandler(propertyController.toggleFavorite))
 
 // ─── Semantic Search ───
@@ -73,7 +75,7 @@ router.post('/search/semantic', requireAiSharingConsent, asyncHandler(async (req
   const { embedding: queryEmbedding } = await embed(query)
 
   // 2. Build MongoDB filter (hybrid: semantic + structured)
-  const filter: Record<string, unknown> = { listingStatus: 'approved', isActive: { $ne: false } }
+  const filter: Record<string, unknown> = { listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES }, isActive: { $ne: false } }
   if (city) filter['address.city'] = { $regex: escapeRegex(city), $options: 'i' }
   if (region) filter['address.region'] = { $regex: escapeRegex(region), $options: 'i' }
   if (type) filter.type = type
@@ -148,7 +150,7 @@ router.get('/nearby', asyncHandler(async (req, res) => {
   const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180))
 
   const filter: Record<string, unknown> = {
-    listingStatus: 'approved',
+    listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
     'coordinates.lat': { $gte: lat - latDelta, $lte: lat + latDelta },
     'coordinates.lng': { $gte: lng - lngDelta, $lte: lng + lngDelta },
   }
@@ -179,7 +181,7 @@ router.get('/nearby', asyncHandler(async (req, res) => {
 }))
 
 // ─── Map pins ───
-// A deliberately tiny projection: the map plots every approved listing at once,
+// A deliberately tiny projection: the map plots every public listing at once,
 // so returning full property documents (descriptions, amenities, embeddings)
 // would move megabytes to draw a few hundred dots. Only what a marker and its
 // popup need is selected here.
@@ -202,7 +204,7 @@ router.get('/map/pins', asyncHandler(async (req, res) => {
   const { type, city, minRent, maxRent, north, south, east, west, limit } = parsed.data
 
   const filter: Record<string, unknown> = {
-    listingStatus: 'approved',
+    listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES },
     isActive: { $ne: false },
     // A property with no coordinates cannot be drawn — exclude it here rather
     // than shipping nulls the client has to filter out.

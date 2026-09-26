@@ -8,6 +8,10 @@ export interface IDocument extends MongoDoc {
   fileUrl: string
   storagePublicId?: string
   storageResourceType?: 'image' | 'video' | 'raw'
+  /** 'authenticated' files (dispute evidence) have no public URL; see signedDownloadUrl. */
+  storageDeliveryType?: 'upload' | 'authenticated'
+  /** File extension Cloudinary stored, needed to sign a download link. */
+  storageFormat?: string
   fileSize: number
   version: number
   parentId?: string // for version chains
@@ -24,6 +28,8 @@ const documentSchema = new Schema<IDocument>({
   fileUrl: { type: String, required: true },
   storagePublicId: String,
   storageResourceType: { type: String, enum: ['image', 'video', 'raw'] },
+  storageDeliveryType: { type: String, enum: ['upload', 'authenticated'] },
+  storageFormat: String,
   fileSize: { type: Number, required: true },
   version: { type: Number, default: 1 },
   parentId: String,

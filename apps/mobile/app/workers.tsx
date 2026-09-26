@@ -17,7 +17,8 @@ interface Worker {
   photo?: string
   trades: string[]
   location: string
-  hourlyRate: number
+  // Optional on the Worker model — a worker may quote per job instead.
+  hourlyRate?: number
   rating: number
   reviewCount: number
   completedJobs: number
@@ -135,7 +136,7 @@ export default function WorkersScreen() {
                   <Text style={[s.divider, { color: c.border }]}>|</Text>
                   <Text style={[s.statText, { color: c.muted }]}>{w.completedJobs} jobs</Text>
                 </View>
-                <Text style={[s.rate, { color: c.primary }]}>GHS {w.hourlyRate}/hr</Text>
+                <Text style={[s.rate, { color: c.primary }]}>{w.hourlyRate != null ? `GHS ${w.hourlyRate}/hr` : 'Quote on request'}</Text>
               </View>
             </TouchableOpacity>
           ))

@@ -11,6 +11,12 @@
  *   - The webhook routes (real provider callback)
  *   - The simulator subscription (dev/seed mode)
  *   - The reconciliation cron (queryStatus poll)
+ *
+ * Terminal means terminal, with one audited exception: a verified success for
+ * the exact amount that arrives after the payment was marked failed. The money
+ * was taken, so the payment moves failed → completed once and an admin is
+ * alerted (the payer may already have paid again). A failure reported for a
+ * completed payment is only logged.
  */
 
 import { Payment } from '../../models/Payment.js'
@@ -24,11 +30,20 @@ import { dispatchWebhook } from '../webhooks.js'
 import { paymentCreditIntent, recoverPaymentWalletCredit } from './paymentWalletCredit.js'
 import { AuditLog } from '../../models/AuditLog.js'
 import { logger } from '../../utils/logger.js'
+import { financialAlert } from './alerts.js'
+import type { IPayment } from '../../models/Payment.js'
 import type { WebhookEvent } from './types.js'
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'refunded'])
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Exact pesewa equality between what the provider observed and what was owed. */
+function exactAmount(received: number, expected: number): boolean {
+  const receivedMinor = Math.round(round2(received) * 100)
+  const expectedMinor = Math.round(round2(expected) * 100)
+  return Number.isSafeInteger(receivedMinor) && Number.isSafeInteger(expectedMinor) && receivedMinor > 0 && expectedMinor > 0 && receivedMinor === expectedMinor
+}
 
 /** Best-effort audit entry for terminal payment transitions. */
 function auditPayment(action: string, payment: { _id: unknown; tenantId: string; reference: string; amount: number }, details: Record<string, unknown>) {
@@ -101,9 +116,9 @@ export async function finalizePayment(
     return false
   }
 
-  // Idempotency — never reprocess a terminal payment.
+  // Idempotency — never reprocess a terminal payment (see lateTerminalEvent for the one exception).
   if (TERMINAL_STATES.has(payment.status)) {
-    return false
+    return lateTerminalEvent(payment, event, opts)
   }
 
   // Pending events aren't actionable.
@@ -127,9 +142,10 @@ export async function finalizePayment(
   if (event.status === 'failed') {
     // Atomic terminal transition: only one caller (webhook vs reconciliation cron
     // vs retry) flips a non-terminal payment, so side-effects fire exactly once.
+    // Clearing openCollectionKey lets the payer start a fresh checkout for the same obligation.
     const failed = await Payment.findOneAndUpdate(
       { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
-      { $set: { ...baseSet, status: 'failed', failureReason: inferFailureReason(event.raw) } },
+      { $set: { ...baseSet, status: 'failed', failureReason: inferFailureReason(event.raw) }, $unset: { openCollectionKey: 1 } },
       { returnDocument: 'after' },
     )
     if (!failed) return false // lost the race — already terminal
@@ -149,9 +165,9 @@ export async function finalizePayment(
   }
   // Validate the provider-reported amount against what we recorded, so a small
   // transfer (or a tampered/replayed event) cannot finalize a large obligation.
-  const receivedMinor = Math.round(round2(event.amount) * 100)
-  const expectedMinor = Math.round(round2(payment.amount) * 100)
-  if (!Number.isSafeInteger(receivedMinor) || !Number.isSafeInteger(expectedMinor) || receivedMinor <= 0 || expectedMinor <= 0 || receivedMinor !== expectedMinor) {
+  // A held payment keeps its openCollectionKey: it may yet settle, so a second
+  // checkout for the same obligation stays refused until an admin resolves it.
+  if (!exactAmount(event.amount, payment.amount)) {
     const flagged = await Payment.findOneAndUpdate(
       { _id: payment._id, status: { $nin: [...TERMINAL_STATES] } },
       { $set: { ...baseSet, status: 'processing', failureReason: `amount_mismatch: provider reported ${event.amount}, expected ${payment.amount}` } },
@@ -167,11 +183,58 @@ export async function finalizePayment(
   const walletCreditIntent = paymentCreditIntent(payment)
   const completed = await Payment.findOneAndUpdate(
     { _id: payment._id, status: { $nin: [...TERMINAL_STATES] }, amount: payment.amount, tenantId: payment.tenantId, landlordId: payment.landlordId, purpose: payment.purpose, reference: payment.reference },
-    { $set: { ...baseSet, status: 'completed', paidAt: event.timestamp || nowIso, ...(walletCreditIntent ? { walletCreditIntent } : {}) }, $unset: { failureReason: 1, collectionInitiationUncertainAt: 1 } },
+    { $set: { ...baseSet, status: 'completed', paidAt: event.timestamp || nowIso, ...(walletCreditIntent ? { walletCreditIntent } : {}) }, $unset: { failureReason: 1, collectionInitiationUncertainAt: 1, openCollectionKey: 1 } },
     { returnDocument: 'after', overwriteImmutable: true, runValidators: true },
   )
   if (!completed) return false // lost the race — another worker already finalized
   auditPayment('payment.completed', completed, { source: opts.source, purpose: completed.purpose })
+  await applyCompletion(completed, opts)
+  return true
+}
+
+/**
+ * An event for a payment that is already terminal.
+ *
+ * A verified success on a FAILED payment means money was taken while the
+ * payment reads failed: the beneficiary is not credited and the payer will
+ * probably pay again. Only a signed webhook or verified reconciliation
+ * evidence, in GHS for the exact amount, may revive it, and only once. A
+ * failure on a COMPLETED payment is recorded and changes nothing — refunds
+ * and chargebacks arrive as their own events (services/payments/refunds.ts).
+ */
+async function lateTerminalEvent(payment: IPayment, event: WebhookEvent, opts: FinalizeOptions): Promise<boolean> {
+  if (payment.status === 'completed' && event.status === 'failed') {
+    logger.warn(`[Payments:${opts.source}] failure reported for completed ${payment.reference}; payment unchanged`)
+    auditPayment('payment.failed_after_completion', payment, { source: opts.source, reason: inferFailureReason(event.raw) })
+    return false
+  }
+  if (payment.status !== 'failed' || event.status !== 'completed') return false
+  if (opts.source !== 'webhook' && opts.source !== 'reconciliation') return false
+  if (event.currency !== 'GHS' || !exactAmount(event.amount, payment.amount)) {
+    auditPayment('payment.late_success_refused', payment, { source: opts.source, reportedAmount: event.amount, currency: event.currency })
+    financialAlert('payment_late_success_unverified', { type: 'Payment', id: String(payment._id) }, { reference: payment.reference, expected: payment.amount, reported: event.amount, currency: event.currency })
+    return false
+  }
+
+  const walletCreditIntent = paymentCreditIntent(payment)
+  const nowIso = new Date().toISOString()
+  const revived = await Payment.findOneAndUpdate(
+    { _id: payment._id, status: 'failed', lateSuccessAt: { $exists: false }, amount: payment.amount, tenantId: payment.tenantId, landlordId: payment.landlordId, purpose: payment.purpose, reference: payment.reference },
+    {
+      $set: { status: 'completed', providerStatus: 'completed', lastProviderCheckAt: nowIso, paidAt: event.timestamp || nowIso, lateSuccessAt: new Date(), ...(walletCreditIntent ? { walletCreditIntent } : {}) },
+      $unset: { failureReason: 1, collectionInitiationUncertainAt: 1 },
+    },
+    { returnDocument: 'after', overwriteImmutable: true, runValidators: true },
+  )
+  if (!revived) return false
+  auditPayment('payment.late_success', revived, { source: opts.source, previousFailureReason: payment.failureReason })
+  financialAlert('payment_late_success', { type: 'Payment', id: String(revived._id) }, { reference: revived.reference, amount: revived.amount, purpose: revived.purpose, source: opts.source })
+  await applyCompletion(revived, opts)
+  return true
+}
+
+/** What a verified completion is FOR: receipt, credit, subscription, notifications. Runs once per completion. */
+async function applyCompletion(completed: IPayment, opts: FinalizeOptions): Promise<void> {
   if (completed.purpose === 'rent') {
     try { await recoverRentReceipt(String(completed._id)) }
     catch { logger.warn('[Payments] Rent receipt issuance deferred to scheduled recovery') }
@@ -222,7 +285,6 @@ export async function finalizePayment(
     .catch((err) => logger.warn('[Payments] checkAndAward failed:', (err as Error).message))
 
   console.log(`[Payments:${opts.source}] marked ${completed.reference} COMPLETED`)
-  return true
 }
 
 function inferFailureReason(raw: unknown): string | undefined {
