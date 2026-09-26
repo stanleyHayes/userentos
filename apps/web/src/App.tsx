@@ -10,6 +10,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { queryClient, querySessionKey } from '@/lib/queryClient'
 import { SplashScreen } from '@/components/ui/SplashScreen'
+import { isSplashFinished, markSplashFinished } from '@/lib/splash'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { RequireRole } from '@/components/layout/RequireRole'
@@ -163,11 +164,9 @@ export default function App() {
   const querySession = useAuthStore(querySessionKey)
   const { resolvedTheme } = useThemeStore()
   const muiTheme = resolvedTheme() === 'dark' ? darkTheme : lightTheme
-  const [showSplash, setShowSplash] = useState(
-    () => typeof window !== 'undefined' && sessionStorage.getItem('rentos-splash-seen') !== '1',
-  )
+  const [showSplash, setShowSplash] = useState(() => !isSplashFinished())
   const handleSplashFinished = useCallback(() => {
-    sessionStorage.setItem('rentos-splash-seen', '1')
+    markSplashFinished()
     setShowSplash(false)
   }, [])
 

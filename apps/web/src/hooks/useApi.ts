@@ -410,6 +410,10 @@ export function useRemoveStorefrontDomain() {
 const retryUnlessMissing = (failureCount: number, error: unknown) =>
   (error as { status?: number } | null)?.status !== 404 && failureCount < 1
 
+/** Same idea for focus/reconnect refetches: a known-missing storefront isn't re-asked. */
+const refetchUnlessMissing = (query: { state: { data: unknown; error: unknown } }) =>
+  query.state.data !== undefined || (query.state.error as { status?: number } | null)?.status !== 404
+
 /** Public storefront, by slug. */
 export function useStorefront(slug: string | undefined) {
   return useQuery({
@@ -417,6 +421,8 @@ export function useStorefront(slug: string | undefined) {
     queryFn: () => api.get<StorefrontRecord & { canonicalUrl: string }>(`/storefronts/${slug}`),
     enabled: Boolean(slug),
     retry: retryUnlessMissing,
+    refetchOnWindowFocus: refetchUnlessMissing,
+    refetchOnReconnect: refetchUnlessMissing,
   })
 }
 
@@ -426,6 +432,8 @@ export function useStorefrontProperties(slug: string | undefined) {
     queryFn: () => api.get<{ items: Property[]; total: number }>(`/storefronts/${slug}/properties`),
     enabled: Boolean(slug),
     retry: retryUnlessMissing,
+    refetchOnWindowFocus: refetchUnlessMissing,
+    refetchOnReconnect: refetchUnlessMissing,
   })
 }
 

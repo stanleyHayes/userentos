@@ -1150,12 +1150,46 @@ h1.font-display, h2.font-display {
 .parallax { will-change: transform; }
 .tilt-card { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease; transform-style: preserve-3d; will-change: transform; }
 
-/* Storefront address plate: hangs from the awning and settles once. */
-@keyframes plateSettle {
-  0% { transform: rotate(-9deg); opacity: 0; }
-  18% { opacity: 1; }
-  40% { transform: rotate(5deg); }
+/* Missing-storefront scene (StorefrontUnavailable). Every animation is applied
+   through motion-safe:, so reduced-motion visitors get the settled scene. */
+@keyframes shutterDown {
+  0% { transform: translateY(-100%); }
+  62% { transform: translateY(0); animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
+  76% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  88% { transform: translateY(0); }
+  94% { transform: translateY(-1.2%); }
+  100% { transform: translateY(0); }
+}
+@keyframes dustPuff {
+  0% { transform: translate(0, 0) scale(0.3); opacity: 0; }
+  20% { opacity: 0.55; }
+  100% { transform: translate(var(--dust-x, 0), -7px) scale(1.9); opacity: 0; }
+}
+@keyframes plateHang {
+  0% { transform: translateY(-30px) rotate(-12deg); opacity: 0; }
+  22% { transform: translateY(3px) rotate(7deg); opacity: 1; }
+  32% { transform: translateY(0) rotate(7deg); }
+  48% { transform: rotate(-4.5deg); }
+  64% { transform: rotate(2.5deg); }
+  80% { transform: rotate(-1deg); }
+  100% { transform: rotate(0deg); }
+}
+/* Starts and ends upright, moving, so it picks up seamlessly from plateHang. */
+@keyframes plateSway {
+  0% { transform: rotate(0deg); animation-timing-function: ease-out; }
+  25% { transform: rotate(1.1deg); animation-timing-function: ease-in-out; }
+  75% { transform: rotate(-1.1deg); animation-timing-function: ease-in; }
+  100% { transform: rotate(0deg); }
+}
+@keyframes plateNudge {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-7deg); }
+  42% { transform: rotate(4.5deg); }
   62% { transform: rotate(-2.5deg); }
   82% { transform: rotate(1deg); }
   100% { transform: rotate(0deg); }
+}
+@keyframes sceneRise {
+  0% { transform: translateY(14px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }

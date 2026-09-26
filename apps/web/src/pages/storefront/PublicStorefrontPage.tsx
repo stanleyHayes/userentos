@@ -23,7 +23,7 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
   // not the path — there is no /s/:slug segment to read.
   const { slug: slugFromPath } = useParams<{ slug: string }>()
   const slug = slugOverride ?? slugFromPath
-  const { data: storefront, isLoading, isError, error, refetch } = useStorefront(slug)
+  const { data: storefront, isLoading, isError, error, refetch, isFetching, errorUpdateCount } = useStorefront(slug)
   const { data: properties, isLoading: loadingProperties } = useStorefrontProperties(slug)
 
   // Per-host SEO (spec §4.1). index.html carries the platform's own tags, so
@@ -51,19 +51,26 @@ export function PublicStorefrontPage({ slugOverride }: { slugOverride?: string }
     })
   }, [storefront, canonicalUrl, slugOverride])
 
-  if (isLoading) {
+  // Refetching a query that never loaded puts it back to pending. After a
+  // failed load, keep the error page up (its button shows the retry) rather
+  // than flashing the skeleton and replaying the page's entrance.
+  const retrying = isFetching && errorUpdateCount > 0
+
+  if (isLoading && !retrying) {
     return <div className="mx-auto max-w-6xl px-4 py-10"><GridSkeleton cols={3} count={6} /></div>
   }
 
   if (isError || !storefront) {
     // Only a 404 means there is no storefront; anything else was a failed load.
-    const missing = !isError || (error as { status?: number } | null)?.status === 404
+    // A 404 is never refetched, so a retry in flight follows a failed load.
+    const missing = !retrying && (!isError || (error as { status?: number } | null)?.status === 404)
     return (
       <StorefrontUnavailable
         slug={slug}
         reason={missing ? 'missing' : 'unreachable'}
         onStorefrontHost={Boolean(slugOverride)}
         onRetry={() => { void refetch() }}
+        retrying={retrying}
       />
     )
   }
