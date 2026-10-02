@@ -34,6 +34,8 @@ export function TenantDashboard() {
   const { data: notifData } = useNotifications()
   const { data: disputesData } = useDisputes()
   const creditEnabled = useRegulatedFeatureEnabled('credit_reporting') === true
+  const rentCollectionEnabled = useRegulatedFeatureEnabled('rent_collection') === true
+  const walletEnabled = useRegulatedFeatureEnabled('wallet') === true
   const { data: creditData } = useQuery({ queryKey: ['credit-score'], queryFn: () => api.get<{ score: number; factors: Record<string, number> }>('/credit/me'), enabled: creditEnabled })
   const { data: profileData } = useQuery({ queryKey: ['tenant-profile'], queryFn: () => api.get<{ completionScore: number; profileComplete: boolean }>('/tenant-profile/me') })
   const { data: recommendations } = usePropertyRecommendations()
@@ -91,6 +93,9 @@ export function TenantDashboard() {
         profileScore={profileScore}
         analytics={a}
         activeAgreement={activeAgreement}
+        rentCollectionEnabled={rentCollectionEnabled}
+        walletEnabled={walletEnabled}
+        savedCount={favoriteIds.length}
       />
 
       <TenantResidenceStatus activeAgreement={activeAgreement} />

@@ -169,7 +169,7 @@ export function AgentLeadsPage() {
         <EmptyState
           preset="general"
           title={status ? `No ${status} leads` : 'No leads yet'}
-          description={status ? 'Try another pipeline stage.' : 'When someone taps “I’m interested”, opens WhatsApp while signed in, or uses your website’s contact form, they land here — and you get an SMS.'}
+          description={status ? 'Try another pipeline stage.' : 'When someone taps “I’m interested” on a listing or writes to you from your website, they land here — and you get an SMS.'}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

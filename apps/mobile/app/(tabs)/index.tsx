@@ -9,6 +9,7 @@ import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { Logo } from '../../components/Logo'
 import { DashboardSkeleton } from '../../components/Skeleton'
+import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 import { listingTypeMeta } from '../../../../packages/shared/listingTypes'
 
 interface PropertyItem {
@@ -45,6 +46,8 @@ export default function HomeScreen() {
   const [savedProperties, setSavedProperties] = useState<PropertyItem[]>([])
   const [recommendations, setRecommendations] = useState<PropertyItem[]>([])
   const [activeAgreement, setActiveAgreement] = useState<AgreementItem | null>(null)
+  // The wallet is a regulated service: its figures show only where the operator offers it.
+  const walletEnabled = useRegulatedFeatureEnabled('wallet') === true
 
   async function load() {
     try {
@@ -102,8 +105,15 @@ export default function HomeScreen() {
     : [
         { icon: 'document-text-outline' as const, label: 'Agreements', value: String(analytics?.activeAgreements ?? 0), color: '#3b82f6' },
         { icon: 'card-outline' as const, label: 'Next Payment', value: formatCompact(analytics?.nextPaymentAmount ?? 0), color: '#f59e0b' },
-        { icon: 'wallet-outline' as const, label: 'Saved', value: formatCompact(analytics?.totalSaved ?? 0), color: '#10b981' },
-        { icon: 'cash-outline' as const, label: 'Wallet', value: formatCompact(analytics?.walletBalance ?? 0), color: '#8b5cf6' },
+        ...(walletEnabled
+          ? [
+              { icon: 'wallet-outline' as const, label: 'Saved', value: formatCompact(analytics?.totalSaved ?? 0), color: '#10b981' },
+              { icon: 'cash-outline' as const, label: 'Wallet', value: formatCompact(analytics?.walletBalance ?? 0), color: '#8b5cf6' },
+            ]
+          : [
+              { icon: 'paper-plane-outline' as const, label: 'Applications', value: String(analytics?.totalApplications ?? 0), color: '#10b981' },
+              { icon: 'heart-outline' as const, label: 'Saved Homes', value: String(savedProperties.length), color: '#8b5cf6' },
+            ]),
       ]
 
   return (
@@ -222,7 +232,7 @@ export default function HomeScreen() {
         )}
 
         {/* Savings progress */}
-        {!isLandlord && analytics && (analytics.savingsTarget ?? 0) > 0 && (
+        {!isLandlord && walletEnabled && analytics && (analytics.savingsTarget ?? 0) > 0 && (
           <View style={[s.card, neuCard(c)]}>
             <View style={s.cardHeader}>
               <Text style={[s.cardTitle, { color: c.text }]}>Savings Progress</Text>
