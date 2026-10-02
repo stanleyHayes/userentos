@@ -34,6 +34,8 @@ export interface IUser extends Document {
   taxReportingConsent: boolean
   storeAccountToken?: string
   profileImage?: string
+  /** Agent, agency or property manager: what a property_manager account does. */
+  professionalType?: 'agent' | 'agency' | 'property_manager'
   subscriptionPackageId?: string
   /**
    * The plan VERSION this subscriber signed up on.
@@ -107,6 +109,7 @@ const userSchema = new Schema<IUser>({
   taxReportingConsent: { type: Boolean, default: false },
   storeAccountToken: { type: String, select: false, unique: true, sparse: true },
   profileImage: String,
+  professionalType: { type: String, enum: ['agent', 'agency', 'property_manager'] },
   subscriptionPackageId: { type: String },
   subscriptionPlanVersion: { type: Number },
   subscriptionPaymentId: String,

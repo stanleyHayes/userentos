@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import { useToastStore } from '@/stores/toastStore'
 import { useAuthStore } from '@/stores/authStore'
 import { parseRegulatedFeatureStatus, type RegulatedFeatureKey } from '../../../../packages/shared/regulatedFeatures'
+import { DEFAULT_SIGNUP_ROLES, parseSignupRoles } from '../../../../packages/shared/productScope'
 import type {
   PaginatedResponse,
   Property,
@@ -1399,6 +1400,16 @@ export function useRegulatedFeatures() {
     },
     staleTime: 5 * 60 * 1000,
   })
+}
+
+/** Account types sign-up accepts, from the API; the phase defaults until it answers. */
+export function useSignupRoles(): string[] {
+  const { data } = useQuery({
+    queryKey: ['platform-features', 'signup-roles'],
+    queryFn: async () => parseSignupRoles(await api.get<unknown>('/platform/features')),
+    staleTime: 5 * 60 * 1000,
+  })
+  return data ?? [...DEFAULT_SIGNUP_ROLES]
 }
 
 /** true/false once known; undefined while loading or unavailable, which callers must treat as not enabled. */

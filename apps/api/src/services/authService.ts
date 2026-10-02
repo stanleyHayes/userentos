@@ -35,6 +35,7 @@ interface RegisterData {
   firstName: string
   lastName: string
   role: string
+  professionalType?: 'agent' | 'agency' | 'property_manager'
 }
 
 function expiresIn(seconds: number) {
@@ -135,7 +136,7 @@ export class AuthService {
   }
 
   async register(data: RegisterData, deviceLabel: string | undefined, ipAddress: string | undefined, consent: IUserConsents) {
-    const { email, phone, password, firstName, lastName, role } = data
+    const { email, phone, password, firstName, lastName, role, professionalType } = data
 
     const existing = await this.userRepo.findByEmail(email)
     if (existing) {
@@ -158,6 +159,7 @@ export class AuthService {
       activeRole: role,
       permissions,
       consents: consent,
+      ...(professionalType ? { professionalType } : {}),
     })
     this.auditConsent(user._id.toString(), consent, 'register')
 

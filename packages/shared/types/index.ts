@@ -299,6 +299,8 @@ export interface User {
   isVerified: boolean
   mfaEnabled?: boolean
   profileImage?: string
+  /** Agent, agency or property manager — set on property_manager accounts. */
+  professionalType?: 'agent' | 'agency' | 'property_manager'
   invitedBy?: string
   /** Latest Terms/Privacy acceptance on record (server-set only). */
   consents?: UserConsents

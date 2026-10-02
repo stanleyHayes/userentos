@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { authService } from '../container.js'
 import { success, error } from '../utils/response.js'
 import { acceptanceSchema, signupAcceptanceSchema, buildConsentRecord } from '../utils/consent.js'
-import { isRoleOffered } from '../config/regulatedFeatures.js'
+import { isSignupOpen } from '../config/signupRoles.js'
 import { pushTokenSchema } from '../services/push/input.js'
 
 /** Password policy — same rules the client checklist enforces (8+, upper,
@@ -23,6 +23,8 @@ const registerSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   role: z.enum(['tenant', 'landlord', 'property_manager', 'financier', 'employer', 'service_provider', 'business', 'developer']),
+  // Agent, agency or property manager — only meaningful for property_manager.
+  professionalType: z.enum(['agent', 'agency', 'property_manager']).optional(),
   // Terms/Privacy acceptance + 18+ confirmation. No account without it.
   acceptance: signupAcceptanceSchema,
 })
@@ -48,11 +50,13 @@ export const authController = {
     const parsed = registerSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    // An account type whose only purpose is a disabled regulated service would
-    // land on screens that refuse every request.
-    if (!isRoleOffered(parsed.data.role)) { error(res, 'This account type is not available yet', 403); return }
+    // Closed account types: those outside this phase's journeys (see
+    // config/signupRoles.ts) and those whose only purpose is a disabled
+    // regulated service, which would land on screens that refuse every request.
+    if (!isSignupOpen(parsed.data.role)) { error(res, 'This account type is not available yet', 403); return }
     const meta = getClientMeta(req)
-    const { acceptance, ...data } = parsed.data
+    const { acceptance, professionalType, ...rest } = parsed.data
+    const data = { ...rest, ...(rest.role === 'property_manager' ? { professionalType: professionalType ?? 'agent' } : {}) }
     const result = await authService.register(data, meta.deviceLabel, meta.ipAddress, buildConsentRecord(acceptance, req))
     if (result.error) { error(res, result.error, result.status); return }
     success(res, result.data, 'Registration successful', result.status)

@@ -3,9 +3,8 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
-import { useSubscriptionPackages } from '@/hooks/useApi'
-import type { UserRole, User as UserType, SubscriptionPackage } from '@/types'
-import { ArrowLeft, ArrowRight, Loader2, Users, Lock, Briefcase, Crown, Check, Sparkles } from 'lucide-react'
+import type { UserRole, User as UserType } from '@/types'
+import { ArrowLeft, ArrowRight, Loader2, Users, Lock, Briefcase, Check, Sparkles } from 'lucide-react'
 import { DoodleSpiral } from '@/components/ui/Doodles'
 import { passwordRequirements } from '@/pages/settings/passwordStrength'
 import { phoneDigits } from '@/lib/ghana'
@@ -13,56 +12,41 @@ import toast from 'react-hot-toast'
 import { RoleStep } from './steps/RoleStep'
 import { AccountStep } from './steps/AccountStep'
 import { RoleDetailsStep } from './steps/RoleDetailsStep'
-import { PlanStep } from './steps/PlanStep'
 import { emptyRoleDetails, type AccountForm, type RoleDetails } from './steps/types'
 import { ConsentCheckbox } from '@/components/legal/ConsentCheckbox'
 import { buildAcceptance } from '../../../../../packages/shared/legalVersions'
+import type { ProfessionalType } from '../../../../../packages/shared/productScope'
 
-const STEPS = [
-  { label: 'Role', icon: <Users size={16} /> },
-  { label: 'Account', icon: <Lock size={16} /> },
-  { label: 'Details', icon: <Briefcase size={16} /> },
-  { label: 'Plan', icon: <Crown size={16} /> },
-]
+const ROLE_STEP = { label: 'Account type', icon: <Users size={16} /> }
+const ACCOUNT_STEP = { label: 'Your details', icon: <Lock size={16} /> }
+const DETAILS_STEP = { label: 'Profile', icon: <Briefcase size={16} /> }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** Only landlords and property managers can hold a listing plan
- * (POST /subscriptions/subscribe is gated to those roles), so nobody else is
- * shown plans they could not buy. */
-const PLAN_ROLES: UserRole[] = ['landlord', 'property_manager']
+/**
+ * Sign-up asks only for what an account needs. Tenants and agents go straight
+ * in (agents finish their business profile and website in onboarding); the
+ * profile step survives only for account types an operator may reopen whose
+ * profile is created at sign-up. Plans are chosen later — the API assigns the
+ * free default plan to a new agent.
+ */
+const DETAILS_ROLES: UserRole[] = ['service_provider', 'business', 'employer', 'financier']
+
+/** Where a new account lands: agents set up their business; tenants start finding a home. */
+function landingFor(role: UserRole): string {
+  if (role === 'property_manager') return '/onboarding'
+  if (role === 'tenant') return '/properties'
+  return '/dashboard'
+}
 
 /**
- * Best-effort persistence of the step-3 role details, run after registration
- * and login. Throws on failure — the caller catches and toasts, so a failure
- * here never blocks the user from entering the app.
- *
- * Not everything is persistable:
- * - landlord: only ghanaCardId is accepted by PATCH /users/me; the rest is
- *   informational.
- * - property_manager / financier: no endpoint accepts these fields today.
+ * Best-effort persistence of the profile step, run after registration and
+ * login. Throws on failure — the caller catches and toasts, so a failure here
+ * never blocks the user from entering the app. Financier details are
+ * informational: no endpoint accepts them today.
  */
 async function persistRoleProfile(role: UserRole, account: AccountForm, details: RoleDetails): Promise<void> {
   switch (role) {
-    case 'tenant': {
-      // GET auto-creates the profile server-side; only PATCH when the user
-      // actually entered something, and only keys profilePatchSchema accepts.
-      await api.get('/tenant-profile/me')
-      const searchPreferences: Record<string, unknown> = {}
-      if (details.searchCity.trim()) searchPreferences.preferredCities = [details.searchCity.trim().slice(0, 60)]
-      if (details.monthlyBudget && Number(details.monthlyBudget) > 0) searchPreferences.maxBudget = Number(details.monthlyBudget)
-      if (details.bedrooms && Number(details.bedrooms) > 0) searchPreferences.minBedrooms = Math.floor(Number(details.bedrooms))
-      if (Object.keys(searchPreferences).length > 0) {
-        await api.patch('/tenant-profile/me', { searchPreferences })
-      }
-      break
-    }
-    case 'landlord': {
-      if (details.ghanaCardId.trim()) {
-        await api.patch('/users/me', { ghanaCardId: details.ghanaCardId.trim() })
-      }
-      break
-    }
     case 'service_provider': {
       await api.post('/workers', {
         name: `${account.firstName} ${account.lastName}`.trim(),
@@ -117,45 +101,29 @@ async function persistRoleProfile(role: UserRole, account: AccountForm, details:
       break
     }
     default:
-      // property_manager & financier details are informational only.
       break
   }
-}
-
-/** Plan used when the user skips: the default package, else the cheapest free one. */
-function pickFreePackage(packages: SubscriptionPackage[]): SubscriptionPackage | null {
-  return (
-    packages.find((p) => p.isDefault) ??
-    packages.filter((p) => p.price <= 0).sort((a, b) => a.price - b.price)[0] ??
-    null
-  )
 }
 
 export function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const login = useAuthStore((s) => s.login)
-  const { data: packagesData, isLoading: pkgLoading } = useSubscriptionPackages()
-  const packages = packagesData?.items ?? []
 
   const [step, setStep] = useState(0)
   const [role, setRole] = useState<UserRole>('tenant')
+  const [professionalType, setProfessionalType] = useState<ProfessionalType>('agent')
   const [account, setAccount] = useState<AccountForm>({
     firstName: '', lastName: '', email: '', phone: '', password: '',
   })
   const [details, setDetails] = useState<RoleDetails>(emptyRoleDetails)
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [consented, setConsented] = useState(false)
 
-  const hasPlanStep = PLAN_ROLES.includes(role)
-  const steps = hasPlanStep ? STEPS : STEPS.slice(0, 3)
+  const hasDetailsStep = DETAILS_ROLES.includes(role)
+  const steps = hasDetailsStep ? [ROLE_STEP, ACCOUNT_STEP, DETAILS_STEP] : [ROLE_STEP, ACCOUNT_STEP]
   const lastStep = steps.length - 1
-
-  // Free Starter plan is preselected — derived (not synced state) so the user
-  // can still override it before packages finish loading.
-  const effectivePackageId = selectedPackageId ?? (packages.length > 0 ? (pickFreePackage(packages)?.id ?? packages[0].id) : null)
 
   // Invitations issued before the accept screen existed pointed here as
   // /register?invite=<token>. Self-service signup can't honour the invited role,
@@ -200,8 +168,8 @@ export function RegisterPage() {
     }
   }
 
-  /** Register, then run the best-effort chain: role profile → subscription. */
-  async function finish(skipPlan: boolean) {
+  /** Register, then (for the reopenable account types) save the profile step. */
+  async function finish() {
     if (!consented) {
       setError('Please confirm you are 18 or older and accept the Terms of Service and Privacy Policy')
       return
@@ -215,6 +183,7 @@ export function RegisterPage() {
         email: account.email.trim(),
         phone: phoneDigits(account.phone),
         role,
+        ...(role === 'property_manager' ? { professionalType } : {}),
         acceptance: buildAcceptance(),
       })
     } catch (err) {
@@ -222,37 +191,23 @@ export function RegisterPage() {
       setLoading(false)
       return
     }
+
+    // AuthLayout redirects as soon as the session exists, so the destination is
+    // set first. A tenant who signed up from a listing goes back to it.
+    const dest = landingFor(role)
+    try {
+      if (role !== 'tenant' || !sessionStorage.getItem('postAuthRedirect')) sessionStorage.setItem('postAuthRedirect', dest)
+    } catch { /* storage blocked: AuthLayout falls back to the dashboard */ }
     login(auth.user, auth.token, auth.refreshToken)
 
-    // 1) Role profile — best-effort; failure must not strand the user here.
-    try {
-      await persistRoleProfile(role, account, details)
-    } catch (err) {
-      toast.error(`Account created, but your ${role.replace('_', ' ')} profile could not be saved — you can complete it later. ${err instanceof Error ? err.message : ''}`)
-    }
-
-    // 2) Subscription — free plans activate instantly; paid plans are paid on
-    //    the Subscription page (MoMo), never inside the wizard. Roles that
-    //    cannot hold a plan skip this entirely.
-    if (!hasPlanStep) {
-      navigate('/dashboard')
-      return
-    }
-    const chosen = skipPlan
-      ? pickFreePackage(packages)
-      : (packages.find((p) => p.id === effectivePackageId) ?? pickFreePackage(packages))
-
-    let dest = '/dashboard'
-    if (chosen && chosen.price > 0 && !skipPlan) {
-      dest = '/subscription'
-    } else if (chosen) {
+    if (hasDetailsStep) {
+      // Best-effort; failure must not strand the user here.
       try {
-        await api.post('/subscriptions/subscribe', { packageId: chosen.id })
-      } catch {
-        toast.error('Account created, but plan activation failed — pick a plan from the Subscription page.')
+        await persistRoleProfile(role, account, details)
+      } catch (err) {
+        toast.error(`Account created, but your ${role.replace('_', ' ')} profile could not be saved — you can complete it later. ${err instanceof Error ? err.message : ''}`)
       }
     }
-
     navigate(dest)
   }
 
@@ -303,10 +258,9 @@ export function RegisterPage() {
       )}
 
       <div key={step} className="auth-step-enter">
-        {step === 0 && <RoleStep value={role} onChange={setRole} />}
+        {step === 0 && <RoleStep value={role} onChange={setRole} professionalType={professionalType} onProfessionalTypeChange={setProfessionalType} />}
         {step === 1 && <AccountStep form={account} update={updateAccount} />}
-        {step === 2 && <RoleDetailsStep role={role} details={details} update={updateDetails} toggleTrade={toggleTrade} />}
-        {step === 3 && hasPlanStep && <PlanStep packages={packages} selectedId={effectivePackageId} onSelect={setSelectedPackageId} isLoading={pkgLoading} />}
+        {step === 2 && hasDetailsStep && <RoleDetailsStep role={role} details={details} update={updateDetails} toggleTrade={toggleTrade} />}
 
         {step === lastStep && (
           <div className="mt-5">
@@ -328,43 +282,21 @@ export function RegisterPage() {
           </Button>
 
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
-            {step === 2 && hasPlanStep && (
-              <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" onClick={() => setStep(3)}>
-                Skip for now
-              </Button>
-            )}
             {step < lastStep ? (
               <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-44 sm:flex-none" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
                 Continue <ArrowRight size={14} />
               </Button>
             ) : (
-              <>
-                {hasPlanStep && (
-                  <Button type="button" variant="ghost" size="sm" className="hidden whitespace-nowrap px-2.5 sm:inline-flex" disabled={loading || !consented} onClick={() => void finish(true)}>
-                    Skip — Starter (free)
-                  </Button>
+              <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-48 sm:flex-none" disabled={loading || !consented || !canProceed()} onClick={() => void finish()}>
+                {loading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <>Create account <ArrowRight size={16} /></>
                 )}
-                <Button type="button" size="lg" className="auth-primary-action min-w-0 flex-1 whitespace-nowrap px-5 sm:min-w-48 sm:flex-none" disabled={loading || !consented || (hasPlanStep && pkgLoading)} onClick={() => void finish(false)}>
-                  {loading ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <>Create account <ArrowRight size={16} /></>
-                  )}
-                </Button>
-              </>
+              </Button>
             )}
           </div>
         </div>
-        {step === 2 && hasPlanStep && (
-          <button type="button" className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary sm:hidden" onClick={() => setStep(3)}>
-            Skip details for now
-          </button>
-        )}
-        {step === lastStep && hasPlanStep && (
-          <button type="button" disabled={loading || !consented} className="mt-3 w-full text-center text-xs font-semibold text-primary/70 transition-colors hover:text-primary disabled:opacity-50 sm:hidden" onClick={() => void finish(true)}>
-            Continue with Starter (free)
-          </button>
-        )}
       </div>
 
       <div className="animate-fade-up" style={{ animationDelay: '0.35s' }}>

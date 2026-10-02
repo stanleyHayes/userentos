@@ -78,7 +78,7 @@ describe('regulated feature enforcement', () => {
     reloadRegulatedFeatures({ NODE_ENV: 'production', REGULATED_FEATURES: 'insurance', REGULATED_BASIS_INSURANCE: 'NIC licence ref' })
     const res = await request(gatedApp().app, '/api/platform/features')
     expect(res.status).toBe(200)
-    expect(res.body.data).toEqual({ regulated: regulatedFeatureStatus() })
+    expect(res.body.data).toMatchObject({ regulated: regulatedFeatureStatus() })
     expect((res.body.data as { regulated: Record<string, boolean> }).regulated).toMatchObject({ insurance: true, lending: false, wallet: false })
   })
 })

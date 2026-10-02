@@ -69,6 +69,7 @@ const profilePatchSchema = z.object({
   ghanaCardId: z.union([z.null(), z.string()]).optional()
     .refine((v) => v == null || v.trim() === '' || normalizeGhanaCardId(v) !== null, 'Ghana Card ID must look like GHA-123456789-0'),
   activeRole: z.string().max(40).optional(),
+  professionalType: z.enum(['agent', 'agency', 'property_manager']).optional(),
 })
 
 router.patch('/me', authenticate, async (req, res) => {
@@ -77,7 +78,7 @@ router.patch('/me', authenticate, async (req, res) => {
   const user = await User.findById(req.user!.userId)
   if (!user) { error(res, 'User not found', 404); return }
 
-  const { firstName, lastName, phone, ghanaCardId, activeRole } = parsed.data
+  const { firstName, lastName, phone, ghanaCardId, activeRole, professionalType } = parsed.data
   const cardOnFile = () => decryptPii(user.ghanaCardId, PII_FIELDS.userGhanaCard) ?? null
   const before = { firstName: user.firstName, lastName: user.lastName, ghanaCardId: cardOnFile() }
   if (firstName !== undefined) user.firstName = firstName
@@ -85,6 +86,7 @@ router.patch('/me', authenticate, async (req, res) => {
   if (phone) user.phone = phone
   if (ghanaCardId !== undefined) user.ghanaCardId = ghanaCardId && ghanaCardId.trim() ? normalizeGhanaCardId(ghanaCardId)! : undefined
   if (activeRole && user.roles.includes(activeRole)) user.activeRole = activeRole
+  if (professionalType && user.roles.includes('property_manager')) user.professionalType = professionalType
 
   // Verification attests to a specific name + Ghana Card. Changing either
   // after approval must not keep the badge (or a pending review) attached

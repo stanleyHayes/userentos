@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, Alert, Platform } from 'react-native'
+import { useState } from 'react'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, Alert } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useThemeColors, spacing } from '../../lib/theme'
@@ -12,14 +12,20 @@ import type { UserRole } from '../../types/shared'
 import { ConsentCheckbox } from '../../components/ConsentCheckbox'
 import { buildAcceptance } from '../../../../packages/shared/legalVersions'
 import { isRoleOffered } from '../../../../packages/shared/regulatedFeatures'
-import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
+import { COMING_SOON_ACCOUNT_TYPES, PROFESSIONAL_TYPES, type ProfessionalType } from '../../../../packages/shared/productScope'
+import { useRegulatedFeatures, useSignupRoles } from '../../hooks/useRegulatedFeatures'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
+// The two journeys this phase runs end to end get the large cards.
+const primaryRoles: { value: UserRole; label: string; icon: IconName; desc: string }[] = [
+  { value: 'tenant', label: 'Tenant', icon: 'home-outline', desc: 'Find a place to rent, buy or stay, and talk to agents on WhatsApp or RentOS.' },
+  { value: 'property_manager', label: 'Agent / Agency / Property Manager', icon: 'briefcase-outline', desc: 'List properties, get your own website and handle enquiries in one place.' },
+]
+
+// Account types an operator can reopen (SIGNUP_ROLES on the API) without an app release.
 const roles: { value: UserRole; label: string; icon: IconName; desc: string }[] = [
-  { value: 'tenant', label: 'Tenant', icon: 'home-outline', desc: 'Find & rent homes' },
   { value: 'landlord', label: 'Landlord', icon: 'business-outline', desc: 'List & manage properties' },
-  { value: 'property_manager', label: 'Manager / Agent', icon: 'briefcase-outline', desc: 'Manage properties & close deals' },
   { value: 'service_provider', label: 'Service Provider', icon: 'construct-outline', desc: 'Offer trade & repair services' },
   { value: 'financier', label: 'Financier', icon: 'cash-outline', desc: 'Lend rent advances & loans' },
   { value: 'employer', label: 'Employer', icon: 'people-outline', desc: 'Run payroll deductions' },
@@ -28,11 +34,26 @@ const roles: { value: UserRole; label: string; icon: IconName; desc: string }[] 
 ]
 
 const STEPS: { label: string; icon: IconName }[] = [
-  { label: 'Role', icon: 'people-outline' },
-  { label: 'Account', icon: 'lock-closed-outline' },
-  { label: 'Details', icon: 'briefcase-outline' },
-  { label: 'Plan', icon: 'trophy-outline' },
+  { label: 'Account type', icon: 'people-outline' },
+  { label: 'Your details', icon: 'lock-closed-outline' },
+  { label: 'Profile', icon: 'briefcase-outline' },
 ]
+
+/**
+ * Sign-up asks only for what an account needs. Tenants and agents go straight
+ * in (agents finish their business profile and website in onboarding); the
+ * profile step survives only for account types an operator may reopen whose
+ * profile is created at sign-up. Plans come later — the API gives a new agent
+ * the free default plan, and paid plans go through the store screen.
+ */
+const DETAILS_ROLES: UserRole[] = ['service_provider', 'business', 'employer', 'financier']
+
+/** Where a new account lands: agents set up their business; tenants start finding a home. */
+function landingFor(role: UserRole): string {
+  if (role === 'property_manager') return '/onboarding'
+  if (role === 'tenant') return '/(tabs)/properties'
+  return '/(tabs)'
+}
 
 const TRADE_OPTIONS = [
   { value: 'plumbing', label: 'Plumbing' },
@@ -63,20 +84,6 @@ const BUSINESS_CATEGORIES = [
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-/** Only landlords and property managers can hold a listing plan
- * (POST /subscriptions/subscribe is gated to those roles). */
-const PLAN_ROLES: UserRole[] = ['landlord', 'property_manager']
-
-/**
- * App Store 3.1.1 / Play billing: digital subscriptions bought inside the
- * native app must go through the store, so paid plans and their web (MoMo)
- * prices are never offered here on iOS/Android — the Subscription screen
- * handles store purchases. Same rule as app/subscription.tsx.
- */
-function offerablePackages<T extends { price: number }>(all: T[]): T[] {
-  return Platform.OS === 'web' ? all : all.filter((p) => p.price === 0)
-}
 
 const passwordRequirements = [
   { key: 'length', label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
@@ -165,20 +172,7 @@ const emptyRoleDetails: RoleDetails = {
   businessDescription: '',
 }
 
-interface Package {
-  id: string
-  name: string
-  price: number
-  billingCycle?: 'monthly' | 'yearly'
-  maxProperties: number
-  benefits?: string[]
-  isDefault?: boolean
-}
-
 const ROLE_TITLES: Partial<Record<UserRole, { title: string; hint: string }>> = {
-  tenant: { title: 'Your home search', hint: 'Helps us pre-fill your tenant profile — all optional.' },
-  landlord: { title: 'Your portfolio', hint: 'A few details about your properties — all optional.' },
-  property_manager: { title: 'Your agency', hint: 'Tell us about your practice — informational only.' },
   service_provider: { title: 'Your services', hint: 'This creates your worker profile so clients can book you.' },
   financier: { title: 'Your institution', hint: 'Tell us about your institution — informational only.' },
   employer: { title: 'Your company', hint: 'Provide your legal name and TIN to set up your employer profile now.' },
@@ -186,35 +180,13 @@ const ROLE_TITLES: Partial<Record<UserRole, { title: string; hint: string }>> = 
 }
 
 /**
- * Best-effort persistence of the step-3 role details, run after registration
- * and login. Throws on failure — the caller catches and alerts, so a failure
- * here never blocks the user from entering the app.
- *
- * Not everything is persistable:
- * - landlord: only ghanaCardId is accepted by PATCH /users/me.
- * - property_manager / financier: no endpoint accepts these fields today.
+ * Best-effort persistence of the profile step, run after registration and
+ * login. Throws on failure — the caller catches and alerts, so a failure here
+ * never blocks the user from entering the app. Financier details are
+ * informational: no endpoint accepts them today.
  */
 async function persistRoleProfile(role: UserRole, account: AccountForm, details: RoleDetails): Promise<void> {
   switch (role) {
-    case 'tenant': {
-      // GET auto-creates the profile server-side; only PATCH when the user
-      // actually entered something.
-      await api.get('/tenant-profile/me')
-      const searchPreferences: Record<string, unknown> = {}
-      if (details.searchCity.trim()) searchPreferences.preferredCities = [details.searchCity.trim().slice(0, 60)]
-      if (details.monthlyBudget && Number(details.monthlyBudget) > 0) searchPreferences.maxBudget = Number(details.monthlyBudget)
-      if (details.bedrooms && Number(details.bedrooms) > 0) searchPreferences.minBedrooms = Math.floor(Number(details.bedrooms))
-      if (Object.keys(searchPreferences).length > 0) {
-        await api.patch('/tenant-profile/me', { searchPreferences })
-      }
-      break
-    }
-    case 'landlord': {
-      if (details.ghanaCardId.trim()) {
-        await api.patch('/users/me', { ghanaCardId: details.ghanaCardId.trim() })
-      }
-      break
-    }
     case 'service_provider': {
       await api.post('/workers', {
         name: `${account.firstName} ${account.lastName}`.trim(),
@@ -267,22 +239,8 @@ async function persistRoleProfile(role: UserRole, account: AccountForm, details:
       break
     }
     default:
-      // property_manager & financier details are informational only.
       break
   }
-}
-
-/** Plan used when the user skips: the default package, else the cheapest free one. */
-function pickFreePackage(packages: Package[]): Package | null {
-  return (
-    packages.find((p) => p.isDefault) ??
-    packages.filter((p) => p.price <= 0).sort((a, b) => a.price - b.price)[0] ??
-    null
-  )
-}
-
-function formatCurrency(n: number) {
-  return `GHS ${n.toLocaleString('en-GH', { minimumFractionDigits: 2 })}`
 }
 
 export default function RegisterScreen() {
@@ -292,32 +250,20 @@ export default function RegisterScreen() {
 
   const [step, setStep] = useState(0)
   const [role, setRole] = useState<UserRole>('tenant')
+  const [professionalType, setProfessionalType] = useState<ProfessionalType>('agent')
   const [account, setAccount] = useState<AccountForm>({ firstName: '', lastName: '', email: '', phone: '', password: '' })
   const [details, setDetails] = useState<RoleDetails>(emptyRoleDetails)
   const [showPassword, setShowPassword] = useState(false)
-  const [packages, setPackages] = useState<Package[]>([])
-  const [pkgLoading, setPkgLoading] = useState(true)
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [consented, setConsented] = useState(false)
   const { data: regulatedFeatures } = useRegulatedFeatures()
+  const openRoles = useSignupRoles()
+  const offered = (r: UserRole) => openRoles.includes(r) && isRoleOffered(r, regulatedFeatures ?? null)
 
-  const hasPlanStep = PLAN_ROLES.includes(role)
-  const steps = hasPlanStep ? STEPS : STEPS.slice(0, 3)
+  const hasDetailsStep = DETAILS_ROLES.includes(role)
+  const steps = hasDetailsStep ? STEPS : STEPS.slice(0, 2)
   const lastStep = steps.length - 1
-
-  // Public endpoint — safe to fetch before the account exists.
-  useEffect(() => {
-    api.get<{ items: Package[] }>('/subscriptions/packages')
-      .then((res) => setPackages(offerablePackages(res.items ?? [])))
-      .catch(() => {})
-      .finally(() => setPkgLoading(false))
-  }, [])
-
-  // Free Starter plan is preselected — derived (not synced state) so the user
-  // can still override it before packages finish loading.
-  const effectivePackageId = selectedPackageId ?? (packages.length > 0 ? (pickFreePackage(packages)?.id ?? packages[0].id) : null)
 
   function updateAccount(field: keyof AccountForm, value: string) { setAccount((prev) => ({ ...prev, [field]: value })) }
   function updateDetails(field: keyof RoleDetails, value: string) { setDetails((prev) => ({ ...prev, [field]: value })) }
@@ -352,8 +298,8 @@ export default function RegisterScreen() {
     }
   }
 
-  /** Register, then run the best-effort chain: role profile → subscription. */
-  async function finish(skipPlan: boolean) {
+  /** Register, then (for the reopenable account types) save the profile step. */
+  async function finish() {
     if (!consented) {
       setError('Please confirm you are 18 or older and accept the Terms of Service and Privacy Policy')
       return
@@ -367,6 +313,7 @@ export default function RegisterScreen() {
         email: account.email.trim(),
         phone: phoneDigits(account.phone),
         role,
+        ...(role === 'property_manager' ? { professionalType } : {}),
         acceptance: buildAcceptance(),
       })
     } catch (e) {
@@ -376,41 +323,20 @@ export default function RegisterScreen() {
     }
     login(auth.user as User, auth.token, auth.refreshToken)
 
-    // 1) Role profile — best-effort; failure must not strand the user here.
-    try {
-      await persistRoleProfile(role, account, details)
-    } catch (e) {
-      Alert.alert(
-        'Profile incomplete',
-        `Account created, but your ${role.replace('_', ' ')} profile couldn't be saved — you can complete it later. ${(e as { message?: string }).message ?? ''}`,
-      )
-    }
-
-    // 2) Subscription — free plans activate instantly; paid plans are paid on
-    //    the Subscription screen, never inside the wizard. Roles that cannot
-    //    hold a plan skip this entirely.
-    if (!hasPlanStep) {
-      setLoading(false)
-      router.replace('/(tabs)')
-      return
-    }
-    const chosen = skipPlan
-      ? pickFreePackage(packages)
-      : (packages.find((p) => p.id === effectivePackageId) ?? pickFreePackage(packages))
-
-    let dest = '/(tabs)'
-    if (chosen && chosen.price > 0 && !skipPlan) {
-      dest = '/subscription'
-    } else if (chosen) {
+    if (hasDetailsStep) {
+      // Best-effort; failure must not strand the user here.
       try {
-        await api.post('/subscriptions/subscribe', { packageId: chosen.id })
-      } catch {
-        Alert.alert('Plan not activated', 'Account created, but plan activation failed — pick a plan from the Subscription screen.')
+        await persistRoleProfile(role, account, details)
+      } catch (e) {
+        Alert.alert(
+          'Profile incomplete',
+          `Account created, but your ${role.replace('_', ' ')} profile couldn't be saved — you can complete it later. ${(e as { message?: string }).message ?? ''}`,
+        )
       }
     }
 
     setLoading(false)
-    router.replace(dest)
+    router.replace(landingFor(role) as never)
   }
 
   const heading = ROLE_TITLES[role]
@@ -462,8 +388,8 @@ export default function RegisterScreen() {
       title="Build your housing workspace."
       subtitle="Choose your role, verify your identity, and connect to Ghana's rental economy in minutes."
       formEyebrow={`Create account · Step ${step + 1} of ${steps.length}`}
-      formTitle={step === 0 ? 'Choose your role' : step === 1 ? 'Your secure account' : step === 2 ? (heading?.title ?? 'Tell us more') : 'Choose your plan'}
-      formSubtitle={step === 0 ? 'We will shape your workspace around how you use RentOS.' : step === 1 ? 'Use details you can access securely on this device.' : step === 2 ? (heading?.hint ?? 'Add the details that make your workspace useful.') : 'Start free and upgrade whenever your portfolio grows.'}
+      formTitle={step === 0 ? 'How will you use RentOS?' : step === 1 ? 'Your secure account' : (heading?.title ?? 'Tell us more')}
+      formSubtitle={step === 0 ? 'Pick one. You can add business details after you sign up.' : step === 1 ? 'Use details you can access securely on this device.' : (heading?.hint ?? 'Add the details that make your workspace useful.')}
       icon={STEPS[step].icon}
     >
         {/* Step indicator */}
@@ -484,29 +410,96 @@ export default function RegisterScreen() {
         {error ? <View style={s.errorBox}><Text style={[s.errorText, { color: c.danger }]}>{error}</Text></View> : null}
 
         <MotionReveal key={step} distance={10}>
-        {/* Step 1 — Role */}
+        {/* Step 1 — Account type */}
         {step === 0 && (
           <View>
-            <Text style={[s.label, { color: c.text }]}>I am a...</Text>
-            <View style={s.roleGrid}>
-              {roles.filter((r) => isRoleOffered(r.value, regulatedFeatures ?? null)).map((r) => {
+            <View style={{ gap: spacing.sm }}>
+              {primaryRoles.filter((r) => offered(r.value)).map((r) => {
                 const active = role === r.value
                 return (
                   <PressScale
                     key={r.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
                     style={[
-                      s.roleCard,
+                      s.primaryCard,
                       active ? authInset(c) : neuCard(c, 14),
                       { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '0D' : c.card },
                     ]}
                     onPress={() => setRole(r.value)}
                   >
-                    <Ionicons name={r.icon} size={20} color={active ? c.primary : c.muted} style={{ marginBottom: 6 }} />
-                    <Text style={[s.roleCardLabel, { color: active ? c.primary : c.text }]}>{r.label}</Text>
-                    <Text style={[s.roleCardDesc, { color: c.muted }]}>{r.desc}</Text>
+                    <View style={[s.primaryIcon, { backgroundColor: active ? c.primary : c.surface }]}>
+                      <Ionicons name={r.icon} size={22} color={active ? '#ffffff' : c.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.primaryLabel, { color: active ? c.primary : c.text }]}>{r.label}</Text>
+                      <Text style={[s.primaryDesc, { color: c.muted }]}>{r.desc}</Text>
+                    </View>
+                    <Ionicons name={active ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={active ? c.primary : c.border} />
                   </PressScale>
                 )
               })}
+            </View>
+
+            {role === 'property_manager' && (
+              <View style={{ marginTop: spacing.md }}>
+                <Text style={[s.label, { color: c.text }]}>Which describes you best?</Text>
+                <View style={{ gap: 8, marginTop: 6 }}>
+                  {PROFESSIONAL_TYPES.map((t) => {
+                    const active = professionalType === t.value
+                    return (
+                      <PressScale
+                        key={t.value}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: active }}
+                        style={[s.typeRow, active ? authInset(c) : neuCard(c, 10), { borderColor: active ? c.primary : c.border }]}
+                        onPress={() => setProfessionalType(t.value)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.typeLabel, { color: active ? c.primary : c.text }]}>{t.label}</Text>
+                          <Text style={[s.primaryDesc, { color: c.muted }]}>{t.description}</Text>
+                        </View>
+                        {active && <Ionicons name="checkmark" size={16} color={c.primary} />}
+                      </PressScale>
+                    )
+                  })}
+                </View>
+              </View>
+            )}
+
+            {roles.some((r) => offered(r.value)) && (
+              <View style={[s.roleGrid, { marginTop: spacing.md }]}>
+                {roles.filter((r) => offered(r.value)).map((r) => {
+                  const active = role === r.value
+                  return (
+                    <PressScale
+                      key={r.value}
+                      style={[
+                        s.roleCard,
+                        active ? authInset(c) : neuCard(c, 14),
+                        { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '0D' : c.card },
+                      ]}
+                      onPress={() => setRole(r.value)}
+                    >
+                      <Ionicons name={r.icon} size={20} color={active ? c.primary : c.muted} style={{ marginBottom: 6 }} />
+                      <Text style={[s.roleCardLabel, { color: active ? c.primary : c.text }]}>{r.label}</Text>
+                      <Text style={[s.roleCardDesc, { color: c.muted }]}>{r.desc}</Text>
+                    </PressScale>
+                  )
+                })}
+              </View>
+            )}
+
+            {/* Visible but not selectable: these journeys are not finished yet. */}
+            <View style={[s.soonBox, { borderColor: c.border }]} accessibilityLabel="Account types coming later">
+              <Text style={[s.soonTitle, { color: c.muted }]}>COMING LATER</Text>
+              <View style={s.chipRow}>
+                {COMING_SOON_ACCOUNT_TYPES.filter((t) => !offered(t.role)).map((t) => (
+                  <View key={t.role} style={[s.soonChip, { backgroundColor: c.surface }]} accessibilityState={{ disabled: true }}>
+                    <Text style={[s.soonChipText, { color: c.muted }]}>{t.label}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
         )}
@@ -554,31 +547,14 @@ export default function RegisterScreen() {
           </View>
         )}
 
-        {/* Step 3 — Role details */}
-        {step === 2 && (
+        {/* Step 3 — Profile (reopenable account types only) */}
+        {step === 2 && hasDetailsStep && (
           <View>
             {heading && (
               <View style={{ marginBottom: spacing.xs }}>
                 <Text style={[s.detailsTitle, { color: c.text }]}>{heading.title}</Text>
                 <Text style={[s.detailsHint, { color: c.muted }]}>{heading.hint}</Text>
               </View>
-            )}
-
-            {role === 'tenant' && (
-              <>
-                {renderField('Where are you searching?', 'searchCity', { placeholder: 'e.g. Accra' })}
-                {renderField('Monthly budget (GHS)', 'monthlyBudget', { placeholder: 'e.g. 2500', keyboardType: 'number-pad' })}
-                {renderField('Bedrooms', 'bedrooms', { placeholder: 'e.g. 2', keyboardType: 'number-pad' })}
-              </>
-            )}
-
-            {role === 'landlord' && renderField('Ghana Card ID (optional)', 'ghanaCardId', { placeholder: 'GHA-XXXXXXXXX-X' })}
-
-            {role === 'property_manager' && (
-              <>
-                {renderField('Agency / company name', 'agencyName', { placeholder: 'e.g. Asante Realty' })}
-                {renderField('Years of experience', 'yearsExperience', { placeholder: 'e.g. 5', keyboardType: 'number-pad' })}
-              </>
             )}
 
             {role === 'service_provider' && (
@@ -624,60 +600,6 @@ export default function RegisterScreen() {
           </View>
         )}
 
-        {/* Step 4 — Plan */}
-        {step === 3 && hasPlanStep && (
-          <View>
-            <Text style={[s.detailsTitle, { color: c.text }]}>Choose a plan</Text>
-            <Text style={[s.detailsHint, { color: c.muted }]}>Start free — upgrade anytime from the Subscription screen.</Text>
-            {pkgLoading ? (
-              <ActivityIndicator color={c.primary} style={{ marginVertical: spacing.lg }} />
-            ) : packages.length === 0 ? (
-              <Text style={[s.detailsHint, { color: c.muted, marginTop: spacing.sm }]}>Plans will appear here once published — you can continue with the free Starter plan.</Text>
-            ) : (
-              <View style={s.pkgList}>
-                {packages.map((pkg) => {
-                  const selected = pkg.id === effectivePackageId
-                  return (
-                    <PressScale
-                      key={pkg.id}
-                      style={[
-                        s.pkgCard,
-                        selected ? authInset(c) : neuCard(c, 14),
-                        { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primary + '0D' : c.card },
-                      ]}
-                      onPress={() => setSelectedPackageId(pkg.id)}
-                    >
-                      <View style={s.pkgHeader}>
-                        <View style={[s.pkgIcon, { backgroundColor: pkg.price === 0 ? c.surface : c.primary + '15' }]}>
-                          <Ionicons name={pkg.price === 0 ? 'cube-outline' : 'trophy-outline'} size={18} color={pkg.price === 0 ? c.muted : c.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.pkgName, { color: selected ? c.primary : c.text }]}>{pkg.name}</Text>
-                          <Text style={[s.pkgPrice, { color: c.muted }]}>
-                            <Text style={{ color: c.text, fontFamily: 'Outfit_700Bold' }}>{pkg.price === 0 ? 'Free' : formatCurrency(pkg.price)}</Text>
-                            {pkg.price > 0 ? `/${pkg.billingCycle === 'yearly' ? 'year' : 'month'}` : ''}
-                          </Text>
-                        </View>
-                        {selected && (
-                          <View style={[s.pkgCheck, { backgroundColor: c.primary }]}>
-                            <Ionicons name="checkmark" size={12} color="#ffffff" />
-                          </View>
-                        )}
-                      </View>
-                      <View style={s.pkgMetaRow}>
-                        <Ionicons name="business-outline" size={13} color={c.primary} />
-                        <Text style={[s.pkgMeta, { color: c.muted }]}>{pkg.maxProperties === -1 ? 'Unlimited' : pkg.maxProperties} properties</Text>
-                        {(pkg.benefits?.length ?? 0) > 0 && (
-                          <Text style={[s.pkgMeta, { color: c.muted }]}> · {pkg.benefits!.length} benefits</Text>
-                        )}
-                      </View>
-                    </PressScale>
-                  )
-                })}
-              </View>
-            )}
-          </View>
-        )}
         </MotionReveal>
 
         {step === lastStep && (
@@ -697,12 +619,6 @@ export default function RegisterScreen() {
             <Text style={[s.backBtnText, { color: c.text }]}>Back</Text>
           </PressScale>
 
-          {step === 2 && hasPlanStep && (
-            <TouchableOpacity style={s.skipBtn} onPress={() => setStep(3)} disabled={loading}>
-              <Text style={[s.skipBtnText, { color: c.muted }]}>Skip for now</Text>
-            </TouchableOpacity>
-          )}
-
           {step < lastStep ? (
             <PressScale
               style={[s.continueBtn, { backgroundColor: c.primary }, !canProceed() && { opacity: 0.45 }]}
@@ -714,12 +630,7 @@ export default function RegisterScreen() {
             </PressScale>
           ) : (
             <View style={s.finishCol}>
-              {hasPlanStep && (
-                <TouchableOpacity style={s.skipBtn} onPress={() => void finish(true)} disabled={loading || !consented}>
-                  <Text style={[s.skipBtnText, { color: c.muted }]}>Skip — Starter (free)</Text>
-                </TouchableOpacity>
-              )}
-              <PressScale style={[s.continueBtn, { backgroundColor: c.primary }, !consented && { opacity: 0.45 }]} onPress={() => void finish(false)} disabled={loading || !consented || (hasPlanStep && pkgLoading)}>
+              <PressScale style={[s.continueBtn, { backgroundColor: c.primary }, (!consented || !canProceed()) && { opacity: 0.45 }]} onPress={() => void finish()} disabled={loading || !consented || !canProceed()}>
                 {loading ? <ActivityIndicator color="#ffffff" /> : (
                   <>
                     <Text style={s.continueBtnText}>Create account</Text>
@@ -744,6 +655,18 @@ const s = StyleSheet.create({
   stepRow: { flexDirection: 'row', gap: 5, marginBottom: spacing.lg },
   stepPill: { flex: 1, minWidth: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 9 },
   stepPillText: { fontSize: 10, fontFamily: 'Outfit_600SemiBold' },
+
+  // Account type
+  primaryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 16, padding: 14 },
+  primaryIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  primaryLabel: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
+  primaryDesc: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 2, lineHeight: 17 },
+  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  typeLabel: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
+  soonBox: { marginTop: spacing.md, borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, padding: 12 },
+  soonTitle: { fontSize: 10, fontFamily: 'Outfit_700Bold', letterSpacing: 1 },
+  soonChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  soonChipText: { fontSize: 11, fontFamily: 'Outfit_600SemiBold' },
 
   // Role grid
   roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
@@ -772,17 +695,6 @@ const s = StyleSheet.create({
   // Details step
   detailsTitle: { fontSize: 16, fontFamily: 'Outfit_700Bold' },
   detailsHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 2 },
-
-  // Plan step
-  pkgList: { gap: spacing.sm, marginTop: spacing.sm },
-  pkgCard: { borderWidth: 1.5, borderRadius: 14, padding: 14 },
-  pkgHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pkgIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  pkgName: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
-  pkgPrice: { fontSize: 12, fontFamily: 'Outfit_400Regular', marginTop: 1 },
-  pkgCheck: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  pkgMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
-  pkgMeta: { fontSize: 12, fontFamily: 'Outfit_400Regular' },
 
   // Navigation
   navRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
