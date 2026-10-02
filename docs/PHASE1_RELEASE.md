@@ -56,7 +56,25 @@ Regulated services (rent collection, wallet, financing, insurance, payroll, cred
 
 ## Verification (2 October 2026)
 
-- API: 240 test files, 2,308 tests passing.
+- API: 240 test files, 2,310 tests passing.
 - Web: typecheck, lint and production build pass; 31 mocked browser specs pass.
 - Mobile: typecheck passes.
 - Full browser suite against a local stack: 254 passed, 100 skipped (mobile specs that need the Expo web build), 1 timing flake (`payout-availability.spec.ts`, which passes 6 of 6 when run alone).
+
+## Release log (2 October 2026)
+
+Before pushing:
+- **Builds:** a clean checkout built the API the way the Render Dockerfile does, and the pruned production build booted with `NODE_ENV=production`. `vercel build --prod` succeeded with the project's production settings.
+- **Review:** the full diff was reviewed area by area. These fixes came out of it: fee unlocks are now idempotent and retried by a recovery job; RentOS's own hosts always count as the platform; moderation reports never go back to an older strike count; the page renderer ignores a relative API address.
+
+Settings changed on Render (`rentos-api`):
+- `ANTHROPIC_MODEL=claude-opus-5-5`.
+- `PUBLIC_API_URL=https://api.userentos.com`, then `PUBLIC_BASE_URL=https://www.userentos.com`. `PUBLIC_BASE_URL` previously named the API host, so every emailed link pointed at the API. Payment callbacks use `PUBLIC_API_URL`.
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` for browser alerts.
+
+Settings changed on Vercel (`userentos`):
+- `VITE_SITE_URL=https://www.userentos.com`, because the apex domain redirects to `www`.
+
+Still open:
+- An SMS provider for agent alerts: `ARKESEL_API_KEY` and `SMS_SENDER_ID`, or the Twilio variables. Without them SMS is skipped, and agents get the in-app and email alerts only.
+- Paystack keys, before turning on the GH₵5 fee switches.
