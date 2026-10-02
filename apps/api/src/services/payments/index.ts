@@ -43,14 +43,30 @@ export type PaymentMode = 'live' | 'simulated'
  *
  * The fallback is right for a demo and wrong for production, so the rail is
  * gated on being configured rather than on the default being plausible.
- * Mobile money needs no gate: it rides Paystack, which is configured.
+ *
+ * Mobile money rides Paystack. Without PAYSTACK_SECRET_KEY every collection
+ * throws, and production ran that way: subscribing answered 500 after a
+ * pending payment had already been recorded, which then blocked the next
+ * attempt as "in progress". So it is gated on the key too.
  */
 export function isMethodAvailable(method: ProviderId): boolean {
   if (getMode() !== 'live') return true
   if (method === 'bank_transfer') {
     return !!envOptional('BANK_DEPOSIT_ACCOUNT') && !!envOptional('BANK_PSP_WEBHOOK_SECRET')
   }
+  if (getRail() === 'paystack') return !!envOptional('PAYSTACK_SECRET_KEY')
   return true
+}
+
+/**
+ * What a checkout answers when the chosen method is not offered: pick another
+ * one, or, when none is set up at all, try again later (503: the server, not
+ * the payer, is missing something).
+ */
+export function unavailableMethodError(): { message: string; status: number } {
+  return availableMethods().length
+    ? { message: 'That payment method is not available right now. Please choose another.', status: 422 }
+    : { message: 'Payments are not available right now. Please try again later.', status: 503 }
 }
 
 /**

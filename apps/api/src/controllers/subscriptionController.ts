@@ -13,7 +13,7 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
-import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
 import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
 import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
@@ -214,7 +214,8 @@ export const subscriptionController = {
     if (!requireIdempotencyKey(req, res)) return
 
     if (!isMethodAvailable(method as ProviderId)) {
-      error(res, 'That payment method is not available right now. Please choose another.', 422); return
+      const unavailable = unavailableMethodError()
+      error(res, unavailable.message, unavailable.status); return
     }
 
     // One in-flight paid checkout per subscriber; the next is allowed once it settles or fails.

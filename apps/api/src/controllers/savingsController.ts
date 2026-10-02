@@ -8,7 +8,7 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { checkAndAward } from '../services/achievements.js'
-import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
 import { isDuplicateKey, requireIdempotencyKey, respondCollectionRefused } from '../services/payments/checkout.js'
 import { withMoneyTransaction } from '../services/payments/moneyTransaction.js'
 import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
@@ -82,7 +82,8 @@ export const savingsController = {
     }
     if (await existingResult()) return
     if (!isMethodAvailable(method as ProviderId)) {
-      error(res, 'That payment method is not available right now. Please choose another.', 422); return
+      const unavailable = unavailableMethodError()
+      error(res, unavailable.message, unavailable.status); return
     }
     const reference = `DEP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
     const provider = getProvider(method as ProviderId)

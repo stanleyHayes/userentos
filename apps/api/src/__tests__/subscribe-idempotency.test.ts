@@ -24,6 +24,7 @@ vi.mock('../models/PlanEntitlement.js', () => ({ PlanEntitlement: { find: vi.fn(
 const initiateCollection = vi.fn().mockResolvedValue({ providerRef: 'prov-1', status: 'pending', instructions: { ussd: '*170#' } })
 vi.mock('../services/payments/index.js', () => ({
   isMethodAvailable: vi.fn(() => true),
+  unavailableMethodError: vi.fn(() => ({ message: 'That payment method is not available right now. Please choose another.', status: 422 })),
   getProvider: vi.fn(() => ({ initiateCollection, source: 'bank_transfer' })),
   collectionCorrelator: vi.fn(() => 'BNK-correlator'),
 }))

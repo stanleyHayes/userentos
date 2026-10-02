@@ -6,7 +6,7 @@ import { recordCollectionInitiation, recordUncertainCollection } from '../servic
 
 const { initiate } = vi.hoisted(() => ({ initiate: vi.fn() }))
 vi.mock('../models/Payment.js', () => ({ Payment: { findOne: vi.fn(), create: vi.fn() } }))
-vi.mock('../services/payments/index.js', () => ({ isMethodAvailable: vi.fn(), getProvider: () => ({ source: 'bank_transfer', initiateCollection: initiate }), collectionCorrelator: () => 'BNK-correlator' }))
+vi.mock('../services/payments/index.js', () => ({ isMethodAvailable: vi.fn(), unavailableMethodError: () => ({ message: 'That payment method is not available right now. Please choose another.', status: 422 }), getProvider: () => ({ source: 'bank_transfer', initiateCollection: initiate }), collectionCorrelator: () => 'BNK-correlator' }))
 vi.mock('../services/payments/collectionInitiation.js', () => ({ recordCollectionInitiation: vi.fn(), recordUncertainCollection: vi.fn() }))
 const original = { _id: 'original-payment', purpose: 'wallet_deposit', method: 'bank_transfer', amount: 100, providerInstructions: 'Use original reference' }
 const request = (body: object = {}, headers: Record<string, string> = { 'idempotency-key': 'original-key' }) => ({ body: { amount: 100, method: 'bank_transfer', ...body }, headers, user: { userId: 'owner', email: 'owner@rentos.test' } })

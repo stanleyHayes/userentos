@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { availableMethods, isMethodAvailable } from '../services/payments/index.js'
+import { availableMethods, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
 
 /**
  * Bank transfer is "pay by reference": the payer is shown a deposit account
@@ -56,13 +56,33 @@ describe('payment rail availability', () => {
     expect(isMethodAvailable('bank_transfer')).toBe(false)
   })
 
-  it('leaves every mobile-money rail available — they ride Paystack', () => {
+  it('offers every mobile-money rail once Paystack is configured — they ride Paystack', () => {
     live()
+    vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_live_configured')
     vi.stubEnv('BANK_DEPOSIT_ACCOUNT', '')
     const methods = availableMethods()
     expect(methods).toEqual(
       expect.arrayContaining(['mtn_momo', 'telecel_cash', 'airteltigo_money']),
     )
+  })
+
+  it('offers no mobile money without a Paystack key, and checkouts say to try again later', () => {
+    // Production ran like this: subscribing answered 500 after recording a
+    // pending payment, which then blocked the next attempt as "in progress".
+    live()
+    vi.stubEnv('PAYSTACK_SECRET_KEY', '')
+    vi.stubEnv('BANK_DEPOSIT_ACCOUNT', '')
+    for (const method of ['mtn_momo', 'telecel_cash', 'airteltigo_money'] as const) expect(isMethodAvailable(method)).toBe(false)
+    expect(availableMethods()).toEqual([])
+    expect(unavailableMethodError()).toEqual({ message: 'Payments are not available right now. Please try again later.', status: 503 })
+  })
+
+  it('asks for another method when only the chosen one is unavailable', () => {
+    live()
+    vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_live_configured')
+    vi.stubEnv('BANK_DEPOSIT_ACCOUNT', '')
+    expect(isMethodAvailable('bank_transfer')).toBe(false)
+    expect(unavailableMethodError()).toEqual({ message: 'That payment method is not available right now. Please choose another.', status: 422 })
   })
 
   it('gates nothing in simulated mode, where no real money moves', () => {

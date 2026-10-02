@@ -8,7 +8,7 @@ import { Payment, type IPayment } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
-import { collectionCorrelator, getProvider, isMethodAvailable } from '../services/payments/index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
 import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
 import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { recordAudit } from '../utils/audit.js'
@@ -108,7 +108,8 @@ export const paymentController = {
       // Bank transfer falls back to a placeholder deposit account when unset, so
       // an unguarded pick tells the tenant to send real rent to `0000000000`.
       if (!isMethodAvailable(method as ProviderId)) {
-        error(res, 'That payment method is not available right now. Please choose another.', 422)
+        const unavailable = unavailableMethodError()
+        error(res, unavailable.message, unavailable.status)
         return
       }
 

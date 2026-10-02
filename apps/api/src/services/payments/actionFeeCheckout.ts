@@ -13,7 +13,7 @@ import { Agreement } from '../../models/Agreement.js'
 import { User } from '../../models/User.js'
 import { success, error } from '../../utils/response.js'
 import { logger } from '../../utils/logger.js'
-import { collectionCorrelator, getProvider, isMethodAvailable } from './index.js'
+import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from './index.js'
 import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from './checkout.js'
 import { CollectionRefusedError, type ProviderId } from './types.js'
 import { recordCollectionInitiation, recordRefusedCollection, recordUncertainCollection } from './collectionInitiation.js'
@@ -52,7 +52,7 @@ export async function startActionFeeCheckout(req: Request, res: Response, checko
   }
   if (await replayed()) return
 
-  if (!isMethodAvailable(method as ProviderId)) { error(res, 'That payment method is not available right now. Please choose another.', 422); return }
+  if (!isMethodAvailable(method as ProviderId)) { const unavailable = unavailableMethodError(); error(res, unavailable.message, unavailable.status); return }
 
   const openCollectionKey = `${checkout.purpose}:${checkout.subjectId}`
   const inFlight = async () => {
