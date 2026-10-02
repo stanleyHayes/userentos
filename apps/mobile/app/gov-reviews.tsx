@@ -6,6 +6,7 @@ import { neuCard } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { RejectListingModal, type RejectableListing } from '../components/RejectListingModal'
+import { listingTypeMeta } from '../../../packages/shared/listingTypes'
 
 interface PendingProperty {
   id: string
@@ -99,7 +100,7 @@ export default function GovReviewsScreen() {
           <View style={s.detailRow}>
             <Ionicons name="cash-outline" size={14} color={c.accent} />
             <Text style={[s.detailLabel, { color: c.muted }]}>Rent</Text>
-            <Text style={[s.detailValue, { color: c.text }]}>{formatCurrency(item.rentAmount)}/mo</Text>
+            <Text style={[s.detailValue, { color: c.text }]}>{formatCurrency(item.rentAmount)}{listingTypeMeta((item as { listingType?: string }).listingType).compactSuffix}</Text>
           </View>
           <View style={s.detailRow}>
             <Ionicons name="calendar-outline" size={14} color={c.secondary} />

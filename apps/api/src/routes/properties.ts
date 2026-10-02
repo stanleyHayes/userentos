@@ -233,7 +233,7 @@ router.get('/map/pins', asyncHandler(async (req, res) => {
   if (cached) { success(res, cached); return }
 
   const properties = await Property.find(filter)
-    .select('title type rentAmount status address.city images coordinates')
+    .select('title type listingType listingRef rentAmount status address.city images coordinates')
     .limit(limit)
     .lean()
 
@@ -241,6 +241,7 @@ router.get('/map/pins', asyncHandler(async (req, res) => {
     id: (p._id as Types.ObjectId).toString(),
     title: p.title,
     type: p.type,
+    listingType: p.listingType ?? 'rent',
     rentAmount: p.rentAmount,
     status: p.status,
     city: p.address?.city,

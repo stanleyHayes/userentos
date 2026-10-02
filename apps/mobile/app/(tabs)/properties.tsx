@@ -9,9 +9,12 @@ import { api } from '../../lib/api'
 import { PropertyGridSkeleton } from '../../components/Skeleton'
 import { SponsoredBadge } from '../../components/SponsoredBadge'
 import { useAuthStore } from '../../stores/authStore'
+import { LISTING_TYPES, listingTypeMeta } from '../../../../packages/shared/listingTypes'
 
 interface Property {
   id: string; title: string; description: string; type: string
+  /** rent (absent on older listings), sale or short_let. */
+  listingType?: string
   status: string; address: { street: string; city: string; region: string }
   rentAmount: number; amenities: string[]; images?: string[]
   /** Paid placement. The API sets it only when asked with placement=search_top, which this app does not send. */
@@ -33,6 +36,7 @@ export default function PropertiesScreen() {
   const [searching, setSearching] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [listingType, setListingType] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const statusColors: Record<string, string> = {
@@ -42,13 +46,15 @@ export default function PropertiesScreen() {
     maintenance_required: c.warning,
   }
 
-  const load = useCallback(async (searchQuery?: string, status?: string) => {
+  const load = useCallback(async (searchQuery?: string, status?: string, purpose?: string) => {
     try {
       const params = new URLSearchParams()
       const q = searchQuery ?? search
       const st = status ?? statusFilter
+      const lt = purpose ?? listingType
       if (q.trim()) params.append('search', q.trim())
       if (st) params.append('status', st)
+      if (lt) params.append('listingType', lt)
       // No placement=search_top: the apps show no paid placements (Google Play
       // "Contains ads: No"). Adding it here would serve sponsored listings,
       // already labelled below, and requires changing the store answers first.
@@ -59,7 +65,7 @@ export default function PropertiesScreen() {
       setLoading(false)
       setSearching(false)
     }
-  }, [search, statusFilter])
+  }, [search, statusFilter, listingType])
 
   useEffect(() => { load() }, [])
   useEffect(() => { return () => { if (debounceRef.current) clearTimeout(debounceRef.current) } }, [])
@@ -72,14 +78,20 @@ export default function PropertiesScreen() {
     // Debounce API calls — wait 400ms after user stops typing
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      load(text, statusFilter)
+      load(text, statusFilter, listingType)
     }, 400)
   }
 
   function handleStatusFilter(status: string) {
     setStatusFilter(status)
     setSearching(true)
-    load(search, status)
+    load(search, status, listingType)
+  }
+
+  function handleListingType(value: string) {
+    setListingType(value)
+    setSearching(true)
+    load(search, statusFilter, value)
   }
 
   function renderProperty({ item }: { item: Property }) {
@@ -107,8 +119,8 @@ export default function PropertiesScreen() {
           </View>
           <Text style={[s.description, { color: c.textLight }]} numberOfLines={2}>{item.description}</Text>
           <View style={s.cardFooter}>
-            <Text style={[s.price, { color: c.primary }]}>{formatCurrency(item.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>/mo</Text></Text>
-            <Text style={[s.typeLabel, { color: c.muted, backgroundColor: c.surface }]}>{item.type}</Text>
+            <Text style={[s.price, { color: c.primary }]}>{formatCurrency(item.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>{listingTypeMeta(item.listingType).compactSuffix}</Text></Text>
+            <Text style={[s.typeLabel, { color: c.primary, backgroundColor: c.primary + '12' }]}>{listingTypeMeta(item.listingType).label} · {item.type}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -136,6 +148,21 @@ export default function PropertiesScreen() {
               <Ionicons name="close-circle" size={18} color={c.muted} />
             </TouchableOpacity>
           )}
+        </View>
+        {/* What the listing is for (brief §04) */}
+        <View style={s.filterRow} accessibilityRole="tablist">
+          {[{ value: '', label: 'All' }, ...LISTING_TYPES.map((t) => ({ value: t.value as string, label: t.label as string }))].map((f) => (
+            <TouchableOpacity
+              key={f.value || 'all'}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: listingType === f.value }}
+              style={[s.filterBtn, { backgroundColor: c.surface, borderColor: c.border }, listingType === f.value && { backgroundColor: c.primary, borderColor: c.primary }]}
+              onPress={() => handleListingType(f.value)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.filterText, { color: c.muted }, listingType === f.value && { color: '#ffffff', fontFamily: 'Outfit_700Bold' }]}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
         <View style={s.filterRow}>
           {statusFilters.map((f) => (

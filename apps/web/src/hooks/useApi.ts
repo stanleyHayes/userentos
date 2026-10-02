@@ -72,6 +72,8 @@ export interface PropertyPin {
   id: string
   title: string
   type: string
+  /** rent | sale | short_let — what rentAmount is the price for. */
+  listingType?: string
   rentAmount: number
   status?: string
   city?: string

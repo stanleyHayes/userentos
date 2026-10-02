@@ -6,11 +6,14 @@ import { Link } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css'
+import { listingTypeMeta } from '../../../../../packages/shared/listingTypes'
 
 export interface PropertyPin {
   id: string
   title: string
   type: string
+  /** rent | sale | short_let — what rentAmount is the price for. */
+  listingType?: string
   rentAmount: number
   status?: string
   city?: string
@@ -134,7 +137,7 @@ export function PropertyMap({ pins, className, autoFit = true }: PropertyMapProp
                   {pin.city ? `${pin.city} · ` : ''}{pin.type.replace(/_/g, ' ')}
                 </p>
                 <p className="mt-1 text-sm font-bold text-primary-dark">
-                  GHS {pin.rentAmount.toLocaleString()}<span className="font-normal text-muted">/mo</span>
+                  GHS {pin.rentAmount.toLocaleString()}<span className="font-normal text-muted">{listingTypeMeta(pin.listingType).compactSuffix}</span>
                 </p>
               </div>
             </Popup>

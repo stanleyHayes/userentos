@@ -9,6 +9,7 @@ import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
 import { Logo } from '../../components/Logo'
 import { DashboardSkeleton } from '../../components/Skeleton'
+import { listingTypeMeta } from '../../../../packages/shared/listingTypes'
 
 interface PropertyItem {
   id?: string
@@ -19,6 +20,7 @@ interface PropertyItem {
   address?: { city?: string; region?: string }
   bedrooms?: number
   bathrooms?: number
+  listingType?: string
 }
 
 interface AgreementItem {
@@ -264,7 +266,7 @@ export default function HomeScreen() {
                       <Text style={[s.savedLocation, { color: c.muted }]} numberOfLines={1}>{p.address?.city}, {p.address?.region}</Text>
                     </View>
                     <View style={s.savedBottom}>
-                      <Text style={[s.savedPrice, { color: c.primary }]}>{formatCompact(p.rentAmount ?? 0)}/mo</Text>
+                      <Text style={[s.savedPrice, { color: c.primary }]}>{formatCompact(p.rentAmount ?? 0)}{listingTypeMeta(p.listingType).compactSuffix}</Text>
                       <View style={s.savedDetails}>
                         <Ionicons name="bed-outline" size={10} color={c.muted} />
                         <Text style={[s.savedDetailText, { color: c.muted }]}>{p.bedrooms ?? '-'}</Text>
@@ -305,7 +307,7 @@ export default function HomeScreen() {
                       <Text style={[s.savedLocation, { color: c.muted }]} numberOfLines={1}>{p.address?.city}, {p.address?.region}</Text>
                     </View>
                     <View style={s.savedBottom}>
-                      <Text style={[s.savedPrice, { color: c.primary }]}>{formatCompact(p.rentAmount ?? 0)}/mo</Text>
+                      <Text style={[s.savedPrice, { color: c.primary }]}>{formatCompact(p.rentAmount ?? 0)}{listingTypeMeta(p.listingType).compactSuffix}</Text>
                       <View style={s.savedDetails}>
                         <Ionicons name="bed-outline" size={10} color={c.muted} />
                         <Text style={[s.savedDetailText, { color: c.muted }]}>{p.bedrooms ?? '-'}</Text>

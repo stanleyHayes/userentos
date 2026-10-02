@@ -12,6 +12,7 @@ import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
 import { createPhotoUploadKeys, photoPart, photosToUpload, submitListing } from '../lib/propertyPhotos'
+import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../packages/shared/listingTypes'
 
 const REGIONS = ['Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central', 'Northern', 'Volta', 'Upper East', 'Upper West', 'Bono', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North']
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
@@ -31,6 +32,8 @@ export default function AddPropertyScreen() {
   const uploadKey = useRef(createPhotoUploadKeys(() => Crypto.randomUUID())).current
 
   const [form, setForm] = useState({
+    // Rent, sale or short let: decides the price wording and which terms apply.
+    listingType: 'rent' as ListingType,
     title: '', description: '', type: 'apartment',
     street: '', city: '', region: 'Greater Accra', neighborhood: '', digitalAddress: '',
     rentAmount: '', rentDurationMonths: '12', advanceMonths: '3',
@@ -70,7 +73,7 @@ export default function AddPropertyScreen() {
     if (!form.title.trim()) { Alert.alert('Error', 'Please enter a title'); return }
     if (!form.description.trim()) { Alert.alert('Error', 'Please enter a description'); return }
     if (!form.street.trim() || !form.city.trim()) { Alert.alert('Error', 'Street and city are required'); return }
-    if (!form.rentAmount || Number(form.rentAmount) <= 0) { Alert.alert('Error', 'Please enter a valid rent amount'); return }
+    if (!form.rentAmount || Number(form.rentAmount) <= 0) { Alert.alert('Error', `Please enter a valid ${listingTypeMeta(form.listingType).priceLabel.toLowerCase()}`); return }
 
     await submit(null, images)
   }
@@ -83,11 +86,11 @@ export default function AddPropertyScreen() {
         savedId,
         photos,
         create: () => api.post<Record<string, unknown>>('/properties', {
-          title: form.title, description: form.description, type: form.type,
+          title: form.title, description: form.description, type: form.type, listingType: form.listingType,
           address: { street: form.street, city: form.city, region: form.region, neighborhood: form.neighborhood || undefined, digitalAddress: form.digitalAddress || undefined },
           rentAmount: Number(form.rentAmount),
-          rentDurationMonths: Number(form.rentDurationMonths),
-          advanceMonths: Number(form.advanceMonths),
+          // Lease length and advance belong to rentals only.
+          ...(form.listingType === 'rent' ? { rentDurationMonths: Number(form.rentDurationMonths), advanceMonths: Number(form.advanceMonths) } : {}),
           bedrooms: Number(form.bedrooms), bathrooms: Number(form.bathrooms),
           furnished: form.furnished, parkingSpaces: Number(form.parkingSpaces),
           floorArea: form.floorArea ? Number(form.floorArea) : undefined,
@@ -140,6 +143,23 @@ export default function AddPropertyScreen() {
     <ScrollView style={[s.container, { backgroundColor: c.surface }]} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       {/* Basic Info */}
       <Section title="Basic Information" icon="home-outline" c={c}>
+        <Text style={[s.fieldLabel, { color: c.text }]}>What are you listing?</Text>
+        <View style={s.typeRow} accessibilityRole="radiogroup">
+          {LISTING_TYPES.map((t) => {
+            const active = form.listingType === t.value
+            return (
+              <TouchableOpacity
+                key={t.value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                onPress={() => u('listingType', t.value)}
+                style={[s.typeChip, { borderColor: active ? c.primary : c.border, backgroundColor: active ? c.primary + '14' : c.card }]}
+              >
+                <Text style={[s.typeChipText, { color: active ? c.primary : c.text }]}>{t.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
         <Field label="Title *" value={form.title} onChangeText={(v) => u('title', v)} c={c} placeholder="e.g. 2-Bedroom Apartment, East Legon" />
         <AITextInput label="Description *" aiContext="property description" value={form.description} onChangeText={(v) => u('description', v)} placeholder="Describe the property..." numberOfLines={5} />
         <Text style={[s.fieldLabel, { color: c.text }]}>Type</Text>
@@ -172,9 +192,13 @@ export default function AddPropertyScreen() {
 
       {/* Pricing */}
       <Section title="Pricing" icon="cash-outline" c={c}>
-        <Field label="Rent Amount (GHS) *" value={form.rentAmount} onChangeText={(v) => u('rentAmount', v)} c={c} keyboardType="numeric" placeholder="e.g. 2500" />
-        <Field label="Lease Duration (months)" value={form.rentDurationMonths} onChangeText={(v) => u('rentDurationMonths', v)} c={c} keyboardType="numeric" />
-        <Field label="Advance (months, max 6)" value={form.advanceMonths} onChangeText={(v) => u('advanceMonths', v)} c={c} keyboardType="numeric" />
+        <Field label={`${listingTypeMeta(form.listingType).priceLabel} (GHS) *`} value={form.rentAmount} onChangeText={(v) => u('rentAmount', v)} c={c} keyboardType="numeric" placeholder={form.listingType === 'sale' ? 'e.g. 850000' : form.listingType === 'short_let' ? 'e.g. 450' : 'e.g. 2500'} />
+        {form.listingType === 'rent' && (
+          <>
+            <Field label="Lease Duration (months)" value={form.rentDurationMonths} onChangeText={(v) => u('rentDurationMonths', v)} c={c} keyboardType="numeric" />
+            <Field label="Advance (months, max 6)" value={form.advanceMonths} onChangeText={(v) => u('advanceMonths', v)} c={c} keyboardType="numeric" />
+          </>
+        )}
       </Section>
 
       {/* Details */}
@@ -303,6 +327,9 @@ function Field({ label, value, onChangeText, c, ...props }: {
 }
 
 const s = StyleSheet.create({
+  typeRow: { flexDirection: 'row', gap: 8, marginBottom: spacing.sm },
+  typeChip: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 },
+  typeChipText: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   container: { flex: 1 },
   scroll: { padding: spacing.md },
   section: { padding: spacing.lg, marginBottom: spacing.md },

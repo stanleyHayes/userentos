@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image, Platform,
+  Modal, TextInput, Alert, Dimensions, FlatList, Share, Image, Platform, Linking,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -16,11 +16,14 @@ import { ReportContentModal, type ReportTarget } from '../../components/ReportCo
 import { RejectListingModal } from '../../components/RejectListingModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 import { listingShareContent } from '../../lib/listingShare'
+import { acceptsRentalApplications, listingTypeMeta } from '../../../../packages/shared/listingTypes'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 interface Property {
   id: string; _id?: string; title: string; description: string; type: string
+  /** rent (absent on older listings), sale or short_let; rentAmount is the asking price for it. */
+  listingType?: string; listingRef?: string
   status: string; listingStatus?: string; rejectionReason?: string
   address: { street: string; city: string; region: string; digitalAddress?: string }
   rentAmount: number; amenities: string[]; rules: string[]
@@ -412,14 +415,43 @@ export default function PropertyDetailScreen() {
     } finally { setBookingViewing(false) }
   }
 
+  // Whether the agent has a WhatsApp number comes from the listing's public
+  // record; the number itself only arrives in the wa.me link on a tap.
+  const [whatsappAvailable, setWhatsappAvailable] = useState(false)
+  const [openingWhatsApp, setOpeningWhatsApp] = useState(false)
+  const publicKey = property?.listingRef ?? property?.id ?? property?._id
+  const isPublicListing = property?.listingStatus === 'approved' || property?.listingStatus === 'published'
+  useEffect(() => {
+    if (!publicKey || !isPublicListing) { setWhatsappAvailable(false); return }
+    let live = true
+    api.get<{ agent?: { whatsapp?: boolean } | null }>(`/public/properties/${encodeURIComponent(publicKey)}`)
+      .then((listing) => { if (live) setWhatsappAvailable(Boolean(listing.agent?.whatsapp)) })
+      .catch(() => { if (live) setWhatsappAvailable(false) })
+    return () => { live = false }
+  }, [publicKey, isPublicListing])
+
+  async function openWhatsApp() {
+    if (!publicKey) return
+    setOpeningWhatsApp(true)
+    try {
+      const { url } = await api.post<{ url: string }>(`/public/properties/${encodeURIComponent(publicKey)}/whatsapp`, {})
+      await Linking.openURL(url)
+    } catch (err) {
+      Alert.alert('WhatsApp', (err as { message?: string }).message ?? 'WhatsApp is not available for this listing')
+    } finally {
+      setOpeningWhatsApp(false)
+    }
+  }
+
   async function handleShare() {
     if (!property) return
     try {
       // Links the public listing page when the listing is publicly visible.
       await Share.share(listingShareContent({
         id: property.id ?? property._id ?? String(id),
+        ref: property.listingRef,
         title: property.title,
-        rent: formatCurrency(property.rentAmount),
+        price: `${formatCurrency(property.rentAmount)}${listingTypeMeta(property.listingType).priceSuffix}`,
         city: property.address.city,
         listingStatus: property.listingStatus,
       }, Platform.OS))
@@ -537,7 +569,10 @@ export default function PropertyDetailScreen() {
           <Ionicons name="location-outline" size={14} color={c.muted} />
           <Text style={[s.locationText, { color: c.muted }]}>{property.address.street}, {property.address.city}, {property.address.region}</Text>
         </View>
-        <Text style={[s.price, { color: c.primary }]}>{formatCurrency(property.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>/mo</Text></Text>
+        <View style={[s.badge, { backgroundColor: c.primary + '18', alignSelf: 'flex-start', marginTop: 8 }]}>
+          <Text style={[s.badgeText, { color: c.primary }]}>{listingTypeMeta(property.listingType).label}</Text>
+        </View>
+        <Text style={[s.price, { color: c.primary }]}>{formatCurrency(property.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>{listingTypeMeta(property.listingType).priceSuffix}</Text></Text>
       </View>
 
       {/* Quick Details */}
@@ -551,9 +586,14 @@ export default function PropertyDetailScreen() {
       {/* Property Details Strip */}
       <View style={[s.detailStrip, neuCard(c)]}>
         <DetailCell icon="business-outline" label="Type" value={property.type} c={c} />
-        <DetailCell icon="time-outline" label="Duration" value={`${property.rentDurationMonths ?? '-'} mo`} c={c} />
-        <DetailCell icon="shield-outline" label="Advance" value={`${property.advanceMonths ?? '-'} mo`} c={c} />
-        <DetailCell icon="card-outline" label="Upfront" value={formatCurrency((property.rentAmount ?? 0) * (property.advanceMonths ?? 0))} c={c} highlight />
+        {/* Lease terms belong to rentals only. */}
+        {acceptsRentalApplications(property.listingType) && (
+          <>
+            <DetailCell icon="time-outline" label="Duration" value={`${property.rentDurationMonths ?? '-'} mo`} c={c} />
+            <DetailCell icon="shield-outline" label="Advance" value={`${property.advanceMonths ?? '-'} mo`} c={c} />
+            <DetailCell icon="card-outline" label="Upfront" value={formatCurrency((property.rentAmount ?? 0) * (property.advanceMonths ?? 0))} c={c} highlight />
+          </>
+        )}
       </View>
 
       {/* Stats */}
@@ -791,8 +831,16 @@ export default function PropertyDetailScreen() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            {/* Apply to Rent / Applied badge */}
-            {isTenant && property.status === 'available' && (
+            {/* WhatsApp enquiry (brief §05): opens a chat with the agent, property included. */}
+            {user && !isOwner && whatsappAvailable && (
+              <TouchableOpacity style={[s.primaryBtn, { backgroundColor: '#25D366' }]} onPress={openWhatsApp} disabled={openingWhatsApp} activeOpacity={0.85}>
+                {openingWhatsApp ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="logo-whatsapp" size={20} color="#ffffff" />}
+                <Text style={s.primaryBtnText}>Chat on WhatsApp</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Apply to Rent / Applied badge — rentals only; sales and short lets are arranged with the agent. */}
+            {isTenant && property.status === 'available' && acceptsRentalApplications(property.listingType) && (
               existingApp ? (
                 <View style={[s.appliedBadge, { backgroundColor: existingApp.status === 'approved' ? c.accent + '15' : c.warning + '15' }]}>
                   <Ionicons name={existingApp.status === 'approved' ? 'checkmark-circle' : 'time'} size={18} color={existingApp.status === 'approved' ? c.accent : c.warning} />
@@ -843,7 +891,7 @@ export default function PropertyDetailScreen() {
             <View style={s.actionRow}>
               <TouchableOpacity style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1 }]} onPress={() => setShowContactModal(true)}>
                 <Ionicons name="chatbubble-outline" size={20} color="#ffffff" />
-                <Text style={s.primaryBtnText}>Contact Landlord</Text>
+                <Text style={s.primaryBtnText}>Message on RentOS</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.favoriteBtn, neuChip(c), isFavorited && { backgroundColor: c.danger + '15', borderColor: c.danger + '40' }]}

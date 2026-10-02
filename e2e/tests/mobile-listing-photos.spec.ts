@@ -94,18 +94,22 @@ test.describe('adding a listing with photos', () => {
 })
 
 test.describe('sharing a listing', () => {
-  const listing = { id, title: 'Two-bedroom flat', rent: 'GH₵2,500', city: 'Accra', listingStatus: 'approved' }
+  const listing = { id, ref: 'RX7K2P9', title: 'Two-bedroom flat', price: 'GH₵2,500/month', city: 'Accra', listingStatus: 'approved' }
 
-  test('a public listing links its registry page: as url on iOS, in the text on Android', () => {
+  test('a public listing links its /property/<ref> page: as url on iOS, in the text on Android', () => {
     expect(listingShareContent(listing, 'ios')).toEqual({
       title: 'Two-bedroom flat',
-      message: 'Check out "Two-bedroom flat" on RentOS Ghana - GH₵2,500/mo in Accra',
-      url: `https://userentos.com/registry/${id}`,
+      message: 'Check out "Two-bedroom flat" on RentOS Ghana - GH₵2,500/month in Accra',
+      url: 'https://userentos.com/property/rx7k2p9',
     })
     expect(listingShareContent({ ...listing, listingStatus: 'published' }, 'android')).toEqual({
       title: 'Two-bedroom flat',
-      message: `Check out "Two-bedroom flat" on RentOS Ghana - GH₵2,500/mo in Accra\nhttps://userentos.com/registry/${id}`,
+      message: 'Check out "Two-bedroom flat" on RentOS Ghana - GH₵2,500/month in Accra\nhttps://userentos.com/property/rx7k2p9',
     })
+  })
+
+  test('a listing not yet given a reference falls back to its registry address', () => {
+    expect(listingShareContent({ ...listing, ref: undefined }, 'ios').url).toBe(`https://userentos.com/registry/${id}`)
   })
 
   test('a listing the public page would not show gets no link', () => {
@@ -114,7 +118,7 @@ test.describe('sharing a listing', () => {
       expect(content.url).toBeUndefined()
       expect(content.message).not.toContain('https://')
     }
-    expect(listingShareContent({ ...listing, id: '../admin' }, 'android').message).not.toContain('https://')
+    expect(listingShareContent({ ...listing, ref: '../admin', id: '../admin' }, 'android').message).not.toContain('https://')
   })
 })
 

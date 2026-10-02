@@ -12,6 +12,7 @@ import {
   Heart, Building2, MapPin, Bed, Bath, Car, Sofa, ExternalLink,
 } from 'lucide-react'
 import type { Property, PropertyStatus } from '@/types'
+import { listingTypeMeta } from '../../../../packages/shared/listingTypes'
 
 const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
   available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
@@ -131,7 +132,7 @@ export function SavedPropertiesPage() {
 
                     <div className="flex items-center gap-2 mt-2.5">
                       <span className="text-base font-extrabold text-primary dark:text-blue-400">{formatCurrency(p.rentAmount)}</span>
-                      <span className="text-[10px] text-muted dark:text-gray-500">/mo</span>
+                      <span className="text-[10px] text-muted dark:text-gray-500">{listingTypeMeta(p.listingType).compactSuffix}</span>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-2.5">

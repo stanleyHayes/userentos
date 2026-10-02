@@ -7,11 +7,13 @@ import { neuCard } from '../lib/neu'
 import { formatCurrency } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
+import { listingTypeMeta } from '../../../packages/shared/listingTypes'
 
 interface Property {
   id: string; _id?: string; title: string; type: string; status: string
   address: { street: string; city: string; region: string }
   rentAmount: number; bedrooms: number; bathrooms: number; images?: string[]
+  listingType?: string
 }
 
 export default function SavedPropertiesScreen() {
@@ -101,7 +103,7 @@ export default function SavedPropertiesScreen() {
                   <Ionicons name="location-outline" size={12} color={c.muted} />
                   <Text style={[s.locationText, { color: c.muted }]} numberOfLines={1}>{item.address?.city}, {item.address?.region}</Text>
                 </View>
-                <Text style={[s.price, { color: c.primary }]}>{formatCurrency(item.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>/mo</Text></Text>
+                <Text style={[s.price, { color: c.primary }]}>{formatCurrency(item.rentAmount)}<Text style={[s.priceUnit, { color: c.muted }]}>{listingTypeMeta(item.listingType).compactSuffix}</Text></Text>
                 <View style={s.detailsRow}>
                   <View style={s.detailChip}>
                     <Ionicons name="bed-outline" size={12} color={c.muted} />
