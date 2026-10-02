@@ -7,6 +7,7 @@ import { Agreement } from '../models/Agreement.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { success, error } from '../utils/response.js'
+import { screenFields, blockedBody } from '../services/trust/screen.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
 import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
@@ -132,6 +133,10 @@ router.post('/', authenticate, async (req, res) => {
 
   const screened = screenText(parsed.data.title, parsed.data.content, ...parsed.data.pros, ...parsed.data.cons)
   if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
+  // A published review naming a phone number or handle would take the next
+  // tenant off RentOS (TRUST-2).
+  const contactScreen = await screenFields({ fields: [parsed.data.title, parsed.data.content, ...parsed.data.pros, ...parsed.data.cons], authorId: userId, channel: 'review', targetType: 'property', targetId: parsed.data.propertyId })
+  if (!contactScreen.allowed) { res.status(422).json(blockedBody(contactScreen)); return }
 
   // Get user name
   const user = await User.findById(userId)

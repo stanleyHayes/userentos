@@ -266,6 +266,8 @@ export const RETENTION_PERIOD_DAYS = {
   storefrontEvent: 400,
   /** Rent valuation requests and outcomes. */
   valuationLog: 730,
+  /** Masked records of messages stopped for sharing contact details (no message text). */
+  trustDecision: 180,
 } as const
 
 /**

@@ -58,6 +58,7 @@ import { FinancierProfile } from '../models/FinancierProfile.js'
 import { InsuranceProviderProfile } from '../models/InsuranceProviderProfile.js'
 import { AffiliateProfile, AffiliateAttribution, AffiliateCommission } from '../models/Affiliate.js'
 import { ContentReport } from '../models/ContentReport.js'
+import { TrustDecision } from '../models/TrustDecision.js'
 import { Delegation } from '../models/Delegation.js'
 import { CapabilityRecord } from '../models/CapabilityRecord.js'
 import { WebhookSubscription } from '../models/WebhookSubscription.js'
@@ -220,6 +221,8 @@ export const EXPORT_SOURCES: readonly ExportSource[] = [
   // The report and its outcome; the reported person's id and the moderator are not the reporter's data.
   { key: 'contentReports', model: ContentReport, filter: own('reporterId'), select: 'targetType targetId targetLabel reason details status action resolutionNote handledAt ipAddress createdAt updatedAt' },
   { key: 'valuationRequests', model: ValuationLog, filter: own('requestedBy') },
+  // Messages the contact screen stopped: the masked record, what the author was told, and any appeal.
+  { key: 'contactProtectionDecisions', model: TrustDecision, filter: own('authorId'), select: 'channel decision enforced mode userReason maskedExcerpt review.status review.appealNote review.appealedAt review.reviewedAt createdAt' },
   { key: 'listingReviewDecisions', model: PropertyReview, filter: own('reviewerId') },
 
   // ─── Roles ───

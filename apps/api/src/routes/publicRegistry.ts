@@ -328,8 +328,9 @@ router.post(
       return
     }
     const contact = await listingContact(resolved.agentId)
+    // Off unless an admin switches direct WhatsApp on (listingContact.ts).
     if (!contact?.whatsappNumber) {
-      error(res, 'This agent has not added a WhatsApp number yet. Send them a message on RentOS instead.', 409)
+      error(res, 'Send the agent a message on RentOS instead — enquiries and replies stay on RentOS, where you are protected.', 409)
       return
     }
 
@@ -338,14 +339,14 @@ router.post(
     const propertyId = String(doc._id)
 
     if (req.user && req.user.userId !== resolved.agentId) {
-      const requester = await User.findById(req.user.userId).select('firstName lastName phone email').lean()
+      const requester = await User.findById(req.user.userId).select('firstName lastName').lean()
       if (requester) {
         await recordEnquiry({
           propertyId,
           propertyTitle: doc.title,
           agentId: resolved.agentId,
           requesterId: req.user.userId,
-          contact: { name: `${requester.firstName} ${requester.lastName}`.trim(), phone: requester.phone, email: requester.email },
+          contact: { name: `${requester.firstName} ${requester.lastName}`.trim() },
           channel: 'whatsapp',
         }).catch((err) => console.warn('[registry/whatsapp] lead not recorded:', (err as Error).message))
       }

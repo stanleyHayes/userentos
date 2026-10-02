@@ -1,8 +1,34 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app'
 import { getMessaging } from 'firebase-admin/messaging'
+import webpush from 'web-push'
 import { DeviceToken, type DevicePlatform } from '../models/DeviceToken.js'
-import { pushTokenSchema, pushPlatformSchema } from './push/input.js'
+import { pushTokenSchema, pushPlatformSchema, webPushSubscriptionSchema } from './push/input.js'
 import { logger } from '../utils/logger.js'
+
+/**
+ * Browser notifications (Web Push, RFC 8030) for the web app, so a new message
+ * reaches someone whose RentOS tab is in the background or closed. Needs a
+ * VAPID key pair: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT (a
+ * mailto: or https: contact). Without them the web app simply does not offer
+ * browser notifications.
+ */
+let webPushReady: boolean | null = null
+export function webPushPublicKey(): string | null {
+  return process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY ? process.env.VAPID_PUBLIC_KEY : null
+}
+function webPushConfigured(): boolean {
+  if (webPushReady !== null) return webPushReady
+  const publicKey = webPushPublicKey()
+  if (!publicKey) return (webPushReady = false)
+  try {
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@userentos.com', publicKey, process.env.VAPID_PRIVATE_KEY!)
+    webPushReady = true
+  } catch (err) {
+    logger.warn(`[Push/Web] VAPID keys rejected: ${(err as Error).message}`)
+    webPushReady = false
+  }
+  return webPushReady
+}
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
@@ -24,6 +50,7 @@ interface PushPayload {
 
 function detectPlatform(token: string): DevicePlatform {
   if (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[')) return 'expo'
+  if (token.startsWith('{')) return 'webpush'
   return 'fcm'
 }
 
@@ -34,6 +61,7 @@ export async function registerDeviceToken(
 ): Promise<void> {
   pushTokenSchema.parse(token)
   const resolvedPlatform = platform === undefined ? detectPlatform(token) : pushPlatformSchema.parse(platform)
+  if (resolvedPlatform === 'webpush') webPushSubscriptionSchema.parse(JSON.parse(token))
   await DeviceToken.findOneAndUpdate(
     { token },
     { userId, token, platform: resolvedPlatform, lastSeenAt: new Date() },
@@ -113,24 +141,43 @@ async function sendViaFcm(tokens: string[], payload: PushPayload): Promise<strin
   return deadTokens
 }
 
+async function sendViaWebPush(tokens: string[], payload: PushPayload): Promise<string[]> {
+  if (tokens.length === 0 || !webPushConfigured()) return []
+  const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.data?.url ?? '/', tag: payload.data?.tag })
+  const dead: string[] = []
+  await Promise.all(tokens.map(async (token) => {
+    try {
+      await webpush.sendNotification(JSON.parse(token), body, { TTL: 24 * 60 * 60, urgency: 'high' })
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode
+      // 404/410: the browser dropped the subscription.
+      if (status === 404 || status === 410) dead.push(token)
+      else logger.warn(`[Push/Web] send failed: ${status ?? ''} ${(err as Error).message}`)
+    }
+  }))
+  return dead
+}
+
 export async function sendPushNotification(userId: string, payload: PushPayload): Promise<boolean> {
   const records = await DeviceToken.find({ userId }).lean()
   if (records.length === 0) return false
 
   const expoTokens = records.filter((r) => r.platform === 'expo').map((r) => r.token)
   const fcmTokens = records.filter((r) => r.platform === 'fcm').map((r) => r.token)
+  const webTokens = records.filter((r) => r.platform === 'webpush').map((r) => r.token)
 
-  const [deadExpo, deadFcm] = await Promise.all([
+  const [deadExpo, deadFcm, deadWeb] = await Promise.all([
     sendViaExpo(expoTokens, payload),
     sendViaFcm(fcmTokens, payload),
+    sendViaWebPush(webTokens, payload),
   ])
 
-  const dead = [...deadExpo, ...deadFcm]
+  const dead = [...deadExpo, ...deadFcm, ...deadWeb]
   if (dead.length > 0) {
     await DeviceToken.deleteMany({ token: { $in: dead } })
   }
 
-  const sent = expoTokens.length - deadExpo.length + (fcmTokens.length - deadFcm.length)
+  const sent = expoTokens.length - deadExpo.length + (fcmTokens.length - deadFcm.length) + (webTokens.length - deadWeb.length)
   return sent > 0
 }
 

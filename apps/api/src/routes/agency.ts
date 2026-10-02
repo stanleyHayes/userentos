@@ -7,6 +7,7 @@ import { Delegation } from '../models/Delegation.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
+import { screenFields, blockedBody } from '../services/trust/screen.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
@@ -42,6 +43,15 @@ const agencySchema = z.object({
   reacLicenceNumber: z.union([z.literal(''), z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9/.\- ]+$/, 'Enter the licence number as shown on your REAC certificate')]).optional(),
 })
 
+/**
+ * The public agency page: no phone numbers or email (the agency's or its
+ * team's). Enquiries go through RentOS so deals stay on the platform.
+ */
+function publicAgencyPage<T extends Parameters<typeof publicAgency>[0] & { phone?: string; email?: string; teamMembers?: { name: string; role: string; phone?: string }[] }>(agency: T) {
+  const { phone: _phone, email: _email, teamMembers, ...rest } = agency
+  return { ...publicAgency(rest), teamMembers: (teamMembers ?? []).map(({ name, role }) => ({ name, role })) }
+}
+
 /** Public view: no owner account id, and licence status instead of reviewer details. */
 function publicAgency<T extends { _id: unknown; ownerId?: string; reacLicenceNumber?: string; reacLicenceVerifiedAt?: Date; reacLicenceVerifiedBy?: string }>(agency: T) {
   const { ownerId: _ownerId, reacLicenceVerifiedBy: _verifiedBy, reacLicenceVerifiedAt, reacLicenceNumber, ...rest } = agency
@@ -61,6 +71,14 @@ function applyLicence(agency: { reacLicenceNumber?: string; reacLicenceVerifiedA
 router.post('/me', authenticate, requireRole('property_manager', 'landlord'), async (req, res) => {
   const parsed = agencySchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+
+  // What the public page shows is screened for contact details (TRUST-2); the
+  // phone and email fields themselves stay private.
+  const screened = await screenFields({
+    fields: [parsed.data.name, parsed.data.description, ...(parsed.data.teamMembers ?? []).flatMap((m) => [m.name, m.role])],
+    authorId: req.user!.userId, channel: 'profile', targetType: 'agency',
+  })
+  if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
 
   const existing = await AgencyProfile.findOne({ ownerId: req.user!.userId })
   const baseSlug = slugify(parsed.data.name)
@@ -200,7 +218,7 @@ router.get('/:slug', async (req, res) => {
     .lean()
 
   success(res, {
-    agency: publicAgency(agency),
+    agency: publicAgencyPage(agency),
     listings: listings.map(idOf),
   })
 })

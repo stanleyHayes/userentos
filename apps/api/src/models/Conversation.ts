@@ -11,6 +11,17 @@ export interface IConversation extends Document {
     createdAt: Date
   }
   unreadCount: Map<string, number>
+  /**
+   * The unread-message email (services/messageAlerts.ts): participants with
+   * an unread message who have not been emailed yet, and since when.
+   */
+  pendingEmail: { userId: string; since: Date }[]
+  /**
+   * Participants already emailed (or alerted by email another way) during
+   * their current unread spell. Reading the conversation clears both lists,
+   * so there is at most one email per conversation until it is read.
+   */
+  emailedUnread: string[]
 }
 
 const conversationSchema = new Schema<IConversation>({
@@ -22,10 +33,14 @@ const conversationSchema = new Schema<IConversation>({
     createdAt: { type: Date },
   },
   unreadCount: { type: Map, of: Number, default: {} },
+  pendingEmail: { type: [{ _id: false, userId: { type: String, required: true }, since: { type: Date, required: true } }], default: [] },
+  emailedUnread: { type: [String], default: [] },
 }, { timestamps: true })
 
 conversationSchema.index({ participants: 1 })
 conversationSchema.index({ updatedAt: -1 })
+// The unread-message email job reads only conversations with an email due.
+conversationSchema.index({ 'pendingEmail.since': 1 })
 
 export const Conversation = mongoose.model<IConversation>('Conversation', conversationSchema)
 
@@ -38,6 +53,8 @@ export interface IMessage extends Document {
   senderId: string
   text: string
   read: boolean
+  createdAt: Date
+  updatedAt: Date
 }
 
 const messageSchema = new Schema<IMessage>({

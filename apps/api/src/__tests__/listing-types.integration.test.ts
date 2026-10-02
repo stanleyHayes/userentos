@@ -14,6 +14,9 @@ import { User } from '../models/User.js'
 import { Lead } from '../models/Lead.js'
 import { Notification } from '../models/Notification.js'
 import { Storefront } from '../models/Storefront.js'
+import { FeatureFlag } from '../models/FeatureFlag.js'
+import { invalidateFlagCache } from '../services/featureFlags.js'
+import { DIRECT_WHATSAPP_FLAG } from '../services/listingContact.js'
 import publicRegistryRouter from '../routes/publicRegistry.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
@@ -103,7 +106,8 @@ describe.skipIf(!hasTestMongo)('listing types, shareable references and WhatsApp
       id: String(property._id), ref: property.listingRef, listingType: 'rent', description: 'A bright home near the junction.',
       images: ['https://example.test/1.jpg', 'https://example.test/2.jpg'], amenities: ['Water', 'Security'], rentDurationMonths: 12, advanceMonths: 2,
       url: expect.stringMatching(new RegExp(`/property/${property.listingRef!.toLowerCase()}$`)),
-      agent: { name: 'ABC Properties', type: 'Agency', identityVerified: true, whatsapp: true },
+      // Direct WhatsApp is off unless an admin switches it on (contact protection).
+      agent: { name: 'ABC Properties', type: 'Agency', identityVerified: true, whatsapp: false },
     })
     const raw = JSON.stringify(data)
     expect(raw).not.toContain('9 Private Lane')
@@ -111,6 +115,24 @@ describe.skipIf(!hasTestMongo)('listing types, shareable references and WhatsApp
     expect(raw).not.toContain('501112222')
     expect((await fetch(`${base}/ZZZZZZZ`)).status).toBe(404)
   })
+
+  it("keeps the agent's number private by default: no WhatsApp link and no lead", async () => {
+    const property = await listing({ title: 'Private number fixture' })
+    const response = await fetch(`${base}/${property.listingRef}/whatsapp`, { method: 'POST', headers: { Authorization: `Bearer ${token(tenantId, 'tenant')}` } })
+    expect(response.status).toBe(409)
+    expect((await response.json()).error).toMatch(/message on RentOS/)
+    expect(await Lead.countDocuments({ propertyId: String(property._id) })).toBe(0)
+  })
+
+  describe('when an admin switches direct WhatsApp on', () => {
+    beforeAll(async () => {
+      await FeatureFlag.create({ key: DIRECT_WHATSAPP_FLAG, description: 'test', enabled: true })
+      invalidateFlagCache()
+    })
+    afterAll(async () => {
+      await FeatureFlag.deleteMany({ key: DIRECT_WHATSAPP_FLAG })
+      invalidateFlagCache()
+    })
 
   it('opens WhatsApp with the property in the message and records a signed-in tenant as a lead, alerting the agent once', async () => {
     const property = await listing({ title: 'WhatsApp fixture flat' })
@@ -130,6 +152,8 @@ describe.skipIf(!hasTestMongo)('listing types, shareable references and WhatsApp
     const leads = await Lead.find({ propertyId: String(property._id) }).lean()
     expect(leads).toHaveLength(1)
     expect(leads[0]).toMatchObject({ requesterId: String(tenantId), contactName: 'Esi Tenant', channel: 'whatsapp' })
+    // The enquirer's own number stays private even then.
+    expect(leads[0].contactPhone).toBeUndefined()
 
     await vi.waitFor(async () => {
       const notices = await Notification.find({ userId: String(agentId), message: /WhatsApp fixture flat/ }).lean()
@@ -152,5 +176,6 @@ describe.skipIf(!hasTestMongo)('listing types, shareable references and WhatsApp
     const owned = await listing({ title: 'No number fixture', landlordId: String(landlordId) })
     const response = await fetch(`${base}/${owned.listingRef}/whatsapp`, { method: 'POST' })
     expect(response.status).toBe(409)
+  })
   })
 })

@@ -27,6 +27,7 @@ import { BlogPost } from '../models/BlogPost.js'
 import { pollPendingCertificates } from './hosting/poll.js'
 import { retryUnprocessedWebhooks, reconcilePendingTransactions } from './marketplace/reconcile.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
+import { sendUnreadMessageEmails } from './messageAlerts.js'
 
 // Ghana timezone (UTC+0, no DST). cron defaults to server time, but we set tz explicitly
 // for clarity/portability since the requirement specifies Ghana time.
@@ -706,6 +707,18 @@ export function startScheduler() {
       await pollPendingCertificates()
     } catch (err) {
       logger.error(`[Cron] TLS provisioning poll failed: ${(err as Error).message}`)
+    }
+  }, { timezone: GHANA_TZ })
+
+  // Unread-message emails (services/messageAlerts.ts): one email per
+  // conversation once a message has waited unread long enough.
+  cron.schedule('*/5 * * * *', async () => {
+    if (!(await acquireCronLock('unread-message-emails', LOCK_TTL_RECONCILE))) return
+    try {
+      const result = await sendUnreadMessageEmails()
+      if (result.emailed > 0) logger.info(`[Cron] Unread-message emails: ${result.emailed} sent.`)
+    } catch (err) {
+      logger.error(`[Cron] Unread-message emails failed: ${(err as Error).message}`)
     }
   }, { timezone: GHANA_TZ })
 

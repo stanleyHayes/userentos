@@ -16,6 +16,14 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { requireQuota, EntitlementError } from '../services/entitlements.js'
+import { screenFields, blockedBody } from '../services/trust/screen.js'
+
+type PostFields = { title?: string; excerpt?: string; content?: string; tags?: string[]; seoTitle?: string; seoDescription?: string }
+/** A post's readable text, screened for contact details (TRUST-2). Articles may cite ordinary websites. */
+const postScreen = (data: PostFields, authorId: string, targetId?: string) => screenFields({
+  fields: [data.title, data.excerpt, data.content, ...(data.tags ?? []), data.seoTitle, data.seoDescription],
+  authorId, channel: 'blog', targetType: 'blog_post', targetId, allowExternalLinks: true,
+})
 
 const router = Router()
 
@@ -49,6 +57,8 @@ const postSchema = z.object({
 router.post('/posts', authenticate, asyncHandler(async (req, res) => {
   const parsed = postSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const screened = await postScreen(parsed.data, req.user!.userId)
+  if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
 
   // No quota here. blog.limit is a *publishing* quota (§7.1): counting drafts
   // against it blocked an author from even saving work, and let anyone who
@@ -91,6 +101,8 @@ router.patch('/posts/:id', authenticate, asyncHandler(async (req, res) => {
   if (!post) { error(res, 'Post not found', 404); return }
   if (post.authorId !== req.user!.userId) { error(res, 'You can only edit your own posts', 403); return }
   if (post.status === 'removed') { error(res, REMOVED_MESSAGE, 403); return }
+  const screened = await postScreen(parsed.data, req.user!.userId, String(post._id))
+  if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
 
   Object.assign(post, parsed.data)
   await post.save()

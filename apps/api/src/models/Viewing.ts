@@ -8,7 +8,8 @@ export interface IViewing extends Document {
   agentId: string
   requesterId?: string
   viewerName: string
-  viewerPhone: string
+  /** Older viewings only; never returned to the agent (they reply on RentOS). */
+  viewerPhone?: string
   date: string
   time: string
   status: ViewingStatus
@@ -24,7 +25,7 @@ const viewingSchema = new Schema<IViewing>(
     agentId: { type: String, required: true, index: true },
     requesterId: String,
     viewerName: { type: String, required: true },
-    viewerPhone: { type: String, required: true },
+    viewerPhone: String,
     date: { type: String, required: true },
     time: { type: String, required: true },
     status: { type: String, enum: ['requested', 'confirmed', 'completed', 'cancelled'], default: 'requested', index: true },

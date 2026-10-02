@@ -44,6 +44,8 @@ export const REPORT_REASONS = [
   'spam',
   'duplicate',
   'illegal',
+  /** Asked to talk, deal or pay outside RentOS; also filed by the contact screen (services/trust/strikes.ts). */
+  'off_platform_contact',
   'other',
 ] as const
 export type ReportReason = (typeof REPORT_REASONS)[number]

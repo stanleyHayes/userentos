@@ -195,8 +195,10 @@ router.get('/', authenticate, asyncHandler(async (req: Request, res: Response) =
   const propertyMap = new Map(properties.map((p) => [(p._id as Types.ObjectId).toString(), p]))
   const tenantMap = new Map(tenants.map((t) => [(t._id as Types.ObjectId).toString(), t]))
 
-  // Regulators see every application but not the applicants' contact details.
-  const showContact = !roles.includes('government') || isAdminStaff(roles)
+  // Applicants' contact details stay private until a tenancy is signed on
+  // RentOS (the agreement then shows them); owners and agents message the
+  // applicant on RentOS. Regulators never see them. Staff do.
+  const showContact = isAdminStaff(roles)
   const items = applications.map((a) => {
     const prop = propertyMap.get(a.propertyId)
     const tenant = tenantMap.get(a.tenantId)
@@ -230,6 +232,9 @@ router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response
     User.findById(application.tenantId).select('firstName lastName email phone').lean(),
   ])
 
+  // The applicant's phone and email are theirs and staff's to see: owners and
+  // agents reply on RentOS until a tenancy is signed (contact protection).
+  const showContact = application.tenantId === userId || isAdminStaff(req.user!.roles)
   success(res, {
     ...application,
     id: (application._id as Types.ObjectId).toString(),
@@ -237,8 +242,8 @@ router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response
     propertyRent: property?.rentAmount ?? 0,
     propertyAddress: property?.address,
     tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Unknown',
-    tenantEmail: tenant?.email ?? '',
-    tenantPhone: tenant?.phone ?? '',
+    tenantEmail: showContact ? tenant?.email ?? '' : '',
+    tenantPhone: showContact ? tenant?.phone ?? '' : '',
   })
 }))
 

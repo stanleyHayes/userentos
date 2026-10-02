@@ -50,6 +50,7 @@ const PUBLISHED_PERIOD: Record<string, keyof typeof RETENTION_PERIOD_DAYS> = {
   enquiries: 'enquiry',
   'moderation.dismissed': 'dismissedContentReport',
   'moderation.complaintLog': 'complaintLog',
+  'moderation.trustDecision': 'trustDecision',
   'analytics.registry': 'registryPageView',
   'analytics.storefront': 'storefrontEvent',
   'analytics.valuation': 'valuationLog',

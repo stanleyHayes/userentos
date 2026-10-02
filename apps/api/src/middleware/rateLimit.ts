@@ -144,6 +144,20 @@ export const trackLimiter = rateLimit({
 })
 
 /**
+ * A website contact form writes a lead and texts the agent: 5 enquiries per
+ * 10 minutes per IP is plenty for a person and stops a flood.
+ */
+export const enquiryLimiter = rateLimit({
+  store: store('enquiry'),
+  windowMs: 10 * 60 * 1000,
+  limit: isProd ? 5 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  passOnStoreError: true,
+  message: { success: false, error: 'Too many messages. Please try again in a few minutes.' },
+})
+
+/**
  * WhatsApp enquiry links — each tap may record a lead and text the agent, so
  * they are capped well below the general public budget: 10 a minute per IP.
  */

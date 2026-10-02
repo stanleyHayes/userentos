@@ -11,7 +11,11 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { notify } from '../services/notify.js'
 import { VIEWING_REQUESTED_TITLE, viewingRequestedMessage } from '../services/enquiryNotices.js'
-import { agentForProperty, recordEnquiry } from '../services/leads.js'
+import { agentForProperty, recordEnquiry, findOpenLead, leadForAgent } from '../services/leads.js'
+import { openEnquiryConversation, findConversation, sendFailureBody, MESSAGING_UNAVAILABLE } from '../services/conversations.js'
+import { screenOutbound, blockedBody } from '../services/trust/screen.js'
+import { Conversation } from '../models/Conversation.js'
+import { contactBlocked } from '../services/userBlocks.js'
 import { logger } from '../utils/logger.js'
 import { round2 } from '../utils/money.js'
 
@@ -23,8 +27,10 @@ const idOf = <T extends { _id: unknown }>(doc: T) => ({
 })
 
 /* ================================================================
-   LEADS — "I'm interested" on a listing creates a lead; the agent
-   works the pipeline: new → contacted → viewing → applied → closed/lost
+   LEADS — "I'm interested" on a listing creates a lead and opens a
+   RentOS conversation with the agent; the agent replies there (never
+   by phone: the enquirer's number and email are not shared) and works
+   the pipeline: new → contacted → viewing → applied → closed/lost
    ================================================================ */
 const leadSchema = z.object({
   message: z.string().trim().max(500).optional(),
@@ -42,17 +48,28 @@ router.post('/leads/property/:propertyId', authenticate, async (req, res) => {
   const requester = await User.findById(req.user!.userId).lean()
   if (!requester) { error(res, 'User not found', 404); return }
 
+  const propertyId = param(req.params.propertyId)
+  const title = resolved.property.title ?? 'your listing'
+  const text = parsed.data.message || `Hi, I'm interested in "${title}". Is it still available?`
+  // The message is screened (TRUST-2) before anything is created. A new lead
+  // alerts the agent itself (with email and SMS), so the message adds no
+  // second alert; a repeat enquiry is announced by the message alone.
+  const repeat = await findOpenLead({ propertyId, agentId: resolved.agentId, requesterId: req.user!.userId })
+  const opened = await openEnquiryConversation({ senderId: req.user!.userId, recipientId: resolved.agentId, propertyId, text, channel: 'interest', alerted: !repeat })
+  if (!opened.ok) { res.status(opened.status).json(sendFailureBody(opened)); return }
+
   const { lead, created } = await recordEnquiry({
-    propertyId: param(req.params.propertyId),
+    propertyId,
     propertyTitle: resolved.property.title,
     agentId: resolved.agentId,
     requesterId: req.user!.userId,
-    contact: { name: `${requester.firstName} ${requester.lastName}`.trim(), phone: requester.phone, email: requester.email },
+    contact: { name: `${requester.firstName} ${requester.lastName}`.trim() },
     message: parsed.data.message,
     channel: 'interest',
+    conversationId: opened.conversationId,
   })
 
-  success(res, idOf(lead.toObject()), created ? 'Interest sent — the agent will contact you' : 'The agent already has your enquiry', created ? 201 : 200)
+  success(res, { ...leadForAgent(idOf(lead.toObject())), conversationId: opened.conversationId }, created ? 'Sent — the agent will reply in your RentOS messages' : 'Sent — the agent already has your enquiry and will reply in your RentOS messages', created ? 201 : 200)
 })
 
 // GET /api/agent/leads — my lead inbox (agent side), optional status/property filter
@@ -62,16 +79,53 @@ router.get('/leads', authenticate, async (req, res) => {
   if (typeof req.query.propertyId === 'string' && req.query.propertyId) filter.propertyId = req.query.propertyId
 
   const leads = await Lead.find(filter).sort({ createdAt: -1 }).limit(200).lean()
-  const propertyIds = [...new Set(leads.map((l) => l.propertyId))]
+  // A general enquiry from the agent's website contact page has no property.
+  const propertyIds = [...new Set(leads.map((l) => l.propertyId).filter((id): id is string => Boolean(id)))]
   const properties = await Property.find({ _id: { $in: propertyIds } }).select('title address').lean()
   const propertyMap = new Map(properties.map((p) => [(p._id as Types.ObjectId).toString(), p]))
 
   success(res, {
+    // Never the enquirer's phone or email: the agent replies on RentOS.
     items: leads.map((l) => ({
-      ...idOf(l),
-      propertyTitle: (propertyMap.get(l.propertyId) as { title?: string } | undefined)?.title ?? null,
+      ...leadForAgent(idOf(l)),
+      canReply: Boolean(l.requesterId),
+      propertyTitle: l.propertyId ? (propertyMap.get(l.propertyId) as { title?: string } | undefined)?.title ?? null : null,
     })),
   })
+})
+
+/**
+ * "Reply on RentOS": the conversation with the enquirer about this lead's
+ * listing, opened if it does not exist yet (older leads predate it).
+ */
+router.post('/leads/:id/conversation', authenticate, async (req, res) => {
+  const lead = await Lead.findById(param(req.params.id))
+  if (!lead || lead.agentId !== req.user!.userId) { error(res, 'Lead not found', 404); return }
+  if (!lead.requesterId) { error(res, 'This enquirer no longer has a RentOS account.', 410); return }
+  const agentId = req.user!.userId
+  const requesterId = lead.requesterId
+
+  const linked = lead.conversationId ? await Conversation.findOne({ _id: lead.conversationId, participants: { $all: [agentId, requesterId] } }).select('_id').lean() : null
+  let conversationId = linked ? String(linked._id) : undefined
+  if (!conversationId) {
+    const found = await findConversation(agentId, requesterId, lead.propertyId)
+    conversationId = found ? String(found._id) : undefined
+  }
+  if (!conversationId) {
+    const active = await User.exists({ _id: requesterId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })
+    if (!active || await contactBlocked(agentId, requesterId)) { error(res, MESSAGING_UNAVAILABLE, 403); return }
+    const created = await Conversation.create({
+      participants: [agentId, requesterId],
+      propertyId: lead.propertyId,
+      unreadCount: new Map([[agentId, 0], [requesterId, 0]]),
+    })
+    conversationId = created._id.toString()
+  }
+  if (lead.conversationId !== conversationId) {
+    lead.conversationId = conversationId
+    await lead.save()
+  }
+  success(res, { conversationId })
 })
 
 // PATCH /api/agent/leads/:id — advance a lead through the pipeline (agent side)
@@ -84,7 +138,7 @@ router.patch('/leads/:id', authenticate, async (req, res) => {
 
   lead.status = parsed.data.status
   await lead.save()
-  success(res, idOf(lead.toObject()), 'Lead updated')
+  success(res, leadForAgent(idOf(lead.toObject())), 'Lead updated')
 })
 
 /* ================================================================
@@ -109,13 +163,19 @@ router.post('/viewings/property/:propertyId', authenticate, async (req, res) => 
   const requester = await User.findById(req.user!.userId).lean()
   if (!requester) { error(res, 'User not found', 404); return }
 
+  // Notes reach the agent, so they are screened like a message (TRUST-2).
+  if (parsed.data.notes) {
+    const screened = await screenOutbound({ text: parsed.data.notes, authorId: req.user!.userId, channel: 'viewing', targetType: 'property', targetId: param(req.params.propertyId) })
+    if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
+  }
+
+  // The viewer's name only: the agent arranges the viewing on RentOS.
   const viewing = await Viewing.create({
     ...parsed.data,
     propertyId: param(req.params.propertyId),
     agentId: resolved.agentId,
     requesterId: req.user!.userId,
     viewerName: `${requester.firstName} ${requester.lastName}`.trim(),
-    viewerPhone: requester.phone,
   })
 
   // A viewing request moves the requester's own lead on this listing to
@@ -149,10 +209,10 @@ router.get('/viewings', authenticate, async (req, res) => {
   const propertyMap = new Map(properties.map((p) => [(p._id as Types.ObjectId).toString(), p]))
 
   success(res, {
-    items: viewings.map((v) => ({
-      ...idOf(v),
-      propertyTitle: (propertyMap.get(v.propertyId) as { title?: string } | undefined)?.title ?? null,
-    })),
+    items: viewings.map((v) => {
+      const { viewerPhone: _phone, ...rest } = idOf(v)
+      return { ...rest, propertyTitle: (propertyMap.get(v.propertyId) as { title?: string } | undefined)?.title ?? null }
+    }),
   })
 })
 
@@ -170,7 +230,8 @@ router.patch('/viewings/:id', authenticate, async (req, res) => {
 
   viewing.status = parsed.data.status
   await viewing.save()
-  success(res, idOf(viewing.toObject()), 'Viewing updated')
+  const { viewerPhone: _phone, ...updated } = idOf(viewing.toObject())
+  success(res, updated, 'Viewing updated')
 })
 
 /* ================================================================

@@ -92,6 +92,8 @@ interface NotifyOptions {
   skipEmail?: boolean
   /** Skip push for this notification */
   skipPush?: boolean
+  /** Push notifications with the same tag replace each other (one per conversation). */
+  pushTag?: string
   /**
    * Also text this (short, no personal data about anyone else) to the
    * recipient's phone, where their SMS toggle allows it.
@@ -229,10 +231,13 @@ async function createNotification(opts: NotifyOptions) {
 
   // 3. Push notification (best-effort, non-blocking)
   if (!skipPush && plan.push) {
+    const data: Record<string, string> = {}
+    if (actionUrl) data.url = actionUrl
+    if (opts.pushTag) data.tag = opts.pushTag
     sendPushNotification(userId, {
       title,
       body: message,
-      data: actionUrl ? { url: actionUrl } : undefined,
+      data: Object.keys(data).length ? data : undefined,
     }).catch((err) => console.warn('[Notify] Push failed:', err.message))
   }
 
@@ -362,13 +367,22 @@ export function notifyPropertyRejected(landlordId: string, propertyTitle: string
   })
 }
 
-export function notifyNewMessage(recipientId: string, senderName: string, preview: string) {
+/** Where a conversation opens on the web (the mobile app maps it to its chat screen). */
+export const conversationPath = (conversationId: string) => `/messages?conversationId=${conversationId}`
+
+/**
+ * A new message: the in-app item, a live toast and a push to the browser and
+ * phone right away. No email now — if the message is still unread a while
+ * later, services/messageAlerts.ts sends one email for the conversation.
+ */
+export function notifyNewMessage(recipientId: string, senderName: string, preview: string, conversationId?: string) {
   return notify({
     userId: recipientId,
     title: `Message from ${senderName}`,
     message: preview.length > 80 ? preview.slice(0, 80) + '...' : preview,
-    actionUrl: '/messages',
-    skipPush: false,
+    actionUrl: conversationId ? conversationPath(conversationId) : '/messages',
+    skipEmail: true,
+    pushTag: conversationId ? `chat:${conversationId}` : undefined,
   })
 }
 

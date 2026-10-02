@@ -40,6 +40,8 @@ export const RETENTION_DAYS = {
   storefrontEvent: RETENTION_PERIOD_DAYS.storefrontEvent,
   /** Rent valuation requests and outcomes (pricing-model evidence). */
   valuationLog: RETENTION_PERIOD_DAYS.valuationLog,
+  /** Contact-protection decisions: masked excerpts, reason codes and reviews. */
+  trustDecision: RETENTION_PERIOD_DAYS.trustDecision,
   /** Security/audit trail (includes IP addresses): purged daily. */
   auditLog: RETENTION_PERIOD_DAYS.auditLog,
   /** A closed account's tombstone and related records, after closure. */
@@ -357,6 +359,13 @@ export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
     data: 'Reports that led to action, suspensions, and moderator decisions on listings.', trigger: 'handledAt', periodDays: null, action: 'retain', enforcedBy: 'none',
     onAccountClosure: "The reporter's id and IP are removed after the grace period; the decision record is retained.",
     basis: 'OWNER/LEGAL: how long to keep moderation and suspension records — to be confirmed. Kept and not used for any other purpose meanwhile.', decision: 'owner_legal_pending',
+  },
+  {
+    id: 'moderation.trustDecision', models: ['TrustDecision'], personalData: true,
+    data: 'Account id, a masked excerpt of the stopped message (digits, emails, links and handles removed), reason codes, scores and any review or appeal.',
+    trigger: 'createdAt', periodDays: RETENTION_DAYS.trustDecision, action: 'delete', enforcedBy: 'ttl', ttlField: 'createdAt',
+    onAccountClosure: 'Deleted after the grace period.',
+    basis: 'Legitimate interest: keeping deals and payments on RentOS, where customers are protected, and measuring the screen for accuracy.', decision: 'engineering_default',
   },
   {
     id: 'moderation.complaintLog', models: ['ComplaintLog'], personalData: true,

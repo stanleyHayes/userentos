@@ -39,7 +39,7 @@ for (const name of [
   'Review', 'Achievement', 'PaymentStreak', 'Payout', 'PayoutAccount', 'PaymentAccount', 'WebhookSubscription', 'BusinessReview', 'BusinessInquiry',
   'Lead', 'Viewing', 'Application', 'Delegation', 'FeatureFlag', 'ContentReport', 'Employment', 'PropertyExpense', 'BlogPost', 'Property', 'Agreement',
   'Payment', 'MarketplaceTransaction', 'Dispute', 'MoveOut', 'MaintenanceRequest', 'Sponsorship', 'Worker', 'ServiceBooking', 'Business',
-  'BusinessListing', 'Storefront', 'AgencyProfile', 'StorefrontDomain',
+  'BusinessListing', 'Storefront', 'AgencyProfile', 'StorefrontDomain', 'TrustDecision',
 ]) vi.doMock(`../models/${name}.js`, () => ({ [name]: modelMock() }))
 
 const { User } = await import('../models/User.js')
@@ -58,6 +58,7 @@ const { Delegation } = await import('../models/Delegation.js')
 const { AffiliateAttribution } = await import('../models/Affiliate.js')
 const { FeatureFlag } = await import('../models/FeatureFlag.js')
 const { ContentReport } = await import('../models/ContentReport.js')
+const { TrustDecision } = await import('../models/TrustDecision.js')
 const { DocumentModel } = await import('../models/Document.js')
 const { Employment } = await import('../models/Employment.js')
 const { PropertyExpense } = await import('../models/PropertyExpense.js')
@@ -90,7 +91,7 @@ describe('retryable account erasure', () => {
   it('erases duplicate message previews and unread counters as well as messages', async () => {
     expect(await eraseAccountRecords(uid, cutoff)).toBe(true)
     expect(Conversation.updateMany).toHaveBeenCalledWith({ 'lastMessage.senderId': uid }, { $unset: { lastMessage: 1 } })
-    expect(Conversation.updateMany).toHaveBeenCalledWith({ participants: uid }, { $pull: { participants: uid }, $unset: { [`unreadCount.${uid}`]: 1 } })
+    expect(Conversation.updateMany).toHaveBeenCalledWith({ participants: uid }, { $pull: { participants: uid, pendingEmail: { userId: uid }, emailedUnread: uid }, $unset: { [`unreadCount.${uid}`]: 1 } })
     expect(User.deleteOne).toHaveBeenCalledWith({ _id: uid, deletedAt: { $lt: cutoff } })
     expect(markAccountErasureComplete).toHaveBeenCalledWith(uid)
   })
@@ -139,6 +140,7 @@ describe('retryable account erasure', () => {
     expect(BusinessInquiry.deleteMany).toHaveBeenCalledWith({ requesterId: uid })
     expect(Lead.updateMany).toHaveBeenCalledWith({ requesterId: uid }, { $set: { contactName: 'Deleted User', contactPhone: 'removed' }, $unset: { contactEmail: 1, message: 1, requesterId: 1 } })
     expect(Viewing.updateMany).toHaveBeenCalledWith({ requesterId: uid }, { $set: { viewerName: 'Deleted User', viewerPhone: 'removed' }, $unset: { notes: 1, requesterId: 1 } })
+    expect(TrustDecision.deleteMany).toHaveBeenCalledWith({ authorId: uid })
     expect(Application.deleteMany).toHaveBeenCalledWith({ tenantId: uid, status: { $ne: 'approved' } })
     expect(Delegation.deleteMany).toHaveBeenCalledWith({ $or: [{ ownerId: uid }, { delegateId: uid }] })
     expect(AffiliateAttribution.updateMany).toHaveBeenCalledWith({ referredUserId: uid }, { $unset: { referredUserId: 1, sessionId: 1 } })

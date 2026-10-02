@@ -20,7 +20,7 @@ const SURFACES = [
   'apps/web/src/pages/legal/DeleteAccountPage.tsx',
   'apps/web/src/pages/legal/TermsPage.tsx',
   'apps/web/src/pages/PublicRegistryPage.tsx',
-  'apps/web/src/pages/PublicRegistryDetailPage.tsx',
+  'apps/web/src/pages/property/PublicPropertyPage.tsx',
   'apps/web/src/pages/RoleCapabilitiesPage.tsx',
   'apps/web/src/pages/LandingPage.tsx',
   'apps/web/src/components/onboarding/tourScripts.ts',

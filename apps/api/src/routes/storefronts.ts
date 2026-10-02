@@ -10,15 +10,23 @@
  */
 import { Router, type Request } from 'express'
 import { z } from 'zod'
+import multer from 'multer'
 import type { Types } from 'mongoose'
 import { authenticate, optionalAuth, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
-import { trackLimiter } from '../middleware/rateLimit.js'
+import { trackLimiter, enquiryLimiter } from '../middleware/rateLimit.js'
+import { uploadToCloudinary } from '../utils/cloudinary.js'
+import { eraseStoredAssets } from '../services/propertyImages.js'
+import { recordEnquiry, findOpenLead } from '../services/leads.js'
+import { openEnquiryConversation, sendFailureBody } from '../services/conversations.js'
+import { screenFields, blockedBody } from '../services/trust/screen.js'
+import { normalizeListingRef } from '../services/listings.js'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
 import { Property } from '../models/Property.js'
 import { BlogPost } from '../models/BlogPost.js'
+import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
@@ -44,18 +52,40 @@ function handleEntitlement(err: unknown, res: Parameters<typeof error>[0]): bool
   return false
 }
 
+const shortList = z.array(z.string().trim().min(1).max(60)).max(12)
+
 const createSchema = z.object({
   slug: z.string().min(3).max(40),
   name: z.string().min(2).max(80),
   tagline: z.string().max(160).optional(),
   about: z.string().max(4000).optional(),
+  heroTitle: z.string().max(90).optional(),
+  heroSubtitle: z.string().max(200).optional(),
+  services: shortList.optional(),
+  serviceAreas: shortList.optional(),
+  // City and office hours only. Phone numbers, emails, WhatsApp and street
+  // addresses are not collected: every enquiry reaches the owner through
+  // RentOS, so deals stay on the platform.
   contact: z.object({
-    phone: z.string().max(20).optional(),
-    email: z.string().email().optional(),
-    whatsapp: z.string().max(20).optional(),
     city: z.string().max(60).optional(),
+    hours: z.string().max(120).optional(),
   }).optional(),
 })
+
+/** Everything on a website a visitor reads, screened as one (TRUST-2). */
+const websiteText = (data: Partial<z.infer<typeof createSchema>>) => [
+  data.name, data.tagline, data.about, data.heroTitle, data.heroSubtitle,
+  ...(data.services ?? []), ...(data.serviceAreas ?? []), data.contact?.city, data.contact?.hours,
+]
+
+/**
+ * Who may see a storefront: everyone once it is active and published; its
+ * owner also while it is a draft, to preview it at /s/<slug> before launch.
+ */
+function visibleTo(storefront: { status?: string; published?: boolean; ownerId: string }, req: Request): boolean {
+  if (storefront.status !== 'active') return false
+  return storefront.published !== false || req.user?.userId === storefront.ownerId
+}
 
 /** Slug availability, for the setup form. */
 router.get('/slug-available/:slug', authenticate, asyncHandler(async (req, res) => {
@@ -105,12 +135,17 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
   if (existingForOwner) { error(res, 'You already have a storefront', 409); return }
   if (slugTaken) { error(res, 'That storefront address is already taken', 409); return }
 
+  const screened = await screenFields({ fields: [slug, ...websiteText(parsed.data)], authorId: req.user!.userId, channel: 'website', targetType: 'storefront' })
+  if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
+
+  // A new website starts as a draft: the owner previews it and launches it.
   const storefront = await Storefront.create({
     ...parsed.data,
     slug,
     ownerType: 'user',
     ownerId: req.user!.userId,
     status: 'active',
+    published: false,
   })
 
   await recordAudit(req, 'storefront.created', 'Storefront', String(storefront._id), { slug })
@@ -118,9 +153,10 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 }))
 
 const updateSchema = createSchema.partial().omit({ slug: true }).extend({
+  aboutImageUrl: z.union([z.literal(''), z.string().url()]).optional(),
   branding: z.object({
-    logoUrl: z.string().url().optional(),
-    coverUrl: z.string().url().optional(),
+    logoUrl: z.union([z.literal(''), z.string().url()]).optional(),
+    coverUrl: z.union([z.literal(''), z.string().url()]).optional(),
     primaryColor: z.string().max(20).optional(),
     accentColor: z.string().max(20).optional(),
     theme: z.string().max(40).optional(),
@@ -135,13 +171,22 @@ router.patch('/me', authenticate, asyncHandler(async (req, res) => {
   const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
   if (!storefront) { error(res, 'Create your storefront first', 404); return }
 
-  // Branding is a separate entitlement from having a storefront at all.
+  const screened = await screenFields({ fields: websiteText(parsed.data), authorId: req.user!.userId, channel: 'website', targetType: 'storefront', targetId: String(storefront._id) })
+  if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
+
+  // A logo and cover photo are content every website has (brief §03). Brand
+  // colours and themes are the paid "custom branding"; hiding the RentOS
+  // mark is a separate entitlement again.
   if (parsed.data.branding) {
-    try {
-      await requireEntitlement(req.user!.userId, 'storefront.custom_branding', 'Custom branding')
-    } catch (err) {
-      if (handleEntitlement(err, res)) return
-      throw err
+    const { logoUrl: _logo, coverUrl: _cover, ...styling } = parsed.data.branding
+    const premium = Object.entries(styling).some(([key, value]) => value !== undefined && !(key === 'hideRentosBranding' && value === false))
+    if (premium) {
+      try {
+        await requireEntitlement(req.user!.userId, 'storefront.custom_branding', 'Custom branding')
+      } catch (err) {
+        if (handleEntitlement(err, res)) return
+        throw err
+      }
     }
     if (parsed.data.branding.hideRentosBranding) {
       try {
@@ -157,11 +202,84 @@ router.patch('/me', authenticate, asyncHandler(async (req, res) => {
   if (parsed.data.name) storefront.name = parsed.data.name
   if (parsed.data.tagline !== undefined) storefront.tagline = parsed.data.tagline
   if (parsed.data.about !== undefined) storefront.about = parsed.data.about
+  if (parsed.data.heroTitle !== undefined) storefront.heroTitle = parsed.data.heroTitle
+  if (parsed.data.heroSubtitle !== undefined) storefront.heroSubtitle = parsed.data.heroSubtitle
+  if (parsed.data.services) storefront.services = parsed.data.services
+  if (parsed.data.serviceAreas) storefront.serviceAreas = parsed.data.serviceAreas
+  if (parsed.data.aboutImageUrl !== undefined) storefront.aboutImageUrl = parsed.data.aboutImageUrl || undefined
   if (parsed.data.contact) storefront.contact = { ...storefront.contact, ...parsed.data.contact }
+  // Contact details saved before contact protection are removed on the next save.
+  storefront.contact = { city: storefront.contact?.city, hours: storefront.contact?.hours }
   await storefront.save()
 
   await recordAudit(req, 'storefront.updated', 'Storefront', String(storefront._id), { fields: Object.keys(parsed.data) })
   success(res, { ...storefront.toObject(), id: String(storefront._id) }, 'Storefront updated')
+}))
+
+/** Launch the website, or take it back to a draft. */
+router.post('/me/publish', authenticate, asyncHandler(async (req, res) => {
+  const parsed = z.object({ published: z.boolean() }).safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
+  if (!storefront) { error(res, 'Create your website first', 404); return }
+  if (storefront.status !== 'active') { error(res, 'This website is suspended. Contact support.', 409); return }
+
+  storefront.published = parsed.data.published
+  if (parsed.data.published && !storefront.publishedAt) storefront.publishedAt = new Date()
+  await storefront.save()
+  await recordAudit(req, parsed.data.published ? 'storefront.published' : 'storefront.unpublished', 'Storefront', String(storefront._id), {})
+  success(res, { ...storefront.toObject(), id: String(storefront._id) }, parsed.data.published ? 'Your website is live' : 'Your website is back to a draft')
+}))
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, done) => done(null, /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)),
+})
+const IMAGE_PURPOSES = ['logo', 'cover', 'about', 'gallery'] as const
+const GALLERY_LIMIT = 12
+
+/** Upload a logo, cover, About photo or gallery photo (brief §03: users upload their own images). */
+router.post('/me/images', authenticate, imageUpload.single('image'), asyncHandler(async (req, res) => {
+  const purpose = String(req.body?.purpose ?? '')
+  if (!(IMAGE_PURPOSES as readonly string[]).includes(purpose)) { error(res, 'Say which image this is: logo, cover, about or gallery'); return }
+  if (!req.file) { error(res, 'Choose a JPEG, PNG, WebP or GIF image under 8 MB'); return }
+
+  const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
+  if (!storefront) { error(res, 'Create your website first', 404); return }
+  if (purpose === 'gallery' && storefront.gallery.length >= GALLERY_LIMIT) { error(res, `A gallery holds up to ${GALLERY_LIMIT} photos. Remove one first.`, 409); return }
+
+  const { url, publicId } = await uploadToCloudinary(req.file.buffer, { folder: 'storefronts', resourceType: 'image' })
+  // The file each slot replaces is erased; it is no longer shown anywhere.
+  const replaced = purpose === 'logo' ? storefront.branding?.logoUrl : purpose === 'cover' ? storefront.branding?.coverUrl : purpose === 'about' ? storefront.aboutImageUrl : undefined
+  if (purpose === 'logo') storefront.branding = { ...storefront.branding, logoUrl: url }
+  else if (purpose === 'cover') storefront.branding = { ...storefront.branding, coverUrl: url }
+  else if (purpose === 'about') storefront.aboutImageUrl = url
+  else storefront.gallery.push(url)
+  storefront.imageAssets.push({ url, publicId })
+  const stale = replaced ? storefront.imageAssets.filter((asset) => asset.url === replaced) : []
+  storefront.imageAssets = storefront.imageAssets.filter((asset) => !stale.includes(asset))
+  await storefront.save()
+  if (stale.length) {
+    eraseStoredAssets(stale.map((asset) => ({ publicId: asset.publicId, resourceType: 'image' as const, deliveryType: 'upload' as const })))
+      .catch(() => console.warn('[storefronts] a replaced image could not be erased from storage'))
+  }
+  success(res, { url, purpose, storefront: { ...storefront.toObject(), id: String(storefront._id) } }, 'Image uploaded', 201)
+}))
+
+/** Remove a gallery photo; the file is erased from storage. */
+router.delete('/me/gallery', authenticate, asyncHandler(async (req, res) => {
+  const url = typeof req.body?.url === 'string' ? req.body.url : ''
+  const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
+  if (!storefront) { error(res, 'Create your website first', 404); return }
+  if (!storefront.gallery.includes(url)) { error(res, 'That photo is not in your gallery', 404); return }
+  const assets = storefront.imageAssets.filter((asset) => asset.url === url)
+  storefront.gallery = storefront.gallery.filter((item) => item !== url)
+  storefront.imageAssets = storefront.imageAssets.filter((asset) => asset.url !== url)
+  await storefront.save()
+  await eraseStoredAssets(assets.map((asset) => ({ publicId: asset.publicId, resourceType: 'image' as const, deliveryType: 'upload' as const })))
+    .catch(() => console.warn('[storefronts] a gallery image could not be erased from storage'))
+  success(res, { gallery: storefront.gallery }, 'Photo removed')
 }))
 
 // ─── Custom domains (§4.3) ───
@@ -745,11 +863,20 @@ router.post('/:slug/track', trackLimiter, optionalAuth, asyncHandler(async (req,
 router.get('/:slug', optionalAuth, asyncHandler(async (req, res) => {
   const slug = param(req.params.slug).toLowerCase()
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
-  if (!storefront) { error(res, 'Storefront not found', 404); return }
+  if (!storefront || !visibleTo(storefront, req)) { error(res, 'Storefront not found', 404); return }
 
+  // Storage ids are internal, and contact details stay private: enquiries go
+  // through RentOS (keeping deals on the platform). Only the city and office
+  // hours are public.
+  const { imageAssets: _assets, contact, ...publicFields } = storefront
+  const owner = await User.findById(storefront.ownerId).select('professionalType verificationStatus').lean()
   success(res, {
-    ...storefront,
+    ...publicFields,
     id: String(storefront._id),
+    contact: { city: contact?.city, hours: contact?.hours },
+    professionalType: owner?.professionalType ?? null,
+    identityVerified: owner?.verificationStatus === 'verified',
+    preview: storefront.published === false,
     canonicalUrl: storefront.canonicalDomain
       ? `https://${storefront.canonicalDomain}`
       : `https://${storefront.slug}.userentos.com`,
@@ -772,11 +899,15 @@ const PUBLIC_LISTING_PROJECTION = '-embedding -reviewedBy -quotaSlot -reviewVers
 router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
   const slug = param(req.params.slug).toLowerCase()
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
-  if (!storefront) { error(res, 'Storefront not found', 404); return }
+  if (!storefront || !visibleTo(storefront, req)) { error(res, 'Storefront not found', 404); return }
 
   const page = Math.max(1, Number(req.query.page) || 1)
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 12))
   const filter = publicStorefrontScope(storefront) as unknown as Record<string, unknown>
+  // The same listing-type filter as the central registry ("rent" includes untyped listings).
+  const listingType = typeof req.query.listingType === 'string' ? req.query.listingType : ''
+  if (listingType === 'rent') filter.listingType = { $nin: ['sale', 'short_let'] }
+  else if (listingType === 'sale' || listingType === 'short_let') filter.listingType = listingType
 
   const [items, total] = await Promise.all([
     Property.find(filter, PUBLIC_LISTING_PROJECTION).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -793,7 +924,7 @@ router.get('/:slug/properties', optionalAuth, asyncHandler(async (req, res) => {
 router.get('/:slug/posts', optionalAuth, asyncHandler(async (req, res) => {
   const slug = param(req.params.slug).toLowerCase()
   const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
-  if (!storefront) { error(res, 'Storefront not found', 404); return }
+  if (!storefront || !visibleTo(storefront, req)) { error(res, 'Storefront not found', 404); return }
 
   const posts = await BlogPost.find({ storefrontId: String(storefront._id), published: true })
     .sort({ createdAt: -1 }).limit(24).lean()
@@ -802,6 +933,74 @@ router.get('/:slug/posts', optionalAuth, asyncHandler(async (req, res) => {
     items: posts.map((p) => ({ ...p, id: String(p._id) })),
     total: posts.length,
   })
+}))
+
+/** One published post on a storefront's News page. */
+router.get('/:slug/posts/:postSlug', optionalAuth, asyncHandler(async (req, res) => {
+  const slug = param(req.params.slug).toLowerCase()
+  const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
+  if (!storefront || !visibleTo(storefront, req)) { error(res, 'Storefront not found', 404); return }
+  const post = await BlogPost.findOne({ storefrontId: String(storefront._id), slug: param(req.params.postSlug), published: true }).lean()
+  if (!post) { error(res, 'Post not found', 404); return }
+  success(res, { ...post, id: String(post._id) })
+}))
+
+const enquirySchema = z.object({
+  message: z.string().trim().min(5, 'Write a short message').max(1000),
+  /** The listing the enquiry is about, by its reference; omitted for a general enquiry. */
+  propertyRef: z.string().max(40).optional(),
+})
+
+/**
+ * The website's Contact page (brief §03, §05). An enquiry opens a RentOS
+ * conversation with the agent — never an exchange of phone numbers — so the
+ * deal stays on the platform, and lands in the agent's leads with an in-app
+ * and SMS alert. Visitors sign in first, which is what lets the agent reply.
+ */
+router.post('/:slug/enquiries', enquiryLimiter, authenticate, asyncHandler(async (req, res) => {
+  const parsed = enquirySchema.safeParse(req.body ?? {})
+  if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  const slug = param(req.params.slug).toLowerCase()
+  const storefront = await Storefront.findOne({ slug, status: 'active' }).lean()
+  if (!storefront || storefront.published === false) { error(res, 'Storefront not found', 404); return }
+  const senderId = req.user!.userId
+  if (senderId === storefront.ownerId) { error(res, 'This is your own website', 400); return }
+
+  let property: { _id: unknown; title: string } | null = null
+  if (parsed.data.propertyRef) {
+    const ref = normalizeListingRef(parsed.data.propertyRef)
+    // Only a listing on this website: the storefront scope is the owner's.
+    property = ref ? await Property.findOne({ ...(publicStorefrontScope(storefront) as unknown as Record<string, unknown>), listingRef: ref }).select('title').lean() : null
+    if (!property) { error(res, 'That listing is not on this website', 404); return }
+  }
+
+  // The first message is screened like any other (TRUST-2): a message that
+  // shares or asks for contact details is not sent. A new lead alerts the
+  // agent itself (with email and SMS), so the message adds no second alert.
+  const propertyId = property ? String(property._id) : undefined
+  const repeat = await findOpenLead({ propertyId, agentId: storefront.ownerId, requesterId: senderId })
+  const opened = await openEnquiryConversation({
+    senderId,
+    recipientId: storefront.ownerId,
+    propertyId,
+    text: parsed.data.message,
+    channel: 'website',
+    alerted: !repeat,
+  })
+  if (!opened.ok) { res.status(opened.status).json(sendFailureBody(opened)); return }
+
+  const requester = await User.findById(senderId).select('firstName lastName').lean()
+  await recordEnquiry({
+    propertyId,
+    propertyTitle: property?.title,
+    agentId: storefront.ownerId,
+    requesterId: senderId,
+    contact: { name: `${requester?.firstName ?? ''} ${requester?.lastName ?? ''}`.trim() || 'RentOS member' },
+    message: parsed.data.message,
+    channel: 'website',
+    conversationId: opened.conversationId,
+  })
+  success(res, { conversationId: opened.conversationId }, `Sent. ${storefront.name} will reply here on RentOS.`, 201)
 }))
 
 // ─── Admin ───

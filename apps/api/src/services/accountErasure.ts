@@ -35,6 +35,7 @@ import { Delegation } from '../models/Delegation.js'
 import { AffiliateProfile, AffiliateAttribution, AffiliateCommission } from '../models/Affiliate.js'
 import { FeatureFlag } from '../models/FeatureFlag.js'
 import { ContentReport } from '../models/ContentReport.js'
+import { TrustDecision } from '../models/TrustDecision.js'
 import { DocumentModel } from '../models/Document.js'
 import { Employment } from '../models/Employment.js'
 import { PropertyExpense } from '../models/PropertyExpense.js'
@@ -196,7 +197,7 @@ export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions
     // The preview duplicates message text, so removing Message alone leaks it.
     () => Conversation.updateMany({ 'lastMessage.senderId': uid }, { $unset: { lastMessage: 1 } }),
     () => Conversation.updateMany({ participants: uid }, {
-      $pull: { participants: uid }, $unset: { [`unreadCount.${uid}`]: 1 },
+      $pull: { participants: uid, pendingEmail: { userId: uid }, emailedUnread: uid }, $unset: { [`unreadCount.${uid}`]: 1 },
     }),
     // Payout destinations hold full MoMo / bank account numbers.
     () => PayoutAccount.deleteMany({ userId: uid }),
@@ -224,6 +225,7 @@ export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions
       { $pull: { enabledForUserIds: uid, disabledForUserIds: uid } },
     ),
     () => ContentReport.updateMany({ reporterId: uid }, { $set: { reporterId: erasedReporter }, $unset: { ipAddress: 1 } }),
+    () => TrustDecision.deleteMany({ authorId: uid }),
     () => DocumentModel.updateMany({ accessControl: uid }, { $pull: { accessControl: uid } }),
     () => Employment.deleteMany({ userId: uid, status: { $in: ['pending', 'declined'] } }),
     () => PropertyExpense.deleteMany({ landlordId: uid }),
@@ -263,6 +265,8 @@ async function scrubEnquiryNotifications(uid: string): Promise<void> {
     Viewing.find({ requesterId: uid }).select('agentId viewerName date time').lean(),
   ])
   for (const lead of leads) {
+    // Only older leads carried a phone number, and only their notices quoted one.
+    if (!lead.contactPhone) continue
     await Notification.updateMany(
       { userId: lead.agentId, title: NEW_LEAD_TITLE, message: legacyLeadMessage(lead.contactName, lead.contactPhone) },
       { $set: { message: newLeadMessage() } },

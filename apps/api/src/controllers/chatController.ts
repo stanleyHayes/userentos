@@ -4,15 +4,11 @@ import { z } from 'zod'
 import { Conversation, Message } from '../models/Conversation.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
-import { notifyNewMessage } from '../services/notify.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
-import { getIO } from '../services/socket.js'
-import { logger } from '../utils/logger.js'
 import { contactBlocked, blockedContacts } from '../services/userBlocks.js'
 import { UserBlock } from '../models/UserBlock.js'
-import { screenText, NEUTRAL_REJECTION } from '../services/moderation/textFilter.js'
-import { shouldReport, reportFlaggedContent } from '../services/moderation/autoReport.js'
+import { sendMessage, sendFailureBody, clearUnreadEmail } from '../services/conversations.js'
 
 const createConversationSchema = z.object({
   participantId: z.string().min(1),
@@ -192,81 +188,11 @@ export const chatController = {
     const parsed = sendMessageSchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
-    const userId = req.user!.userId
-    const conversationId = param(req.params.id)
-
-    const conversation = await Conversation.findById(conversationId)
-    if (!conversation || !conversation.participants.includes(userId)) {
-      error(res, 'Conversation not found', 404); return
-    }
-
-    const recipientId = conversation.participants.find(p => p !== userId)
-    if (!recipientId || await contactBlocked(userId, recipientId) || !await User.exists({ _id: recipientId, deletedAt: { $exists: false }, suspendedAt: { $exists: false } })) {
-      error(res, 'Messaging is unavailable for this contact.', 403); return
-    }
-    // Slurs, threats and abuse aimed at the recipient never reach them.
-    const screened = screenText(parsed.data.text)
-    if (screened.action === 'reject') { error(res, NEUTRAL_REJECTION, 400); return }
-    const message = await Message.create({
-      conversationId,
-      senderId: userId,
-      text: parsed.data.text,
-      read: false,
-    })
-    if (shouldReport(screened, 'private')) {
-      void reportFlaggedContent({ targetType: 'message', targetId: message._id.toString(), ownerId: userId, label: parsed.data.text, verdict: screened })
-    }
-
-    // Update conversation lastMessage and increment unread for the other participant.
-    // Atomic $inc — the previous get→set→save read-modify-write lost increments
-    // under concurrent messages.
-    const otherId = conversation.participants.find((p) => p !== userId) ?? conversation.participants[0]
-    const currentUnread = conversation.unreadCount.get(otherId) ?? 0
-    await Conversation.updateOne(
-      { _id: conversation._id },
-      {
-        $set: {
-          lastMessage: {
-            text: parsed.data.text,
-            senderId: userId,
-            createdAt: new Date(),
-          },
-        },
-        $inc: { [`unreadCount.${otherId}`]: 1 },
-      },
-    )
-
-    const sender = await User.findById(userId).select('firstName lastName').lean()
-
-    const messageData = {
-      id: message._id.toString(),
-      conversationId,
-      senderId: userId,
-      senderName: sender ? `${sender.firstName} ${sender.lastName}` : undefined,
-      text: message.text,
-      read: message.read,
-      createdAt: (message as unknown as { createdAt: string }).createdAt,
-    }
-
-    // Emit real-time events via Socket.IO
-    try {
-      const io = getIO()
-      // Send to conversation room (for users viewing this chat)
-      io.to(`chat:${conversationId}`).emit('message:new', messageData)
-      // Send unread update to the other user
-      io.to(`user:${otherId}`).emit('unread:update', {
-        conversationId,
-        unreadCount: currentUnread + 1,
-        lastMessage: { text: parsed.data.text, senderId: userId, createdAt: messageData.createdAt },
-      })
-    } catch { /* ignore socket emission errors */ }
-
-    // Persistent notification for offline users
-    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'Someone'
-    notifyNewMessage(otherId, senderName, parsed.data.text)
-      .catch((err) => logger.warn('[chat] notifyNewMessage failed:', (err as Error).message))
-
-    success(res, messageData, 'Message sent', 201)
+    // Blocks, the abuse filter and the contact screen (TRUST-2) all run in
+    // services/conversations.ts, the one path every message takes.
+    const result = await sendMessage({ conversationId: param(req.params.id), senderId: req.user!.userId, text: parsed.data.text, channel: 'chat' })
+    if (!result.ok) { res.status(result.status).json(sendFailureBody(result)); return }
+    success(res, result.message, 'Message sent', 201)
   },
 
   markRead: async (req: Request, res: Response) => {
@@ -284,9 +210,10 @@ export const chatController = {
       { read: true }
     )
 
-    // Reset unread count for this user
+    // Reset unread count for this user; a later unread spell may email again.
     conversation.unreadCount.set(userId, 0)
     await conversation.save()
+    await clearUnreadEmail(conversationId, userId)
 
     success(res, null, 'Marked as read')
   },

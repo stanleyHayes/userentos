@@ -6,6 +6,7 @@ import { propertyService } from '../container.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
+import { screenFields, blockedBody } from '../services/trust/screen.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
 import { notify } from '../services/notify.js'
@@ -101,6 +102,21 @@ function buildPropertyEmbeddingText(data: { title: string; description: string; 
  * saved — and the search filters for minBedrooms, furnished and parking then
  * matched nothing on every property created through the product.
  */
+type ListingText = { title?: unknown; description?: unknown; rules?: unknown; amenities?: unknown; address?: { street?: unknown; neighborhood?: unknown } }
+const strings = (value: unknown): string[] => (typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [])
+
+/**
+ * A listing's readable text, screened for contact details (TRUST-2): a phone
+ * number, email, handle or link in a listing takes enquiries off RentOS.
+ * Enquiries reach the owner through RentOS messages and an SMS alert instead.
+ */
+function screenListing(data: ListingText, authorId: string, targetId?: string) {
+  return screenFields({
+    fields: [...strings(data.title), ...strings(data.description), ...strings(data.rules), ...strings(data.amenities), ...strings(data.address?.street), ...strings(data.address?.neighborhood)],
+    authorId, channel: 'listing', targetType: 'property', targetId,
+  })
+}
+
 const createPropertySchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
@@ -353,6 +369,8 @@ export const propertyController = {
   create: async (req: Request, res: Response) => {
     const parsed = createPropertySchema.safeParse(req.body)
     if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+    const screened = await screenListing(parsed.data, req.user!.userId)
+    if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
 
     const result = await propertyService.create(parsed.data, req.user!.userId)
     // The service refuses over-quota and expired-subscription creates. Without
@@ -388,6 +406,11 @@ export const propertyController = {
     const created: unknown[] = []
     const failures: { row: number; error: string }[] = []
     for (const [index, item] of parsed.data.items.entries()) {
+      const screened = await screenListing(item, req.user!.userId)
+      if (!screened.allowed) {
+        failures.push({ row: index + 2, error: screened.message ?? 'This listing contains contact details.' })
+        continue
+      }
       const result = await propertyService.create(item, req.user!.userId)
       if (result.error || !result.data) {
         failures.push({ row: index + 2, error: result.error ?? 'Could not create property' })
@@ -400,6 +423,8 @@ export const propertyController = {
   },
 
   update: async (req: Request, res: Response) => {
+    const screened = await screenListing(req.body ?? {}, req.user!.userId, param(req.params.id))
+    if (!screened.allowed) { res.status(422).json(blockedBody(screened)); return }
     const result = await propertyService.update(param(req.params.id), req.body, req.user!.userId)
     if (result.error) { error(res, result.error, result.status); return }
 
