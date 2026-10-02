@@ -26,6 +26,7 @@ const { modelMock } = vi.hoisted(() => {
 vi.mock('../services/avatarStorage.js', () => ({ eraseAvatars: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/documentErasure.js', () => ({ erasePersonalDocuments: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/propertyImages.js', () => ({ propertyImageAssets: vi.fn(() => []), eraseStoredAssets: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../services/mediaErasure.js', () => ({ postImagesPrefix: (uid: string) => `rentos/posts/${uid}/`, eraseByPrefix: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/accountClosure.js', () => ({ releaseStorefrontDomains: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../services/erasureLedger.js', () => ({ markAccountErasureComplete: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn() } }))

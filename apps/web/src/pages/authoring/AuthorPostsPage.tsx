@@ -13,8 +13,9 @@ import {
 import { adminTableClassName } from '@/components/admin/adminPageUtils'
 import {
   useAuthorPosts, useCreatePost, useUpdatePost, usePublishPost, useArchivePost,
-  useTakedownPost, type AuthorPost, type AuthorPostInput, type AuthorPostStatus,
+  useTakedownPost, uploadPostImage, type AuthorPost, type AuthorPostInput, type AuthorPostStatus,
 } from '@/hooks/useAuthoring'
+import { CoverImageField } from '@/components/news/CoverImageField'
 import { useMyStorefront, useMyEntitlements } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDate } from '@/lib/utils'
@@ -201,7 +202,8 @@ export function AuthorPostsPage() {
     const payload = buildPayload(form)
 
     if (editing) {
-      update.mutate({ id: editing.id, ...payload }, {
+      // An emptied cover is sent as "" so the edit removes it.
+      update.mutate({ id: editing.id, ...payload, ...(editing.coverImage && !payload.coverImage ? { coverImage: '' } : {}) }, {
         onSuccess: () => { toast.success('Post updated'); closeComposer() },
         onError: failed('Could not save the post'),
       })
@@ -249,7 +251,7 @@ export function AuthorPostsPage() {
       <AdminPageHeader
         eyebrow="Publishing"
         title="Your posts"
-        description="Write, schedule and publish to your storefront feed and the RentOS blog."
+        description="News for your website. Every post you publish also appears in RentOS Real Estate News, credited to you."
         icon={<PenLine size={22} />}
         accent="#2d5a8e"
         meta={`${allPosts?.items.length ?? 0} post${(allPosts?.items.length ?? 0) === 1 ? '' : 's'} in total`}
@@ -277,10 +279,12 @@ export function AuthorPostsPage() {
         />
         <AdminStatCard
           label="Publishing slots"
-          value={typeof blogLimit === 'number' ? `${slotsUsed} of ${blogLimit}` : String(slotsUsed)}
-          description={typeof blogLimit === 'number'
-            ? `Live and queued posts on the ${entitlements?.planName ?? 'current'} plan`
-            : 'Live and queued posts counted against your plan'}
+          value={typeof blogLimit === 'number' && blogLimit >= 0 ? `${slotsUsed} of ${blogLimit}` : String(slotsUsed)}
+          description={blogLimit === -1
+            ? `Unlimited on the ${entitlements?.planName ?? 'current'} plan`
+            : typeof blogLimit === 'number'
+              ? `Live and queued posts on the ${entitlements?.planName ?? 'current'} plan`
+              : 'Live and queued posts counted against your plan'}
           icon={<PenLine size={18} />} accent="#7c3aed"
         />
       </AdminStatGrid>
@@ -381,16 +385,16 @@ export function AuthorPostsPage() {
                       {post.storefrontId ? (
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-primary-dark dark:text-white">
                           <Store size={12} className="shrink-0 text-muted" />
-                          <span className="break-words">{storefront?.name ?? 'Your storefront'}</span>
+                          <span className="break-words">{storefront?.name ?? 'Your website'}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-primary-dark dark:text-white">
                           <User2 size={12} className="shrink-0 text-muted" />
-                          <span>Your byline only</span>
+                          <span>Not on a website</span>
                         </div>
                       )}
-                      <div className="mt-1 text-[11px] text-muted dark:text-gray-500">
-                        {post.storefrontId ? 'Shows on your storefront feed' : 'Shows on the RentOS blog'}
+                      <div className="mt-1 max-w-[14rem] text-[11px] text-muted dark:text-gray-500">
+                        {post.storefrontId ? 'Your website\'s News page and RentOS Real Estate News' : 'Only you can see it'}
                       </div>
                     </td>
                     <td className="px-4 py-4">
@@ -455,16 +459,14 @@ export function AuthorPostsPage() {
               onChange={(content) => setForm((f) => ({ ...f, content }))}
               minRows={14}
               aiContext="blog post"
+              onUploadImage={uploadPostImage}
             />
-            <p className="mt-1.5 text-[11px] text-muted dark:text-gray-500">At least 10 characters. Markdown, rendered exactly as the preview shows it.</p>
+            <p className="mt-1.5 text-[11px] text-muted dark:text-gray-500">At least 10 characters. Add pictures with the picture button, or paste or drop them into the text.</p>
           </div>
 
+          <CoverImageField value={form.coverImage} onChange={(coverImage) => setForm((f) => ({ ...f, coverImage }))} />
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              id="post-cover" label="Cover image URL" value={form.coverImage}
-              onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
-              placeholder="https://…"
-            />
             <Input
               id="post-tags" label="Tags" value={form.tags}
               onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
@@ -502,11 +504,11 @@ export function AuthorPostsPage() {
           {!editing && (
             <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 p-3 dark:border-[#252a3a]/80">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-primary-dark dark:text-white">Publish to my storefront</p>
+                <p className="text-xs font-semibold text-primary-dark dark:text-white">Publish on my website</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted dark:text-gray-500">
                   {storefront
-                    ? `Attaches the post to ${storefront.name}, so it shows on that storefront's blog. The RentOS blog carries RentOS editorial only.`
-                    : 'You do not have a storefront yet. The RentOS blog carries RentOS editorial only, so this post will not be listed there.'}
+                    ? `Shows on ${storefront.name}'s News page and in RentOS Real Estate News, credited to ${storefront.name}.`
+                    : 'Set up your website first. A post that is not on a website is not shown to readers.'}
                 </p>
               </div>
               <Switch

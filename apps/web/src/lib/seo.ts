@@ -80,6 +80,8 @@ export interface SeoTags {
   image?: string
   siteName?: string
   noIndex?: boolean
+  /** og:type; "website" when omitted. */
+  type?: 'website' | 'article'
 }
 
 /** Apply a full set of head tags in one call. */
@@ -104,6 +106,7 @@ export function applySeo(tags: SeoTags): void {
     setMeta('twitter:image', tags.image)
   }
   if (tags.siteName) setOgMeta('og:site_name', tags.siteName)
+  setOgMeta('og:type', tags.type ?? 'website')
 
   setNoIndex(tags.noIndex === true)
 }

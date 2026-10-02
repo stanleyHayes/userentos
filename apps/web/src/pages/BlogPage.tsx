@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { NewsAvatar, NewsBylineName } from '@/components/news/NewsByline'
+import type { NewsArticle } from '@/lib/news'
 import { Link, useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -6,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye, Newspaper } from 'lucide-react'
+import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { GridSkeleton } from '@/components/ui/Skeleton'
@@ -15,13 +17,18 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/stores/authStore'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
-import { DoodleUnderline } from '@/components/ui/Doodles'
-import { IconWatermark } from '@/components/ui/Watermark'
 
-interface BlogPost {
+interface BlogPost extends NewsArticle {
   id: string; title: string; slug: string; excerpt: string; content: string
   author: string; coverImage?: string; tags: string[]; createdAt: string
 }
+
+const SOURCES = [
+  { value: 'all', label: 'All news' },
+  { value: 'rentos', label: 'RentOS guides' },
+  { value: 'websites', label: 'From agents' },
+] as const
+type Source = (typeof SOURCES)[number]['value']
 
 const ADMIN_ROLES = ['admin', 'government', 'super_admin']
 const BLOG_PAGE_SIZE = 6
@@ -33,6 +40,7 @@ export function BlogPage() {
   const [selected, setSelected] = useState<BlogPost | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [scope, setScope] = useState<Source>('all')
   const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tag ?? '__all__')
 
   const user = useAuthStore((s) => s.user)
@@ -44,11 +52,12 @@ export function BlogPage() {
   const postHref = (slug: string) => (user ? `/blog/${slug}` : `/article/${slug}`)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['blog', search, tag],
+    queryKey: ['blog', search, tag, scope],
     queryFn: () => {
-      const params = new URLSearchParams()
+      const params = new URLSearchParams({ pageSize: '50' })
       if (search) params.set('search', search)
       if (tag) params.set('tag', tag)
+      if (scope !== 'all') params.set('scope', scope)
       const qs = params.toString()
       return api.get<{ items: BlogPost[] }>(`/blog${qs ? `?${qs}` : ''}`)
     },
@@ -81,9 +90,9 @@ export function BlogPage() {
         {/* Back */}
         <div className="flex items-center justify-between mb-6">
           <button onClick={() => setSelected(null)} className="flex items-center gap-2 text-sm text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors">
-            <ArrowLeft size={16} /> Back to Blog
+            <ArrowLeft size={16} /> Back to news
           </button>
-          {isAdmin && (
+          {isAdmin && selected.source !== 'website' && (
             <div className="flex items-center gap-2">
               <Link to={`/blog/edit/${selected.id}`}>
                 <Button variant="outline" size="sm">
@@ -142,12 +151,10 @@ export function BlogPage() {
 
             {/* Author */}
             <div className="flex items-center gap-3 mt-4 mb-6 pb-6 border-b border-border dark:border-[#252a3a]">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white text-sm font-bold">
-                R
-              </div>
+              <NewsAvatar post={selected} className="h-10 w-10 text-sm" />
               <div>
-                <p className="text-sm font-bold text-primary-dark dark:text-white">RentOS Team</p>
-                <p className="text-xs text-muted dark:text-gray-500">{formatDate(selected.createdAt)}</p>
+                <NewsBylineName post={selected} className="text-sm font-bold text-primary-dark dark:text-white" />
+                <p className="text-xs text-muted dark:text-gray-500">{formatDate(selected.publishedAt ?? selected.createdAt)}</p>
               </div>
             </div>
 
@@ -189,12 +196,10 @@ export function BlogPage() {
                 </div>
                 <div className="border-t border-border dark:border-[#252a3a] pt-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold">
-                      R
-                    </div>
+                    <NewsAvatar post={selected} className="h-12 w-12 text-base" />
                     <div>
-                      <p className="text-sm font-bold text-primary-dark dark:text-white">RentOS Team</p>
-                      <p className="text-xs text-muted dark:text-gray-500">Contributor</p>
+                      <NewsBylineName post={selected} className="text-sm font-bold text-primary-dark dark:text-white" />
+                      <p className="text-xs text-muted dark:text-gray-500">{selected.source === 'website' ? 'Agent on RentOS' : 'RentOS'}</p>
                     </div>
                   </div>
                 </div>
@@ -228,11 +233,9 @@ export function BlogPage() {
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <div className="relative overflow-hidden">
-          <DoodleUnderline className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
-          <IconWatermark icon={Newspaper} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
-          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">Blog</h1>
-          <p className="text-sm text-muted dark:text-gray-400 mt-1">News, guides, and updates about renting in Ghana</p>
+        <div>
+          <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">RentOS Real Estate News</h1>
+          <p className="text-sm text-muted dark:text-gray-400 mt-1">Guides from RentOS and market news from agents across Ghana</p>
         </div>
         {isAdmin && (
           <Link to="/blog/new">
@@ -241,6 +244,21 @@ export function BlogPage() {
             </Button>
           </Link>
         )}
+      </div>
+
+      <div role="tablist" aria-label="Source" className="flex flex-wrap gap-1.5">
+        {SOURCES.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            role="tab"
+            aria-selected={scope === s.value}
+            onClick={() => { setScope(s.value); setTag(undefined); setPage(1) }}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${scope === s.value ? 'bg-primary-dark text-white dark:bg-white dark:text-primary-dark' : 'bg-surface text-muted hover:text-primary-dark dark:bg-white/5 dark:text-gray-400 dark:hover:text-white'}`}
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
       <TextField
@@ -269,7 +287,7 @@ export function BlogPage() {
       {isLoading ? (
         <GridSkeleton cols={2} count={4} />
       ) : posts.length === 0 ? (
-        <EmptyState preset="general" title="No blog posts yet" description="Check back soon for news and guides about renting in Ghana." />
+        <EmptyState preset="general" title={scope === 'websites' ? 'No posts from agents yet' : 'No news yet'} description="Check back soon for news and guides about renting and buying in Ghana." />
       ) : (
         <div className="space-y-4">
           {/* Featured first post */}
@@ -312,10 +330,10 @@ export function BlogPage() {
                       <p className="text-sm text-muted dark:text-gray-400 mt-3 line-clamp-3 leading-relaxed">{posts[0].excerpt}</p>
                       <div className="flex items-center gap-4 mt-5 pt-4 border-t border-border dark:border-[#252a3a]">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white text-[10px] font-bold">R</div>
-                          <span className="text-xs text-muted dark:text-gray-500">RentOS Team</span>
+                          <NewsAvatar post={posts[0]} className="h-7 w-7 text-[10px]" />
+                          <NewsBylineName post={posts[0]} className="text-xs text-muted dark:text-gray-500" />
                         </div>
-                        <span className="text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Calendar size={10} /> {formatDate(posts[0].createdAt)}</span>
+                        <span className="text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Calendar size={10} /> {formatDate(posts[0].publishedAt ?? posts[0].createdAt)}</span>
                         <span className="text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Clock size={10} /> {readTime} min</span>
                         <span className="ml-auto text-xs font-semibold text-primary dark:text-blue-400 flex items-center gap-1 group-hover:gap-2 transition-all">
                           Read <ArrowRight size={12} />
@@ -324,7 +342,7 @@ export function BlogPage() {
                     </div>
                   </div>
                 </div>
-                {isAdmin && (
+                {isAdmin && posts[0].source !== 'website' && (
                   <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
                     <Link to={`/blog/edit/${posts[0].id}`} onClick={(e) => e.stopPropagation()}>
                       <Button variant="outline" size="sm" className="bg-white/90 dark:bg-[#161927]/90 backdrop-blur-sm">
@@ -384,14 +402,15 @@ export function BlogPage() {
                       </h3>
                       <p className="text-xs text-muted dark:text-gray-400 mt-2 line-clamp-2 leading-relaxed flex-1">{post.excerpt}</p>
                       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border dark:border-[#252a3a]">
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white text-[8px] font-bold">R</div>
-                        <span className="text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Calendar size={9} /> {formatDate(post.createdAt)}</span>
+                        <NewsAvatar post={post} className="h-5 w-5 text-[8px]" />
+                        {post.source === 'website' && <NewsBylineName post={post} className="min-w-0 truncate text-[10px] font-semibold text-muted dark:text-gray-400" />}
+                        <span className="shrink-0 text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Calendar size={9} /> {formatDate(post.publishedAt ?? post.createdAt)}</span>
                         <span className="text-[10px] text-muted dark:text-gray-500 flex items-center gap-1"><Clock size={9} /> {readTime} min</span>
                         <Eye size={10} className="ml-auto text-muted dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
                   </div>
-                  {isAdmin && (
+                  {isAdmin && post.source !== 'website' && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
                       <Link to={`/blog/edit/${post.id}`} onClick={(e) => e.stopPropagation()}>
                         <Button variant="outline" size="sm" className="bg-white/90 dark:bg-[#161927]/90 backdrop-blur-sm">

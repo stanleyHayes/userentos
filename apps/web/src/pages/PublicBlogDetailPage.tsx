@@ -1,4 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
+import { MoreFromWebsite, NewsAvatar, NewsBylineName } from '@/components/news/NewsByline'
+import { useArticleSeo, type NewsArticle } from '@/lib/news'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -10,7 +12,7 @@ import { DetailSkeleton } from '@/components/ui/Skeleton'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-interface BlogPost {
+interface BlogPost extends NewsArticle {
   id: string; title: string; slug: string; excerpt: string; content: string
   author: string; coverImage?: string; tags: string[]; createdAt: string
 }
@@ -23,11 +25,12 @@ export function PublicBlogDetailPage() {
     queryFn: () => api.get<BlogPost>(`/blog/slug/${slug}`),
     enabled: !!slug,
   })
+  useArticleSeo(post)
 
   // Fetch other posts for "related" section
   const { data: postsData } = useQuery({
     queryKey: ['blog-public'],
-    queryFn: () => api.get<{ items: BlogPost[] }>('/blog'),
+    queryFn: () => api.get<{ items: BlogPost[] }>('/blog?pageSize=6'),
   })
   const relatedPosts = (postsData?.items ?? []).filter((p) => p.slug !== slug).slice(0, 3)
 
@@ -56,45 +59,38 @@ export function PublicBlogDetailPage() {
 
   return (
     <div className="animate-fade-up">
-      {/* Hero header */}
-      <div className="relative">
-        {post.coverImage ? (
-          <div className="h-64 md:h-96 overflow-hidden">
-            <img src={post.coverImage} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-          </div>
-        ) : (
-          <div className="h-48 md:h-64 bg-gradient-to-br from-primary/10 to-accent/5 dark:from-primary/20 dark:to-accent/10" />
+      {/* Hero: the title on the cover photo, or on a plain band when there is none */}
+      <div className={post.coverImage ? 'relative flex min-h-[22rem] items-end overflow-hidden md:min-h-[30rem]' : 'bg-gradient-to-br from-primary/10 to-accent/5 dark:from-primary/20 dark:to-accent/10'}>
+        {post.coverImage && (
+          <>
+            <img src={post.coverImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" />
+          </>
         )}
+        <div className={`relative mx-auto w-full max-w-4xl px-6 ${post.coverImage ? 'pb-8 pt-28' : 'pb-10 pt-12'}`}>
+          <Link to="/#blog" className={`mb-4 inline-flex items-center gap-2 text-sm transition-colors ${post.coverImage ? 'text-white/75 hover:text-white' : 'text-muted hover:text-primary-dark dark:hover:text-white'}`}>
+            <ArrowLeft size={16} /> Back to news
+          </Link>
 
-        <div className="max-w-4xl mx-auto px-6">
-          <div className={post.coverImage ? '-mt-24 relative z-10' : 'pt-8'}>
-            {/* Back link */}
-            <Link to="/#blog" className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white mb-4 transition-colors">
-              <ArrowLeft size={16} /> Back to Articles
-            </Link>
-
-            {/* Tags + Meta */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+          {post.tags.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               {post.tags.map((t) => (
-                <Badge key={t} variant="default" className="text-[11px] bg-white/10 text-white border-white/20 backdrop-blur">{t}</Badge>
+                <Badge key={t} variant="default" className={`text-[11px] ${post.coverImage ? 'border-white/20 bg-white/10 text-white backdrop-blur' : ''}`}>{t}</Badge>
               ))}
             </div>
+          )}
 
-            {/* Title */}
-            <h1 className={`text-3xl md:text-5xl font-extrabold font-display tracking-tight leading-tight ${post.coverImage ? 'text-white' : 'text-primary-dark dark:text-white'}`}>
-              {post.title}
-            </h1>
+          <h1 className={`font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl ${post.coverImage ? 'text-white' : 'text-primary-dark dark:text-white'}`}>
+            {post.title}
+          </h1>
 
-            {/* Author + date row */}
-            <div className={`flex items-center gap-4 mt-4 ${post.coverImage ? 'text-white/60' : 'text-muted'}`}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white text-xs font-bold">R</div>
-                <span className="text-sm font-medium text-white dark:text-white">RentOS Team</span>
-              </div>
-              <span className="flex items-center gap-1 text-xs"><Calendar size={12} /> {formatDate(post.createdAt)}</span>
-              <span className="flex items-center gap-1 text-xs"><Clock size={12} /> {readTime} min read</span>
+          <div className={`mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 ${post.coverImage ? 'text-white/75' : 'text-muted'}`}>
+            <div className="flex items-center gap-2">
+              <NewsAvatar post={post} className="h-8 w-8 text-xs" />
+              <NewsBylineName post={post} className={`text-sm font-semibold ${post.coverImage ? 'text-white' : 'text-primary-dark dark:text-white'}`} />
             </div>
+            <span className="flex items-center gap-1 text-xs"><Calendar size={12} /> {formatDate(post.publishedAt ?? post.createdAt)}</span>
+            <span className="flex items-center gap-1 text-xs"><Clock size={12} /> {readTime} min read</span>
           </div>
         </div>
       </div>
@@ -126,6 +122,7 @@ export function PublicBlogDetailPage() {
           }}>
             <Share2 size={14} /> Share this article
           </Button>
+          <MoreFromWebsite post={post} />
           <Link to="/register">
             <Button>Join RentOS <ArrowRight size={14} /></Button>
           </Link>
@@ -134,7 +131,7 @@ export function PublicBlogDetailPage() {
         {/* Related posts */}
         {relatedPosts.length > 0 && (
           <div className="mt-16">
-            <h2 className="text-xl font-extrabold font-display text-primary-dark dark:text-white mb-6">More Articles</h2>
+            <h2 className="text-xl font-extrabold font-display text-primary-dark dark:text-white mb-6">More from RentOS Real Estate News</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {relatedPosts.map((rp) => (
                 <Link key={rp.id} to={`/article/${rp.slug}`} className="group">
@@ -149,7 +146,7 @@ export function PublicBlogDetailPage() {
                       </div>
                     )}
                     <div className="p-4">
-                      <p className="text-xs text-muted dark:text-gray-500 mb-1">{formatDate(rp.createdAt)}</p>
+                      <p className="text-xs text-muted dark:text-gray-500 mb-1">{formatDate(rp.publishedAt ?? rp.createdAt)}{rp.source === 'website' && rp.website ? ` · By ${rp.website.name}` : ''}</p>
                       <h3 className="text-sm font-bold text-primary-dark dark:text-white line-clamp-2 group-hover:text-primary dark:group-hover:text-blue-400 transition-colors">
                         {rp.title}
                       </h3>

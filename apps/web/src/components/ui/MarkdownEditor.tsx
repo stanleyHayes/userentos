@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -25,6 +26,17 @@ interface MarkdownEditorProps {
   minRows?: number
   /** Pass a context string to enable AI generation (e.g. "blog post") */
   aiContext?: string
+  /**
+   * Uploads a picture and resolves to its address. With it, the image button
+   * uploads a picture, and pictures can be pasted or dropped into the text.
+   */
+  onUploadImage?: (file: File) => Promise<string>
+}
+
+/** Alt text from a well-named file ("accra-rent-map.png"); "Photo" for camera names. */
+function altFromName(name: string): string {
+  const words = name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_.[\]]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return /[a-z]{3,}/i.test(words) && !/^(img|dsc|pxl|image|photo|screenshot|whatsapp image)\b/i.test(words) ? words.slice(0, 80) : 'Photo'
 }
 
 interface ToolbarAction {
@@ -49,12 +61,56 @@ const TOOLBAR_ACTIONS: ToolbarAction[] = [
   { icon: <Minus size={16} />, label: 'Horizontal rule', prefix: '\n---\n', suffix: '' },
 ]
 
-export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, minRows = 12, aiContext, onUploadImage }: MarkdownEditorProps) {
   const [tab, setTab] = useState<'write' | 'preview'>('write')
   const { attach: tabPillAttach, style: tabPillStyle, visible: tabPillVisible } = useSlidingIndicator<HTMLDivElement>(tab)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const generate = useAIGenerate()
   const [aiLoading, setAiLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(0)
+  // Uploads finish after the author has typed on, so they edit the latest text.
+  const valueRef = useRef(value)
+  useEffect(() => { valueRef.current = value }, [value])
+  const caretRef = useRef<number | null>(null)
+
+  const addPictures = useCallback(async (files: File[]) => {
+    if (!onUploadImage) return
+    const pictures = files.filter((file) => file.type.startsWith('image/'))
+    if (!pictures.length) return
+    const textarea = textareaRef.current
+    const current = valueRef.current
+    const at = textarea && document.activeElement === textarea ? textarea.selectionEnd : caretRef.current ?? current.length
+    // Each picture holds its place with a marker while it uploads.
+    const stamp = Date.now().toString(36)
+    const markers = pictures.map((_, i) => `![Uploading picture ${stamp}-${i}…]()`)
+    const before = current.slice(0, at)
+    const after = current.slice(at)
+    const lead = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n'
+    const trail = !after || after.startsWith('\n') ? '' : '\n\n'
+    const next = `${before}${lead}${markers.join('\n\n')}${trail}${after}`
+    valueRef.current = next
+    onChange(next)
+
+    setUploading((n) => n + pictures.length)
+    await Promise.all(pictures.map(async (file, i) => {
+      let replacement = ''
+      try {
+        replacement = `![${altFromName(file.name)}](${await onUploadImage(file)})`
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'The picture did not upload. Try again.')
+      } finally {
+        setUploading((n) => n - 1)
+      }
+      const latest = valueRef.current
+      const marker = markers[i]
+      const swapped = replacement
+        ? latest.includes(marker) ? latest.replace(marker, replacement) : `${latest}\n\n${replacement}`
+        : latest.replace(`${marker}\n\n`, '').replace(`\n\n${marker}`, '').replace(marker, '')
+      valueRef.current = swapped
+      onChange(swapped)
+    }))
+  }, [onUploadImage, onChange])
 
   const handleAIGenerate = useCallback(async () => {
     if (!value?.trim() || aiLoading || !aiContext) return
@@ -110,13 +166,28 @@ export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: Mar
             title={action.label}
             onClick={() => {
               setTab('write')
-              insertSyntax(action)
+              if (action.label === 'Image' && onUploadImage) fileInputRef.current?.click()
+              else insertSyntax(action)
             }}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-[#252a3a] text-gray-600 dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors"
           >
-            {action.icon}
+            {action.label === 'Image' && uploading > 0 ? <Loader2 size={16} className="animate-spin" /> : action.icon}
           </button>
         ))}
+        {onUploadImage && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])]
+              e.target.value = ''
+              void addPictures(files)
+            }}
+          />
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -171,8 +242,18 @@ export function MarkdownEditor({ value, onChange, minRows = 12, aiContext }: Mar
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => { caretRef.current = e.currentTarget.selectionEnd }}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files]
+            if (onUploadImage && files.some((file) => file.type.startsWith('image/'))) { e.preventDefault(); void addPictures(files) }
+          }}
+          onDragOver={(e) => { if (onUploadImage && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+          onDrop={(e) => {
+            const files = [...e.dataTransfer.files]
+            if (onUploadImage && files.some((file) => file.type.startsWith('image/'))) { e.preventDefault(); void addPictures(files) }
+          }}
           rows={minRows}
-          placeholder="Write your content in Markdown..."
+          placeholder={onUploadImage ? 'Write your content in Markdown. Paste or drop pictures in.' : 'Write your content in Markdown...'}
           className="w-full p-4 bg-transparent text-primary-dark dark:text-white placeholder:text-muted dark:placeholder:text-gray-600 font-mono text-sm leading-relaxed resize-y focus:outline-none"
           style={{ minHeight: `${minRows * 1.625}rem` }}
         />

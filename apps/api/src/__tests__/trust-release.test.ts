@@ -21,6 +21,10 @@ import {
 } from '../services/trust/training/generator.js'
 import { BENIGN, LEAKS, INTENT } from './fixtures/trustCorpus.js'
 
+// Each generated suite screens thousands of messages. Alone that takes a
+// second or two, but beside 200+ test files in a full run it can pass the 5 s default.
+const GENERATED_SUITE_TIMEOUT = 60_000
+
 const enforced = (text: string, history: ContextMessage[] = [], now = new Date()) => {
   const { policy } = evaluate(text, history, now)
   return policy.decision === 'BLOCK' && policy.basis !== 'model'
@@ -80,7 +84,7 @@ describe('generated adversarial and benign traffic (compositions of transforms)'
     const leaks = examples.filter((e) => e.leak)
     const missed = leaks.filter((e) => !enforced(e.text))
     expect(rate(leaks.length - missed.length, leaks.length), missed.slice(0, 5).map((e) => e.text).join(' | ')).toBeGreaterThanOrEqual(0.995)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 
   it('stops ≥ 95% of off-platform requests without an identifier; with the model on (canary), ≥ 99%', () => {
     const intents = examples.filter((e) => e.block && !e.leak)
@@ -88,13 +92,13 @@ describe('generated adversarial and benign traffic (compositions of transforms)'
     expect(rate(intents.length - missed.length, intents.length), missed.slice(0, 5).map((e) => e.text).join(' | ')).toBeGreaterThanOrEqual(0.95)
     const withModel = intents.filter((e) => evaluate(e.text).policy.decision === 'BLOCK')
     expect(rate(withModel.length, intents.length)).toBeGreaterThanOrEqual(0.99)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 
   it('stops fewer than 0.5% of benign messages', () => {
     const negatives = examples.filter((e) => !e.block)
     const stopped = negatives.filter((e) => enforced(e.text))
     expect(rate(stopped.length, negatives.length), stopped.slice(0, 5).map((e) => e.text).join(' | ')).toBeLessThan(0.005)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 })
 
 describe('semantic camouflage (§13.3) — false negatives and false positives reported separately', () => {
@@ -105,14 +109,14 @@ describe('semantic camouflage (§13.3) — false negatives and false positives r
     const missed = positives.filter((e) => !enforced(e.text))
     expect(positives.length).toBeGreaterThan(1500)
     expect(rate(missed.length, positives.length), missed.slice(0, 5).map((e) => e.text).join(' | ')).toBeLessThanOrEqual(0.01)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 
   it('false-positive rate ≤ 0.5%: genuine populations, invoices and scores go through', () => {
     const negatives = examples.filter((e) => !e.block)
     const stopped = negatives.filter((e) => enforced(e.text))
     expect(negatives.length).toBeGreaterThan(1500)
     expect(rate(stopped.length, negatives.length), stopped.slice(0, 5).map((e) => e.text).join(' | ')).toBeLessThanOrEqual(0.005)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 })
 
 describe('cross-message reconstruction (§13.1, §13.5) — mandatory cases', () => {
@@ -158,7 +162,7 @@ describe('cross-message reconstruction (§13.1, §13.5) — mandatory cases', ()
     const falseStops = negatives.filter((s) => sequenceStopped(s))
     expect(rate(positives.length - missed.length, positives.length), missed.slice(0, 3).map((s) => JSON.stringify(s.turns.map((t) => t.text))).join(' | ')).toBeGreaterThanOrEqual(0.99)
     expect(rate(falseStops.length, negatives.length)).toBeLessThanOrEqual(0.01)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 
   it('stops the completing message, not the harmless first fragment', () => {
     const start = new Date('2026-10-02T10:00:00Z')
@@ -202,5 +206,5 @@ describe('latency (§17.1)', () => {
     const mean = times.reduce((a, b) => a + b, 0) / times.length
     expect(mean).toBeLessThan(2)
     expect(p99).toBeLessThan(20)
-  })
+  }, GENERATED_SUITE_TIMEOUT)
 })

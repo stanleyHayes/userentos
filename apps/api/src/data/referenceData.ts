@@ -14,21 +14,26 @@
  */
 
 /**
- * Plan benefits list only what the code enforces (the property limit — see
- * services/entitlements.ts) plus email support. Earlier copies promised API
- * access, bulk operations, advanced analytics, featured listings, priority
- * support and a dedicated account manager, none of which exist. Add a benefit
- * here only once it is delivered.
+ * Plan benefits list only what the code enforces (services/entitlements.ts:
+ * the property limit, the website and its options, the news-post quota) plus
+ * email support. Add a benefit here only once it is delivered.
+ *
+ * Phase 1 (product brief §08): a free Starter plan that includes a website on
+ * <name>.userentos.com, and Professional at GH₵150 a month. The old GH₵50
+ * Professional and the Enterprise plan are retired; anyone already on them
+ * keeps the terms they bought (plan versions, see scripts/migratePhase1.ts).
+ * An admin can switch the free plan off in Admin → Packages. The feature
+ * grants behind these benefits are in bootstrapPlanEntitlements.ts.
  */
 export const SUBSCRIPTION_PACKAGES = [
     {
       name: 'Starter',
       slug: 'starter',
-      description: 'Perfect for individual landlords just getting started',
+      description: 'Start free: list your properties and get your own RentOS website',
       price: 0,
       billingCycle: 'monthly',
       maxProperties: 3,
-      benefits: ['List up to 3 properties', 'Email support'],
+      benefits: ['List up to 3 properties', 'Your website at yourname.userentos.com', 'Up to 5 news posts', 'Email support'],
       isActive: true,
       isDefault: true,
       sortOrder: 0,
@@ -36,11 +41,11 @@ export const SUBSCRIPTION_PACKAGES = [
     {
       name: 'Professional',
       slug: 'professional',
-      description: 'For growing landlords managing multiple properties',
-      price: 50,
+      description: 'For agents, agencies and property managers growing their business',
+      price: 150,
       billingCycle: 'monthly',
-      maxProperties: 10,
-      benefits: ['List up to 10 properties', 'Email support'],
+      maxProperties: -1,
+      benefits: ['Unlimited properties', 'Your website on your own domain', 'Your brand colours, without RentOS branding', 'Website visitor analytics', 'Unlimited news posts', 'Email support'],
       isActive: true,
       isDefault: false,
       sortOrder: 1,
@@ -48,12 +53,12 @@ export const SUBSCRIPTION_PACKAGES = [
     {
       name: 'Enterprise',
       slug: 'enterprise',
-      description: 'Unlimited properties for property management companies',
+      description: 'Retired: subscribers keep their plan until it ends',
       price: 150,
       billingCycle: 'monthly',
       maxProperties: -1,
       benefits: ['Unlimited properties', 'Email support'],
-      isActive: true,
+      isActive: false,
       isDefault: false,
       sortOrder: 2,
     },

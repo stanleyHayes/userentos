@@ -150,7 +150,12 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
  * Everything on a listing's page below the site's own header: used on the
  * platform at /property/<ref> and on an agent's website.
  */
-export function PublicPropertyView({ listing, backTo }: { listing: PublicListing; backTo?: { href: string; label: string } }) {
+export function PublicPropertyView({ listing, backTo, actionsOverride }: {
+  listing: PublicListing
+  backTo?: { href: string; label: string }
+  /** Replaces the enquiry buttons — a professional's website on its own domain links them to RentOS. */
+  actionsOverride?: React.ReactNode
+}) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const role = useAuthStore((s) => s.user?.activeRole)
   const navigate = useNavigate()
@@ -174,7 +179,7 @@ export function PublicPropertyView({ listing, backTo }: { listing: PublicListing
     try {
       await api.post(`/agent/leads/property/${listing.id}`, {})
       setInterestSent(true)
-      toast.success('Interest sent. The agent has been told by SMS and in RentOS.')
+      toast.success('Sent. The agent will reply in your RentOS messages.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send your interest')
     }
@@ -280,6 +285,7 @@ export function PublicPropertyView({ listing, backTo }: { listing: PublicListing
               </div>
             )}
 
+            {actionsOverride ? <div className="mt-4 space-y-2">{actionsOverride}</div> : (
             <div className="mt-4 space-y-2">
               <WhatsAppEnquiryButton listing={listing} />
               <Button type="button" variant="outline" size="md" className="w-full" onClick={messageAgent}>
@@ -298,6 +304,7 @@ export function PublicPropertyView({ listing, backTo }: { listing: PublicListing
                 )
               )}
             </div>
+            )}
             {listing.agent?.websiteUrl && (
               <a href={listing.agent.websiteUrl} className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:underline dark:text-cyan-300">
                 <Globe size={13} /> More from {listing.agent.name}

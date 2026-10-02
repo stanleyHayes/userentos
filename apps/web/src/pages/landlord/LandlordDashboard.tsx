@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { WebsiteSetupBanner } from '@/components/website/WebsiteSetupBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -76,6 +77,7 @@ export function LandlordDashboard() {
 
   return (
     <div className="space-y-6">
+      {user?.activeRole === 'property_manager' && <WebsiteSetupBanner />}
       {/* Hero greeting */}
       <DashboardHero
         title={`${greeting}, ${user?.firstName ?? 'there'}`}

@@ -1,4 +1,6 @@
 import { Link, useParams, useNavigate } from 'react-router-dom'
+import { MoreFromWebsite, NewsAvatar, NewsBylineName } from '@/components/news/NewsByline'
+import { useArticleSeo, type NewsArticle } from '@/lib/news'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +15,7 @@ import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/stores/authStore'
 import { useState } from 'react'
 
-interface BlogPost {
+interface BlogPost extends NewsArticle {
   id: string; title: string; slug: string; excerpt: string; content: string
   author: string; coverImage?: string; tags: string[]; createdAt: string
 }
@@ -31,6 +33,7 @@ export function BlogDetailPage() {
     queryFn: () => api.get<BlogPost>(`/blog/slug/${slug}`),
     enabled: !!slug,
   })
+  useArticleSeo(post)
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/blog/${id}`),
@@ -40,7 +43,7 @@ export function BlogDetailPage() {
   if (isLoading) return <DetailSkeleton />
 
   if (!post) {
-    return <EmptyState preset="properties" title="Post not found" description="This blog post doesn't exist or has been removed." action={{ label: 'Back to Blog', href: '/dashboard/blog' }} />
+    return <EmptyState preset="properties" title="Post not found" description="This blog post doesn't exist or has been removed." action={{ label: 'Back to news', href: '/dashboard/blog' }} />
   }
 
   const readTime = Math.max(1, Math.ceil((post.content?.length ?? 0) / 1000))
@@ -50,9 +53,9 @@ export function BlogDetailPage() {
       {/* Back + actions */}
       <div className="flex items-center justify-between">
         <Link to="/dashboard/blog" className="flex items-center gap-2 text-sm text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors">
-          <ArrowLeft size={16} /> Back to Blog
+          <ArrowLeft size={16} /> Back to news
         </Link>
-        {isAdmin && (
+        {isAdmin && post.source !== 'website' && (
           <div className="flex items-center gap-2">
             <Link to={`/blog/edit/${post.id}`}>
               <Button variant="outline" size="sm"><PenSquare size={14} /> Edit</Button>
@@ -83,7 +86,7 @@ export function BlogDetailPage() {
       {/* Meta */}
       <div className="flex flex-wrap items-center gap-2">
         {post.tags.map((t) => <Badge key={t} variant="default" className="text-[11px]">{t}</Badge>)}
-        <span className="flex items-center gap-1 text-xs text-muted dark:text-gray-500"><Calendar size={12} /> {formatDate(post.createdAt)}</span>
+        <span className="flex items-center gap-1 text-xs text-muted dark:text-gray-500"><Calendar size={12} /> {formatDate(post.publishedAt ?? post.createdAt)}</span>
         <span className="flex items-center gap-1 text-xs text-muted dark:text-gray-500"><Clock size={12} /> {readTime} min read</span>
       </div>
 
@@ -94,10 +97,10 @@ export function BlogDetailPage() {
 
       {/* Author */}
       <div className="flex items-center gap-3 pb-6 border-b border-border dark:border-[#252a3a]">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white text-sm font-bold">R</div>
+        <NewsAvatar post={post} className="h-10 w-10 text-sm" />
         <div>
-          <p className="text-sm font-bold text-primary-dark dark:text-white">RentOS Team</p>
-          <p className="text-xs text-muted dark:text-gray-500">{formatDate(post.createdAt)}</p>
+          <NewsBylineName post={post} className="text-sm font-bold text-primary-dark dark:text-white" />
+          <p className="text-xs text-muted dark:text-gray-500">{formatDate(post.publishedAt ?? post.createdAt)}</p>
         </div>
       </div>
 
@@ -119,6 +122,7 @@ export function BlogDetailPage() {
         }}>
           <Share2 size={14} /> Share
         </Button>
+        <MoreFromWebsite post={post} />
       </div>
     </div>
   )

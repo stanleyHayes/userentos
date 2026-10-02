@@ -269,7 +269,7 @@ router.post('/me/images', authenticate, imageUpload.single('image'), asyncHandle
 
 /** Remove a gallery photo; the file is erased from storage. */
 router.delete('/me/gallery', authenticate, asyncHandler(async (req, res) => {
-  const url = typeof req.body?.url === 'string' ? req.body.url : ''
+  const url = typeof req.query.url === 'string' ? req.query.url : typeof req.body?.url === 'string' ? req.body.url : ''
   const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
   if (!storefront) { error(res, 'Create your website first', 404); return }
   if (!storefront.gallery.includes(url)) { error(res, 'That photo is not in your gallery', 404); return }

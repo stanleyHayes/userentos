@@ -17,6 +17,9 @@ import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { requireQuota, EntitlementError } from '../services/entitlements.js'
 import { screenFields, blockedBody } from '../services/trust/screen.js'
+import multer from 'multer'
+import { uploadToCloudinary } from '../utils/cloudinary.js'
+import { writeLimiter } from '../middleware/rateLimit.js'
 
 type PostFields = { title?: string; excerpt?: string; content?: string; tags?: string[]; seoTitle?: string; seoDescription?: string }
 /** A post's readable text, screened for contact details (TRUST-2). Articles may cite ordinary websites. */
@@ -32,6 +35,26 @@ const REMOVED_MESSAGE = 'This post was removed by moderation and can no longer b
 const slugify = (title: string) =>
   title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 
+const postImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, done) => done(null, /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)),
+})
+
+/**
+ * A picture for a post — its cover or one inside the article (brief §07: news
+ * is not text-only). Stored under the author's own folder, so closing the
+ * account erases every picture they uploaded (services/mediaErasure.ts).
+ */
+// Whoever can reach a post editor: professionals in "My website", RentOS staff in the news desk.
+const AUTHOR_ROLES = ['landlord', 'property_manager', 'business', 'developer', 'admin', 'government', 'legal_officer'] as const
+
+router.post('/images', authenticate, requireRole(...AUTHOR_ROLES), writeLimiter, postImageUpload.single('image'), asyncHandler(async (req, res) => {
+  if (!req.file) { error(res, 'Choose a JPEG, PNG, WebP or GIF image under 8 MB'); return }
+  const { url } = await uploadToCloudinary(req.file.buffer, { folder: `posts/${req.user!.userId}`, resourceType: 'image' })
+  success(res, { url }, 'Image uploaded', 201)
+}))
+
 /** The author's own dashboard: drafts, scheduled, published, archived. */
 router.get('/posts', authenticate, asyncHandler(async (req, res) => {
   const filter: Record<string, unknown> = { authorId: req.user!.userId }
@@ -45,7 +68,8 @@ const postSchema = z.object({
   title: z.string().min(3).max(160),
   excerpt: z.string().min(3).max(400),
   content: z.string().min(10).max(60_000),
-  coverImage: z.string().url().optional(),
+  // "" removes the cover on an edit.
+  coverImage: z.union([z.string().url(), z.literal('')]).optional(),
   tags: z.array(z.string().max(40)).max(10).default([]),
   seoTitle: z.string().max(160).optional(),
   seoDescription: z.string().max(320).optional(),

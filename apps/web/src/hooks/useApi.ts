@@ -360,14 +360,69 @@ export interface StorefrontRecord {
   name: string
   tagline?: string
   about?: string
+  heroTitle?: string
+  heroSubtitle?: string
+  services?: string[]
+  serviceAreas?: string[]
+  aboutImageUrl?: string
+  gallery?: string[]
+  /** False while a draft; undefined on websites created before drafts existed (live). */
+  published?: boolean
+  publishedAt?: string
   status: string
   canonicalDomain?: string
   branding: {
     logoUrl?: string; coverUrl?: string; primaryColor?: string
     accentColor?: string; theme?: string; hideRentosBranding?: boolean
   }
-  contact: { phone?: string; email?: string; whatsapp?: string; city?: string }
+  /** City and office hours; phone numbers and emails are not collected (contact protection). */
+  contact: { city?: string; hours?: string }
   domains?: StorefrontDomainRow[]
+}
+
+export type StorefrontInput = Partial<Pick<StorefrontRecord, 'name' | 'tagline' | 'about' | 'heroTitle' | 'heroSubtitle' | 'services' | 'serviceAreas' | 'aboutImageUrl' | 'branding' | 'contact'>>
+
+/** Launch the website, or take it back to a draft. */
+export function usePublishStorefront() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (published: boolean) => api.post<StorefrontRecord>('/storefronts/me/publish', { published }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+export type StorefrontImagePurpose = 'logo' | 'cover' | 'about' | 'gallery'
+
+/** Upload a logo, cover, About photo or gallery photo. */
+export function useUploadStorefrontImage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ file, purpose }: { file: File; purpose: StorefrontImagePurpose }) => {
+      const form = new FormData()
+      form.append('purpose', purpose)
+      form.append('image', file)
+      return api.upload<{ url: string; purpose: StorefrontImagePurpose; storefront: StorefrontRecord }>('/storefronts/me/images', form)
+    },
+    onSuccess: (result) => qc.setQueryData(['storefront-me'], (old: StorefrontRecord | null | undefined) => (old ? { ...old, ...result.storefront, domains: old.domains } : result.storefront)),
+  })
+}
+
+export function useRemoveGalleryImage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (url: string) => api.delete<{ gallery: string[] }>(`/storefronts/me/gallery?url=${encodeURIComponent(url)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
+  })
+}
+
+/** Whether a website address is free (and valid). */
+export function useSlugAvailability(slug: string) {
+  return useQuery({
+    queryKey: ['storefront-slug', slug],
+    queryFn: () => api.get<{ available: boolean; reason?: string }>(`/storefronts/slug-available/${encodeURIComponent(slug)}`),
+    enabled: slug.length >= 3,
+    staleTime: 30_000,
+  })
 }
 
 export function useMyStorefront() {
@@ -380,7 +435,7 @@ export function useMyStorefront() {
 export function useCreateStorefront() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { slug: string; name: string; tagline?: string }) =>
+    mutationFn: (body: { slug: string; name: string } & StorefrontInput) =>
       api.post<StorefrontRecord>('/storefronts', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
   })
@@ -389,7 +444,7 @@ export function useCreateStorefront() {
 export function useUpdateStorefront() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Partial<Pick<StorefrontRecord, 'name' | 'tagline' | 'about' | 'branding' | 'contact'>>) =>
+    mutationFn: (body: StorefrontInput) =>
       api.patch<StorefrontRecord>('/storefronts/me', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['storefront-me'] }),
   })

@@ -130,3 +130,19 @@ export function useTakedownPost() {
     onSuccess: () => invalidatePosts(qc),
   })
 }
+
+export const POST_IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+const POST_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+
+/**
+ * POST /authoring/images: a picture for a post, its cover or one inside the
+ * article (brief §07: news is never text-only). Resolves to the picture's address.
+ */
+export async function uploadPostImage(file: File): Promise<string> {
+  if (!POST_IMAGE_ACCEPT.split(',').includes(file.type)) throw new Error('Choose a JPEG, PNG, WebP or GIF picture')
+  if (file.size > POST_IMAGE_MAX_BYTES) throw new Error('Choose a picture under 8 MB')
+  const form = new FormData()
+  form.append('image', file)
+  const { url } = await api.upload<{ url: string }>('/authoring/images', form)
+  return url
+}

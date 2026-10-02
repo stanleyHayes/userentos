@@ -80,7 +80,9 @@ const OffPlanReviewPage = lazy(() => import('@/pages/admin/OffPlanReviewPage').t
 const PlanEntitlementsPage = lazy(() => import('@/pages/admin/PlanEntitlementsPage').then((m) => ({ default: m.PlanEntitlementsPage })))
 const StorefrontSettingsPage = lazy(() => import('@/pages/storefront/StorefrontSettingsPage').then((m) => ({ default: m.StorefrontSettingsPage })))
 const SellerPaymentsPage = lazy(() => import('@/pages/storefront/SellerPaymentsPage').then((m) => ({ default: m.SellerPaymentsPage })))
-const PublicStorefrontPage = lazy(() => import('@/pages/storefront/PublicStorefrontPage').then((m) => ({ default: m.PublicStorefrontPage })))
+const SiteApp = lazy(() => import('@/pages/site/SiteApp').then((m) => ({ default: m.SiteApp })))
+const WebsitePage = lazy(() => import('@/pages/website/WebsitePage').then((m) => ({ default: m.WebsitePage })))
+const OnboardingPage = lazy(() => import('@/pages/website/OnboardingPage').then((m) => ({ default: m.OnboardingPage })))
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })))
 const FinancierOffersPage = lazy(() => import('@/pages/financier/OffersPage').then((m) => ({ default: m.FinancierOffersPage })))
 const OfferEditorPage = lazy(() => import('@/pages/financier/OfferEditorPage').then((m) => ({ default: m.OfferEditorPage })))
@@ -149,15 +151,27 @@ const noop = () => {}
  * threw "No QueryClient set" on every page load — the build was clean and the
  * error only appeared in a browser.
  */
-function HomeRoute({ isPortal }: { isPortal: boolean }) {
-  const { slug: storefrontSlug, isResolving } = useStorefrontHost()
+/** Agents, agencies and landlords now manage their website at /website; other sellers keep the storefront settings. */
+function StorefrontOrWebsite() {
+  const role = useAuthStore((s) => s.user?.activeRole)
+  return role === 'landlord' || role === 'property_manager' ? <Navigate to="/website" replace /> : <StorefrontSettingsPage />
+}
 
-  // A custom domain needs a server round-trip to name its storefront. Showing
-  // the marketing page in the meantime would flash the wrong brand at a
-  // seller's own visitors, so hold the splash until the answer arrives.
-  if (isResolving) return <SplashScreen onFinished={noop} />
-  if (storefrontSlug) return <PublicStorefrontPage slugOverride={storefrontSlug} />
+function HomeRoute({ isPortal }: { isPortal: boolean }) {
   return isPortal ? <Navigate to="/dashboard" replace /> : <LandingPage />
+}
+
+/**
+ * On <slug>.userentos.com or a professional's own domain, every path belongs
+ * to their website (Home, Properties, About, News, Contact), not just "/".
+ * A custom domain needs a server round-trip to name its site; the splash holds
+ * until then so the marketing page never flashes at the owner's visitors.
+ */
+function HostGate({ children }: { children: React.ReactNode }) {
+  const { slug: storefrontSlug, isResolving } = useStorefrontHost()
+  if (isResolving) return <SplashScreen onFinished={noop} />
+  if (storefrontSlug) return <SiteApp slug={storefrontSlug} />
+  return <>{children}</>
 }
 
 export default function App() {
@@ -182,6 +196,7 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <Suspense fallback={<SplashScreen onFinished={noop} />}>
+        <HostGate>
         <Routes>
           {/* Public pages. Order matters: a storefront host owns "/" before the
               portal redirect or the marketing page get a chance, otherwise
@@ -191,7 +206,9 @@ export default function App() {
           {/* A storefront is a full page with its own header, the same as on its
               own host. Under AuthLayout it rendered inside the sign-in card and
               signed-in visitors were redirected to the dashboard. */}
-          <Route path="/s/:slug" element={<PublicStorefrontPage />} />
+          <Route path="/s/:slug/*" element={<SiteApp />} />
+          {/* Website set-up wizard: signed in, but outside the dashboard (brief §03). */}
+          <Route path="/onboarding" element={<OnboardingPage />} />
           <Route element={<PublicLayout />}>
             <Route path="/delete-account" element={<DeleteAccountPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
@@ -199,7 +216,8 @@ export default function App() {
             <Route path="/data-protection" element={<DataProtectionPage />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/rental-laws" element={<RentalLawsPage />} />
-            <Route path="/blog" element={<BlogPage />} />
+            {/* The same news page as in the app, which supplies its own padding there. */}
+            <Route path="/blog" element={<div className="px-4 pb-16 pt-8 sm:px-6 md:pt-12"><BlogPage /></div>} />
             <Route path="/article/:slug" element={<PublicBlogDetailPage />} />
             <Route path="/registry" element={<PublicRegistryPage />} />
             {/* A listing's shareable page (brief §04); old /registry/<id> links land on it too. */}
@@ -272,7 +290,8 @@ export default function App() {
             <Route path="/admin/agency-licences" element={<RequireRole roles={['admin']}><AgencyLicencesPage /></RequireRole>} />
             <Route path="/admin/offplan-reviews" element={<RequireRole roles={['admin']}><OffPlanReviewPage /></RequireRole>} />
             <Route path="/admin/plans/entitlements" element={<RequireRole roles={['admin']}><PlanEntitlementsPage /></RequireRole>} />
-            <Route path="/storefront" element={<RequireRole roles={['landlord', 'property_manager', 'business', 'developer']}><StorefrontSettingsPage /></RequireRole>} />
+            <Route path="/website" element={<RequireRole roles={['landlord', 'property_manager']}><WebsitePage /></RequireRole>} />
+            <Route path="/storefront" element={<RequireRole roles={['landlord', 'property_manager', 'business', 'developer']}><StorefrontOrWebsite /></RequireRole>} />
             <Route path="/storefront/payments" element={<RequireRole roles={['landlord', 'property_manager', 'business', 'developer']}><SellerPaymentsPage /></RequireRole>} />
             {/* Financing — financier + applicants */}
             <Route path="/financing" element={<FinancingOffersPage />} />
@@ -333,6 +352,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </HostGate>
         </Suspense>
       </BrowserRouter>
     </QueryClientProvider>

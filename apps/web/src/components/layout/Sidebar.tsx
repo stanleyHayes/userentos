@@ -101,7 +101,7 @@ const navGroups: NavGroup[] = [
     items: [{ label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: JOURNEY }],
   },
   { label: 'Website', icon: <Globe size={15} />, roles: PRO, exclusive: true,
-    items: [{ label: 'My website', path: '/storefront', icon: <Globe size={20} />, roles: PRO }],
+    items: [{ label: 'My website', path: '/website', icon: <Globe size={20} />, roles: PRO }],
   },
   { label: 'My rental', icon: <KeyRound size={15} />, roles: TENANT, exclusive: true, defaultOpen: true,
     items: [

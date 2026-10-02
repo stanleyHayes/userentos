@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { eraseAvatars } from './avatarStorage.js'
 import { erasePersonalDocuments } from './documentErasure.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
+import { eraseByPrefix, postImagesPrefix } from './mediaErasure.js'
 import { releaseStorefrontDomains, type HostOptions } from './accountClosure.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { markAccountErasureComplete } from './erasureLedger.js'
@@ -137,11 +138,14 @@ async function eraseDirectoryProfiles(uid: string, hostOptions: HostOptions): Pr
   const heldByDomain = new Set((await StorefrontDomain.find({ storefrontId: { $in: storefrontIds } }).select('storefrontId').lean()).map((d) => String(d.storefrontId)))
   for (const id of storefrontIds) {
     if (heldByDomain.has(id)) continue
+    // The website's logo, cover, about photo and gallery go with it.
+    const site = await Storefront.findById(id).select('imageAssets').lean()
+    await eraseStoredAssets((site?.imageAssets ?? []).map((asset) => ({ publicId: asset.publicId, resourceType: 'image' as const, deliveryType: 'upload' as const })))
     await BlogPost.deleteMany({ storefrontId: id })
     if (await MarketplaceTransaction.exists({ storefrontId: id })) {
       await Storefront.updateOne({ _id: id }, {
-        $set: { name: 'Closed storefront', slug: `closed-${id}`, status: 'archived' },
-        $unset: { tagline: 1, about: 1, contact: 1, canonicalDomain: 1, 'branding.logoUrl': 1, 'branding.coverUrl': 1 },
+        $set: { name: 'Closed storefront', slug: `closed-${id}`, status: 'archived', imageAssets: [], gallery: [], services: [], serviceAreas: [] },
+        $unset: { tagline: 1, about: 1, contact: 1, canonicalDomain: 1, heroTitle: 1, heroSubtitle: 1, aboutImageUrl: 1, 'branding.logoUrl': 1, 'branding.coverUrl': 1 },
       })
     } else {
       await Storefront.deleteOne({ _id: id })
@@ -230,6 +234,8 @@ export async function eraseAccountRecords(uid: string, cutoff: Date, hostOptions
     () => Employment.deleteMany({ userId: uid, status: { $in: ['pending', 'declined'] } }),
     () => PropertyExpense.deleteMany({ landlordId: uid }),
     () => BlogPost.updateMany({ authorId: uid }, { $set: { author: 'RentOS' }, $unset: { authorId: 1 } }),
+    // Pictures uploaded for posts (covers and in-article images).
+    () => eraseByPrefix(postImagesPrefix(uid)),
   ]
   // All settlements must complete before a retry or account removal. Promise.all
   // rejects early while sibling writes may still be running.

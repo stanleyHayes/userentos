@@ -7,8 +7,13 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { User } from '../models/User.js'
 import { REGULATED_FEATURES, isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
+import { Storefront } from '../models/Storefront.js'
+import { storefrontUrl } from '../services/storefront.js'
 
 const router = Router()
+
+const slugify = (title: string) =>
+  title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -46,29 +51,77 @@ function offeredOnly(): Record<string, unknown> {
   return off.length ? { requiresFeature: { $nin: off } } : {}
 }
 
-// Public: list published posts on the platform's own blog
+/**
+ * RentOS Real Estate News (product brief §07): RentOS's own articles, plus
+ * every post published on a live professional website, always credited to
+ * that website ("By ABC Properties"). A suspended, archived or draft website's
+ * posts stay out, like the website itself.
+ */
+async function hiddenStorefrontIds(): Promise<string[]> {
+  const hidden = await Storefront.find({ $or: [{ status: { $ne: 'active' } }, { published: false }] }).select('_id').lean()
+  return hidden.map((s) => String(s._id))
+}
+
+async function websitePostsFilter(): Promise<Record<string, unknown>> {
+  return { storefrontId: { $exists: true, $ne: null, $nin: await hiddenStorefrontIds() }, status: 'published' }
+}
+
+/** Attribution for website posts: the website's name, address and logo. */
+async function withAttribution<T extends { _id: unknown; storefrontId?: string | null }>(posts: T[]) {
+  const ids = [...new Set(posts.map((p) => p.storefrontId).filter((id): id is string => Boolean(id)))]
+  const sites = ids.length ? await Storefront.find({ _id: { $in: ids } }).select('name slug canonicalDomain branding.logoUrl').lean() : []
+  const byId = new Map(sites.map((site) => [String(site._id), site]))
+  return posts.map((p) => {
+    const site = p.storefrontId ? byId.get(p.storefrontId) : undefined
+    return {
+      ...p,
+      id: (p._id as Types.ObjectId).toString(),
+      source: site ? 'website' as const : 'rentos' as const,
+      website: site ? { name: site.name, slug: site.slug, url: storefrontUrl(site), logoUrl: site.branding?.logoUrl ?? null } : null,
+    }
+  })
+}
+
+// Public: the news feed. ?scope=rentos (RentOS articles), websites, or all (default).
 router.get('/', async (req, res) => {
-  const filter: Record<string, unknown> = { published: true, ...PLATFORM_ONLY, ...offeredOnly() }
-  if (req.query.tag) filter.tags = req.query.tag
+  const scope = req.query.scope === 'rentos' || req.query.scope === 'websites' ? req.query.scope : 'all'
+  const sources: Record<string, unknown>[] = []
+  if (scope !== 'websites') sources.push(PLATFORM_ONLY)
+  if (scope !== 'rentos') sources.push(await websitePostsFilter())
+  const and: Record<string, unknown>[] = [{ published: true }, offeredOnly(), { $or: sources }]
+  if (req.query.tag) and.push({ tags: req.query.tag })
   if (req.query.search) {
     const escaped = escapeRegex(String(req.query.search))
-    filter.$or = [
-      { title: { $regex: escaped, $options: 'i' } },
-      { excerpt: { $regex: escaped, $options: 'i' } },
-    ]
+    and.push({ $or: [{ title: { $regex: escaped, $options: 'i' } }, { excerpt: { $regex: escaped, $options: 'i' } }] })
   }
+  const filter = { $and: and }
+  const pageSize = Math.min(50, Math.max(1, Number(req.query.pageSize) || 24))
+  const page = Math.max(1, Number(req.query.page) || 1)
 
-  const posts = await BlogPost.find(filter).sort({ createdAt: -1 }).lean()
-  const items = posts.map((p) => ({ ...p, id: (p._id as Types.ObjectId).toString() }))
-  success(res, { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 })
+  // Newest first by publish date. Older RentOS articles never recorded one, so
+  // they fall back to when they were written instead of sinking below every
+  // website post.
+  const [posts, total] = await Promise.all([
+    BlogPost.aggregate<{ _id: Types.ObjectId; storefrontId?: string | null }>([
+      { $match: filter },
+      { $addFields: { feedDate: { $ifNull: ['$publishedAt', '$createdAt'] } } },
+      { $sort: { feedDate: -1, _id: -1 } },
+      { $skip: (page - 1) * pageSize },
+      { $limit: pageSize },
+      { $project: { feedDate: 0 } },
+    ]),
+    BlogPost.countDocuments(filter),
+  ])
+  success(res, { items: await withAttribution(posts), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
 })
 
-// Public: get single post by slug
+// Public: one article by slug — RentOS's own or a website's, credited to it.
 router.get('/slug/:slug', async (req, res) => {
-  const slugFilter: Record<string, unknown> = { slug: param(req.params.slug), published: true, ...PLATFORM_ONLY, ...offeredOnly() }
+  const slugFilter: Record<string, unknown> = { $and: [{ slug: param(req.params.slug), published: true }, offeredOnly(), { $or: [PLATFORM_ONLY, await websitePostsFilter()] }] }
   const post = await BlogPost.findOne(slugFilter).lean()
   if (!post) { error(res, 'Post not found', 404); return }
-  success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
+  const [attributed] = await withAttribution([post])
+  success(res, attributed)
 })
 
 // Get post by ID (for editing). Unpublished drafts stay private to their author
@@ -92,7 +145,8 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer'), async (req, res) => {
   const schema = z.object({
     title: z.string().min(1),
-    slug: z.string().min(1),
+    // The news desk does not ask for one; it comes from the title.
+    slug: z.string().min(1).optional(),
     excerpt: z.string().min(1),
     content: z.string().min(1),
     coverImage: z.string().optional(),
@@ -114,12 +168,19 @@ router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer
   const writer = await User.findById(req.user!.userId).select('firstName lastName').lean()
   const byline = writer ? `${writer.firstName ?? ''} ${writer.lastName ?? ''}`.trim() : ''
 
+  let slug = slugify(parsed.data.slug || parsed.data.title) || 'post'
+  if (await BlogPost.exists({ slug })) slug = `${slug}-${Date.now().toString(36)}`
+
   const post = await BlogPost.create({
     ...parsed.data,
+    slug,
     author: byline || 'RentOS editorial',
     authorId: req.user!.userId,
     // The only place a post becomes RentOS editorial.
     platform: true,
+    status: parsed.data.published ? 'published' : 'draft',
+    // The news feed orders RentOS and website posts together by publish date.
+    ...(parsed.data.published ? { publishedAt: new Date() } : {}),
   })
   success(res, { ...post.toObject(), id: post._id.toString() }, 'Post created', 201)
 })
@@ -147,7 +208,14 @@ router.patch('/:id', authenticate, requireRole('admin', 'government', 'legal_off
    */
   const scope: Record<string, unknown> = { _id: param(req.params.id), ...PLATFORM_ONLY }
   const filter: Record<string, unknown> = parsed.data.published ? { ...scope, status: { $ne: 'removed' } } : scope
-  const post = await BlogPost.findOneAndUpdate(filter, parsed.data, { returnDocument: 'after' }).lean()
+  const existing = parsed.data.published === undefined ? null : await BlogPost.findOne(filter).select('publishedAt').lean()
+  // The scope already proves this is RentOS editorial, so a legacy row without
+  // the flag gets it here; otherwise the status change below would drop it
+  // out of PLATFORM_ONLY and off the feed.
+  const update: Record<string, unknown> = { ...parsed.data, platform: true }
+  if (parsed.data.published !== undefined) update.status = parsed.data.published ? 'published' : 'draft'
+  if (parsed.data.published && existing && !existing.publishedAt) update.publishedAt = new Date()
+  const post = await BlogPost.findOneAndUpdate(filter, update, { returnDocument: 'after' }).lean()
   if (!post) {
     const removed = parsed.data.published && await BlogPost.exists({ ...scope, status: 'removed' })
     if (removed) { error(res, 'This post was removed by moderation and can no longer be published.', 403); return }

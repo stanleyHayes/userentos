@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
+import { CoverImageField } from '@/components/news/CoverImageField'
+import { uploadPostImage } from '@/hooks/useAuthoring'
 import { api } from '@/lib/api'
 import { ArrowLeft, Save, Send, Loader2 } from 'lucide-react'
 import { FormSkeleton } from '@/components/ui/Skeleton'
@@ -18,7 +20,7 @@ interface BlogPost {
   author: string
   coverImage?: string
   tags: string[]
-  status?: 'draft' | 'published'
+  published?: boolean
   createdAt: string
 }
 
@@ -52,7 +54,7 @@ export function BlogEditorPage() {
     setContent(existingPost.content)
     setTags(existingPost.tags?.join(', ') ?? '')
     setCoverImage(existingPost.coverImage ?? '')
-    setStatus(existingPost.status ?? 'published')
+    setStatus(existingPost.published ? 'published' : 'draft')
   }
 
   const saveMutation = useMutation({
@@ -78,8 +80,9 @@ export function BlogEditorPage() {
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean),
-      coverImage: coverImage.trim() || undefined,
-      status: publishStatus,
+      // An emptied cover is sent as "" so an edit can remove it.
+      coverImage: coverImage.trim() || (isEditing ? '' : undefined),
+      published: publishStatus === 'published',
     }
     saveMutation.mutate(payload)
   }
@@ -134,7 +137,7 @@ export function BlogEditorPage() {
           <label className="block text-sm font-medium text-primary-dark dark:text-white mb-1.5">
             Content
           </label>
-          <MarkdownEditor value={content} onChange={setContent} minRows={16} aiContext="blog post" />
+          <MarkdownEditor value={content} onChange={setContent} minRows={16} aiContext="blog post" onUploadImage={uploadPostImage} />
         </div>
 
         {/* Tags */}
@@ -147,15 +150,7 @@ export function BlogEditorPage() {
           slotProps={{ inputLabel: { shrink: true } }}
         />
 
-        {/* Cover image */}
-        <TextField
-          label="Cover Image URL"
-          value={coverImage}
-          onChange={(e) => setCoverImage(e.target.value)}
-          fullWidth
-          placeholder="https://example.com/image.jpg"
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <CoverImageField value={coverImage} onChange={setCoverImage} />
 
         {/* Status toggle */}
         <div>

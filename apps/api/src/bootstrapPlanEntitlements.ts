@@ -30,31 +30,34 @@ type Grants = Partial<Record<FeatureKey, FeatureValue>>
  * maxProperties / platformFeePercent columns, and an explicit grant here would
  * silently override whatever an admin set on the plan itself.
  */
-const DEFAULT_GRANTS: Record<string, Grants> = {
+export const DEFAULT_GRANTS: Record<string, Grants> = {
+  // Free: listings and a website on <name>.userentos.com (product brief §08).
   starter: {
-    'storefront.enabled': false,
+    'storefront.enabled': true,
     'storefront.custom_branding': false,
     'storefront.custom_domain': false,
     'storefront.remove_rentos_branding': false,
     'storefront.theme_count': 1,
     'storefront.analytics': 'none',
-    'blog.limit': 0,
+    'blog.limit': 5,
     'sponsorship.quota': 0,
     'promotion.enabled': false,
     'affiliate.enabled': false,
   },
+  // GH₵150 a month: the website on the owner's own domain, their brand, analytics.
   professional: {
     'storefront.enabled': true,
     'storefront.custom_branding': true,
-    'storefront.custom_domain': false,
-    'storefront.remove_rentos_branding': false,
+    'storefront.custom_domain': true,
+    'storefront.remove_rentos_branding': true,
     'storefront.theme_count': 4,
-    'storefront.analytics': 'basic',
-    'blog.limit': 10,
+    'storefront.analytics': 'advanced',
+    'blog.limit': -1,
     'sponsorship.quota': 1,
     'promotion.enabled': true,
     'affiliate.enabled': false,
   },
+  // Retired; subscribers keep these terms until their plan ends.
   enterprise: {
     'storefront.enabled': true,
     'storefront.custom_branding': true,

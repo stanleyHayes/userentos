@@ -48,23 +48,27 @@ describe('default plan entitlements (spec §7.1)', () => {
     expect(grantsFor('p_ent')['blog.limit']).toBe(-1)
   })
 
-  it('keeps the free tier free', async () => {
+  it('gives the free tier a website, and keeps its paid options paid', async () => {
     await bootstrapPlanEntitlements()
     const starter = grantsFor('p_starter')
-    expect(starter['storefront.enabled']).toBe(false)
+    // Product brief §08: the free Starter plan includes a website on <name>.userentos.com.
+    expect(starter['storefront.enabled']).toBe(true)
+    expect(starter['blog.limit']).toBe(5)
+    expect(starter['storefront.custom_domain']).toBe(false)
+    expect(starter['storefront.custom_branding']).toBe(false)
+    expect(starter['storefront.remove_rentos_branding']).toBe(false)
     expect(starter['promotion.enabled']).toBe(false)
     expect(starter['affiliate.enabled']).toBe(false)
-    expect(starter['blog.limit']).toBe(0)
   })
 
-  it('escalates capability upward across the tiers', async () => {
+  it('makes Professional (GH₵150) the website upgrade: own domain, own brand, analytics', async () => {
     await bootstrapPlanEntitlements()
     const pro = grantsFor('p_pro')
-    const ent = grantsFor('p_ent')
-    // Custom domains are the enterprise differentiator; pro must not have them.
-    expect(pro['storefront.custom_domain']).toBe(false)
-    expect(ent['storefront.custom_domain']).toBe(true)
-    expect(Number(ent['sponsorship.quota'])).toBeGreaterThan(Number(pro['sponsorship.quota']))
+    expect(pro['storefront.custom_domain']).toBe(true)
+    expect(pro['storefront.custom_branding']).toBe(true)
+    expect(pro['storefront.remove_rentos_branding']).toBe(true)
+    expect(pro['storefront.analytics']).toBe('advanced')
+    expect(pro['blog.limit']).toBe(-1)
   })
 
   it('never overwrites grants an admin has already authored', async () => {
