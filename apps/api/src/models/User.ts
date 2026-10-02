@@ -52,6 +52,8 @@ export interface IUser extends Document {
   passportExportCredits?: number
   /** A used export may be retried until then. */
   passportExportUnlockedUntil?: Date
+  /** Fee payments whose export credit has been added, so applying one twice adds it once. */
+  passportExportPaymentIds?: string[]
   subscriptionPaymentId?: string
   subscriptionSnapshotJson?: string
   subscriptionStartDate?: Date
@@ -118,6 +120,7 @@ const userSchema = new Schema<IUser>({
   subscriptionPlanVersion: { type: Number },
   passportExportCredits: { type: Number, default: 0, min: 0 },
   passportExportUnlockedUntil: Date,
+  passportExportPaymentIds: { type: [String], default: undefined, select: false },
   subscriptionPaymentId: String,
   subscriptionSnapshotJson: String,
   subscriptionStartDate: { type: Date },

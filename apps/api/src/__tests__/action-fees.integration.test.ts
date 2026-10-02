@@ -34,6 +34,7 @@ const { default: agreementsRouter } = await import('../routes/agreements.js')
 const { default: passportRouter } = await import('../routes/tenantPassport.js')
 const { onSimulatedComplete } = await import('../services/payments/simulator.js')
 const { finalizePayment } = await import('../services/payments/finalize.js')
+const { applyActionFee, recoverActionFees } = await import('../services/payments/actionFeeCheckout.js')
 
 // The server wires simulated completions to finalize (src/index.ts); this test app does the same.
 onSimulatedComplete((event) => { void finalizePayment(event, { source: 'simulator', providerSource: 'simulated' }) })
@@ -193,5 +194,36 @@ describe.skipIf(!hasTestMongo)('GH₵5 pay-per-action fees (brief §08)', () => 
 
     await User.updateOne({ _id: tenantId }, { $set: { passportExportUnlockedUntil: new Date(Date.now() - 1000) } })
     expect((await call('/tenant-passport/me/document-link', asTenant, 'POST')).status).toBe(402)
+  })
+
+  it('applies a paid unlock exactly once, and the recovery sweep finishes one that failed midway', { timeout: 20_000 }, async () => {
+    await setFlag('fees.passport_export', true)
+    await User.updateOne({ _id: tenantId }, { $set: { passportExportCredits: 0 }, $unset: { passportExportPaymentIds: 1 } })
+    const started = await pay('/tenant-passport/export-fee', asTenant)
+    expect(started.status).toBe(201)
+    const paid = await settle(started.json.data!.payment!.id)
+    const credits = async () => (await User.findById(tenantId).select('passportExportCredits').lean())?.passportExportCredits
+    expect(await credits()).toBe(1)
+
+    // Running the unlock again (a webhook retry, two callers at once) adds nothing.
+    const doc = await Payment.findById(paid._id)
+    await applyActionFee(doc!)
+    await applyActionFee(doc!)
+    expect(await credits()).toBe(1)
+
+    // A failure after the credit but before the payment was marked: the sweep
+    // marks it and does not credit twice.
+    await Payment.updateOne({ _id: paid._id }, { $unset: { feeAppliedAt: 1 } })
+    const swept = await recoverActionFees()
+    expect(swept).toMatchObject({ checked: 1, applied: 1 })
+    expect(await credits()).toBe(1)
+    expect((await Payment.findById(paid._id).lean())?.feeAppliedAt).toBeTruthy()
+    expect(await recoverActionFees()).toMatchObject({ checked: 0 })
+
+    // A failure before the credit: the sweep adds the missing credit.
+    await User.updateOne({ _id: tenantId }, { $set: { passportExportCredits: 0 }, $pull: { passportExportPaymentIds: String(paid._id) } })
+    await Payment.updateOne({ _id: paid._id }, { $unset: { feeAppliedAt: 1 } })
+    await recoverActionFees()
+    expect(await credits()).toBe(1)
   })
 })

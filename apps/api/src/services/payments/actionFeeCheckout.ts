@@ -116,14 +116,39 @@ export async function startActionFeeCheckout(req: Request, res: Response, checko
 export async function applyActionFee(payment: IPayment): Promise<void> {
   const subjectId = String(payment.purposeMeta?.subjectId ?? '')
   if (!subjectId) { logger.error(`[Payments] fee payment ${payment.reference} has no subject`); return }
-  const claimed = await Payment.updateOne({ _id: payment._id, feeAppliedAt: { $exists: false } }, { $set: { feeAppliedAt: new Date() } })
-  if (!claimed.modifiedCount) return
+  const paymentId = String(payment._id)
 
+  // Each unlock is safe to repeat, so a retry after a failure (or two callers
+  // at once) applies it exactly once.
   if (payment.purpose === 'agreement_fee') {
-    await Agreement.updateOne({ _id: subjectId, signingFeePaidAt: { $exists: false } }, { $set: { signingFeePaidAt: new Date(), signingFeePaymentId: String(payment._id) } })
+    await Agreement.updateOne({ _id: subjectId, signingFeePaidAt: { $exists: false } }, { $set: { signingFeePaidAt: new Date(), signingFeePaymentId: paymentId } })
   } else if (payment.purpose === 'passport_export') {
-    await User.updateOne({ _id: payment.tenantId }, { $inc: { passportExportCredits: 1 } })
+    await User.updateOne(
+      { _id: payment.tenantId, passportExportPaymentIds: { $ne: paymentId } },
+      { $inc: { passportExportCredits: 1 }, $push: { passportExportPaymentIds: paymentId } },
+    )
   }
+  // Marked last: if the unlock above failed, the payment stays unmarked and
+  // recoverActionFees retries it.
+  await Payment.updateOne({ _id: payment._id, feeAppliedAt: { $exists: false } }, { $set: { feeAppliedAt: new Date() } })
+}
+
+/**
+ * Completed fee payments whose unlock never ran (a database error between the
+ * payment completing and the unlock). Run by the scheduler.
+ */
+export async function recoverActionFees(limit = 50): Promise<{ checked: number; applied: number }> {
+  const stuck = await Payment.find({ purpose: { $in: ['agreement_fee', 'passport_export'] }, status: 'completed', feeAppliedAt: { $exists: false } }).limit(limit)
+  let applied = 0
+  for (const payment of stuck) {
+    try {
+      await applyActionFee(payment)
+      applied += 1
+    } catch (err) {
+      logger.error(`[Payments] fee unlock for ${payment.reference} still failing: ${(err as Error).message}`)
+    }
+  }
+  return { checked: stuck.length, applied }
 }
 
 /**

@@ -3,6 +3,7 @@ import { recoverPaymentWalletCredits } from './payments/paymentWalletCredit.js'
 import { recoverPaidSubscriptions } from './payments/paidSubscription.js'
 import { recoverApplePurchases } from './storeBilling/recoverApplePurchases.js'
 import { recoverRentReceipts } from './payments/recoverRentReceipts.js'
+import { recoverActionFees } from './payments/actionFeeCheckout.js'
 import { expireSubscription } from './subscriptionExpiry.js'
 import { recoverGooglePurchases } from './storeBilling/recoverPurchases.js'
 import cron from 'node-cron'
@@ -87,6 +88,12 @@ export function startScheduler() {
       const result = await recoverPaymentWalletCredits()
       if (result.completed || result.deferred) logger.info('[Scheduler] Payment wallet credit recovery', result)
     } catch { logger.error('[Scheduler] Payment wallet credit recovery failed; retry scheduled') }
+  }, { timezone: GHANA_TZ })
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const result = await recoverActionFees()
+      if (result.checked) logger.info('[Scheduler] Fee unlock recovery', result)
+    } catch { logger.error('[Scheduler] Fee unlock recovery failed; retry scheduled for the next run') }
   }, { timezone: GHANA_TZ })
   cron.schedule('*/5 * * * *', async () => {
     try {

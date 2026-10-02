@@ -247,7 +247,7 @@ async function applyCompletion(completed: IPayment, opts: FinalizeOptions): Prom
     catch { logger.error('[Payments] Confirmed payment credit deferred to scheduled recovery') }
   } else if (completed.purpose === 'agreement_fee' || completed.purpose === 'passport_export') {
     try { await applyActionFee(completed) }
-    catch (err) { logger.error(`[Payments:${opts.source}] CRITICAL: fee payment ${completed.reference} completed but its unlock failed: ${(err as Error).message}`) }
+    catch (err) { logger.error(`[Payments:${opts.source}] fee payment ${completed.reference} completed but its unlock failed (deferred to scheduled recovery): ${(err as Error).message}`) }
   } else if (completed.purpose === 'subscription') {
     try {
       if (completed.subscriptionTerms) {
