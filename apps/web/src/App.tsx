@@ -1,6 +1,7 @@
 import { ContentReportsPage } from '@/pages/admin/ContentReportsPage'
 import { useState, useCallback, lazy, Suspense } from 'react'
 import { useStorefrontHost } from '@/hooks/useStorefrontHost'
+import { useRouteSeoDefaults } from '@/lib/seo'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
@@ -167,6 +168,12 @@ function HomeRoute({ isPortal }: { isPortal: boolean }) {
  * A custom domain needs a server round-trip to name its site; the splash holds
  * until then so the marketing page never flashes at the owner's visitors.
  */
+/** Default title and canonical address per route; pages override them (lib/seo.ts). */
+function RouteSeo() {
+  useRouteSeoDefaults()
+  return null
+}
+
 function HostGate({ children }: { children: React.ReactNode }) {
   const { slug: storefrontSlug, isResolving } = useStorefrontHost()
   if (isResolving) return <SplashScreen onFinished={noop} />
@@ -197,6 +204,7 @@ export default function App() {
         <ScrollToTop />
         <Suspense fallback={<SplashScreen onFinished={noop} />}>
         <HostGate>
+        <RouteSeo />
         <Routes>
           {/* Public pages. Order matters: a storefront host owns "/" before the
               portal redirect or the marketing page get a chance, otherwise

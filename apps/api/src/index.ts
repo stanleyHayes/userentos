@@ -46,6 +46,7 @@ import reviewerOrgRoutes from './routes/reviewerOrganizations.js'
 import authoringRoutes from './routes/authoring.js'
 import contentReportRoutes from './routes/contentReports.js'
 import trustRoutes from './routes/trust.js'
+import seoRoutes from './routes/seo.js'
 import adminAuditLogsRoutes from './routes/adminAuditLogs.js'
 import adminAffiliatesRoutes from './routes/adminAffiliates.js'
 import marketplaceWebhookRoutes from './routes/marketplaceWebhooks.js'
@@ -321,6 +322,7 @@ app.use('/api/reviewer-organizations', reviewerOrgRoutes)
 app.use('/api/authoring', authoringRoutes)
 app.use('/api/reports', contentReportRoutes)
 app.use('/api/trust', trustRoutes)
+app.use('/api/seo', seoRoutes)
 app.use('/api/properties', propertyModerationRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agreements', agreementRoutes)

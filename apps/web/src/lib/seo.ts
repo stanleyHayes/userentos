@@ -11,6 +11,10 @@
  * last render left behind, and one small module is cheaper than a dependency.
  */
 
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { platformOrigin } from './platformOrigin'
+
 function upsert(selector: string, create: () => HTMLElement): HTMLElement {
   let el = document.head.querySelector(selector) as HTMLElement | null
   if (!el) {
@@ -131,4 +135,36 @@ export function setJsonLd(id: string, data: Record<string, unknown> | null): voi
   })()
   // "<" is escaped so a title containing </script> cannot end the tag early.
   el.textContent = JSON.stringify(data).replace(/</g, '\\u003c')
+}
+
+/** The platform's default title and description; index.html carries the same. */
+export const DEFAULT_SEO = {
+  title: 'RentOS Ghana: houses and apartments to rent and buy in Ghana',
+  description: 'Find verified houses, apartments and short stays to rent or buy across Ghana. Message agents safely, sign tenancy agreements online and keep your rent records in one place.',
+}
+
+/** Public pages with their own title (kept in step with PLATFORM_PAGES in apps/api/src/services/seo.ts). */
+const PAGE_SEO: Record<string, { title: string; description: string }> = {
+  '/properties': { title: 'Houses and apartments for rent and sale in Ghana | RentOS', description: 'Browse verified houses, apartments, rooms and short stays to rent or buy across Accra, Kumasi, Tema, Takoradi and the rest of Ghana.' },
+  '/registry': { title: 'Property registry: verified listings in Ghana | RentOS', description: 'Search reviewed rental and sale listings across Ghana by city, price and property type, each with its own shareable page.' },
+  '/blog': { title: 'RentOS Real Estate News: property news and guides for Ghana', description: 'Rental guides from RentOS and market news from agents and agencies across Ghana: prices, tenancy law, deposits and buying tips.' },
+  '/rental-laws': { title: 'Ghana rental laws explained: tenant and landlord rights | RentOS', description: 'Plain-language guide to the Rent Act 1963 (Act 220), rent advance limits, deposits, evictions and the Rent Control Department.' },
+}
+
+/**
+ * Every route starts from the platform defaults with its own canonical
+ * address; a page with something better to say (a listing, an article, a
+ * website) then sets its own in its effects. The shell used to name the home
+ * page as canonical for every route, which told search engines that pages
+ * like /blog and /rental-laws were copies of it.
+ *
+ * Call it from a component rendered before the routes, so it runs first.
+ */
+export function useRouteSeoDefaults(): void {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const path = pathname.replace(/\/+$/, '') || '/'
+    const page = PAGE_SEO[path] ?? DEFAULT_SEO
+    applySeo({ ...page, canonical: `${platformOrigin()}${path === '/' ? '/' : path}`, image: `${platformOrigin()}/og-image.png`, siteName: 'RentOS Ghana' })
+  }, [pathname])
 }

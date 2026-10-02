@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import fs from 'fs'
 
 // Heavy third-party deps are split into named vendor chunks so the initial
 // JS payload stays small and chunks can be cached independently across
@@ -75,60 +76,32 @@ function manualChunks(id: string): string | undefined {
  */
 const SITE_URL = (process.env.VITE_SITE_URL || 'https://userentos.com').replace(/\/$/, '')
 
-/** Public routes worth putting in front of a crawler. */
-const SITEMAP_ROUTES = [
-  { path: '/', priority: '1.0', changefreq: 'daily' },
-  { path: '/properties', priority: '0.9', changefreq: 'daily' },
-  { path: '/registry', priority: '0.8', changefreq: 'daily' },
-  { path: '/blog', priority: '0.8', changefreq: 'weekly' },
-  { path: '/rental-laws', priority: '0.7', changefreq: 'monthly' },
-  { path: '/developments', priority: '0.6', changefreq: 'weekly' },
-  { path: '/login', priority: '0.4', changefreq: 'yearly' },
-  { path: '/register', priority: '0.5', changefreq: 'yearly' },
-  { path: '/privacy', priority: '0.3', changefreq: 'yearly' },
-  { path: '/terms', priority: '0.3', changefreq: 'yearly' },
-  { path: '/data-protection', priority: '0.3', changefreq: 'yearly' },
-]
-
+/**
+ * The shell ships as app.html as well as index.html, and on Vercel only as
+ * app.html. Vercel serves a real file before any rewrite, so an index.html
+ * there would answer "/" on every host itself, and an agency website's home
+ * page could never get its own title and preview from api/page.ts. With no
+ * file at "/", vercel.json routes every page: agency hosts and the public
+ * pages through api/page.ts, everything else to app.html.
+ *
+ * robots.txt and sitemap.xml are not built here any more: both differ per
+ * host and are answered by api/robots.ts and api/sitemap.ts.
+ */
 function seoUrls(): Plugin {
+  let outDir = 'dist'
   return {
     name: 'rentos-seo-urls',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
     transformIndexHtml(html) {
       return html.replaceAll('__SITE_URL__', SITE_URL)
     },
-    generateBundle() {
-      const urls = SITEMAP_ROUTES.map(({ path: route, priority, changefreq }) =>
-        `  <url>\n    <loc>${SITE_URL}${route}</loc>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`,
-      ).join('\n')
-
-      this.emitFile({
-        type: 'asset',
-        fileName: 'sitemap.xml',
-        source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
-      })
-
-      // Private surfaces are behind auth and have nothing to index; keeping them
-      // out of the crawl budget also keeps them out of search results.
-      this.emitFile({
-        type: 'asset',
-        fileName: 'robots.txt',
-        source: [
-          'User-agent: *',
-          'Allow: /',
-          'Disallow: /dashboard',
-          'Disallow: /settings',
-          'Disallow: /admin',
-          'Disallow: /payments',
-          'Disallow: /agreements',
-          'Disallow: /documents',
-          'Disallow: /chat',
-          'Disallow: /accept-invite',
-          'Disallow: /reset-password',
-          '',
-          `Sitemap: ${SITE_URL}/sitemap.xml`,
-          '',
-        ].join('\n'),
-      })
+    closeBundle() {
+      const index = path.join(outDir, 'index.html')
+      if (!fs.existsSync(index)) return
+      fs.copyFileSync(index, path.join(outDir, 'app.html'))
+      if (process.env.VERCEL) fs.rmSync(index)
     },
   }
 }

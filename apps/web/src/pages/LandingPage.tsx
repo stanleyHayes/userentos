@@ -515,7 +515,7 @@ export function LandingPage() {
           <div>
             <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
               <span className="h-2 w-2 animate-pulse rounded-full bg-secondary shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
-              The digital OS for Ghana&apos;s rental ecosystem
+              Homes to rent and buy across Ghana
             </div>
             <h1 className="animate-headline-breathe max-w-4xl font-display text-5xl font-extrabold leading-[0.92] tracking-[-0.04em] md:text-7xl xl:text-[6.8rem]">
               <SplitText text="Renting," immediate charDelay={48} />
@@ -524,7 +524,7 @@ export function LandingPage() {
               <span className="text-secondary"><SplitText text="sync." immediate charDelay={60} startDelay={620} /></span>
             </h1>
             <p className="mt-8 max-w-xl text-lg leading-relaxed text-white/62 md:text-xl">
-              Find a home, apply, sign, keep records, maintain it and resolve issues without losing the thread.
+              Find verified houses and apartments to rent or buy in Accra, Kumasi and across Ghana. Message agents safely, sign your tenancy agreement online and keep every rent record in one place.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Magnetic><Link to="/register"><Button size="lg" className="dark-surface-control w-full bg-secondary text-[#0f1f33] hover:bg-amber-400 sm:w-auto">Start your rental journey <ArrowRight size={18} /></Button></Link></Magnetic>
