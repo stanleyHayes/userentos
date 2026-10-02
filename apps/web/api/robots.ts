@@ -8,7 +8,7 @@ import { SITE_URL, isPlatformHost, isPreviewHost, requestHost } from './_lib/seo
 const PRIVATE = ['/dashboard', '/settings', '/admin', '/payments', '/agreements', '/documents', '/chat', '/messages', '/website', '/onboarding', '/storefront', '/accept-invite', '/reset-password']
 
 export function GET(request: Request): Response {
-  const host = requestHost(request)
+  const host = requestHost(request) || new URL(SITE_URL).host
   const lines = isPreviewHost(host)
     ? ['User-agent: *', 'Disallow: /']
     : isPlatformHost(host)

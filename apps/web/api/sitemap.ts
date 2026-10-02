@@ -1,8 +1,8 @@
 /** /sitemap.xml for whichever host asked: the platform's, or an agency website's own. */
-import { API_URL, fetchWithTimeout, requestHost } from './_lib/seo.js'
+import { API_URL, SITE_URL, fetchWithTimeout, requestHost } from './_lib/seo.js'
 
 export async function GET(request: Request): Promise<Response> {
-  const host = requestHost(request)
+  const host = requestHost(request) || new URL(SITE_URL).host
   try {
     const response = await fetchWithTimeout(`${API_URL}/seo/sitemap.xml?host=${encodeURIComponent(host)}`, 8000)
     if (response.ok) {

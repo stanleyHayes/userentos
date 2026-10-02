@@ -20,9 +20,30 @@ export interface PageMeta {
 export const API_URL = (process.env.SEO_API_URL || process.env.VITE_API_URL || 'https://api.userentos.com/api').replace(/\/$/, '')
 export const SITE_URL = (process.env.VITE_SITE_URL || 'https://userentos.com').replace(/\/$/, '')
 
+const HOSTNAME = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:\d{1,5})?$/
+
+/**
+ * The host this request was made to, or "" if it is not a plausible hostname.
+ *
+ * Only the Host header: Vercel routes on it, so it names one of this
+ * project's domains. X-Forwarded-Host is never read; a client can send any
+ * value there. The result only ever selects which website's metadata to
+ * look up; it never decides where anything is fetched from.
+ */
 export function requestHost(request: Request): string {
-  const raw = request.headers.get('x-forwarded-host') || request.headers.get('host') || new URL(request.url).host
-  return raw.split(',')[0].trim().toLowerCase()
+  const raw = (request.headers.get('host') || new URL(request.url).host).trim().toLowerCase()
+  return raw.length <= 253 && HOSTNAME.test(raw) ? raw : ''
+}
+
+/**
+ * Where the app shell is fetched from: this deployment's own address, fixed
+ * by the platform and never derived from the request. Production reads the
+ * public site (served by the current production deployment); previews read
+ * their own deployment URL.
+ */
+export function shellOrigin(): string {
+  if (process.env.VERCEL_ENV !== 'production' && process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return SITE_URL
 }
 
 /** userentos.com and www: the platform itself, not an agency website. */

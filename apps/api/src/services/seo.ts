@@ -250,7 +250,8 @@ async function siteForHost(host: string): Promise<SiteRecord | null> {
 /** Metadata for one page; null when the page sets its own in the browser and the defaults will do. */
 export async function pageMeta(rawHost: string, rawPath: string): Promise<PageMeta | null> {
   const host = rawHost.trim().toLowerCase()
-  const path = `/${rawPath.split(/[?#]/)[0].split('/').filter(Boolean).map(decodeURIComponent).join('/')}`
+  const decode = (segment: string) => { try { return decodeURIComponent(segment) } catch { return segment } }
+  const path = `/${rawPath.split(/[?#]/)[0].split('/').filter(Boolean).map(decode).join('/')}`
   const parts = path.split('/').filter(Boolean)
 
   const site = await siteForHost(host)

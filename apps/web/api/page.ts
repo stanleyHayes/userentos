@@ -5,14 +5,21 @@
  * right title, description and photo without running JavaScript; people get
  * the same single-page app as everywhere else.
  */
-import { API_URL, fetchWithTimeout, injectMeta, requestHost, type PageMeta } from './_lib/seo.js'
+import { API_URL, fetchWithTimeout, injectMeta, requestHost, shellOrigin, type PageMeta } from './_lib/seo.js'
 
 let cachedShell: { html: string; at: number } | null = null
 
-/** The deployed app shell, app.html (see vite.config.ts), kept for a minute. */
-async function shell(origin: string): Promise<string> {
+/**
+ * The deployed app shell, app.html (see vite.config.ts), kept for a minute.
+ * Always from shellOrigin(), this deployment's own fixed address, so the one
+ * cached copy is never anyone else's HTML and the bypass secret (needed to
+ * read a protected preview) only ever goes to this deployment.
+ */
+async function shell(): Promise<string> {
   if (cachedShell && Date.now() - cachedShell.at < 60_000) return cachedShell.html
-  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  const origin = shellOrigin()
+  // Only a preview's own deployment URL is behind protection.
+  const bypass = process.env.VERCEL_URL && origin === `https://${process.env.VERCEL_URL}` ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined
   const response = await fetchWithTimeout(`${origin}/app.html`, 3000, bypass ? { headers: { 'x-vercel-protection-bypass': bypass } } : {})
   if (!response.ok) throw new Error(`app.html answered ${response.status}`)
   cachedShell = { html: await response.text(), at: Date.now() }
@@ -33,20 +40,21 @@ async function metaFor(host: string, path: string): Promise<PageMeta | null> {
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const host = requestHost(request)
-  const path = url.searchParams.get('path') || '/'
-  const origin = `${url.protocol}//${host}`
+  // A path on this site only: never a scheme or another host.
+  const raw = url.searchParams.get('path') || '/'
+  const path = raw.startsWith('/') && !raw.startsWith('//') ? raw.slice(0, 512) : '/'
 
   let html: string
   try {
-    html = await shell(origin)
+    html = await shell()
   } catch {
     // Serve the plain app instead (vercel.json skips this function when _shell is set).
-    const fallback = new URL(path, origin)
-    fallback.searchParams.set('_shell', '1')
-    return Response.redirect(fallback.toString(), 302)
+    // A relative redirect stays on whichever host was asked.
+    const query = new URLSearchParams({ _shell: '1' })
+    return new Response(null, { status: 302, headers: { Location: `${path.split('?')[0]}?${query}`, 'Cache-Control': 'no-store' } })
   }
 
-  const meta = await metaFor(host, path)
+  const meta = host ? await metaFor(host, path) : null
   return new Response(meta ? injectMeta(html, meta) : html, {
     status: meta?.status === 404 ? 404 : 200,
     headers: {
