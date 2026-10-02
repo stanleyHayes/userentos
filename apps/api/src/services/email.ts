@@ -1,4 +1,6 @@
 import { Resend } from 'resend'
+import { renderEmail, BRAND, formatCedis } from './emailLayout.js'
+import { CREDENTIAL_LIFETIMES } from '../types/index.js'
 
 let resendInstance: Resend | null = null
 
@@ -41,52 +43,97 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 }
 
-// Pre-built templates
+// Pre-built templates — all rendered with the RentOS layout (emailLayout.ts).
+// Each has a builder (subject, html, text; tested and previewed) and a sender.
+
+export interface BuiltEmail { subject: string; html: string; text: string }
+
+export function welcomeEmail(firstName: string): BuiltEmail {
+  const email = renderEmail({
+    preheader: 'Your RentOS account is ready. Find a home, message agents and keep everything in one safe place.',
+    heading: `Welcome to RentOS, ${firstName}`,
+    paragraphs: [
+      'Your account is ready. Here is what you can do on RentOS:',
+      { html: `<strong style="color:${BRAND.navy}">Find a home</strong> to rent or buy across Ghana, with verified listings and clear prices.<br><strong style="color:${BRAND.navy}">Message agents and landlords</strong> safely on RentOS, and book viewings.<br><strong style="color:${BRAND.navy}">Keep your tenancy in one place</strong>: agreements, receipts and your rental profile.` },
+    ],
+    button: { label: 'Open RentOS', url: absoluteUrl('/login') },
+  })
+  return { subject: 'Welcome to RentOS Ghana', ...email }
+}
 
 export function sendWelcomeEmail(to: string, firstName: string) {
-  return sendEmail({
-    to,
-    subject: 'Welcome to RentOS Ghana',
-    text: `Hi ${firstName},\n\nWelcome to RentOS Ghana! Your account has been created successfully.\n\nYou can now:\n- Browse rental properties\n- Create digital agreements\n- Make rent payments\n- Start saving with RentGuard\n\nLog in at: ${PUBLIC_BASE_URL}/login\n\nBest regards,\nThe RentOS Team`,
-    html: `<h2>Welcome to RentOS Ghana, ${firstName}!</h2><p>Your account has been created successfully.</p><p>You can now:</p><ul><li>Browse rental properties</li><li>Create digital agreements</li><li>Make rent payments</li><li>Start saving with RentGuard</li></ul><p><a href="${PUBLIC_BASE_URL}/login">Log in to your account</a></p>`,
+  return sendEmail({ to, ...welcomeEmail(firstName) })
+}
+
+export function passwordResetEmail(resetToken: string): BuiltEmail {
+  const resetUrl = absoluteUrl(`/reset-password?token=${encodeURIComponent(resetToken)}`)
+  const minutes = CREDENTIAL_LIFETIMES.passwordResetMinutes
+  const email = renderEmail({
+    preheader: `Reset your RentOS password. The link works for ${minutes} minutes.`,
+    heading: 'Reset your password',
+    paragraphs: ['Someone asked to reset the password for your RentOS account. If it was you, choose a new password with the button below.'],
+    button: { label: 'Choose a new password', url: resetUrl },
+    note: `This link works once and expires in ${minutes} minutes. If you did not ask for it, ignore this email: your password stays the same.`,
+    footer: emailFooterExempt(),
   })
+  return { subject: 'Reset your RentOS password', ...email }
 }
 
 export function sendPasswordResetEmail(to: string, resetToken: string) {
-  const resetUrl = `${PUBLIC_BASE_URL}/reset-password?token=${resetToken}`
-  return sendEmail({
-    to,
-    subject: 'Reset Your RentOS Password',
-    text: `You requested a password reset. Click this link to reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you did not request this, please ignore this email.`,
-    html: `<h2>Reset Your Password</h2><p>You requested a password reset. Click the button below:</p><p><a href="${resetUrl}" style="background:#1e3a5f;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Reset Password</a></p><p><small>This link expires in 1 hour. If you did not request this, please ignore this email.</small></p>`,
+  return sendEmail({ to, ...passwordResetEmail(resetToken) })
+}
+
+export function paymentConfirmationEmail(amount: number, reference: string): BuiltEmail {
+  const email = renderEmail({
+    preheader: `${formatCedis(amount)} received. Reference ${reference}.`,
+    heading: 'Payment confirmed',
+    paragraphs: ['Your rent payment has been confirmed. Keep this email as your receipt; it is also saved in your payment history.'],
+    details: [{ label: 'Amount', value: formatCedis(amount) }, { label: 'Reference', value: reference }],
+    button: { label: 'View payment history', url: absoluteUrl('/payments') },
+    footer: emailFooterExempt(),
   })
+  return { subject: `Payment confirmed - ${reference}`, ...email }
 }
 
 export function sendPaymentConfirmation(to: string, amount: number, reference: string) {
-  return sendEmail({
-    to,
-    subject: `Payment Confirmed - ${reference}`,
-    text: `Your rent payment of GHS ${amount.toFixed(2)} has been confirmed.\n\nReference: ${reference}\n\nView your payment history at: ${PUBLIC_BASE_URL}/payments`,
-    html: `<h2>Payment Confirmed</h2><p>Your rent payment of <strong>GHS ${amount.toFixed(2)}</strong> has been confirmed.</p><p>Reference: <code>${reference}</code></p><p><a href="${PUBLIC_BASE_URL}/payments">View Payment History</a></p>`,
+  return sendEmail({ to, ...paymentConfirmationEmail(amount, reference) })
+}
+
+export function rentReminderEmail(amount: number, dueDate: string, property: string): BuiltEmail {
+  const email = renderEmail({
+    preheader: `${formatCedis(amount)} for ${property} is due on ${dueDate}.`,
+    heading: 'Rent reminder',
+    paragraphs: ['A friendly reminder that your next rent payment is coming up.'],
+    details: [{ label: 'Property', value: property }, { label: 'Amount', value: formatCedis(amount) }, { label: 'Due', value: dueDate }],
+    button: { label: 'Pay on RentOS', url: absoluteUrl('/payments') },
   })
+  return { subject: `Rent reminder - ${formatCedis(amount)} due ${dueDate}`, ...email }
 }
 
 export function sendRentReminder(to: string, amount: number, dueDate: string, property: string) {
-  return sendEmail({
-    to,
-    subject: `Rent Reminder - GHS ${amount.toFixed(2)} due ${dueDate}`,
-    text: `This is a reminder that your rent payment of GHS ${amount.toFixed(2)} for ${property} is due on ${dueDate}.\n\nPay now at: ${PUBLIC_BASE_URL}/payments`,
-    html: `<h2>Rent Reminder</h2><p>Your rent payment of <strong>GHS ${amount.toFixed(2)}</strong> for <strong>${property}</strong> is due on <strong>${dueDate}</strong>.</p><p><a href="${PUBLIC_BASE_URL}/payments" style="background:#1e3a5f;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Pay Now</a></p>`,
+  return sendEmail({ to, ...rentReminderEmail(amount, dueDate, property) })
+}
+
+export function disputeEmail(disputeTitle: string, status: string): BuiltEmail {
+  const readable = status.replace(/_/g, ' ')
+  const email = renderEmail({
+    preheader: `Your dispute "${disputeTitle}" is now ${readable}.`,
+    heading: 'Dispute update',
+    paragraphs: [`There is an update on your dispute "${disputeTitle}".`],
+    details: [{ label: 'Status', value: readable }],
+    button: { label: 'View the dispute', url: absoluteUrl('/disputes') },
   })
+  return { subject: `Dispute update - ${disputeTitle}`, ...email }
 }
 
 export function sendDisputeNotification(to: string, disputeTitle: string, status: string) {
-  return sendEmail({
-    to,
-    subject: `Dispute Update - ${disputeTitle}`,
-    text: `Your dispute "${disputeTitle}" has been updated to: ${status.replace('_', ' ')}.\n\nView details at: ${PUBLIC_BASE_URL}/disputes`,
-    html: `<h2>Dispute Update</h2><p>Your dispute "<strong>${disputeTitle}</strong>" has been updated to: <strong>${status.replace('_', ' ')}</strong>.</p><p><a href="${PUBLIC_BASE_URL}/disputes">View Details</a></p>`,
-  })
+  return sendEmail({ to, ...disputeEmail(disputeTitle, status) })
+}
+
+/** Footer for emails sent whatever the notification settings say. */
+function emailFooterExempt(): { text: string; html: string } {
+  const note = 'This is a required service message about your RentOS account or a payment. It is sent even if optional notifications are turned off.'
+  return { text: `\n\n--\n${note}`, html: `<p style="color:#6b7280;font-size:12px">${note}</p>` }
 }
 
 /** Escape user-controlled values before interpolating into email HTML. */
@@ -136,24 +183,30 @@ export function buildInviteUrl(rawToken: string): string {
   return absoluteUrl(`/accept-invite?token=${encodeURIComponent(rawToken)}`)
 }
 
+export function invitationEmail(to: string, opts: {
+  inviteUrl: string
+  roles: string[]
+  invitedByName?: string
+  expiresAt: Date
+}): BuiltEmail {
+  const roleText = describeRoles(opts.roles)
+  const invitedBy = opts.invitedByName ? `${opts.invitedByName} has invited you` : 'You have been invited'
+  const expires = opts.expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  const email = renderEmail({
+    preheader: `${invitedBy} to join RentOS Ghana as ${roleText}.`,
+    heading: 'You have been invited to RentOS',
+    paragraphs: [{ html: `${escapeHtml(invitedBy)} to join <strong style="color:${BRAND.navy}">RentOS Ghana</strong> as <strong style="color:${BRAND.navy}">${escapeHtml(roleText)}</strong>. Accept the invitation to set your password and sign in.` }],
+    button: { label: 'Accept invitation', url: opts.inviteUrl },
+    note: `This invitation is for ${to} only and expires on ${expires}. If you were not expecting it, you can ignore this email: the link does nothing until someone completes the form.`,
+  })
+  return { subject: `You have been invited to RentOS Ghana as ${roleText}`, ...email }
+}
+
 export function sendInvitationEmail(to: string, opts: {
   inviteUrl: string
   roles: string[]
   invitedByName?: string
   expiresAt: Date
 }) {
-  const roleText = describeRoles(opts.roles)
-  const invitedBy = opts.invitedByName ? `${opts.invitedByName} has invited you` : 'You have been invited'
-  const expires = opts.expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-
-  return sendEmail({
-    to,
-    subject: `You have been invited to RentOS Ghana as ${roleText}`,
-    text: `${invitedBy} to join RentOS Ghana as ${roleText}.\n\nAccept your invitation and set your password here:\n\n${opts.inviteUrl}\n\nThis invitation is for ${to} only and expires on ${expires}.\n\nIf you were not expecting this invitation, you can ignore this email — the link cannot be used until someone completes the form.\n\nThe RentOS Team`,
-    html: `<h2>You have been invited to RentOS Ghana</h2>`
-      + `<p>${escapeHtml(invitedBy)} to join <strong>RentOS Ghana</strong> as <strong>${escapeHtml(roleText)}</strong>.</p>`
-      + `<p><a href="${opts.inviteUrl}" style="background:#1e3a5f;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Accept Invitation</a></p>`
-      + `<p><small>Or paste this link into your browser:<br>${escapeHtml(opts.inviteUrl)}</small></p>`
-      + `<p><small>This invitation is for ${escapeHtml(to)} only and expires on ${escapeHtml(expires)}. If you were not expecting it, you can ignore this email.</small></p>`,
-  })
+  return sendEmail({ to, ...invitationEmail(to, opts) })
 }

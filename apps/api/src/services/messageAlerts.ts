@@ -14,6 +14,7 @@ import { Conversation } from '../models/Conversation.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { sendEmail, absoluteUrl } from './email.js'
+import { renderEmail } from './emailLayout.js'
 import { deliveryPlan, emailFooter, conversationPath, type NotificationPreferences } from './notify.js'
 import { logger } from '../utils/logger.js'
 
@@ -28,9 +29,6 @@ export function messageEmailDelayMs(): number {
   return minutes * 60 * 1000
 }
 
-const escapeHtml = (value: string) => value
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-
 export interface UnreadEmail {
   subject: string
   text: string
@@ -42,17 +40,16 @@ export function unreadEmail(input: { firstName?: string; senderName: string; unr
   const count = input.unread > 1 ? `${input.unread} new messages` : 'a new message'
   const about = input.propertyTitle ? ` about "${input.propertyTitle}"` : ''
   const preview = input.preview.length > 200 ? `${input.preview.slice(0, 199).trimEnd()}…` : input.preview
-  const greeting = input.firstName ? `Hi ${input.firstName},` : 'Hi,'
-  const footer = emailFooter('account')
   const subject = input.unread > 1 ? `${input.unread} unread messages from ${input.senderName}` : `${input.senderName} sent you a message`
-  const text = `${greeting}\n\n${input.senderName} sent you ${count}${about} on RentOS:\n\n"${preview}"\n\nReply on RentOS: ${input.url}\n\nKeep the conversation, viewing and payment on RentOS — that's how you stay protected.${footer.text}`
-  const html = `<p>${escapeHtml(greeting)}</p>`
-    + `<p><strong>${escapeHtml(input.senderName)}</strong> sent you ${count}${escapeHtml(about)} on RentOS:</p>`
-    + `<blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #1e3a5f;background:#f5f7fa;color:#1f2937">${escapeHtml(preview)}</blockquote>`
-    + `<p><a href="${escapeHtml(input.url)}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">Reply on RentOS</a></p>`
-    + `<p style="color:#6b7280;font-size:13px">Keep the conversation, viewing and payment on RentOS — that's how you stay protected.</p>`
-    + footer.html
-  return { subject, text, html }
+  const email = renderEmail({
+    preheader: `${input.senderName}: ${preview}`,
+    heading: input.unread > 1 ? `${input.unread} unread messages from ${input.senderName}` : `New message from ${input.senderName}`,
+    paragraphs: [`${input.firstName ? `Hi ${input.firstName}, ` : ''}${input.senderName} sent you ${count}${about} on RentOS.`],
+    highlight: { label: input.unread > 1 ? 'Latest message' : 'Message', text: preview },
+    button: { label: 'Reply on RentOS', url: input.url },
+    footer: emailFooter('account'),
+  })
+  return { subject, ...email }
 }
 
 /** One run: email everyone whose unread message has waited long enough. */

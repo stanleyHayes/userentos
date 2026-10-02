@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js'
 import { Notification } from '../models/Notification.js'
 import { User } from '../models/User.js'
 import { sendEmail, absoluteUrl } from './email.js'
+import { renderEmail, formatCedis } from './emailLayout.js'
 import { sendPushNotification } from './push.js'
 import { sendSMS, smsConfigured } from './sms.js'
 import { getIO } from './socket.js'
@@ -99,6 +100,32 @@ interface NotifyOptions {
    * recipient's phone, where their SMS toggle allows it.
    */
   sms?: string
+}
+
+/** A notification as an email, in the RentOS layout. */
+export function notificationEmail(input: { title: string; message: string; actionUrl?: string; category: NotificationCategory }) {
+  const email = renderEmail({
+    preheader: input.message,
+    heading: input.title,
+    paragraphs: [input.message],
+    button: input.actionUrl ? { label: actionLabel(input.actionUrl), url: absoluteUrl(input.actionUrl) } : undefined,
+    footer: emailFooter(input.category),
+  })
+  return { subject: input.title, ...email }
+}
+
+/** What the email button says, from where it leads. */
+export function actionLabel(actionUrl: string): string {
+  const path = actionUrl.split('?')[0]
+  if (path.startsWith('/messages')) return 'Open the conversation'
+  if (path.startsWith('/agent/leads')) return 'View the enquiry'
+  if (path.startsWith('/payments')) return 'View payments'
+  if (path.startsWith('/agreements')) return 'View the agreement'
+  if (path.startsWith('/applications')) return 'View the application'
+  if (path.startsWith('/properties') || path.startsWith('/property')) return 'View the listing'
+  if (path.startsWith('/disputes')) return 'View the dispute'
+  if (path.startsWith('/maintenance')) return 'View the request'
+  return 'Open RentOS'
 }
 
 /** Escape user-controlled values before interpolating into email HTML. */
@@ -209,24 +236,13 @@ async function createNotification(opts: NotifyOptions) {
     console.warn('[Notify] Socket emit failed:', (err as Error).message)
   }
 
-  // 2. Email (best-effort, non-blocking)
+  // 2. Email (best-effort, non-blocking), in the RentOS layout. title and
+  // message can carry user-generated text (a listing title, a name): the
+  // layout escapes plain strings. Link targets are absolute and
+  // environment-aware, so staging emails never point at production.
   if (!skipEmail && plan.email && recipient?.email) {
-    // title/message/actionUrl can contain user-generated content (e.g. chat
-    // messages) — escape before HTML interpolation. subject/text are
-    // plain-text contexts and stay unescaped.
-    const safeTitle = escapeHtml(title)
-    const safeMessage = escapeHtml(message)
-    // Link targets must be absolute and environment-aware — this used to
-    // hardcode https://rentos.gh, so every staging/dev notification pointed
-    // at production.
-    const safeActionUrl = actionUrl ? escapeHtml(absoluteUrl(actionUrl)) : undefined
-    const footer = emailFooter(category)
-    sendEmail({
-      to: recipient.email,
-      subject: title,
-      text: `${message}${footer.text}`,
-      html: `<h3>${safeTitle}</h3><p>${safeMessage}</p>${safeActionUrl ? `<p><a href="${safeActionUrl}" style="background:#1e3a5f;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">View Details</a></p>` : ''}${footer.html}`,
-    }).catch((err) => console.warn('[Notify] Email failed:', err.message))
+    sendEmail({ to: recipient.email, ...notificationEmail({ title, message, actionUrl, category }) })
+      .catch((err) => console.warn('[Notify] Email failed:', err.message))
   }
 
   // 3. Push notification (best-effort, non-blocking)
@@ -282,7 +298,7 @@ export function notifyPaymentReceived(landlordId: string, tenantName: string, am
   return notify({
     userId: landlordId,
     title: 'Payment Received',
-    message: `${tenantName} paid GHS ${amount.toFixed(2)} (Ref: ${reference}).`,
+    message: `${tenantName} paid ${formatCedis(amount)} (Ref: ${reference}).`,
     actionUrl: '/payments',
   })
 }
@@ -291,7 +307,7 @@ export function notifyPaymentConfirmed(tenantId: string, amount: number, referen
   return notify({
     userId: tenantId,
     title: 'Payment Confirmed',
-    message: `Your payment of GHS ${amount.toFixed(2)} has been confirmed (Ref: ${reference}).`,
+    message: `Your payment of ${formatCedis(amount)} has been confirmed (Ref: ${reference}).`,
     actionUrl: '/payments',
     // The payer's receipt — exempt from the optional toggles.
     category: 'receipt',
@@ -390,7 +406,7 @@ export function notifyRentReminder(tenantId: string, amount: number, daysLeft: n
   return notify({
     userId: tenantId,
     title: 'Rent Due Soon',
-    message: `Your rent of GHS ${amount.toFixed(2)} for "${propertyTitle}" is due in ${daysLeft} days.`,
+    message: `Your rent of ${formatCedis(amount)} for "${propertyTitle}" is due in ${daysLeft} days.`,
     actionUrl: '/payments',
     category: 'payment',
   })
