@@ -23,6 +23,12 @@ export const LANDLORD_USER = {
   password: process.env.E2E_LANDLORD_PASSWORD || 'password123',
 } as const
 
+/** Kwasi Osei, the seeded plumber: service providers keep Workers and My Bookings in Phase 1. */
+export const PROVIDER_USER = {
+  email: process.env.E2E_PROVIDER_EMAIL || 'kwasi@rentos.gh',
+  password: process.env.E2E_PROVIDER_PASSWORD || 'password123',
+} as const
+
 /**
  * Perform a UI login flow against /login and assert the dashboard renders.
  * Reusable from any test file.
@@ -78,6 +84,8 @@ type AuthFixtures = {
   authedPage: Page
   /** A page that has already completed the landlord login flow. */
   authedLandlordPage: Page
+  /** A page that has already completed the service provider login flow. */
+  authedProviderPage: Page
 }
 
 /**
@@ -94,6 +102,10 @@ export const test = base.extend<AuthFixtures>({
   },
   authedLandlordPage: async ({ page }, use) => {
     await loginViaUI(page, LANDLORD_USER)
+    await use(page)
+  },
+  authedProviderPage: async ({ page }, use) => {
+    await loginViaUI(page, PROVIDER_USER)
     await use(page)
   },
 })

@@ -143,8 +143,6 @@ export async function seedDatabase() {
       'subscriptions:view', 'subscriptions:manage',
     ] },
     { email: 'superadmin@rentos.gh', phone: '0300000001', firstName: 'Super', lastName: 'Admin', passwordHash: hash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] },
-    // Optional owner super-admin (env-configured only — never hardcoded)
-    ...(ownerEmail && ownerHash ? [{ email: ownerEmail, phone: '0300000009', firstName: 'Owner', lastName: 'Admin', passwordHash: ownerHash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] }] : []),
     // Financiers (lenders) — pay landlord upfront, collect from tenant
     { email: 'bloom@rentos.gh', phone: '0302456789', firstName: 'Bloom', lastName: 'Capital', passwordHash: hash, roles: ['financier'], activeRole: 'financier', isVerified: true, permissions: [
       'users:view', 'agreements:view', 'payments:view',
@@ -174,6 +172,11 @@ export async function seedDatabase() {
     // Local businesses — furniture, internet, etc. advertising to renters
     { email: 'furniture@rentos.gh', phone: '0244331000', firstName: 'Adom', lastName: 'Furnishings', passwordHash: hash, roles: ['business'], activeRole: 'business', isVerified: true, permissions: [] },
     { email: 'internet@rentos.gh', phone: '0244332000', firstName: 'SwiftLink', lastName: 'Ghana', passwordHash: hash, roles: ['business'], activeRole: 'business', isVerified: true, permissions: [] },
+    // Service provider: Kwasi, the plumber in the worker marketplace (his worker profile is linked below).
+    { email: 'kwasi@rentos.gh', phone: '0244441111', firstName: 'Kwasi', lastName: 'Osei', passwordHash: hash, roles: ['service_provider'], activeRole: 'service_provider', isVerified: true, permissions: [] },
+    // Optional owner super-admin (env-configured only — never hardcoded). Keep it
+    // last: the accounts above are destructured by position below.
+    ...(ownerEmail && ownerHash ? [{ email: ownerEmail, phone: '0300000009', firstName: 'Owner', lastName: 'Admin', passwordHash: ownerHash, roles: ['super_admin'], activeRole: 'super_admin', isVerified: true, permissions: [] }] : []),
   ])
 
   const [tenant1, tenant2, tenant3, tenant4, tenant5, tenant6, tenant7, tenant8,
@@ -182,7 +185,8 @@ export async function seedDatabase() {
     gov, legal, admin, ofiAdmin, superAdmin,
     financier1, financier2,
     employerOwner1, employerOwner2,
-    businessOwner1, businessOwner2] = users
+    businessOwner1, businessOwner2,
+    provider1] = users
 
   const t1 = tenant1._id.toString()
   const t2 = tenant2._id.toString()
@@ -1327,7 +1331,7 @@ export async function seedDatabase() {
 
   const workers = await Worker.insertMany([
     {
-      name: 'Kwasi Osei', phone: '0244441111', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+      name: 'Kwasi Osei', phone: '0244441111', userId: provider1._id.toString(), photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
       trades: ['plumbing'], skills: ['Pipe fitting', 'Leak detection', 'Water heater repair', 'Bathroom installation'],
       bio: 'Certified plumber with 8 years experience. Specializes in residential plumbing repairs and bathroom renovations. Available for emergencies.',
       location: 'Accra', serviceRadius: 15, hourlyRate: 80,
@@ -1404,7 +1408,7 @@ export async function seedDatabase() {
 
   await ServiceBooking.insertMany([
     {
-      requesterId: t1, requesterRole: 'tenant', workerId: plumber._id.toString(),
+      requesterId: t1, requesterRole: 'tenant', workerId: plumber._id.toString(), workerUserId: plumber.userId,
       type: 'repair', description: 'Kitchen sink leaking badly under the cabinet. Need urgent repair.',
       status: 'pending', scheduledDate: _addDays(now, 2), scheduledTime: '09:00',
       estimatedCost: 200, paymentStatus: 'pending', notes: [],
@@ -2405,6 +2409,7 @@ export async function seedDatabase() {
   logCred('  Employer 2:     college-hr@rentos.gh      (Coastal University College, fictional — 1 employee)')
   logCred('  Business 1:     furniture@rentos.gh   (Adom Furnishings — furniture store, Accra)')
   logCred('  Business 2:     internet@rentos.gh    (SwiftLink Ghana — internet provider, Tema)')
+  logCred('  Provider:       kwasi@rentos.gh       (Kwasi Osei — plumber in the worker marketplace)')
   logCred('\nPending invitations:')
   logCred('  mensah.akufo@rentos.gh    → government role (invited by super admin)')
   logCred('  grace.tetteh@rentos.gh    → legal_officer role (invited by super admin)')

@@ -32,7 +32,9 @@ test.describe('property application', () => {
         password: 'E2e!Password123',
         firstName: 'E2E',
         lastName: 'ApplyLandlord',
-        role: 'landlord',
+        // Phase 1 sign-up is open to tenants and agents / property managers (apps/api/src/config/signupRoles.ts).
+        role: 'property_manager',
+        professionalType: 'agent',
         acceptance,
       },
     })
