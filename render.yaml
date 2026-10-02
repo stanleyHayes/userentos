@@ -144,7 +144,8 @@ services:
       # ─── AI / ML ───
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Optional override — defaults to claude-sonnet-4-20250514.
+      # Optional override — defaults to claude-opus-5-5. Must accept output_config.effort
+      # (Opus 4.5+, Sonnet 4.6+); claude-sonnet-4-20250514 is retired and answers 404.
       - key: ANTHROPIC_MODEL
         sync: false
       # Only used for legal-document search embeddings.

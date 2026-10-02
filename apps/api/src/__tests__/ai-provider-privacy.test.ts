@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ message: vi.fn(), embedding: vi.fn(), retrieval: vi.fn(), warn: vi.fn() }))
-vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mocks.message } } }))
+vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mocks.message }; beta = { messages: { create: mocks.message } } } }))
 vi.mock('openai', () => ({ default: class { embeddings = { create: mocks.embedding } } }))
 vi.mock('../services/rag.js', () => ({ retrieveLegalChunks: mocks.retrieval, buildRagSystemPrompt: (prompt: string) => prompt }))
 vi.mock('../utils/logger.js', () => ({ logger: { warn: mocks.warn } }))

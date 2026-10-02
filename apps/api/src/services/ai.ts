@@ -4,7 +4,15 @@ import { retrieveLegalChunks, buildRagSystemPrompt } from './rag.js'
 
 let client: Anthropic | null = null
 
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+// Claude Sonnet 4 (claude-sonnet-4-20250514) was retired and answers 404, which
+// took every AI feature down. ANTHROPIC_MODEL still overrides this, but only
+// with a model that accepts output_config.effort (Opus 4.5+, Sonnet 4.6+).
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-5-5'
+
+// Claude Opus 5.5's safety classifiers can decline a benign request (HTTP 200,
+// stop_reason "refusal"). The server-side fallback re-runs that one request on
+// Claude Opus 4.8 instead of failing the writer.
+const REFUSAL_FALLBACKS: Partial<Record<string, string>> = { 'claude-opus-5-5': 'claude-opus-4-8' }
 
 export function getClient(): Anthropic {
   if (client) return client
@@ -12,11 +20,51 @@ export function getClient(): Anthropic {
   if (!anthropicApiKey) {
     throw new Error('Missing required environment variable: ANTHROPIC_API_KEY')
   }
-  client = new Anthropic({ apiKey: anthropicApiKey, maxRetries: 0, timeout: 35_000, fetch: createAiFetch('https://api.anthropic.com') })
+  // Opus 5.5 thinks before it answers, so replies take longer than Sonnet 4's
+  // did; the transport deadline sits just inside the SDK's.
+  client = new Anthropic({ apiKey: anthropicApiKey, maxRetries: 0, timeout: 65_000, fetch: createAiFetch('https://api.anthropic.com', { timeoutMs: 60_000 }) })
   return client
 }
 
 export { ANTHROPIC_MODEL }
+
+/** The model declined the request. The message is ours, so it is safe to show. */
+export class AiDeclinedError extends Error {
+  constructor() {
+    super('The AI assistant could not help with this request. Try rephrasing it.')
+  }
+}
+
+interface Completion {
+  system: string
+  messages: Anthropic.Beta.BetaMessageParam[]
+  /** Thinking counts toward this limit as well as the reply. */
+  maxTokens: number
+  /** low for anything a person waits on; medium for officers' case summaries. */
+  effort: 'low' | 'medium'
+  format?: Anthropic.Beta.BetaJSONOutputFormat
+}
+
+/**
+ * Sends one request and returns the reply text. The text is collected from the
+ * text blocks rather than read from content[0]: Opus 5.5 puts its thinking
+ * block first, so content[0] is no longer the answer.
+ */
+export async function complete({ system, messages, maxTokens, effort, format }: Completion): Promise<string> {
+  const fallback = REFUSAL_FALLBACKS[ANTHROPIC_MODEL]
+  const response = await getClient().beta.messages.create({
+    model: ANTHROPIC_MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages,
+    output_config: format ? { effort, format } : { effort },
+    ...(fallback ? { betas: ['server-side-fallback-2026-06-01'], fallbacks: [{ model: fallback }] } : {}),
+  })
+  if (response.stop_reason === 'refusal') throw new AiDeclinedError()
+  const text = response.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('').trim()
+  if (!text) throw new Error('AI reply contained no text')
+  return text
+}
 
 function langLabel(code: string): string {
   const map: Record<string, string> = {
@@ -76,22 +124,16 @@ Rules:
 - For agreements/terms: be precise and legally clear
 - For reviews: be honest and balanced
 - For bios: be personable yet professional
+- For business descriptions (an agency's About Us): describe who they are, the areas and property types they cover, and why to work with them
+- For marketing copy and social posts: be short, lively and end with a clear call to action
 - Do NOT add fictional details the user didn't mention
 - Output ONLY the generated text, no explanations or preamble
 - Keep it concise — expand meaningfully but don't pad with filler${langInstruction}`
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const block = response.content[0]
-    if (block.type === 'text') return block.text
-    return prompt // fallback to original
+    return await complete({ system: systemPrompt, messages: [{ role: 'user', content: prompt }], maxTokens: 4000, effort: 'low' })
   } catch (err) {
+    if (err instanceof AiDeclinedError) throw err
     const e = err as { status?: number; message?: string }
     if (e.status === 401) {
       // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
@@ -110,6 +152,8 @@ export interface PropertyListingInput {
   bathrooms: number
   amenities: string[]
   price: number
+  /** What the price is for: monthly rent (the default), a nightly short-let rate, or a sale price. */
+  listingType?: 'rent' | 'sale' | 'short_let'
   rules: string[]
   nearby?: string
   targetTenant?: string
@@ -131,6 +175,29 @@ export interface GeneratedListing {
 
 export type ToneOption = 'professional' | 'luxury' | 'simple' | 'friendly' | 'urgent' | 'student' | 'family' | 'commercial'
 
+// Structured output: the reply is guaranteed to parse, so there is no code
+// fence or stray prose to strip before JSON.parse.
+const LISTING_FORMAT: Anthropic.Beta.BetaJSONOutputFormat = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      description: { type: 'string' },
+      shortDescription: { type: 'string' },
+      socialCaption: { type: 'string' },
+    },
+    required: ['title', 'description', 'shortDescription', 'socialCaption'],
+    additionalProperties: false,
+  },
+}
+
+function priceLine(price: number, listingType: PropertyListingInput['listingType']): string {
+  if (listingType === 'sale') return `Sale price: GHS ${price}`
+  if (listingType === 'short_let') return `Short-let rate: GHS ${price} per night`
+  return `Rent: GHS ${price} per month`
+}
+
 export async function generatePropertyListing(
   input: PropertyListingInput,
   tone: ToneOption = 'professional',
@@ -150,12 +217,13 @@ export async function generatePropertyListing(
   const lang = langLabel(language)
   const parts: string[] = []
   parts.push(`Property type: ${input.propertyType}`)
+  parts.push(`Listing: ${input.listingType === 'sale' ? 'For sale' : input.listingType === 'short_let' ? 'Short let / short stay' : 'For rent'}`)
   parts.push(`Location: ${input.location}`)
   parts.push(`Bedrooms: ${input.bedrooms}`)
   parts.push(`Bathrooms: ${input.bathrooms}`)
   if (input.sizeSqm) parts.push(`Size: ${input.sizeSqm} sqm`)
   if (input.floor) parts.push(`Floor: ${input.floor}`)
-  parts.push(`Price: GHS ${input.price}/month`)
+  parts.push(priceLine(input.price, input.listingType))
   if (input.furnished) parts.push('Furnished: Yes')
   if (input.parking) parts.push('Parking: Yes')
   if (input.water) parts.push('Water: Yes')
@@ -168,33 +236,21 @@ export async function generatePropertyListing(
 
   const prompt = parts.join('\n')
 
-  const systemPrompt = `You are RentOS AI Writer, a professional property listing copywriter for the Ghana rental market.
+  const systemPrompt = `You are RentOS AI Writer, a professional property listing copywriter for the Ghana property market.
 
 ${toneInstructions[tone]}
 
-Write in ${lang}.
+Write in ${lang}. Use only the facts given; do not invent features, landmarks or prices.
 
-You must output ONLY a JSON object with these exact keys:
-- "title": A catchy, informative listing title (max 80 characters)
-- "description": A detailed property description (2-4 paragraphs, highlighting location, features, amenities, and benefits)
-- "shortDescription": A 1-sentence summary for cards and previews (max 120 characters)
-- "socialCaption": A social media caption for WhatsApp/Facebook/Instagram (engaging, includes emojis, ends with a call to action)
-
-Do NOT include markdown code fences. Output raw JSON only.`
+Fill these fields:
+- title: a catchy, informative listing title (max 80 characters)
+- description: a detailed property description (2-4 paragraphs, highlighting location, features, amenities, and benefits)
+- shortDescription: a 1-sentence summary for cards and previews (max 120 characters)
+- socialCaption: a social media caption for WhatsApp/Facebook/Instagram (engaging, includes emojis, ends with a call to action)`
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const block = response.content[0]
-    if (block.type !== 'text') throw new Error('Unexpected response type')
-
-    const text = block.text.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '')
-    const parsed = JSON.parse(text) as GeneratedListing
+    const text = await complete({ system: systemPrompt, messages: [{ role: 'user', content: prompt }], maxTokens: 6000, effort: 'low', format: LISTING_FORMAT })
+    const parsed = JSON.parse(text) as Partial<GeneratedListing>
     return {
       title: parsed.title?.trim() ?? '',
       description: parsed.description?.trim() ?? '',
@@ -202,6 +258,7 @@ Do NOT include markdown code fences. Output raw JSON only.`
       socialCaption: parsed.socialCaption?.trim() ?? '',
     }
   } catch (err) {
+    if (err instanceof AiDeclinedError) throw err
     const e = err as { status?: number; message?: string }
     // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
     if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
@@ -224,17 +281,9 @@ Rules:
 - Output ONLY the rewritten text, no explanations`
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: text }],
-    })
-
-    const block = response.content[0]
-    if (block.type === 'text') return block.text.trim()
-    return text
+    return await complete({ system: systemPrompt, messages: [{ role: 'user', content: text }], maxTokens: 4000, effort: 'low' })
   } catch (err) {
+    if (err instanceof AiDeclinedError) throw err
     const e = err as { status?: number; message?: string }
     // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
     if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
@@ -255,17 +304,9 @@ Rules:
 - Output ONLY the translated text, no explanations`
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: text }],
-    })
-
-    const block = response.content[0]
-    if (block.type === 'text') return block.text.trim()
-    return text
+    return await complete({ system: systemPrompt, messages: [{ role: 'user', content: text }], maxTokens: 4000, effort: 'low' })
   } catch (err) {
+    if (err instanceof AiDeclinedError) throw err
     const e = err as { status?: number; message?: string }
     // eslint-disable-next-line preserve-caught-error -- Provider error causes may contain submitted personal data.
     if (e.status === 401) throw new Error('AI is temporarily unavailable. Please try again later.')
@@ -304,7 +345,7 @@ export function scoreListingQuality(listing: Partial<PropertyListingInput> & { t
   }
   if (!listing.price || listing.price <= 0) {
     score -= 15
-    missing.push('Clear rental price')
+    missing.push('A clear price')
   }
   if (!listing.amenities || listing.amenities.length === 0) {
     score -= 10
@@ -359,20 +400,15 @@ export async function chat(messages: ChatMessage[], language = 'en'): Promise<st
   }
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
+    return await complete({
       system: systemPrompt,
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      maxTokens: 6000,
+      // A chat reply is waited on; at medium it took ~25s, at low ~half that.
+      effort: 'low',
     })
-
-    const block = response.content[0]
-    if (block.type === 'text') return block.text
-    return 'I apologize, I could not generate a response. Please try again.'
   } catch (err) {
+    if (err instanceof AiDeclinedError) return err.message
     const e = err as { status?: number; message?: string }
     if (e.status === 401) {
       return 'AI Legal Assistant is temporarily unavailable. Please try again later.'

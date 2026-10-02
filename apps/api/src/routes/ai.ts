@@ -9,8 +9,8 @@ import {
   formalizeText,
   translatePropertyText,
   scoreListingQuality,
-  getClient,
-  ANTHROPIC_MODEL,
+  complete,
+  AiDeclinedError,
   type ChatMessage,
   type ToneOption,
 } from '../services/ai.js'
@@ -68,7 +68,8 @@ router.post('/generate', authenticate, aiLimiter, requireAiSharingConsent, async
     success(res, { text })
   } catch (err) {
     const e = err as { message?: string }
-    error(res, e.message || 'Failed to generate text', 500)
+    // A decline is about the request, not a server fault.
+    error(res, e.message || 'Failed to generate text', err instanceof AiDeclinedError ? 422 : 500)
   }
 })
 
@@ -400,6 +401,7 @@ const listingSchema = z.object({
   bathrooms: z.number().int().min(0),
   amenities: z.array(z.string()).default([]),
   price: z.number().positive(),
+  listingType: z.enum(['rent', 'sale', 'short_let']).optional(),
   rules: z.array(z.string()).default([]),
   nearby: z.string().optional(),
   targetTenant: z.string().optional(),
@@ -427,7 +429,8 @@ router.post('/listing', authenticate, requireRole('landlord', 'property_manager'
     success(res, result)
   } catch (err) {
     const e = err as { message?: string }
-    error(res, e.message || 'Failed to generate listing', 500)
+    // A decline is about the request, not a server fault.
+    error(res, e.message || 'Failed to generate listing', err instanceof AiDeclinedError ? 422 : 500)
   }
 })
 
@@ -445,7 +448,8 @@ router.post('/formalize', authenticate, requireRole('landlord', 'property_manage
     success(res, { text: result })
   } catch (err) {
     const e = err as { message?: string }
-    error(res, e.message || 'Failed to formalize text', 500)
+    // A decline is about the request, not a server fault.
+    error(res, e.message || 'Failed to formalize text', err instanceof AiDeclinedError ? 422 : 500)
   }
 })
 
@@ -463,7 +467,8 @@ router.post('/translate', authenticate, requireRole('landlord', 'property_manage
     success(res, { text: result })
   } catch (err) {
     const e = err as { message?: string }
-    error(res, e.message || 'Failed to translate text', 500)
+    // A decline is about the request, not a server fault.
+    error(res, e.message || 'Failed to translate text', err instanceof AiDeclinedError ? 422 : 500)
   }
 })
 
@@ -529,18 +534,10 @@ Provide a structured summary with these sections:
 Keep it concise and professional. Do NOT include markdown code fences.`
 
   try {
-    const response = await getClient().messages.create({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1200,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const block = response.content[0]
-    if (block.type !== 'text') { error(res, 'Unexpected response type', 500); return }
-
-    success(res, { summary: block.text.trim() })
+    const summary = await complete({ system: systemPrompt, messages: [{ role: 'user', content: prompt }], maxTokens: 6000, effort: 'medium' })
+    success(res, { summary })
   } catch (err) {
+    if (err instanceof AiDeclinedError) { error(res, err.message, 422); return }
     const e = err as { status?: number; message?: string }
     if (e.status === 401) { error(res, 'AI is temporarily unavailable. Please try again later.', 500); return }
     console.error('[AI] Case summary generation failed')
