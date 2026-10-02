@@ -9,6 +9,7 @@ import { basetenClient } from '../services/ml/baseten.js'
 import { listValuations, recordValuation, scoreValuations, valuationLogSummary } from '../services/ml/valuationLog.js'
 import { Property } from '../models/Property.js'
 import { blankToUndefined, queryBoolean } from '../utils/params.js'
+import { RENTAL_LISTINGS } from '../services/listings.js'
 
 const router = Router()
 
@@ -276,7 +277,7 @@ router.get('/valuations', authenticate, requireRole('admin', 'super_admin'), asy
 
 router.post('/train-ml', authenticate, requireRole('admin', 'super_admin'), async (_req, res) => {
   try {
-    const props = await Property.find({ listingStatus: 'approved', rentAmount: { $gt: 0 } }).lean()
+    const props = await Property.find({ listingStatus: 'approved', rentAmount: { $gt: 0 }, ...RENTAL_LISTINGS }).lean()
     if (props.length < 20) {
       error(res, `Need at least 20 approved properties with rent data. Found ${props.length}.`, 400)
       return

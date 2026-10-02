@@ -144,6 +144,20 @@ export const trackLimiter = rateLimit({
 })
 
 /**
+ * WhatsApp enquiry links — each tap may record a lead and text the agent, so
+ * they are capped well below the general public budget: 10 a minute per IP.
+ */
+export const whatsappLimiter = rateLimit({
+  store: store('whatsapp'),
+  windowMs: 60 * 1000,
+  limit: isProd ? 10 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  passOnStoreError: true,
+  message: { success: false, error: 'Too many requests. Please slow down.' },
+})
+
+/**
  * Write limiter — 30 requests per 1 minute per authenticated user in production.
  * Relaxed in dev/test for E2E suites that perform multiple writes in sequence.
  */

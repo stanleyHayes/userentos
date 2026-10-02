@@ -6,10 +6,15 @@ import { RegistryPageView } from '../models/RegistryPageView.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
-import { authenticate, requireRole, requirePermission } from '../middleware/auth.js'
+import { authenticate, optionalAuth, requireRole, requirePermission } from '../middleware/auth.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 import { visitorHash } from '../utils/visitorHash.js'
 import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
+import { LISTING_TYPES, RENTAL_LISTINGS, isRentalListing, listingUrl, normalizeListingRef, whatsappEnquiryText, whatsappLink } from '../services/listings.js'
+import { listingContact } from '../services/listingContact.js'
+import { agentForProperty, recordEnquiry } from '../services/leads.js'
+import { StorefrontEvent } from '../models/StorefrontEvent.js'
+import { whatsappLimiter } from '../middleware/rateLimit.js'
 
 // Keyed and rotated daily (utils/visitorHash.ts): an unsalted SHA-256 of an
 // IPv4 address can be reversed by hashing all 2^32 of them.
@@ -35,6 +40,10 @@ function escapeRegex(input: string): string {
 
 interface SanitizedListing {
   id: string
+  /** Short reference; the shareable page is /property/<ref>. Null only until backfilled. */
+  ref: string | null
+  /** rent | sale | short_let — rentAmount is the asking price for that purpose. */
+  listingType: string
   title: string
   city: string
   region: string
@@ -55,6 +64,8 @@ function sanitize(p: object): SanitizedListing {
   const images = Array.isArray(raw.images) ? raw.images : []
   return {
     id: ((raw._id as Types.ObjectId)?.toString?.() ?? raw.id) as string,
+    ref: typeof raw.listingRef === 'string' ? raw.listingRef : null,
+    listingType: typeof raw.listingType === 'string' ? raw.listingType : 'rent',
     title: (raw.title as string) ?? '',
     city: (address?.city as string) ?? '',
     region: (address?.region as string) ?? '',
@@ -83,6 +94,7 @@ router.get(
     const city = typeof q.city === 'string' ? q.city.trim() : ''
     const region = typeof q.region === 'string' ? q.region.trim() : ''
     const propertyType = typeof q.propertyType === 'string' ? q.propertyType.trim() : ''
+    const listingType = typeof q.listingType === 'string' && (LISTING_TYPES as readonly string[]).includes(q.listingType) ? q.listingType : ''
     const minRent = q.minRent ? Number(q.minRent) : undefined
     const maxRent = q.maxRent ? Number(q.maxRent) : undefined
 
@@ -103,6 +115,9 @@ router.get(
     if (propertyType) {
       filter.type = propertyType
     }
+    // "rent" also covers listings created before listing types existed.
+    if (listingType === 'rent') Object.assign(filter, RENTAL_LISTINGS)
+    else if (listingType) filter.listingType = listingType
     if (minRent !== undefined && !Number.isNaN(minRent)) {
       filter.rentAmount = { ...(filter.rentAmount ?? {}), $gte: minRent }
     }
@@ -240,28 +255,112 @@ router.get(
   }),
 )
 
+/** A publicly visible listing by its short reference or its id; null otherwise. */
+async function findPublicListing(key: string) {
+  const ref = normalizeListingRef(key)
+  const match = /^[a-f0-9]{24}$/i.test(key) ? { _id: key } : ref ? { listingRef: ref } : null
+  if (!match) return null
+  const doc = await Property.findOne({ ...match, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
+  if (!doc || await isClosedAccount(doc.landlordId)) return null
+  return doc
+}
+
+const locationOf = (doc: { address?: { neighborhood?: string; city?: string } }) =>
+  [doc.address?.neighborhood, doc.address?.city].filter(Boolean).join(', ')
+
+// The shareable property page (brief §04): everything a visitor needs to decide
+// and to get in touch. The street address, coordinates and the owner's phone
+// number stay off it; WhatsApp goes through POST /:id/whatsapp below.
 router.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
-    const id = param(req.params.id)
-
-    if (!id || !/^[a-f0-9]{24}$/i.test(id)) {
+    const doc = await findPublicListing(param(req.params.id))
+    if (!doc) {
       error(res, 'Property not found', 404)
       return
     }
 
-    const doc = await Property.findOne({ _id: id, listingStatus: { $in: PUBLICLY_VISIBLE_STATUSES } }).lean()
-    if (!doc || await isClosedAccount(doc.landlordId)) {
-      error(res, 'Property not found', 404)
-      return
-    }
-
+    const resolved = await agentForProperty(String(doc._id))
     // The only landlord trust signal the public page may show: whether our
-    // team approved the landlord's identity-verification request. Not
-    // isVerified — admin-created and invited accounts get that without any
-    // document review. Ownership is never checked, so it is never claimed.
-    const landlord = await User.findById(doc.landlordId).select('verificationStatus').lean()
-    success(res, { ...sanitize(doc), landlordIdentityVerified: landlord?.verificationStatus === 'verified' })
+    // team approved the identity-verification request. Not isVerified —
+    // admin-created and invited accounts get that without any document
+    // review. Ownership is never checked, so it is never claimed.
+    const [owner, contact] = await Promise.all([
+      User.findById(doc.landlordId).select('verificationStatus').lean(),
+      resolved?.agentId ? listingContact(resolved.agentId) : null,
+    ])
+    const rental = isRentalListing(doc.listingType)
+    success(res, {
+      ...sanitize(doc),
+      url: doc.listingRef ? listingUrl(doc.listingRef) : null,
+      description: doc.description ?? '',
+      images: Array.isArray(doc.images) ? doc.images : [],
+      amenities: doc.amenities ?? [],
+      rules: doc.rules ?? [],
+      status: doc.status,
+      furnished: Boolean(doc.furnished),
+      floorArea: doc.floorArea ?? null,
+      parkingSpaces: doc.parkingSpaces ?? 0,
+      availableFrom: doc.availableFrom ?? null,
+      ...(rental ? { rentDurationMonths: doc.rentDurationMonths, advanceMonths: doc.advanceMonths } : {}),
+      landlordIdentityVerified: owner?.verificationStatus === 'verified',
+      agent: contact?.agent ?? null,
+    })
+  }),
+)
+
+/**
+ * WhatsApp enquiry (brief §05). Answers the wa.me link for the agent who
+ * handles the listing, with the property already in the message, and lets
+ * the agent know: a signed-in enquirer becomes a lead (with an SMS and in-app
+ * alert); an anonymous tap counts as a contact click on the agent's website
+ * analytics — the agent sees who it is on WhatsApp itself.
+ */
+router.post(
+  '/:id/whatsapp',
+  whatsappLimiter,
+  optionalAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const doc = await findPublicListing(param(req.params.id))
+    const resolved = doc ? await agentForProperty(String(doc._id)) : null
+    if (!doc || !resolved?.agentId) {
+      error(res, 'Property not found', 404)
+      return
+    }
+    const contact = await listingContact(resolved.agentId)
+    if (!contact?.whatsappNumber) {
+      error(res, 'This agent has not added a WhatsApp number yet. Send them a message on RentOS instead.', 409)
+      return
+    }
+
+    const url = doc.listingRef ? listingUrl(doc.listingRef) : `${listingUrl(String(doc._id))}`
+    const text = whatsappEnquiryText({ title: doc.title, location: locationOf(doc), ref: doc.listingRef ?? null, url })
+    const propertyId = String(doc._id)
+
+    if (req.user && req.user.userId !== resolved.agentId) {
+      const requester = await User.findById(req.user.userId).select('firstName lastName phone email').lean()
+      if (requester) {
+        await recordEnquiry({
+          propertyId,
+          propertyTitle: doc.title,
+          agentId: resolved.agentId,
+          requesterId: req.user.userId,
+          contact: { name: `${requester.firstName} ${requester.lastName}`.trim(), phone: requester.phone, email: requester.email },
+          channel: 'whatsapp',
+        }).catch((err) => console.warn('[registry/whatsapp] lead not recorded:', (err as Error).message))
+      }
+    }
+    if (contact.agent.storefrontSlug && req.user?.userId !== resolved.agentId) {
+      StorefrontEvent.create({
+        storefrontSlug: contact.agent.storefrontSlug,
+        type: 'contact_click',
+        channel: 'whatsapp',
+        propertyId,
+        visitorHash: req.user ? visitorHash(`user:${req.user.userId}`) : hashIp(clientIp(req)),
+      }).catch((err) => console.warn('[registry/whatsapp] click not recorded:', (err as Error).message))
+    }
+
+    success(res, { url: whatsappLink(contact.whatsappNumber, text) })
   }),
 )
 

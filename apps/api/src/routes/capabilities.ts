@@ -28,6 +28,7 @@ import {
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { signedTenancyFilter } from '../services/tenancyRelationship.js'
+import { RENTAL_LISTINGS } from '../services/listings.js'
 
 const router = Router()
 const idOf = (doc: Record<string, unknown>) => ({ ...doc, id: String(doc._id) })
@@ -265,13 +266,14 @@ router.get('/government/fraud-watch', authenticate, requireRole('government', 'a
 router.get('/government/national-rental-export.csv', authenticate, requireRole('government', 'admin'), async (_req, res) => {
   const properties = await Property.find({}).lean()
   sendCsv(res, 'national-rental-database-anonymized.csv', properties.map((item) => ({
-    region: item.address?.region, city: item.address?.city, type: item.type,
+    region: item.address?.region, city: item.address?.city, type: item.type, listingType: item.listingType ?? 'rent',
     bedrooms: item.bedrooms, rentAmount: item.rentAmount, status: item.status, createdAt: (item as unknown as { createdAt?: Date }).createdAt,
   })))
 })
 
 router.get('/developer/market', authenticate, requireRole('developer', 'landlord', 'property_manager', 'admin'), async (_req, res) => {
   const [rows, demographics] = await Promise.all([Property.aggregate([
+    { $match: RENTAL_LISTINGS },
     { $group: { _id: { city: '$address.city', type: '$type' }, listings: { $sum: 1 }, averageRent: { $avg: '$rentAmount' }, bedrooms: { $avg: '$bedrooms' } } },
     { $sort: { listings: -1 } },
   ]), TenantProfile.aggregate([

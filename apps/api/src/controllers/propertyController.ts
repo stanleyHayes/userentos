@@ -16,6 +16,7 @@ import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 import { recordErasure, completeErasure } from '../services/erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from '../services/propertyImages.js'
+import { LISTING_TYPES } from '../services/listings.js'
 
 /** The app's per-photo upload key (a UUID). */
 const UPLOAD_KEY = /^[A-Za-z0-9-]{8,64}$/
@@ -104,6 +105,9 @@ const createPropertySchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   type: z.enum(['apartment', 'house', 'room', 'commercial', 'warehouse', 'studio', 'townhouse', 'hostel', 'shared_room']),
+  // For rent, for sale or short let. rentAmount is the asking price for it:
+  // monthly rent, the sale price, or the nightly rate.
+  listingType: z.enum(LISTING_TYPES).default('rent'),
   address: z.object({
     street: z.string().min(1),
     city: z.string().min(1),
@@ -112,8 +116,9 @@ const createPropertySchema = z.object({
     neighborhood: z.string().optional(),
   }),
   rentAmount: z.number().positive(),
-  rentDurationMonths: z.number().int().positive(),
-  advanceMonths: z.number().int().min(0).max(6),
+  // A lease length and rent advance belong to rentals only.
+  rentDurationMonths: z.number().int().min(0).optional(),
+  advanceMonths: z.number().int().min(0).max(6).optional(),
   rules: z.array(z.string()).default([]),
   amenities: z.array(z.string()).default([]),
   coordinates: z.object({ lat: z.number(), lng: z.number() }).optional(),
@@ -155,6 +160,14 @@ const createPropertySchema = z.object({
     brailleSignage: z.boolean().optional(),
     groundFloorOnly: z.boolean().optional(),
   }).optional(),
+}).superRefine((value, ctx) => {
+  if (value.listingType !== 'rent') return
+  if (!value.rentDurationMonths || value.rentDurationMonths < 1) {
+    ctx.addIssue({ code: 'custom', path: ['rentDurationMonths'], message: 'A rental needs a lease length in months' })
+  }
+  if (value.advanceMonths === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['advanceMonths'], message: 'A rental needs the number of months paid in advance' })
+  }
 })
 
 export const propertyController = {
@@ -172,6 +185,7 @@ export const propertyController = {
 
     const filters: Record<string, unknown> = {
       status: q.status as string | undefined,
+      listingType: typeof q.listingType === 'string' && (LISTING_TYPES as readonly string[]).includes(q.listingType) ? q.listingType : undefined,
       type: q.type as string | undefined,
       city: q.city as string | undefined,
       region: q.region as string | undefined,

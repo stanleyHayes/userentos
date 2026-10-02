@@ -15,6 +15,9 @@ vi.mock('../models/Property.js', () => ({ Property: { findOne: (...a: unknown[])
 const findById = vi.fn()
 vi.mock('../models/User.js', () => ({ User: { findById: (...a: unknown[]) => ({ select: () => ({ lean: () => findById(...a) }) }) } }))
 vi.mock('../models/RegistryPageView.js', () => ({ RegistryPageView: { create: vi.fn() } }))
+// The agent card is covered by listing-types.integration.test.ts.
+vi.mock('../services/leads.js', () => ({ agentForProperty: vi.fn(async () => ({ agentId: null })), recordEnquiry: vi.fn() }))
+vi.mock('../services/listingContact.js', () => ({ listingContact: vi.fn(async () => null) }))
 
 const { default: router } = await import('../routes/publicRegistry.js')
 

@@ -8,6 +8,7 @@ import { Dispute } from '../models/Dispute.js'
 import { MaintenanceRequest } from '../models/MaintenanceRequest.js'
 import { success, error } from '../utils/response.js'
 import { analyzePropertyPricing } from '../services/pricing.js'
+import { RENTAL_LISTINGS } from '../services/listings.js'
 
 const router = Router()
 
@@ -24,7 +25,8 @@ router.post('/rent-cap', authenticate, requireRole('government', 'admin', 'legal
 
   const { maxRent, region, propertyType } = parsed.data
 
-  const filter: Record<string, unknown> = {}
+  // A rent cap concerns monthly rentals, not sale prices or nightly rates.
+  const filter: Record<string, unknown> = { ...RENTAL_LISTINGS }
   if (region) filter['address.region'] = region
   if (propertyType) filter.type = propertyType
 

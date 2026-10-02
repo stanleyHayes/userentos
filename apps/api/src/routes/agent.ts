@@ -5,13 +5,13 @@ import { authenticate } from '../middleware/auth.js'
 import { Lead } from '../models/Lead.js'
 import { Viewing } from '../models/Viewing.js'
 import { Commission } from '../models/Commission.js'
-import { Delegation } from '../models/Delegation.js'
 import { Property } from '../models/Property.js'
 import { User } from '../models/User.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { notify } from '../services/notify.js'
-import { NEW_LEAD_TITLE, VIEWING_REQUESTED_TITLE, newLeadMessage, viewingRequestedMessage } from '../services/enquiryNotices.js'
+import { VIEWING_REQUESTED_TITLE, viewingRequestedMessage } from '../services/enquiryNotices.js'
+import { agentForProperty, recordEnquiry } from '../services/leads.js'
 import { logger } from '../utils/logger.js'
 import { round2 } from '../utils/money.js'
 
@@ -21,19 +21,6 @@ const idOf = <T extends { _id: unknown }>(doc: T) => ({
   ...doc,
   id: (doc._id as Types.ObjectId).toString(),
 })
-
-/** Resolve the agent (owner or manager) who should receive leads for a property.
- *  An active delegation with the 'leads' scope takes precedence over the owner. */
-async function agentForProperty(propertyId: string) {
-  const property = await Property.findById(propertyId).lean()
-  if (!property) return null
-  const p = property as unknown as { landlordId?: string; managerId?: string }
-  const ownerId = p.managerId ?? p.landlordId ?? null
-  if (!ownerId) return { property, agentId: null }
-
-  const delegation = await Delegation.findOne({ propertyId, status: 'active', scopes: 'leads' }).lean()
-  return { property, agentId: delegation?.delegateId ?? ownerId }
-}
 
 /* ================================================================
    LEADS — "I'm interested" on a listing creates a lead; the agent
@@ -55,24 +42,17 @@ router.post('/leads/property/:propertyId', authenticate, async (req, res) => {
   const requester = await User.findById(req.user!.userId).lean()
   if (!requester) { error(res, 'User not found', 404); return }
 
-  const lead = await Lead.create({
-    ...parsed.data,
+  const { lead, created } = await recordEnquiry({
     propertyId: param(req.params.propertyId),
+    propertyTitle: resolved.property.title,
     agentId: resolved.agentId,
     requesterId: req.user!.userId,
-    contactName: `${requester.firstName} ${requester.lastName}`.trim(),
-    contactPhone: requester.phone,
-    contactEmail: requester.email,
+    contact: { name: `${requester.firstName} ${requester.lastName}`.trim(), phone: requester.phone, email: requester.email },
+    message: parsed.data.message,
+    channel: 'interest',
   })
 
-  notify({
-    userId: resolved.agentId,
-    title: NEW_LEAD_TITLE,
-    message: newLeadMessage(),
-    actionUrl: '/dashboard',
-  }).catch((err) => logger.warn('[Agent] lead notify failed:', err))
-
-  success(res, idOf(lead.toObject()), 'Interest sent — the agent will contact you', 201)
+  success(res, idOf(lead.toObject()), created ? 'Interest sent — the agent will contact you' : 'The agent already has your enquiry', created ? 201 : 200)
 })
 
 // GET /api/agent/leads — my lead inbox (agent side), optional status/property filter

@@ -44,6 +44,9 @@ services:
       # one REGULATED_BASIS_<FEATURE> per enabled feature (see .env.example).
       - key: REGULATED_FEATURES
         sync: false
+      # Account types open to sign-up. Unset: tenant,property_manager (phase 1).
+      - key: SIGNUP_ROLES
+        sync: false
       # 64 hex chars; encrypts national ID numbers at rest. Required.
       - key: PII_ENCRYPTION_KEY
         sync: false
@@ -123,7 +126,15 @@ services:
         sync: false
       - key: FROM_EMAIL
         sync: false
-      # No code path sends SMS today — set only when that lands.
+      # SMS alerts agents to new enquiries. Arkesel (Ghana) is used when its key
+      # is set; SMS_SENDER_ID is the registered sender name (max 11 chars).
+      # Twilio is the alternative. With neither, SMS is skipped.
+      - key: ARKESEL_API_KEY
+        sync: false
+      - key: SMS_SENDER_ID
+        sync: false
+      - key: SMS_PROVIDER
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN

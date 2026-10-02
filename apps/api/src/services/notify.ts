@@ -9,6 +9,7 @@ import { Notification } from '../models/Notification.js'
 import { User } from '../models/User.js'
 import { sendEmail, absoluteUrl } from './email.js'
 import { sendPushNotification } from './push.js'
+import { sendSMS, smsConfigured } from './sms.js'
 import { getIO } from './socket.js'
 
 /**
@@ -34,8 +35,9 @@ import { getIO } from './socket.js'
  *
  * The in-app notification centre has no toggle: it is the account's own record
  * and is written for every category unless a category toggle suppresses it.
- * SMS: no notification is sent by SMS today (services/sms.ts has no callers);
- * `sms` is still resolved here so a future SMS sender honours the toggle.
+ * SMS goes out only for notifications that carry an `sms` text (new enquiries
+ * on an agent's listing), only where the `sms` toggle allows, and only when an
+ * SMS provider is configured (services/sms.ts).
  */
 export type NotificationCategory = 'account' | 'payment' | 'savings' | 'security' | 'receipt' | 'promotion'
 
@@ -90,6 +92,11 @@ interface NotifyOptions {
   skipEmail?: boolean
   /** Skip push for this notification */
   skipPush?: boolean
+  /**
+   * Also text this (short, no personal data about anyone else) to the
+   * recipient's phone, where their SMS toggle allows it.
+   */
+  sms?: string
 }
 
 /** Escape user-controlled values before interpolating into email HTML. */
@@ -155,12 +162,12 @@ export async function notify(opts: NotifyOptions): Promise<boolean> {
   }
 }
 
-/** Recipient email + stored preferences; null when unavailable. Never throws. */
-async function loadRecipient(userId: string): Promise<{ email?: string; prefs: NotificationPreferences } | null> {
+/** Recipient email, phone + stored preferences; null when unavailable. Never throws. */
+async function loadRecipient(userId: string): Promise<{ email?: string; phone?: string; prefs: NotificationPreferences } | null> {
   try {
-    const user = await User.findById(userId).select('email settings.notifications').lean()
+    const user = await User.findById(userId).select('email phone settings.notifications').lean()
     if (!user) return null
-    return { email: user.email, prefs: (user.settings?.notifications ?? {}) as NotificationPreferences }
+    return { email: user.email, phone: user.phone, prefs: (user.settings?.notifications ?? {}) as NotificationPreferences }
   } catch (err) {
     logger.warn(`[Notify] preference lookup failed for user ${userId}: ${(err as Error).message}`)
     return null
@@ -227,6 +234,11 @@ async function createNotification(opts: NotifyOptions) {
       body: message,
       data: actionUrl ? { url: actionUrl } : undefined,
     }).catch((err) => console.warn('[Notify] Push failed:', err.message))
+  }
+
+  // 4. SMS (best-effort, non-blocking; sendSMS never rejects)
+  if (opts.sms && plan.sms && recipient?.phone && smsConfigured()) {
+    void sendSMS(recipient.phone, opts.sms)
   }
 
   return notification

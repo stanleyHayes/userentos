@@ -11,6 +11,24 @@ export const VIEWING_REQUESTED_TITLE = 'Viewing Requested'
 
 export const newLeadMessage = () => 'Someone is interested in your listing. Their contact details are in your leads.'
 
+/** A listing title short enough for an SMS. */
+const shortTitle = (title: string) => (title.length > 42 ? `${title.slice(0, 41).trimEnd()}…` : title)
+
+/** The in-app / email / push alert for a new enquiry: which property, never who. */
+export function enquiryNotice(channel: 'interest' | 'whatsapp' | 'website', propertyTitle: string): string {
+  if (channel === 'whatsapp') return `A tenant contacted you on WhatsApp about "${propertyTitle}". Their details are in your leads.`
+  if (channel === 'website') return `New enquiry from your website about "${propertyTitle}". The details are in your leads.`
+  return `A new tenant is interested in "${propertyTitle}". Their contact details are in your leads.`
+}
+
+/** The SMS (brief §05): the property, and a link straight to the lead. */
+export function enquirySms(channel: 'interest' | 'whatsapp' | 'website', propertyTitle: string, url: string): string {
+  const title = shortTitle(propertyTitle)
+  if (channel === 'whatsapp') return `RentOS: A tenant contacted you on WhatsApp about your property "${title}". View the enquiry: ${url}`
+  if (channel === 'website') return `RentOS: New enquiry from your website about "${title}". View the enquiry: ${url}`
+  return `RentOS: A new tenant has expressed interest in your property "${title}". View the enquiry: ${url}`
+}
+
 export const viewingRequestedMessage = (date: string, time: string) => `A viewing was requested for ${date} at ${time}. The details are in your viewings.`
 
 /** The wording used before, which quoted the enquirer; erasure rewrites any still stored. */

@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose'
+import { LISTING_TYPES, generateListingRef, type ListingType } from '../services/listings.js'
 
 export interface IProperty extends Document {
   landlordId: string
@@ -6,6 +7,10 @@ export interface IProperty extends Document {
   title: string
   description: string
   type: string
+  /** For rent, for sale or short let (see services/listings.ts); rentAmount is the asking price for that purpose. */
+  listingType: ListingType
+  /** Short public reference, e.g. RX7K2P9: the listing's shareable URL is /property/<ref>. */
+  listingRef?: string
   stayType: 'short_stay' | 'long_stay'
   status: string
   listingStatus: 'draft' | 'pending_review' | 'in_review' | 'changes_requested' | 'approved' | 'rejected' | 'published' | 'suspended' | 'archived' | 'withdrawn'
@@ -86,6 +91,8 @@ const propertySchema = new Schema<IProperty>({
   title: { type: String, required: true },
   description: { type: String, required: true },
   type: { type: String, required: true, enum: ['apartment', 'house', 'room', 'commercial', 'warehouse', 'studio', 'townhouse', 'hostel', 'shared_room'] },
+  listingType: { type: String, enum: LISTING_TYPES, default: 'rent' },
+  listingRef: { type: String, uppercase: true, trim: true },
   stayType: { type: String, enum: ['short_stay', 'long_stay'], default: 'long_stay' },
   status: { type: String, required: true, enum: ['available', 'occupied', 'under_dispute', 'maintenance_required'], default: 'available' },
   listingStatus: {
@@ -161,7 +168,21 @@ const propertySchema = new Schema<IProperty>({
   },
 }, { timestamps: true })
 
+// Every listing gets a shareable reference, and its purpose decides the parts
+// of a rental record that do not apply: a short let is a short stay, and
+// neither it nor a sale has a lease length or rent advance.
+propertySchema.pre('validate', function () {
+  if (!this.listingRef) this.listingRef = generateListingRef()
+  if (this.listingType === 'short_let') this.stayType = 'short_stay'
+  if (this.listingType === 'sale' || this.listingType === 'short_let') {
+    if (this.rentDurationMonths == null) this.rentDurationMonths = 0
+    if (this.advanceMonths == null) this.advanceMonths = 0
+  }
+})
+
 // Performance indexes
+propertySchema.index({ listingRef: 1 }, { name: 'property_listing_ref', unique: true, partialFilterExpression: { listingRef: { $type: 'string' } } })
+propertySchema.index({ listingType: 1, listingStatus: 1 })
 propertySchema.index({ status: 1, listingStatus: 1 })
 propertySchema.index({ type: 1 })
 propertySchema.index({ createdAt: -1 })

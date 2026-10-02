@@ -9,6 +9,7 @@ import type { IProperty } from '../models/Property.js'
 import { embed, embedBatch, cosineSimilarity } from './embeddings.js'
 import { closedAccountIds } from './closedAccounts.js'
 import { logger } from '../utils/logger.js'
+import { RENTAL_LISTINGS } from './listings.js'
 
 export interface ScoredProperty {
   id: string
@@ -98,7 +99,8 @@ export async function getSmartRecommendations(userId: string, limit: number = 10
 
   // Load candidate properties (approved listings only)
   // Closed accounts' listings are withdrawn at closure; excluded here too in case that failed.
-  const filter: Record<string, unknown> = { listingStatus: 'approved', landlordId: { $nin: await closedAccountIds() } }
+  // Matched against a monthly budget, so rentals only.
+  const filter: Record<string, unknown> = { listingStatus: 'approved', landlordId: { $nin: await closedAccountIds() }, ...RENTAL_LISTINGS }
   const prefs = profile?.searchPreferences
 
   if (prefs && prefs.maxBudget != null && prefs.maxBudget > 0) {

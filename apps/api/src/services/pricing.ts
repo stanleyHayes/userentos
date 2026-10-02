@@ -4,6 +4,7 @@ import type { PredictionResult } from './ml/pricingModel.js'
 import { mlClient } from './mlClient.js'
 import { basetenClient } from './ml/baseten.js'
 import { recordValuation } from './ml/valuationLog.js'
+import { RENTAL_LISTINGS } from './listings.js'
 
 // Escape user-supplied input before embedding it in a RegExp, to prevent
 // catastrophic-backtracking ReDoS and regex injection (e.g. city = '.*').
@@ -81,6 +82,8 @@ export async function analyzePropertyPricing(
     status: 'available',
     listingStatus: 'approved',
     rentAmount: { $gt: 0 },
+    // A sale price or a nightly rate is not a comparable monthly rent.
+    ...RENTAL_LISTINGS,
   }
   if (excludePropertyId) {
     query._id = { $ne: excludePropertyId }
@@ -247,6 +250,7 @@ export async function getRentTrends(
       listingStatus: 'approved',
       rentAmount: { $gt: 0 },
       createdAt: { $lte: monthEnd },
+      ...RENTAL_LISTINGS,
     }
     if (type) query.type = type
     if (bedrooms !== undefined) query.bedrooms = bedrooms

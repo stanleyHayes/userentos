@@ -21,6 +21,7 @@ import { AuditLog } from '../models/AuditLog.js'
 import { success } from '../utils/response.js'
 import { logger } from '../utils/logger.js'
 import { cache } from '../services/cache.js'
+import { RENTAL_LISTINGS } from '../services/listings.js'
 
 function parseDateRange(req: Request): { start: Date; end: Date } {
   const rawStart = req.query.startDate as string | undefined
@@ -321,15 +322,17 @@ export const analyticsController = {
             totalViews: { $sum: '$views' },
             totalInquiries: { $sum: '$inquiries' },
             totalFavorites: { $sum: '$favorites' },
-            avgRent: { $avg: '$rentAmount' },
+            // Monthly rents only: $avg skips the null a sale or short let maps to.
+            avgRent: { $avg: { $cond: [{ $in: [{ $ifNull: ['$listingType', 'rent'] }, ['sale', 'short_let']] }, null, '$rentAmount'] } },
           } }],
+          byListingType: [{ $group: { _id: { $ifNull: ['$listingType', 'rent'] }, count: { $sum: 1 } } }],
           byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
           byListingStatus: [{ $group: { _id: '$listingStatus', count: { $sum: 1 } } }],
           byType: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
           byStayType: [{ $group: { _id: '$stayType', count: { $sum: 1 } } }],
           regions: [{ $group: { _id: '$address.region', count: { $sum: 1 } } }],
           cities: [{ $group: { _id: '$address.city', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }],
-          rentByType: [{ $group: { _id: '$type', avgRent: { $avg: '$rentAmount' } } }],
+          rentByType: [{ $match: RENTAL_LISTINGS }, { $group: { _id: '$type', avgRent: { $avg: '$rentAmount' } } }],
         }},
       ]),
       // Agreements
@@ -762,7 +765,7 @@ export const analyticsController = {
 
     const [regionStats, rentTrend, applicationStats, occupiedCount] = await Promise.all([
       Property.aggregate([
-        { $match: { 'address.region': { $exists: true, $ne: '' } } },
+        { $match: { 'address.region': { $exists: true, $ne: '' }, ...RENTAL_LISTINGS } },
         { $group: {
           _id: '$address.region',
           listings: { $sum: 1 },
@@ -774,7 +777,7 @@ export const analyticsController = {
         { $sort: { listings: -1 } },
       ]),
       Property.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        { $match: { createdAt: { $gte: sixMonthsAgo }, ...RENTAL_LISTINGS } },
         { $group: {
           _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
           newListings: { $sum: 1 },

@@ -115,6 +115,7 @@ import { onSimulatedComplete, getMode as getPaymentMode } from './services/payme
 import { finalizePayment } from './services/payments/finalize.js'
 import { onSimulatedPayout } from './services/payouts/index.js'
 import { finalizePayout } from './services/payouts/finalize.js'
+import { RENTAL_LISTINGS } from './services/listings.js'
 
 const app = express()
 // Don't advertise the framework to scanners.
@@ -530,7 +531,7 @@ async function start() {
       logger.info(`[ML] Pricing model loaded: R²=${rentPriceModel.r2Score.toFixed(3)}, trained ${rentPriceModel.trainedAt}`)
     } else {
       try {
-        const props = await Property.find({ listingStatus: 'approved', rentAmount: { $gt: 0 } }).lean()
+        const props = await Property.find({ listingStatus: 'approved', rentAmount: { $gt: 0 }, ...RENTAL_LISTINGS }).lean()
         if (props.length >= 20) {
           rentPriceModel.train(props as unknown as InstanceType<typeof Property>[], { verbose: false })
           rentPriceModel.save()

@@ -13,6 +13,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { delegatedPropertyIds, hasDelegatedScope } from '../services/delegation.js'
 import { isAdminStaff } from '../utils/accessControl.js'
+import { isRentalListing } from '../services/listings.js'
 
 const router = Router()
 
@@ -57,6 +58,14 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
   const property = await Property.findById(propertyId)
   if (!property) { error(res, 'Property not found', 404); return }
   if (property.status !== 'available') { error(res, 'Property is not available for applications'); return }
+  // Sales and short lets are arranged with the agent directly; only monthly
+  // rentals go through the application, agreement and rent flow.
+  if (!isRentalListing(property.listingType)) {
+    error(res, property.listingType === 'sale'
+      ? 'This property is for sale. Contact the agent on WhatsApp or RentOS messages to make an offer.'
+      : 'This is a short let. Contact the agent on WhatsApp or RentOS messages to book it.', 409)
+    return
+  }
 
   // Check for existing pending/approved application
   const existing = await Application.findOne({

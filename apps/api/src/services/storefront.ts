@@ -109,6 +109,11 @@ export async function checkDomainOwnership(
   }
 }
 
+/** A storefront's public address: its verified custom domain, else {slug}.userentos.com. */
+export function storefrontUrl(storefront: { slug: string; canonicalDomain?: string | null }): string {
+  return storefront.canonicalDomain ? `https://${storefront.canonicalDomain}` : `https://${storefront.slug}.userentos.com`
+}
+
 /**
  * Resolve a hostname to its storefront, for request-time tenant routing.
  * A custom domain only resolves once it is verified AND active.

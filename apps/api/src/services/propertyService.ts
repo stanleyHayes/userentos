@@ -7,15 +7,17 @@ import { hasDelegatedScope } from './delegation.js'
 import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
 import { recordErasure, completeErasure } from './erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
+import { LISTING_TYPES, RENTAL_LISTINGS, type ListingType } from './listings.js'
 
 interface CreatePropertyData {
   title: string
   description: string
   type: string
+  listingType?: ListingType
   address: { street: string; city: string; region: string; digitalAddress?: string }
   rentAmount: number
-  rentDurationMonths: number
-  advanceMonths: number
+  rentDurationMonths?: number
+  advanceMonths?: number
   rules?: string[]
   amenities?: string[]
 }
@@ -23,6 +25,7 @@ interface CreatePropertyData {
 interface UpdatePropertyData {
   title?: string
   description?: string
+  listingType?: string
   rentAmount?: number
   status?: string
   rules?: string[]
@@ -35,6 +38,7 @@ interface ListFilters {
   excludeLandlordIds?: string[]
   status?: string
   listingStatus?: string | readonly string[]
+  listingType?: string
   type?: string
   city?: string
   region?: string
@@ -83,6 +87,9 @@ export class PropertyService {
     if (Object.keys(landlord).length) filter.landlordId = landlord
     if (filters.status) filter.status = filters.status
     if (filters.listingStatus) filter.listingStatus = typeof filters.listingStatus === 'string' ? filters.listingStatus : { $in: [...filters.listingStatus] }
+    // "rent" also matches listings created before types existed.
+    if (filters.listingType === 'rent') Object.assign(filter, RENTAL_LISTINGS)
+    else if (filters.listingType) filter.listingType = filters.listingType
     if (filters.type) filter.type = filters.type
     if (filters.city) filter['address.city'] = { $regex: escapeRegex(filters.city), $options: 'i' }
     if (filters.region) filter['address.region'] = { $regex: escapeRegex(filters.region), $options: 'i' }
@@ -177,7 +184,11 @@ export class PropertyService {
         return { data: { ...property.toObject(), id: property._id.toString() }, status: 201 }
       } catch (failure) {
         const duplicate = failure as { code?: number; keyPattern?: Record<string, number> }
-        if (duplicate.code !== 11000 || duplicate.keyPattern?.landlordId !== 1 || duplicate.keyPattern?.quotaSlot !== 1) throw failure
+        // A clash on the slot (a concurrent create) or, vanishingly rarely, on
+        // the generated listing reference: either way the next attempt differs.
+        const retryable = duplicate.code === 11000
+          && ((duplicate.keyPattern?.landlordId === 1 && duplicate.keyPattern?.quotaSlot === 1) || duplicate.keyPattern?.listingRef === 1)
+        if (!retryable) throw failure
       }
     }
     return { error: 'Another property is being created. Please try again.', status: 409 }
@@ -201,13 +212,19 @@ export class PropertyService {
     // Content changes to an already-approved listing must go back through
     // moderation — otherwise approval can be bypassed by editing after the fact.
     // House rules are listing content too (they can carry unlawful terms).
+    if (data.listingType !== undefined && !(LISTING_TYPES as readonly string[]).includes(data.listingType)) {
+      return { error: 'Listing type must be rent, sale or short_let', status: 400 }
+    }
+
     const contentChanged =
+      (data.listingType !== undefined && data.listingType !== (property.listingType ?? 'rent')) ||
       (data.title !== undefined && data.title !== property.title) ||
       (data.description !== undefined && data.description !== property.description) ||
       (data.rentAmount !== undefined && data.rentAmount !== property.rentAmount) ||
       (data.rules !== undefined && JSON.stringify(data.rules) !== JSON.stringify(property.rules ?? [])) ||
       (data.amenities !== undefined && JSON.stringify(data.amenities) !== JSON.stringify(property.amenities))
 
+    if (data.listingType) property.listingType = data.listingType as ListingType
     if (data.title) property.title = data.title
     if (data.description) property.description = data.description
     if (data.rentAmount) property.rentAmount = data.rentAmount

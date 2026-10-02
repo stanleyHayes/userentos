@@ -316,6 +316,10 @@ export interface Property {
   title: string
   description: string
   type: PropertyType
+  /** For rent (the default when absent), for sale or short let; rentAmount is the asking price for it. */
+  listingType?: 'rent' | 'sale' | 'short_let'
+  /** Short public reference: the shareable page is /property/<ref> (see listingTypes.ts). */
+  listingRef?: string
   status: PropertyStatus
   listingStatus: ListingStatus
   rejectionReason?: string
