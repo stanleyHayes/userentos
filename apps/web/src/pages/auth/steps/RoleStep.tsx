@@ -6,7 +6,7 @@ import { COMING_SOON_ACCOUNT_TYPES, PROFESSIONAL_TYPES, type ProfessionalType } 
 
 // The two journeys this phase runs end to end get the large cards.
 const PRIMARY: { value: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'tenant', label: 'Tenant', icon: <Home size={22} />, desc: 'Find a place to rent, buy or stay, and talk to agents on WhatsApp or RentOS.' },
+  { value: 'tenant', label: 'Tenant', icon: <Home size={22} />, desc: 'Find a place to rent, buy or stay, and message agents on RentOS.' },
   { value: 'property_manager', label: 'Agent / Agency / Property Manager', icon: <Briefcase size={22} />, desc: 'List properties, get your own website and handle enquiries in one place.' },
 ]
 

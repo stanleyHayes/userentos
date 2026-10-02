@@ -22,7 +22,7 @@ export function TenantActions({ canApply, purposeLabel, existingApplication, sho
     <div className="space-y-2">
       {!canApply ? (
         <p className="rounded-xl bg-surface px-3 py-2.5 text-center text-xs text-muted dark:bg-white/5 dark:text-gray-400">
-          Message the agent or use WhatsApp to {purposeLabel}.
+          Message the agent to {purposeLabel}.
         </p>
       ) : existingApplication ? (
         <Badge variant={existingApplication.status === 'approved' ? 'success' : 'warning'} className="w-full justify-center py-2">

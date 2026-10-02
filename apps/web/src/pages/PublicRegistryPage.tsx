@@ -118,7 +118,7 @@ export function PublicRegistryPage() {
     const purpose = listingType === 'sale' ? 'for sale' : listingType === 'short_let' ? 'short lets' : listingType === 'rent' ? 'for rent' : 'for rent, for sale and short let'
     applySeo({
       title: `Houses & apartments ${purpose} in Ghana | RentOS Property Registry`,
-      description: `Browse reviewed property listings ${purpose} in Accra, Kumasi, Tema and across Ghana. Prices shown up front; chat with the agent on WhatsApp.`,
+      description: `Browse reviewed property listings ${purpose} in Accra, Kumasi, Tema and across Ghana. Prices shown up front; message the agent on RentOS.`,
       canonical: `${window.location.origin}/registry${listingType ? `?type=${listingType}` : ''}`,
       siteName: 'RentOS Ghana',
     })

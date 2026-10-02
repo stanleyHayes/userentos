@@ -19,7 +19,7 @@ type IconName = keyof typeof Ionicons.glyphMap
 
 // The two journeys this phase runs end to end get the large cards.
 const primaryRoles: { value: UserRole; label: string; icon: IconName; desc: string }[] = [
-  { value: 'tenant', label: 'Tenant', icon: 'home-outline', desc: 'Find a place to rent, buy or stay, and talk to agents on WhatsApp or RentOS.' },
+  { value: 'tenant', label: 'Tenant', icon: 'home-outline', desc: 'Find a place to rent, buy or stay, and message agents on RentOS.' },
   { value: 'property_manager', label: 'Agent / Agency / Property Manager', icon: 'briefcase-outline', desc: 'List properties, get your own website and handle enquiries in one place.' },
 ]
 

@@ -95,8 +95,8 @@ const platformModules: { title: string; description: string; icon: React.ReactNo
     href: '/registry',
   },
   {
-    title: 'WhatsApp on every listing',
-    description: 'Tap WhatsApp and the right agent gets a message that already names the property, where it is and its link.',
+    title: 'Message agents privately',
+    description: 'Ask about any listing in RentOS messages. Your phone number stays private, and the agent gets an SMS alert so replies come quickly.',
     icon: <MessageCircle size={22} />,
     href: '/registry',
   },
@@ -176,13 +176,13 @@ const platformModules: { title: string; description: string; icon: React.ReactNo
 const roleRoutes: { title: string; description: string; icon: React.ReactNode; checks: string[]; requires?: RegulatedFeatureKey[] }[] = [
   {
     title: 'Tenants',
-    description: 'Search homes for rent, for sale and short stays, message the agent on WhatsApp or RentOS, sign the agreement and keep every rental record in your dashboard.',
+    description: 'Search homes for rent, for sale and short stays, message the agent on RentOS, sign the agreement and keep every rental record in your dashboard.',
     icon: <Users size={22} />,
-    checks: ['Search & filter', 'WhatsApp the agent', 'Digital agreements', 'Rental history'],
+    checks: ['Search & filter', 'Message the agent', 'Digital agreements', 'Rental history'],
   },
   {
     title: 'Agents, agencies and property managers',
-    description: 'List a property once and it appears on your own website and in the RentOS registry, with a link you can share anywhere. Leads arrive by SMS, WhatsApp and RentOS messages.',
+    description: 'List a property once and it appears on your own website and in the RentOS registry, with a link you can share anywhere. Leads arrive in your RentOS messages, with an SMS alert.',
     icon: <Handshake size={22} />,
     checks: ['Your own website', 'Leads & enquiries', 'Shareable listings', 'Agreements'],
   },
