@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, BadgeCheck, Bath, BedDouble, Building2, Calendar, Car, Check, Globe, Heart, Home, Lock,
+  ArrowLeft, BadgeCheck, Bath, BedDouble, Building2, Calendar, Car, Check, ChevronRight, Globe, Heart, Home, Lock,
   MapPin, MessageSquare, Ruler, ShieldCheck, Sofa, Warehouse,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -14,8 +14,8 @@ import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { applySeo, setJsonLd } from '@/lib/seo'
 import { useAuthStore } from '@/stores/authStore'
-import { acceptsRentalApplications, formatListingPrice, listingPath, listingTypeMeta } from '../../../../../packages/shared/listingTypes'
-import { SCHEMA_TYPES, TYPE_LABELS, apiBase, listingLocation, shareUrlFor, usePublicListing, type PublicListing } from '@/lib/publicListing'
+import { acceptsRentalApplications, formatListingPrice, listingBreadcrumbs, listingPath, listingTypeMeta } from '../../../../../packages/shared/listingTypes'
+import { TYPE_LABELS, apiBase, listingLocation, shareUrlFor, usePublicListing, type PublicListing } from '@/lib/publicListing'
 
 function WhatsAppGlyph({ size = 18 }: { size?: number }) {
   return (
@@ -150,9 +150,11 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
  * Everything on a listing's page below the site's own header: used on the
  * platform at /property/<ref> and on an agent's website.
  */
-export function PublicPropertyView({ listing, backTo, actionsOverride }: {
+export function PublicPropertyView({ listing, backTo, breadcrumbs, actionsOverride }: {
   listing: PublicListing
   backTo?: { href: string; label: string }
+  /** The search pages the listing appears on (Home › For rent › Accra › East Legon); replaces the back link. */
+  breadcrumbs?: { name: string; to: string }[]
   /** Replaces the enquiry buttons — a professional's website on its own domain links them to RentOS. */
   actionsOverride?: React.ReactNode
 }) {
@@ -189,7 +191,18 @@ export function PublicPropertyView({ listing, backTo, actionsOverride }: {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:py-10">
-      {backTo && (
+      {breadcrumbs?.length ? (
+        <nav aria-label="Breadcrumb" className="mb-4">
+          <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted dark:text-white/50">
+            {breadcrumbs.map((crumb, i) => (
+              <li key={crumb.to} className="inline-flex items-center gap-1.5">
+                {i > 0 && <ChevronRight size={14} className="shrink-0 opacity-60" />}
+                <Link to={crumb.to} className="transition-colors hover:text-primary-dark dark:hover:text-white">{crumb.name}</Link>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      ) : backTo && (
         <Link to={backTo.href} className="mb-4 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-primary-dark dark:hover:text-white">
           <ArrowLeft size={16} /> {backTo.label}
         </Link>
@@ -343,59 +356,44 @@ export function PublicPropertyPage() {
   const navigate = useNavigate()
   const { data: listing, isLoading, isError } = usePublicListing(key)
 
-  // One address per listing: an old /registry/<id> link moves to /property/<ref>.
+  // One address per listing: an old /registry/<id> or short /property/<ref> link moves to the descriptive address.
+  const { pathname } = useLocation()
+  // The address the API names (its canonical), so the page only moves somewhere the server also resolves.
+  const seoPath = listing?.ref && listing.canonicalUrl ? new URL(listing.canonicalUrl, window.location.origin).pathname : null
   useEffect(() => {
-    if (listing?.ref && id) navigate(listingPath(listing.ref), { replace: true })
-  }, [listing?.ref, id, navigate])
+    if (seoPath && pathname !== seoPath) navigate(seoPath, { replace: true })
+  }, [seoPath, pathname, navigate])
 
   useEffect(() => {
     if (!listing) return
-    const meta = listingTypeMeta(listing.listingType)
-    const place = listingLocation(listing)
-    const typeLabel = TYPE_LABELS[listing.propertyType] ?? listing.propertyType
-    const purpose = meta.value === 'sale' ? 'for sale' : meta.value === 'short_let' ? 'short let' : 'for rent'
-    const canonical = listing.url ?? `${window.location.origin}${listingPath(listing.ref ?? listing.id)}`
+    const canonical = listing.canonicalUrl ?? listing.url ?? `${window.location.origin}${listingPath(listing.ref ?? listing.id)}`
+    // The server's own title, description and structured data, so the page
+    // search engines render says exactly what the first HTML said.
+    const seo = listing.seo
     applySeo({
-      title: `${listing.title} — ${typeLabel} ${purpose} in ${listing.city || 'Ghana'} | RentOS`,
-      description: `${typeLabel} ${purpose} in ${place || 'Ghana'}: ${formatListingPrice(listing.rentAmount, listing.listingType)}${listing.bedrooms ? `, ${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'}` : ''}. ${(listing.description ?? '').slice(0, 120)}`,
+      title: seo?.title ?? `${listing.title} | RentOS`,
+      description: seo?.description ?? (listing.description ?? '').slice(0, 160),
       canonical,
       image: listing.images?.[0] ?? listing.image ?? undefined,
       siteName: 'RentOS Ghana',
     })
-    setJsonLd('listing', {
-      '@context': 'https://schema.org',
-      '@type': 'RealEstateListing',
-      name: listing.title,
-      description: listing.description,
-      url: canonical,
-      image: listing.images?.length ? listing.images : listing.image ? [listing.image] : undefined,
-      datePosted: listing.publishedAt ?? undefined,
-      offers: {
-        '@type': 'Offer',
-        price: listing.rentAmount,
-        priceCurrency: 'GHS',
-        availability: listing.status === 'available' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        businessFunction: meta.value === 'sale' ? 'http://purl.org/goodrelations/v1#Sell' : 'http://purl.org/goodrelations/v1#LeaseOut',
-      },
-      about: {
-        '@type': SCHEMA_TYPES[listing.propertyType] ?? 'Accommodation',
-        numberOfRooms: listing.bedrooms || undefined,
-        numberOfBathroomsTotal: listing.bathrooms || undefined,
-        address: { '@type': 'PostalAddress', addressLocality: listing.city, addressRegion: listing.region, addressCountry: 'GH' },
-      },
-    })
-    return () => setJsonLd('listing', null)
-  }, [listing])
+    const [listingLd, breadcrumbLd] = seo?.jsonLd ?? []
+    if (listingLd) setJsonLd('listing', listingLd)
+    if (breadcrumbLd) setJsonLd('breadcrumbs', breadcrumbLd)
+    return () => { setJsonLd('listing', null); setJsonLd('breadcrumbs', null) }
+    // pathname: the move to the descriptive address re-applies the route defaults, so this runs again after them.
+  }, [listing, pathname])
 
-  // Page views for the registry's statistics; best-effort.
+  // Page views for the registry's statistics; best-effort. Counted at the final
+  // address only: a short link remounts the page after the move.
   useEffect(() => {
-    if (!listing) return
+    if (!listing || (seoPath && pathname !== seoPath)) return
     void fetch(`${apiBase()}/public/properties/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: listingPath(listing.ref ?? listing.id), propertyId: listing.id, referrer: document.referrer || undefined }),
     }).catch(() => {})
-  }, [listing])
+  }, [listing, seoPath, pathname])
 
   if (isLoading) return <div className="mx-auto max-w-5xl px-6 py-12"><DetailSkeleton /></div>
 
@@ -410,5 +408,5 @@ export function PublicPropertyPage() {
     )
   }
 
-  return <PublicPropertyView listing={listing} backTo={{ href: '/registry', label: 'All properties' }} />
+  return <PublicPropertyView listing={listing} backTo={{ href: '/registry', label: 'All properties' }} breadcrumbs={listingBreadcrumbs(listing)} />
 }

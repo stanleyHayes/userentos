@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { SiteContext, useSiteData, siteColor, type SiteContextValue } from '@/lib/site'
-import { applySeo, setJsonLd } from '@/lib/seo'
+import { applySeo, clipDescription, setJsonLd } from '@/lib/seo'
 import { StorefrontUnavailable } from '@/pages/storefront/StorefrontUnavailable'
 import { SiteLayout } from './SiteLayout'
 import { SiteHome } from './SiteHome'
@@ -25,8 +25,9 @@ function useSiteSeo(value: SiteContextValue | null) {
     const canonical = `${site.canonicalUrl.replace(/\/$/, '')}${page ? `/${page}` : ''}`
     const onCanonicalHost = typeof window !== 'undefined' && site.canonicalUrl.startsWith(window.location.origin)
     applySeo({
-      title: page ? `${PAGE_TITLES[page] ?? site.name} · ${site.name}` : site.tagline ? `${site.name} — ${site.tagline}` : site.name,
-      description: (site.heroSubtitle || site.about || site.tagline || `Homes to rent and buy from ${site.name}.`).slice(0, 160),
+      // The same title and description the server sends (siteMeta in apps/api/src/services/seo.ts).
+      title: page ? `${PAGE_TITLES[page] ?? site.name} · ${site.name}` : site.tagline ? `${site.name}: ${site.tagline}` : site.name,
+      description: clipDescription(site.heroSubtitle || site.about || site.tagline || `Homes to rent and buy from ${site.name}.`),
       canonical,
       image: site.branding.coverUrl ?? site.branding.logoUrl,
       siteName: site.name,

@@ -513,16 +513,18 @@ export function LandingPage() {
         <IconWatermark icon={Building2} tone="brand" className="-bottom-24 -left-20 size-80 rotate-12 opacity-50" />
         <div className="relative mx-auto grid min-h-[calc(96vh-5rem)] max-w-7xl items-center gap-14 px-6 py-20 lg:grid-cols-[1.08fr_0.92fr]">
           <div>
-            <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-secondary shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
-              Homes to rent and buy across Ghana
-            </div>
-            <h1 className="animate-headline-breathe max-w-4xl font-display text-5xl font-extrabold leading-[0.92] tracking-[-0.04em] md:text-7xl xl:text-[6.8rem]">
+            {/* The page's one <h1> says what people search for; the slogan below is display type.
+                Inline font: index.css sets Fraunces on every h1 outside Tailwind's layers. */}
+            <h1 className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65" style={{ fontFamily: 'var(--font-sans)' }}>
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-secondary shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
+              Houses and apartments to rent and buy in Ghana
+            </h1>
+            <p className="animate-headline-breathe max-w-4xl font-serif text-5xl font-extrabold leading-[0.92] tracking-[-0.04em] md:text-7xl xl:text-[6.8rem]">
               <SplitText text="Renting," immediate charDelay={48} />
               <br />
               <span className="text-white/45"><SplitText text="finally in" immediate charDelay={48} startDelay={300} /></span>{' '}
               <span className="text-secondary"><SplitText text="sync." immediate charDelay={60} startDelay={620} /></span>
-            </h1>
+            </p>
             <p className="mt-8 max-w-xl text-lg leading-relaxed text-white/62 md:text-xl">
               Find verified houses and apartments to rent or buy in Accra, Kumasi and across Ghana. Message agents safely, sign your tenancy agreement online and keep every rent record in one place.
             </p>

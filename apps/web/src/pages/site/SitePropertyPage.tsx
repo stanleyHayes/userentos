@@ -5,7 +5,7 @@ import { PublicPropertyView } from '@/pages/property/PublicPropertyPage'
 import { usePublicListing } from '@/lib/publicListing'
 import { useSite, sitePath, trackSite } from '@/lib/site'
 import { platformOrigin } from '@/lib/platformOrigin'
-import { applySeo } from '@/lib/seo'
+import { applySeo, clipDescription } from '@/lib/seo'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { BrandLink } from './parts'
@@ -25,8 +25,10 @@ export function SitePropertyPage() {
     if (!listing) return
     applySeo({
       title: `${listing.title} · ${site.name}`,
-      description: listing.description?.slice(0, 160) ?? `${listing.title} from ${site.name}.`,
-      canonical: listing.url ?? undefined,
+      // The listing's description as the server sends it for this page.
+      description: listing.seo?.description ?? clipDescription(listing.description || `${listing.title} from ${site.name}.`),
+      // The descriptive platform address the server names too (listing.url is the short share link).
+      canonical: listing.canonicalUrl ?? listing.url ?? undefined,
       image: listing.images?.[0],
       siteName: site.name,
     })
@@ -44,7 +46,7 @@ export function SitePropertyPage() {
   // On the owner's own domain nobody is signed in: enquiries continue on RentOS.
   const actions = onHost ? (
     <>
-      <BrandLink href={`${platformOrigin()}/property/${(listing.ref ?? listing.id).toLowerCase()}`} className="w-full">
+      <BrandLink href={listing.canonicalUrl ?? `${platformOrigin()}/property/${(listing.ref ?? listing.id).toLowerCase()}`} className="w-full">
         <MessageSquare size={16} /> Enquire on RentOS
       </BrandLink>
       <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted dark:text-gray-400"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-500" />You will message {site.name} on RentOS, where your conversation, viewing and payment are protected.</p>

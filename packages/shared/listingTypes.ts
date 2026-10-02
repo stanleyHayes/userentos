@@ -43,3 +43,64 @@ export function formatListingPrice(amount: number, listingType: string | null | 
 export function listingPath(ref: string): string {
   return `/property/${ref.toLowerCase()}`
 }
+
+/** URL-safe words: "East Legon" → "east-legon", accents dropped. */
+export function slugify(text: string | null | undefined): string {
+  return (text ?? '')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+const TYPE_WORDS: Record<string, string> = {
+  apartment: 'apartment', house: 'house', studio: 'studio', townhouse: 'townhouse', room: 'room',
+  shared_room: 'shared-room', hostel: 'hostel-room', commercial: 'commercial-space', warehouse: 'warehouse',
+}
+const PURPOSE_WORDS: Record<string, string> = { rent: 'for-rent', sale: 'for-sale', short_let: 'short-stay' }
+
+/**
+ * The descriptive part of a listing's address, from its facts:
+ * "2-bedroom-townhouse-for-rent-in-east-legon-accra". Mirrored by listingSlug in
+ * apps/api/src/services/listings.ts; keep the two identical.
+ */
+export function listingSlug(listing: { bedrooms?: number | null; type?: string | null; propertyType?: string | null; listingType?: string | null; neighborhood?: string | null; city?: string | null; address?: { neighborhood?: string | null; city?: string | null } | null }): string {
+  const kind = listing.type ?? listing.propertyType ?? ''
+  const bedrooms = listing.bedrooms && listing.bedrooms > 0 && !['commercial', 'warehouse'].includes(kind) ? `${listing.bedrooms}-bedroom-` : ''
+  const type = TYPE_WORDS[kind] ?? 'property'
+  const purpose = PURPOSE_WORDS[listing.listingType ?? ''] ?? 'for-rent'
+  const place = [listing.address?.neighborhood ?? listing.neighborhood, listing.address?.city ?? listing.city].map(slugify).filter(Boolean)
+  const unique = place.filter((part, i) => place.indexOf(part) === i)
+  const slug = `${bedrooms}${type}-${purpose}${unique.length ? `-in-${unique.join('-')}` : ''}`
+  // Long names stop at a whole word.
+  return slug.length <= 90 ? slug : slug.slice(0, 91).replace(/-[^-]*$/, '')
+}
+
+/** The address a listing is indexed at: /property/<description>-<ref>; old /property/<ref> links still open it. */
+export function listingSeoPath(listing: Parameters<typeof listingSlug>[0] & { ref?: string | null; listingRef?: string | null; id?: string | null }): string {
+  const ref = listing.ref ?? listing.listingRef
+  return ref ? `/property/${listingSlug(listing)}-${ref.toLowerCase()}` : `/registry/${listing.id ?? ''}`
+}
+
+
+/** Where each purpose's search pages live: /rent, /buy and /short-stay. */
+export const PURPOSE_SEARCH: Record<string, { slug: string; crumb: string; phrase: string }> = {
+  rent: { slug: 'rent', crumb: 'For rent', phrase: 'for rent' },
+  sale: { slug: 'buy', crumb: 'For sale', phrase: 'for sale' },
+  short_let: { slug: 'short-stay', crumb: 'Short stays', phrase: 'for short stays' },
+}
+
+/** Home › For rent › Accra › East Legon: the search pages a listing appears on. */
+export function listingBreadcrumbs(listing: { listingType?: string | null; city?: string | null; neighborhood?: string | null }): { name: string; to: string }[] {
+  const purpose = PURPOSE_SEARCH[listingTypeMeta(listing.listingType).value] ?? PURPOSE_SEARCH.rent
+  const city = (listing.city ?? '').trim()
+  const area = (listing.neighborhood ?? '').trim()
+  const crumbs = [{ name: 'Home', to: '/' }, { name: purpose.crumb, to: `/${purpose.slug}` }]
+  if (slugify(city)) crumbs.push({ name: city, to: `/${purpose.slug}/${slugify(city)}` })
+  if (slugify(city) && slugify(area)) crumbs.push({ name: area, to: `/${purpose.slug}/${slugify(city)}/${slugify(area)}` })
+  return crumbs
+}
+
+/** The listing reference inside any listing address: "…-in-osu-accra-rx7k2p9" or "rx7k2p9" → "rx7k2p9". */
+export function listingKey(param: string): string {
+  const last = param.slice(param.lastIndexOf('-') + 1)
+  return /^[23456789abcdefghjkmnpqrstuvwxyz]{7}$/i.test(last) ? last.toLowerCase() : param.toLowerCase()
+}

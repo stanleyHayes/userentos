@@ -8,7 +8,7 @@ import { GridSkeleton, DetailSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useSite, sitePath, useSitePosts, useSitePost } from '@/lib/site'
 import { formatDate } from '@/lib/utils'
-import { applySeo, setJsonLd } from '@/lib/seo'
+import { applySeo, clipDescription, setJsonLd } from '@/lib/seo'
 import { SitePostCard, PageIntro } from './parts'
 
 /** The website's News page. Each post also appears in RentOS Real Estate News, credited to the owner. */
@@ -45,7 +45,7 @@ export function SiteNewsPost() {
     const canonical = `${home}/news/${post.slug}`
     applySeo({
       title: `${post.title} · ${site.name}`,
-      description: (post.excerpt || post.title).slice(0, 160),
+      description: clipDescription(post.excerpt || post.title),
       canonical,
       image: post.coverImage,
       siteName: site.name,

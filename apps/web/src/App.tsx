@@ -2,7 +2,7 @@ import { ContentReportsPage } from '@/pages/admin/ContentReportsPage'
 import { useState, useCallback, lazy, Suspense } from 'react'
 import { useStorefrontHost } from '@/hooks/useStorefrontHost'
 import { useRouteSeoDefaults } from '@/lib/seo'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { queryClient, querySessionKey } from '@/lib/queryClient'
 import { SplashScreen } from '@/components/ui/SplashScreen'
 import { isSplashFinished, markSplashFinished } from '@/lib/splash'
+import { bootHtml, bootPath } from '@/lib/prerender'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { RequireRole, NotPaused } from '@/components/layout/RequireRole'
@@ -71,6 +72,7 @@ const RentalLawsPage = lazy(() => import('@/pages/RentalLawsPage').then((m) => (
 const PublicBlogDetailPage = lazy(() => import('@/pages/PublicBlogDetailPage').then((m) => ({ default: m.PublicBlogDetailPage })))
 const PublicRegistryPage = lazy(() => import('@/pages/PublicRegistryPage').then((m) => ({ default: m.PublicRegistryPage })))
 const PublicPropertyPage = lazy(() => import('@/pages/property/PublicPropertyPage').then((m) => ({ default: m.PublicPropertyPage })))
+const SearchLandingPage = lazy(() => import('@/pages/seo/SearchLandingPage').then((m) => ({ default: m.SearchLandingPage })))
 const PackagesPage = lazy(() => import('@/pages/admin/PackagesPage').then((m) => ({ default: m.PackagesPage })))
 const PackageEditorPage = lazy(() => import('@/pages/admin/PackageEditorPage').then((m) => ({ default: m.PackageEditorPage })))
 const InsuranceClaimsPage = lazy(() => import('@/pages/admin/InsuranceClaimsPage').then((m) => ({ default: m.InsuranceClaimsPage })))
@@ -145,6 +147,18 @@ const PublicDevelopmentsPage = lazy(() => import('@/pages/PublicDevelopmentsPage
 const noop = () => {}
 
 /**
+ * What shows while a page's code loads. On the address the visitor arrived at
+ * that is the page itself, as the server rendered it (lib/prerender.ts); the
+ * markup came from our own renderer, where every value is escaped. Elsewhere,
+ * the splash.
+ */
+function BootFallback() {
+  const { pathname } = useLocation()
+  if (bootHtml && pathname === bootPath) return <div dangerouslySetInnerHTML={{ __html: bootHtml }} />
+  return <SplashScreen onFinished={noop} />
+}
+
+/**
  * What "/" renders, which depends on the hostname (spec §4.1).
  *
  * This has to be its own component: useStorefrontHost() calls useQuery, so it
@@ -176,7 +190,7 @@ function RouteSeo() {
 
 function HostGate({ children }: { children: React.ReactNode }) {
   const { slug: storefrontSlug, isResolving } = useStorefrontHost()
-  if (isResolving) return <SplashScreen onFinished={noop} />
+  if (isResolving) return <BootFallback />
   if (storefrontSlug) return <SiteApp slug={storefrontSlug} />
   return <>{children}</>
 }
@@ -202,7 +216,7 @@ export default function App() {
       <ConfettiBurstPortal />
       <BrowserRouter>
         <ScrollToTop />
-        <Suspense fallback={<SplashScreen onFinished={noop} />}>
+        <Suspense fallback={<BootFallback />}>
         <HostGate>
         <RouteSeo />
         <Routes>
@@ -234,6 +248,10 @@ export default function App() {
             <Route path="/passport/:token" element={<PublicPassportPage />} />
             <Route path="/agency/:slug" element={<PublicAgencyPage />} />
             <Route path="/developments" element={<PublicDevelopmentsPage />} />
+            {/* Search landing pages: /rent/accra/east-legon/apartments and the like (pages/seo/SearchLandingPage.tsx). */}
+            <Route path="/rent/*" element={<SearchLandingPage purpose="rent" />} />
+            <Route path="/buy/*" element={<SearchLandingPage purpose="buy" />} />
+            <Route path="/short-stay/*" element={<SearchLandingPage purpose="short-stay" />} />
           </Route>
 
           {/* Auth routes */}

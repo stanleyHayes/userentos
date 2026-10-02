@@ -18,3 +18,6 @@ export function GET(request: Request): Response {
     headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600, s-maxage=86400' },
   })
 }
+
+// Crawlers and monitors may ask with HEAD; without it the launcher answers 405.
+export { GET as HEAD }

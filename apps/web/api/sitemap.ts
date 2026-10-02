@@ -15,3 +15,6 @@ export async function GET(request: Request): Promise<Response> {
   }
   return new Response('Sitemap temporarily unavailable', { status: 503, headers: { 'Retry-After': '600', 'Cache-Control': 'no-store' } })
 }
+
+// Sitemap checkers and monitors ask with HEAD; without it the launcher answers 405.
+export { GET as HEAD }

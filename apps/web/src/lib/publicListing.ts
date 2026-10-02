@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { listingPath } from '../../../../packages/shared/listingTypes'
+import { listingKey, listingPath } from '../../../../packages/shared/listingTypes'
 
 export interface PublicListingAgent {
   name: string
@@ -30,6 +30,10 @@ export interface PublicListing {
   publishedAt: string | null
   image: string | null
   url: string | null
+  /** The descriptive address search engines index (/property/<description>-<ref>). */
+  canonicalUrl?: string
+  /** What the server renders for this page (apps/api/src/services/seo.ts listingSeo); the page keeps it after JavaScript runs. */
+  seo?: { title: string; description: string; jsonLd: Record<string, unknown>[] }
   images: string[]
   amenities: string[]
   rules: string[]
@@ -48,13 +52,13 @@ export const TYPE_LABELS: Record<string, string> = {
   apartment: 'Apartment', house: 'House', studio: 'Studio', townhouse: 'Townhouse', room: 'Room',
   shared_room: 'Shared Room', hostel: 'Hostel', commercial: 'Commercial', warehouse: 'Warehouse',
 }
-export const SCHEMA_TYPES: Record<string, string> = { apartment: 'Apartment', studio: 'Apartment', house: 'SingleFamilyResidence', townhouse: 'House', room: 'Room', shared_room: 'Room', hostel: 'Accommodation', commercial: 'Place', warehouse: 'Place' }
-
 export const apiBase = () => import.meta.env.VITE_API_URL || '/api'
 
-export function usePublicListing(key: string | undefined) {
+export function usePublicListing(param: string | undefined) {
+  // "/property/2-bedroom-house-for-rent-in-osu-accra-rx7k2p9" and "/property/rx7k2p9" are the same listing.
+  const key = param ? listingKey(param) : undefined
   return useQuery({
-    queryKey: ['public-listing', key?.toLowerCase()],
+    queryKey: ['public-listing', key],
     queryFn: async () => {
       const response = await fetch(`${apiBase()}/public/properties/${encodeURIComponent(key!)}`)
       const json = await response.json().catch(() => ({}))

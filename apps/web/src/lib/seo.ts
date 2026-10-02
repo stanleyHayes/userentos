@@ -69,12 +69,8 @@ export function setCanonical(url: string): void {
  * tag is what keeps the duplicate out of the index.
  */
 export function setNoIndex(noIndex: boolean): void {
-  const existing = document.head.querySelector('meta[name="robots"]')
-  if (!noIndex) {
-    existing?.remove()
-    return
-  }
-  setMeta('robots', 'noindex, follow')
+  // The same default the server sends: removing the tag would drop max-image-preview:large.
+  setMeta('robots', noIndex ? 'noindex, follow' : 'index, follow, max-image-preview:large')
 }
 
 export interface SeoTags {
@@ -139,16 +135,33 @@ export function setJsonLd(id: string, data: Record<string, unknown> | null): voi
 
 /** The platform's default title and description; index.html carries the same. */
 export const DEFAULT_SEO = {
-  title: 'RentOS Ghana: houses and apartments to rent and buy in Ghana',
-  description: 'Find verified houses, apartments and short stays to rent or buy across Ghana. Message agents safely, sign tenancy agreements online and keep your rent records in one place.',
+  title: 'Houses and apartments for rent and sale in Ghana | RentOS',
+  description: 'Find verified houses, apartments, rooms and short stays to rent or buy in Accra, Kumasi, Tema and across Ghana. Message agents safely and sign your tenancy online.',
 }
 
 /** Public pages with their own title (kept in step with PLATFORM_PAGES in apps/api/src/services/seo.ts). */
 const PAGE_SEO: Record<string, { title: string; description: string }> = {
-  '/properties': { title: 'Houses and apartments for rent and sale in Ghana | RentOS', description: 'Browse verified houses, apartments, rooms and short stays to rent or buy across Accra, Kumasi, Tema, Takoradi and the rest of Ghana.' },
-  '/registry': { title: 'Property registry: verified listings in Ghana | RentOS', description: 'Search reviewed rental and sale listings across Ghana by city, price and property type, each with its own shareable page.' },
+  '/registry': { title: 'Property registry: verified houses and apartments in Ghana | RentOS', description: 'Search reviewed homes for rent, for sale and for short stays across Ghana by city, price and property type, each with its own shareable page.' },
   '/blog': { title: 'RentOS Real Estate News: property news and guides for Ghana', description: 'Rental guides from RentOS and market news from agents and agencies across Ghana: prices, tenancy law, deposits and buying tips.' },
   '/rental-laws': { title: 'Ghana rental laws explained: tenant and landlord rights | RentOS', description: 'Plain-language guide to the Rent Act 1963 (Act 220), rent advance limits, deposits, evictions and the Rent Control Department.' },
+  '/developments': { title: 'New developments and off-plan homes in Ghana | RentOS', description: 'New-build and off-plan homes from property developers in Ghana, reviewed by RentOS before they are published.' },
+  '/register': { title: 'Create your free RentOS account', description: 'Join RentOS free as a tenant or as an agent, agency or property manager: find homes, list properties and get your own property website.' },
+}
+
+/**
+ * A description clipped the way the server clips it (clip in
+ * apps/api/src/services/seo.ts): Markdown marks dropped, spaces folded, cut
+ * at a word with an ellipsis. Keeps the rendered page saying what the first
+ * HTML said.
+ */
+export function clipDescription(text: string, max = 160): string {
+  const flat = text.replace(/[#*_>`[\]]/g, '').replace(/\s+/g, ' ').trim()
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…`
+}
+
+/** A platform page's own title and description (or the defaults), as the server sends them. */
+export function platformPageSeo(path: string): { title: string; description: string } {
+  return PAGE_SEO[path] ?? DEFAULT_SEO
 }
 
 /**

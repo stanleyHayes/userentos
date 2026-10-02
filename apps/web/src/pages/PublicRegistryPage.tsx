@@ -12,11 +12,11 @@ import { Button } from '@/components/ui/Button'
 import { IconWatermark } from '@/components/ui/Watermark'
 import { GridSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { applySeo } from '@/lib/seo'
-import { LISTING_TYPES, formatListingPrice, isListingType, listingPath, listingTypeMeta, type ListingType } from '../../../../packages/shared/listingTypes'
+import { applySeo, platformPageSeo } from '@/lib/seo'
+import { LISTING_TYPES, formatListingPrice, isListingType, listingSeoPath, listingTypeMeta, type ListingType } from '../../../../packages/shared/listingTypes'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 
-interface RegistryListing {
+export interface RegistryListing {
   id: string
   ref: string | null
   listingType: string
@@ -113,13 +113,16 @@ export function PublicRegistryPage() {
   const { attach: typePillAttach, style: typePillStyle, visible: typePillVisible } = useSlidingIndicator<HTMLDivElement>(propertyType || '__any_type__')
   const { attach: pricePillAttach, style: pricePillStyle, visible: pricePillVisible } = useSlidingIndicator<HTMLDivElement>(priceRangeIdx ?? '__any_price__')
 
-  // SEO: one indexable page per purpose (/registry?type=sale ranks for "houses for sale in Ghana").
+  // SEO: the registry is one page; /rent, /buy and /short-stay are the indexable pages per purpose
+  // (pages/seo/SearchLandingPage.tsx), so a filtered registry names /registry as its canonical address.
   useEffect(() => {
-    const purpose = listingType === 'sale' ? 'for sale' : listingType === 'short_let' ? 'short lets' : listingType === 'rent' ? 'for rent' : 'for rent, for sale and short let'
+    // Unfiltered, the title and description the server sends; a filter only renames the tab.
+    const page = platformPageSeo('/registry')
+    const purpose = listingType === 'sale' ? 'for sale' : listingType === 'short_let' ? 'short lets' : 'for rent'
     applySeo({
-      title: `Houses & apartments ${purpose} in Ghana | RentOS Property Registry`,
-      description: `Browse reviewed property listings ${purpose} in Accra, Kumasi, Tema and across Ghana. Prices shown up front; message the agent on RentOS.`,
-      canonical: `${window.location.origin}/registry${listingType ? `?type=${listingType}` : ''}`,
+      title: listingType ? `Houses & apartments ${purpose} in Ghana | RentOS Property Registry` : page.title,
+      description: listingType ? `Browse reviewed property listings ${purpose} in Accra, Kumasi, Tema and across Ghana. Prices shown up front; message the agent on RentOS.` : page.description,
+      canonical: `${window.location.origin}/registry`,
       siteName: 'RentOS Ghana',
     })
   }, [listingType])
@@ -411,12 +414,12 @@ function ChipButton({
   )
 }
 
-function RegistryCard({ item }: { item: RegistryListing }) {
+export function RegistryCard({ item }: { item: RegistryListing }) {
   const typeLabel = PROPERTY_TYPES.find((t) => t.value === item.propertyType)?.label ?? item.propertyType
   const purpose = listingTypeMeta(item.listingType)
 
   return (
-    <Link to={listingPath(item.ref ?? item.id)} className="group block">
+    <Link to={listingSeoPath(item)} className="group block">
       <Card className="p-0 overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
         {/* Image */}
         <div className="relative mx-3 mt-3 h-44 overflow-hidden rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/15 dark:to-accent/10">

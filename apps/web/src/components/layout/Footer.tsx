@@ -19,6 +19,7 @@ import {
   Wand2,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
+import { usePopularSearches } from '@/lib/popularSearches'
 
 interface FooterLink {
   label: string
@@ -66,6 +67,7 @@ const footerGroups: FooterGroup[] = [
 ]
 
 export function Footer() {
+  const popular = usePopularSearches()
   return (
     <footer className="relative overflow-hidden bg-[#070b14] text-white">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/80 to-transparent" />
@@ -161,6 +163,21 @@ export function Footer() {
             </div>
           </div>
         </div>
+
+        {/* Links to the search pages people land on ("Apartments for rent in Accra"): found by visitors and crawlers alike. */}
+        <nav aria-label="Popular searches" className="border-t border-white/10 py-8">
+          <h3 className="text-xs font-extrabold uppercase tracking-wide text-sky-300">Popular searches</h3>
+          <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
+            {popular.map((link) => (
+              <li key={link.path}>
+                <Link to={link.path} className="text-sm font-semibold text-white/45 transition-colors hover:text-white">{link.label}</Link>
+              </li>
+            ))}
+            <li><Link to="/rent" className="text-sm font-semibold text-white/45 transition-colors hover:text-white">All homes for rent</Link></li>
+            <li><Link to="/buy" className="text-sm font-semibold text-white/45 transition-colors hover:text-white">All homes for sale</Link></li>
+            <li><Link to="/short-stay" className="text-sm font-semibold text-white/45 transition-colors hover:text-white">All short stays</Link></li>
+          </ul>
+        </nav>
 
         <div className="flex flex-col gap-4 border-t border-white/10 pt-6 text-xs font-semibold text-white/30 md:flex-row md:items-center md:justify-between">
           <span>&copy; {new Date().getFullYear()} RentOS Ghana. All rights reserved.</span>

@@ -15,6 +15,8 @@ export interface PageMeta {
   status: 200 | 404
   jsonLd: Record<string, unknown>[]
   replaceSiteJsonLd: boolean
+  /** The page's readable content (escaped by the API), served inside #root until the app takes over. */
+  body?: string
 }
 
 // Server-side fetches need an absolute URL; the browser build also accepts a relative VITE_API_URL ("/api").
@@ -64,17 +66,24 @@ export function fetchWithTimeout(url: string, ms: number, init: RequestInit = {}
 const attr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const text = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** Replace the first tag matching `pattern`, or add `tag` before </head>. */
+/**
+ * Replace the first tag matching `pattern`, or add `tag` before </head>.
+ * Always with a replacer function: page text (a listing title) can contain
+ * "$'" or "$&", which a replacement string would expand into other parts of
+ * the document.
+ */
 function upsert(html: string, pattern: RegExp, tag: string): string {
-  return pattern.test(html) ? html.replace(pattern, tag) : html.replace('</head>', `  ${tag}\n  </head>`)
+  return pattern.test(html) ? html.replace(pattern, () => tag) : beforeHeadEnd(html, tag)
 }
 
+const beforeHeadEnd = (html: string, tag: string) => html.replace('</head>', () => `  ${tag}\n  </head>`)
+
 /** The browser replaces structured data by these ids (setJsonLd in src/lib/seo.ts), so it never appears twice. */
-const LD_IDS: Record<string, string> = { RealEstateListing: 'listing', BlogPosting: 'article', RealEstateAgent: 'site-org' }
+const LD_IDS: Record<string, string> = { RealEstateListing: 'listing', BlogPosting: 'article', RealEstateAgent: 'site-org', CollectionPage: 'page', BreadcrumbList: 'breadcrumbs', FAQPage: 'faq' }
 
 /** Put a page's own title, description, image, canonical address and structured data into the app shell. */
 export function injectMeta(html: string, meta: PageMeta): string {
-  let out = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${text(meta.title)}</title>`)
+  let out = html.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${text(meta.title)}</title>`)
   const name = (key: string, value: string) => { out = upsert(out, new RegExp(`<meta\\s+name="${key}"[^>]*>`), `<meta name="${key}" content="${attr(value)}" />`) }
   const property = (key: string, value: string) => { out = upsert(out, new RegExp(`<meta\\s+property="${key}"[^>]*>`), `<meta property="${key}" content="${attr(value)}" />`) }
   const itemprop = (key: string, value: string) => { out = upsert(out, new RegExp(`<meta\\s+itemprop="${key}"[^>]*>`), `<meta itemprop="${key}" content="${attr(value)}" />`) }
@@ -106,7 +115,27 @@ export function injectMeta(html: string, meta: PageMeta): string {
   for (const data of meta.jsonLd) {
     const id = LD_IDS[String(data['@type'])] ?? 'page'
     // "<" is escaped so a title containing </script> cannot end the tag early.
-    out = out.replace('</head>', `  <script type="application/ld+json" data-seo="${id}">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>\n  </head>`)
+    out = beforeHeadEnd(out, `<script type="application/ld+json" data-seo="${id}">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`)
   }
+  if (meta.body) out = injectBody(out, meta.body)
   return out
+}
+
+/**
+ * Put the page's readable content inside #root. The app reuses it as its loading
+ * state for this address (src/lib/prerender.ts) and then replaces it, so visitors
+ * see the page at once and crawlers read it without running JavaScript.
+ */
+export function injectBody(html: string, body: string): string {
+  return html.replace(/<div id="root"><\/div>/, () => `<div id="root" data-prerendered="1">${body}</div>`)
+}
+
+/** Search Console / Bing Webmaster Tools ownership tags, when their tokens are configured. */
+export function injectVerification(html: string, env: Record<string, string | undefined> = process.env): string {
+  const tags = [
+    ['google-site-verification', env.GOOGLE_SITE_VERIFICATION],
+    ['msvalidate.01', env.BING_SITE_VERIFICATION],
+    ['yandex-verification', env.YANDEX_VERIFICATION],
+  ].filter(([, value]) => value && /^[\w.-]{4,200}$/.test(value)).map(([name, value]) => `<meta name="${name}" content="${value}" />`)
+  return tags.length ? beforeHeadEnd(html, tags.join('\n  ')) : html
 }

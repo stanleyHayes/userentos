@@ -5,7 +5,7 @@
  * right title, description and photo without running JavaScript; people get
  * the same single-page app as everywhere else.
  */
-import { API_URL, fetchWithTimeout, injectMeta, requestHost, shellOrigin, type PageMeta } from './_lib/seo.js'
+import { API_URL, fetchWithTimeout, injectMeta, injectVerification, isPlatformHost, requestHost, shellOrigin, type PageMeta } from './_lib/seo.js'
 
 let cachedShell: { html: string; at: number } | null = null
 
@@ -55,11 +55,17 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const meta = host ? await metaFor(host, path) : null
-  return new Response(meta ? injectMeta(html, meta) : html, {
+  const page = meta ? injectMeta(html, meta) : html
+  // Ownership tags belong to the platform's own pages, never an agent's website.
+  return new Response(host && isPlatformHost(host) ? injectVerification(page) : page, {
     status: meta?.status === 404 ? 404 : 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+      // A missing page may exist a minute later (a listing just approved in a new area), so its 404 is kept briefly.
+      'Cache-Control': meta?.status === 404 ? 'public, max-age=0, s-maxage=60' : 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
     },
   })
 }
+
+// Uptime monitors and link checkers ask with HEAD; without it the launcher answers 405. Node drops the body.
+export { GET as HEAD }
