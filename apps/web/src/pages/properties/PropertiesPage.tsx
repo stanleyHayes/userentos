@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -18,12 +18,16 @@ import {
   Plus, Search, MapPin, SlidersHorizontal,
   Bed, Bath, Car, Sofa, ArrowUpDown, Eye, Building2,
   Grid3X3, List, Send, Accessibility,
-  Upload,
+  Upload, Sparkles,
 } from 'lucide-react'
 import { SponsoredBadge } from '@/components/ui/SponsoredBadge'
 import toast from 'react-hot-toast'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
+
+// Discover's swipe feed is the tenant's "For you" view of this page (one
+// Properties section, product brief §06); it loads only when opened.
+const SwipeFeedPage = lazy(() => import('@/pages/tenant/SwipeFeedPage').then((m) => ({ default: m.SwipeFeedPage })))
 
 const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
   available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
@@ -90,6 +94,9 @@ export function PropertiesPage() {
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
   const isLandlord = user?.activeRole === 'landlord' || user?.activeRole === 'property_manager'
+  const isTenant = user?.activeRole === 'tenant'
+  const [searchParams, setSearchParams] = useSearchParams()
+  const forYou = isTenant && searchParams.get('view') === 'for-you'
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -126,6 +133,7 @@ export function PropertiesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['properties', qs],
     queryFn: () => api.get<{ items: PropertyCard[] }>(`/properties${qs ? `?${qs}` : ''}`),
+    enabled: !forYou,
   })
   const properties = data?.items ?? []
 
@@ -212,6 +220,34 @@ export function PropertiesPage() {
         </div>
       </PageHeader>
 
+      {isTenant && (
+        <div role="tablist" aria-label="Browse properties" className="inline-flex w-full rounded-2xl border border-border/70 bg-surface/60 p-1 dark:border-white/10 dark:bg-white/[0.03] sm:w-auto">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!forYou}
+            onClick={() => setSearchParams({}, { replace: true })}
+            className={`flex-1 rounded-xl px-4 py-2 text-sm font-bold transition-colors sm:flex-none ${!forYou ? 'bg-white text-primary shadow-sm dark:bg-[#0c1626] dark:text-cyan-200' : 'text-muted hover:text-primary-dark dark:text-gray-400 dark:hover:text-white'}`}
+          >
+            All properties
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={forYou}
+            onClick={() => setSearchParams({ view: 'for-you' }, { replace: true })}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition-colors sm:flex-none ${forYou ? 'bg-white text-primary shadow-sm dark:bg-[#0c1626] dark:text-cyan-200' : 'text-muted hover:text-primary-dark dark:text-gray-400 dark:hover:text-white'}`}
+          >
+            <Sparkles size={14} /> For you
+          </button>
+        </div>
+      )}
+
+      {forYou ? (
+        <Suspense fallback={<Skeleton className="mx-auto h-[520px] max-w-sm rounded-2xl" />}>
+          <SwipeFeedPage embedded />
+        </Suspense>
+      ) : (<>
       {/* Search bar + filter controls */}
       <div className="flex flex-col gap-3">
         {/* Search input — full width */}
@@ -399,6 +435,7 @@ export function PropertiesPage() {
           {properties.map((property) => <PropertyListCard key={property.id} property={property} />)}
         </div>
       )}
+      </>)}
 
     </div>
   )

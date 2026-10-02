@@ -324,16 +324,22 @@ export default function HomeScreen() {
         <View style={s.quickActions}>
           <Text style={[s.sectionTitle, { color: c.text }]}>Quick Actions</Text>
           <View style={s.actionGrid}>
-            {[
-              { icon: 'card-outline' as const, label: 'Pay Rent', route: '/(tabs)/payments', color: '#3b82f6' },
-              { icon: 'wallet-outline' as const, label: 'Savings', route: '/(tabs)/savings', color: '#10b981' },
-              { icon: 'business-outline' as const, label: 'Properties', route: '/(tabs)/properties', color: '#f59e0b' },
-              { icon: 'chatbubbles-outline' as const, label: 'Messages', route: '/messages', color: '#8b5cf6' },
-              { icon: 'construct-outline' as const, label: 'Workers', route: '/workers', color: '#06b6d4' },
-              { icon: 'calendar-outline' as const, label: 'Bookings', route: '/bookings', color: '#8b5cf6' },
-              { icon: 'color-wand-outline' as const, label: 'AI Writer', route: '/ai-writer', color: '#f59e0b' },
-              { icon: 'trending-up-outline' as const, label: 'Pricing', route: '/pricing', color: '#10b981' },
-            ].map((action) => (
+            {/* What each journey comes for first (product brief §06). */}
+            {(isLandlord ? [
+              { icon: 'add-circle-outline' as const, label: 'Add Property', route: '/add-property', color: '#3b82f6' },
+              { icon: 'people-circle-outline' as const, label: 'Leads', route: '/(tabs)/leads', color: '#10b981' },
+              { icon: 'chatbubbles-outline' as const, label: 'Messages', route: '/(tabs)/messages', color: '#8b5cf6' },
+              { icon: 'globe-outline' as const, label: 'My Website', route: '/website', color: '#06b6d4' },
+              { icon: 'document-text-outline' as const, label: 'Agreements', route: '/agreements', color: '#f59e0b' },
+              { icon: 'color-wand-outline' as const, label: 'AI Writer', route: '/ai-writer', color: '#ec4899' },
+            ] : [
+              { icon: 'search-outline' as const, label: 'Find a Home', route: '/(tabs)/properties', color: '#3b82f6' },
+              { icon: 'heart-outline' as const, label: 'Saved', route: '/saved-properties', color: '#ec4899' },
+              { icon: 'chatbubbles-outline' as const, label: 'Messages', route: '/(tabs)/messages', color: '#8b5cf6' },
+              { icon: 'document-text-outline' as const, label: 'Agreements', route: '/agreements', color: '#f59e0b' },
+              { icon: 'card-outline' as const, label: 'Payments', route: '/(tabs)/payments', color: '#10b981' },
+              { icon: 'construct-outline' as const, label: 'Repairs', route: '/maintenance', color: '#06b6d4' },
+            ]).map((action) => (
               <TouchableOpacity key={action.label} style={s.actionBtn} onPress={() => router.push(action.route as string)}>
                 <View style={[s.actionIcon, { backgroundColor: action.color + '12' }]}>
                   <Ionicons name={action.icon} size={22} color={action.color} />

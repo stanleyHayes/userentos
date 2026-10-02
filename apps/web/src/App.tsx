@@ -13,7 +13,7 @@ import { SplashScreen } from '@/components/ui/SplashScreen'
 import { isSplashFinished, markSplashFinished } from '@/lib/splash'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { RequireRole } from '@/components/layout/RequireRole'
+import { RequireRole, NotPaused } from '@/components/layout/RequireRole'
 import { PublicLayout } from '@/components/layout/PublicLayout'
 import { LandingPage } from '@/pages/LandingPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -52,7 +52,6 @@ const BlogEditorPage = lazy(() => import('@/pages/BlogEditorPage').then((m) => (
 const BlogDetailPage = lazy(() => import('@/pages/BlogDetailPage').then((m) => ({ default: m.BlogDetailPage })))
 const CreditScorePage = lazy(() => import('@/pages/CreditScorePage').then((m) => ({ default: m.CreditScorePage })))
 const TenantProfilePage = lazy(() => import('@/pages/tenant/TenantProfilePage').then((m) => ({ default: m.TenantProfilePage })))
-const SwipeFeedPage = lazy(() => import('@/pages/tenant/SwipeFeedPage').then((m) => ({ default: m.SwipeFeedPage })))
 const DocumentsPage = lazy(() => import('@/pages/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
 const PolicySimulationPage = lazy(() => import('@/pages/government/PolicySimulationPage').then((m) => ({ default: m.PolicySimulationPage })))
 const PropertyReviewPage = lazy(() => import('@/pages/government/PropertyReviewPage').then((m) => ({ default: m.PropertyReviewPage })))
@@ -221,7 +220,8 @@ export default function App() {
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/properties" element={<PropertiesPage />} />
-            <Route path="/discover" element={<SwipeFeedPage />} />
+            {/* Discover is the "For you" view of Properties now. */}
+            <Route path="/discover" element={<Navigate to="/properties?view=for-you" replace />} />
             <Route path="/properties/new" element={<AddPropertyPage />} />
             <Route path="/properties/map" element={<PropertyMapPage />} />
             <Route path="/properties/:id" element={<PropertyDetailPage />} />
@@ -298,13 +298,13 @@ export default function App() {
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/ai-writer" element={<RequireRole roles={['landlord', 'property_manager', 'admin']}><AIWritingAssistantPage /></RequireRole>} />
             <Route path="/pricing" element={<PricingEnginePage />} />
-            <Route path="/workers" element={<WorkerMarketplacePage />} />
-            <Route path="/workers/:id" element={<WorkerDetailPage />} />
-            <Route path="/workers/join" element={<BecomeWorkerPage />} />
-            <Route path="/bookings" element={<MyBookingsPage />} />
+            <Route path="/workers" element={<NotPaused><WorkerMarketplacePage /></NotPaused>} />
+            <Route path="/workers/:id" element={<NotPaused><WorkerDetailPage /></NotPaused>} />
+            <Route path="/workers/join" element={<NotPaused><BecomeWorkerPage /></NotPaused>} />
+            <Route path="/bookings" element={<NotPaused><MyBookingsPage /></NotPaused>} />
             <Route path="/insurance" element={<InsuranceMarketplacePage />} />
             <Route path="/insurance/provider" element={<ProviderProductsPage />} />
-            <Route path="/local-services" element={<LocalServicesPage />} />
+            <Route path="/local-services" element={<NotPaused><LocalServicesPage /></NotPaused>} />
             <Route path="/achievements" element={<AchievementsPage />} />
             <Route path="/role-capabilities" element={<RoleCapabilitiesPage />} />
             {/* Platform Admin — read-only views across all tenants */}

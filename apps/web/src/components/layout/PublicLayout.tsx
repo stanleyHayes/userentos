@@ -6,17 +6,24 @@ import { Footer } from '@/components/layout/Footer'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import {
   Menu, X, Scale, Shield, FileText, Lock, ArrowRight,
-  Home, ChevronRight,
+  Home, ChevronRight, Search, Newspaper,
   LifeBuoy,
 } from 'lucide-react'
 
+// What visitors come for first: listings and the blog. The legal pages stay one
+// tap away in the footer and in the mobile drawer's Legal section.
 const NAV_LINKS = [
+  { to: '/registry', label: 'Properties', icon: Search },
+  { to: '/blog', label: 'Blog', icon: Newspaper },
   { to: '/#features', label: 'Features', icon: Home },
   { to: '/rental-laws', label: 'Rental Laws', icon: Scale },
+  { to: '/support', label: 'Support', icon: LifeBuoy },
+]
+
+const LEGAL_LINKS = [
   { to: '/privacy', label: 'Privacy', icon: Shield },
   { to: '/terms', label: 'Terms', icon: FileText },
   { to: '/data-protection', label: 'Data Protection', icon: Lock },
-  { to: '/support', label: 'Support', icon: LifeBuoy },
 ]
 
 export function PublicLayout() {
@@ -36,6 +43,8 @@ export function PublicLayout() {
       const hash = to.slice(1)
       return location.pathname === '/' && (location.hash === hash || (!location.hash && hash === '#features'))
     }
+    // An article belongs to the blog.
+    if (to === '/blog' && location.pathname.startsWith('/article/')) return true
     return location.pathname === to || location.pathname.startsWith(`${to}/`)
   }
 
@@ -215,6 +224,23 @@ export function PublicLayout() {
                 </span>
                 <span className="font-medium text-sm">{label}</span>
                 <ChevronRight size={14} className={`ml-auto transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+              </Link>
+            )
+          })}
+
+          <p className="px-4 pb-1 pt-5 text-[10px] font-bold uppercase tracking-widest text-white/30">Legal</p>
+          {LEGAL_LINKS.map(({ to, label, icon: Icon }) => {
+            const active = isNavActive(to)
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                aria-current={active ? 'page' : undefined}
+                className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors ${active ? 'bg-white/15 text-white' : 'text-white/50 hover:bg-white/10 hover:text-white'}`}
+              >
+                <Icon size={15} />
+                {label}
               </Link>
             )
           })}

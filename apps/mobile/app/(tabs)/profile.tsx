@@ -11,10 +11,11 @@ import { signOutDevice } from '../../lib/signOut'
 import { takeRegisteredPushToken } from '../../lib/pushSession'
 import { useRegulatedFeatures } from '../../hooks/useRegulatedFeatures'
 import { isPathAvailable } from '../../../../packages/shared/regulatedFeatures'
+import { isPathPausedFor } from '../../../../packages/shared/productScope'
 
 interface MenuSection {
   title: string
-  // `path` marks a regulated screen so the entry hides when the feature is off.
+  // `path` marks a regulated or paused screen so the entry hides when it is off.
   items: { icon: string; label: string; onPress: () => void; badge?: string; color?: string; path?: string }[]
 }
 
@@ -81,7 +82,6 @@ export default function ProfileScreen() {
         { icon: 'document-text-outline', label: 'My Agreements', onPress: () => router.push('/agreements') },
         { icon: 'folder-outline', label: 'Documents', onPress: () => router.push('/documents') },
         ...(isLandlord ? [
-          { icon: 'people-circle-outline' as const, label: 'Leads', onPress: () => router.push('/agent-leads' as string) },
           { icon: 'calendar-outline' as const, label: 'Viewings', onPress: () => router.push('/agent-viewings' as string) },
           { icon: 'cash-outline' as const, label: 'Commissions', onPress: () => router.push('/agent-commissions' as string) },
           { icon: 'receipt-outline' as const, label: 'Expenses', onPress: () => router.push('/landlord-expenses' as string) },
@@ -92,10 +92,10 @@ export default function ProfileScreen() {
     {
       title: 'Services',
       items: [
-        { icon: 'storefront-outline', label: 'Local Services', onPress: () => router.push('/local-services' as string) },
-        { icon: 'construct-outline', label: 'Find Workers', onPress: () => router.push('/workers') },
-        { icon: 'calendar-outline', label: 'My Bookings', onPress: () => router.push('/bookings') },
-        { icon: 'hammer-outline', label: 'Become a Worker', onPress: () => router.push('/become-worker') },
+        { icon: 'storefront-outline', label: 'Local Services', path: '/local-services', onPress: () => router.push('/local-services' as string) },
+        { icon: 'construct-outline', label: 'Find Workers', path: '/workers', onPress: () => router.push('/workers') },
+        { icon: 'calendar-outline', label: 'My Bookings', path: '/bookings', onPress: () => router.push('/bookings') },
+        { icon: 'hammer-outline', label: 'Become a Worker', path: '/become-worker', onPress: () => router.push('/become-worker') },
         ...(isServiceProvider ? [{ icon: 'wallet-outline' as const, label: 'Earnings', onPress: () => router.push('/earnings' as string) }] : []),
       ],
     },
@@ -140,7 +140,14 @@ export default function ProfileScreen() {
   ]
 
   const visibleSections = sections
-    .map((section) => ({ ...section, items: section.items.filter((item) => !item.path || isPathAvailable(item.path, regulatedFeatures ?? null)) }))
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.path || (
+        isPathAvailable(item.path, regulatedFeatures ?? null)
+        // Workers, Local Services and My Bookings are paused for tenants and agents this phase.
+        && !isPathPausedFor(item.path, user?.activeRole)
+      )),
+    }))
     .filter((section) => section.items.length > 0)
 
   const themeOptions: { value: 'light' | 'dark' | 'system'; icon: string }[] = [

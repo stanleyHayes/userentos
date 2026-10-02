@@ -39,7 +39,8 @@ const ROTATION_FACTOR = 0.08
 
 const pid = (p: SwipeProperty) => (p.id ?? p._id) as string
 
-export function SwipeFeedPage() {
+/** `embedded` renders the feed inside the Properties page's "For you" view, without its own header. */
+export function SwipeFeedPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const favoriteIds = useFavoritesStore((s) => s.ids)
@@ -171,21 +172,25 @@ export function SwipeFeedPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[820px]">
-      <div className="mb-4">
-        <PageHeader
-          eyebrow="Rentals"
-          title="Discover"
-          description="Swipe right to save · left to pass · up for details."
-          icon={<Sparkles size={22} />}
-        >
-          <Link to="/properties">
-            <Button variant="outline" size="sm">
-              <Building2 size={14} /> All listings
-            </Button>
-          </Link>
-        </PageHeader>
-      </div>
+    <div className={embedded ? 'flex flex-col min-h-[600px]' : 'flex flex-col h-[calc(100vh-8rem)] max-h-[820px]'}>
+      {embedded ? (
+        <p className="mb-4 text-center text-xs font-semibold text-muted dark:text-gray-400">Swipe right to save · left to pass · up for details.</p>
+      ) : (
+        <div className="mb-4">
+          <PageHeader
+            eyebrow="Rentals"
+            title="Discover"
+            description="Swipe right to save · left to pass · up for details."
+            icon={<Sparkles size={22} />}
+          >
+            <Link to="/properties">
+              <Button variant="outline" size="sm">
+                <Building2 size={14} /> All listings
+              </Button>
+            </Link>
+          </PageHeader>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col items-center justify-center">
         {isLoading ? (

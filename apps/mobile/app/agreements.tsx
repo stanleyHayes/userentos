@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
 import { useAuthStore } from '../stores/authStore'
+import { isPathPausedFor } from '../../../packages/shared/productScope'
 
 interface Agreement {
   id: string; propertyId: string; rentAmount: number; status: string
@@ -34,6 +35,7 @@ const MOVE_IN_TASKS: { key: string; label: string; icon: keyof typeof Ionicons.g
 ]
 
 function MoveInChecklist({ agreementId, propertyId }: { agreementId: string; propertyId: string }) {
+  const role = useAuthStore((state) => state.user?.activeRole)
   const c = useThemeColors()
   const [checked, setChecked] = useState<string[]>([])
   const [city, setCity] = useState('')
@@ -92,7 +94,8 @@ function MoveInChecklist({ agreementId, propertyId }: { agreementId: string; pro
             </TouchableOpacity>
             <Ionicons name={task.icon} size={15} color={c.muted} style={isDone && s.taskIconDone} />
             <Text style={[s.taskLabel, { color: c.text }, isDone && { textDecorationLine: 'line-through', color: c.muted }]}>{task.label}</Text>
-            {nearby && !isDone && (
+            {/* Local Services is paused for tenants this phase. */}
+            {nearby && !isDone && !isPathPausedFor('/local-services', role) && (
               <TouchableOpacity onPress={() => router.push('/local-services')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                 <Text style={[s.nearbyLink, { color: c.primary }]}>Nearby options →</Text>
               </TouchableOpacity>

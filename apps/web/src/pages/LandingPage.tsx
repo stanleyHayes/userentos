@@ -29,13 +29,11 @@ import {
   CalendarCheck,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   CreditCard,
   FileSignature,
   FileText,
   Hammer,
   Handshake,
-  Landmark,
   Loader2,
     MapPin,
   Menu,
@@ -49,10 +47,13 @@ import {
   ShieldCheck,
   ShieldPlus,
   Sparkles,
-  Store,
-  TrendingUp,
   Users,
   Wand2,
+  Globe,
+  MessageCircle,
+  Newspaper,
+  Wrench,
+  Clock,
   X,
   XCircle,
   AlertTriangle,
@@ -88,21 +89,57 @@ interface AbuseCheckResult {
 // the public page never advertises an unlicensed financial product.
 const platformModules: { title: string; description: string; icon: React.ReactNode; href: string; requires?: RegulatedFeatureKey[] }[] = [
   {
-    title: 'Public registry and discovery',
-    description: 'Search public property records, browse listings, save homes, and review property details before applying.',
+    title: 'One registry for every listing',
+    description: 'Homes for rent, for sale and short lets from agents across Ghana in one search, each from a single listing record that is never duplicated.',
     icon: <Search size={22} />,
     href: '/registry',
   },
   {
+    title: 'WhatsApp on every listing',
+    description: 'Tap WhatsApp and the right agent gets a message that already names the property, where it is and its link.',
+    icon: <MessageCircle size={22} />,
+    href: '/registry',
+  },
+  {
+    title: 'A website for every agent',
+    description: 'Agents, agencies and property managers get a professional property website at their-name.userentos.com, or on their own domain.',
+    icon: <Globe size={22} />,
+    href: '/register',
+  },
+  {
+    title: 'Agreements and payments',
+    description: 'Agreements are stored in your dashboard and free to view. Signing and exporting one costs GH₵5, and every payment gets a receipt.',
+    icon: <FileSignature size={22} />,
+    href: '/register',
+  },
+  {
     title: 'Tenant passport',
-    description: 'Build a tenant profile with documents, references, rent history and achievements, and share a summary with landlords.',
+    description: 'Build a tenant profile with documents, references and rent history, and share it with an agent when you apply.',
     icon: <ShieldCheck size={22} />,
     href: '/register',
   },
   {
-    title: 'Agreements, payments, and documents',
-    description: 'Run digital leases, payment records, receipts, document vaults, applications, and disputes in one flow.',
-    icon: <FileSignature size={22} />,
+    title: 'Real estate news',
+    description: 'Market updates and advice from agents across Ghana, credited to the agency that wrote them.',
+    icon: <Newspaper size={22} />,
+    href: '/blog',
+  },
+  {
+    title: 'AI writing assistant',
+    description: 'Draft listing descriptions, articles and your business story, then edit before anything is published.',
+    icon: <Wand2 size={22} />,
+    href: '/login',
+  },
+  {
+    title: 'Fair rent and matches',
+    description: 'See what similar homes rent for, and get homes matched to your budget in the For you feed.',
+    icon: <Sparkles size={22} />,
+    href: '/register',
+  },
+  {
+    title: 'Repairs, tracked',
+    description: 'Tenants report a repair in a few taps and follow it until it is fixed.',
+    icon: <Wrench size={22} />,
     href: '/register',
   },
   {
@@ -133,102 +170,31 @@ const platformModules: { title: string; description: string; icon: React.ReactNo
     href: '/register',
     requires: ['insurance'],
   },
-  {
-    title: 'Maintenance and service work',
-    description: 'Track maintenance requests, vendors, repair schedules, worker marketplace bookings, and job history.',
-    icon: <Hammer size={22} />,
-    href: '/register',
-  },
-  {
-    title: 'AI writing assistant',
-    description: 'Generate, polish, translate, and score property copy so listings launch with stronger information quality.',
-    icon: <Wand2 size={22} />,
-    href: '/login',
-  },
-  {
-    title: 'AI pricing and recommendations',
-    description: 'Suggest fair rental prices from market data and match tenants with homes that fit their budget and history.',
-    icon: <Sparkles size={22} />,
-    href: '/register',
-  },
-  {
-    title: 'Government and market analytics',
-    description: 'Track regional rental prices, housing demand, and vacancy trends to support planning and housing policy.',
-    icon: <BarChart3 size={22} />,
-    href: '/register',
-  },
 ]
 
+// The two journeys this phase runs end to end (product brief §01).
 const roleRoutes: { title: string; description: string; icon: React.ReactNode; checks: string[]; requires?: RegulatedFeatureKey[] }[] = [
   {
     title: 'Tenants',
-    description: 'Find reviewed listings with rent shown up front, apply and sign digitally, pay online with receipts, and build a portable rental history.',
+    description: 'Search homes for rent, for sale and short stays, message the agent on WhatsApp or RentOS, sign the agreement and keep every rental record in your dashboard.',
     icon: <Users size={22} />,
-    checks: ['Reviewed listings', 'AI matches', 'Digital receipts', 'Rental history'],
+    checks: ['Search & filter', 'WhatsApp the agent', 'Digital agreements', 'Rental history'],
   },
   {
-    title: 'Landlords and managers',
-    description: 'Review applicants\' RentOS profiles and scores, collect rent digitally with automated reminders, manage vacancies and expenses, and price with AI.',
-    icon: <Building2 size={22} />,
-    checks: ['Tenant scoring', 'Rent collection', 'AI pricing', 'Analytics'],
-  },
-  {
-    title: 'Agents',
-    description: 'Manage leads and a digital portfolio, take online bookings, manage clients, and track commissions — less time searching, more time closing deals.',
+    title: 'Agents, agencies and property managers',
+    description: 'List a property once and it appears on your own website and in the RentOS registry, with a link you can share anywhere. Leads arrive by SMS, WhatsApp and RentOS messages.',
     icon: <Handshake size={22} />,
-    checks: ['Lead management', 'Digital portfolio', 'Commissions', 'CRM & analytics'],
-  },
-  {
-    title: 'Service providers',
-    description: 'Electricians, plumbers, cleaners, movers, and more win jobs through a marketplace with customer ratings, scheduling, and online payments.',
-    icon: <Hammer size={22} />,
-    checks: ['Job marketplace', 'Bookings', 'Ratings & reviews', 'Online payments'],
-  },
-  {
-    title: 'Local businesses',
-    description: 'Furniture, appliance, internet, moving, and cleaning businesses advertise their services, sell products, and offer discounts to renters settling into a new home.',
-    icon: <Store size={22} />,
-    checks: ['Business profiles', 'Product listings', 'Discount offers', 'Move-in reach'],
-  },
-  {
-    title: 'Banks and financiers',
-    description: 'Review rent-financing applications that tenants choose to send you — including the RentOS payment history and score they share with that application — and collect repayments digitally.',
-    icon: <Landmark size={22} />,
-    checks: ['Applications', 'Rental financing', 'Digital collections', 'Portfolio view'],
-    requires: ['financing'],
-  },
-  {
-    title: 'Insurers',
-    description: 'Offer rent protection, property and tenant cover, and damage claims, integrated directly into the rental agreement.',
-    icon: <ShieldPlus size={22} />,
-    checks: ['Rent protection', 'Property cover', 'Damage claims', 'Agreement integration'],
-    requires: ['insurance'],
-  },
-  {
-    title: 'Employers',
-    description: 'Maintain employee records, approve payroll deduction mandates, and run payroll with clear approval workflows.',
-    icon: <BriefcaseBusiness size={22} />,
-    checks: ['Employees', 'Mandates', 'Payroll', 'Approvals'],
-    requires: ['payroll'],
-  },
-  {
-    title: 'Developers',
-    description: 'Read demand analytics, vacancy trends, rental pricing intelligence, and demographic insights to build what people actually need.',
-    icon: <TrendingUp size={22} />,
-    checks: ['Demand analytics', 'Vacancy trends', 'Pricing intelligence', 'Demographics'],
-  },
-  {
-    title: 'Government and admins',
-    description: 'Monitor regional rental prices, analyse housing demand, support tax compliance and fraud reduction, and spot underserved communities.',
-    icon: <ClipboardCheck size={22} />,
-    checks: ['Price monitoring', 'Housing demand', 'Compliance', 'Analytics'],
+    checks: ['Your own website', 'Leads & enquiries', 'Shareable listings', 'Agreements'],
   },
 ]
+
+/** Account types whose journeys are coming later; shown, never offered. */
+const comingLater = ['Landlords & owners', 'Property developers', 'Service providers', 'Local businesses']
 
 const workflow = [
   { title: 'Review', description: 'Listing moderation, identity-document review and licence checks keep records dependable.', icon: <Shield size={20} /> },
   { title: 'Transact', description: 'Agreements, signatures, payment records and receipts move through auditable rails.', icon: <CreditCard size={20} /> },
-  { title: 'Operate', description: 'Maintenance, worker bookings, messages, disputes, applications, and claims stay visible to the right role.', icon: <CalendarCheck size={20} /> },
+  { title: 'Operate', description: 'Maintenance, messages, disputes, applications and enquiries stay visible to the right person.', icon: <CalendarCheck size={20} /> },
   { title: 'Govern', description: 'Analytics, simulations, public records, admin queues, and compliance reviews keep the platform accountable.', icon: <BarChart3 size={20} /> },
 ]
 
@@ -338,19 +304,19 @@ export function LandingPage() {
   }
 
   const navLinks = [
+    { href: '/registry', label: 'Properties' },
     { href: '#features', label: 'Features' },
-    { href: '#roles', label: 'Roles' },
-    { href: '#operations', label: 'Operations' },
+    { href: '#roles', label: 'For agents' },
+    { href: '/blog', label: 'Blog' },
     { href: '#rights', label: 'Rights' },
-    { href: '/registry', label: 'Registry' },
   ]
 
   const drawerLinks = [
+    { href: '/registry', label: 'Properties', desc: 'Homes for rent, sale & short let', icon: Search },
     { href: '#features', label: 'Features', desc: 'Everything in one platform', icon: Sparkles },
-    { href: '#roles', label: 'Roles', desc: 'A workspace for everyone', icon: Users },
-    { href: '#operations', label: 'Operations', desc: 'Payments, receipts & disputes', icon: BarChart3 },
+    { href: '#roles', label: 'For agents', desc: 'Your own website and leads', icon: Users },
+    { href: '/blog', label: 'Blog', desc: 'Real estate news from across Ghana', icon: Newspaper },
     { href: '#rights', label: 'Rights', desc: 'Know where you stand', icon: ShieldCheck },
-    { href: '/registry', label: 'Registry', desc: 'Reviewed rental listings', icon: Search },
     { href: '/rental-laws', label: 'Rental Laws', desc: 'Tenancy law in plain language', icon: Scale },
   ]
 
@@ -667,8 +633,8 @@ export function LandingPage() {
           <div className="lg:sticky lg:top-32 lg:self-start">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Built around people</p>
             <h2 className="mt-5 font-display text-4xl font-extrabold leading-[0.98] md:text-6xl">Your view changes.<br /><span className="text-white/35">The record doesn&apos;t.</span></h2>
-            <p className="mt-6 max-w-md text-base leading-relaxed text-white/55">Every participant gets the context and actions they need, without fragmenting the rental story.</p>
-            <Link to="/register" className="mt-8 inline-flex"><Button variant="secondary">Choose your workspace <Send size={16} /></Button></Link>
+            <p className="mt-6 max-w-md text-base leading-relaxed text-white/55">Tenants find and secure a home. Agents list, market and close. One listing record serves both.</p>
+            <Link to="/register" className="mt-8 inline-flex"><Button variant="secondary">Create your free account <Send size={16} /></Button></Link>
           </div>
           <div className="space-y-3">
             {roleRoutes.filter((role) => offered(role.requires)).map((role, i) => (
@@ -687,6 +653,12 @@ export function LandingPage() {
                 </article>
               </Animate>
             ))}
+            <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-dashed border-white/12 px-5 py-4">
+              <span className="mr-1 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/40"><Clock size={12} /> Coming later</span>
+              {comingLater.map((label) => (
+                <span key={label} className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/45">{label}</span>
+              ))}
+            </div>
           </div>
         </div>
       </section>

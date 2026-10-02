@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Modal } from '@/components/ui/Modal'
 import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
+import { isPathPausedFor } from '../../../../../packages/shared/productScope'
 import { api } from '@/lib/api'
 import { useAgreement, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
 import { useRenewalOffers, useCreateRenewalOffer, useRespondToRenewal } from '@/hooks/useRenewals'
@@ -76,7 +77,9 @@ export function AgreementDetailPage() {
   // No `placement`: this widget is chosen by the tenant's lease city, so it
   // stays in organic order. Boosting paid businesses here would make lease
   // data an advertising input (and change the store privacy answers).
-  const { data: localBusinessData } = useBusinesses({ city: propertyCity }, { enabled: isTenantView && !!propertyCity })
+  // Local Services is paused for tenants this phase: no businesses, no links into it.
+  const localServicesOpen = !isPathPausedFor('/local-services', user?.activeRole)
+  const { data: localBusinessData } = useBusinesses({ city: propertyCity }, { enabled: isTenantView && localServicesOpen && !!propertyCity })
   const localBusinesses = (localBusinessData?.items ?? []).slice(0, 4)
 
   const [isEditing, setIsEditing] = useState(false)

@@ -56,6 +56,8 @@ import {
   ScrollText,
   Gauge,
   BadgeCheck,
+  Globe,
+  KeyRound,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -65,66 +67,127 @@ import { useSidebarStore } from '@/stores/sidebarStore'
 import { useUnreadCount, useBadgeCounts, useMaintenanceRequests, useRegulatedFeatures } from '@/hooks/useApi'
 import { usePortal } from '@/hooks/usePortal'
 import { isPathAvailable } from '../../../../../packages/shared/regulatedFeatures'
+import { isPathPausedFor } from '../../../../../packages/shared/productScope'
 import type { UserRole } from '@/types'
 import Tooltip from '@mui/material/Tooltip'
 
 interface NavItem { label: string; labelKey?: string; path: string; icon: React.ReactNode; roles: UserRole[]; badge?: ReactNode }
-interface NavGroup { label: string; labelKey?: string; icon: React.ReactNode; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean }
+interface NavGroup {
+  label: string; labelKey?: string; icon: React.ReactNode; roles: UserRole[]; items: NavItem[]; defaultOpen?: boolean
+  /** Only for the listed roles, even for a super admin (who otherwise sees every group). */
+  exclusive?: boolean
+}
+
+// The two journeys this phase runs (product brief §06): tenants, and agents /
+// agencies / property managers. Landlord accounts predate the phase and get
+// the agent experience. Their menus lead with what they come for — properties,
+// leads, messages, the website, agreements — and push the rest under "More".
+const TENANT: UserRole[] = ['tenant']
+const PRO: UserRole[] = ['landlord', 'property_manager']
+const JOURNEY: UserRole[] = [...TENANT, ...PRO]
 
 const navGroups: NavGroup[] = [
-  { label: 'Overview', icon: <LayoutGrid size={15} />, labelKey: 'nav.overview', roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'], defaultOpen: true,
+  { label: 'Home', icon: <Home size={15} />, roles: JOURNEY, exclusive: true,
+    items: [{ label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: JOURNEY }],
+  },
+  // One section for browsing: Discover is the "For you" view of this page.
+  { label: 'Properties', icon: <Building2 size={15} />, roles: JOURNEY, exclusive: true,
+    items: [{ label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: JOURNEY }],
+  },
+  { label: 'Leads', icon: <Inbox size={15} />, roles: PRO, exclusive: true,
+    items: [{ label: 'Leads & enquiries', path: '/agent/leads', icon: <Inbox size={20} />, roles: PRO }],
+  },
+  { label: 'Messages', icon: <MessageSquare size={15} />, roles: JOURNEY, exclusive: true,
+    items: [{ label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: JOURNEY }],
+  },
+  { label: 'Website', icon: <Globe size={15} />, roles: PRO, exclusive: true,
+    items: [{ label: 'My website', path: '/storefront', icon: <Globe size={20} />, roles: PRO }],
+  },
+  { label: 'My rental', icon: <KeyRound size={15} />, roles: TENANT, exclusive: true, defaultOpen: true,
     items: [
-      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
-      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
+      { label: 'Saved', labelKey: 'nav.saved', path: '/saved', icon: <Heart size={20} />, roles: TENANT },
+      { label: 'Applications', labelKey: 'nav.applications', path: '/applications', icon: <FileCheck size={20} />, roles: TENANT },
+      { label: 'Agreements', labelKey: 'nav.agreements', path: '/agreements', icon: <FileText size={20} />, roles: TENANT },
+      { label: 'Payments', labelKey: 'nav.payments', path: '/payments', icon: <CreditCard size={20} />, roles: TENANT },
+      { label: 'Documents', labelKey: 'nav.documents', path: '/documents', icon: <FolderOpen size={20} />, roles: TENANT },
+      { label: 'Maintenance', labelKey: 'nav.maintenance', path: '/maintenance', icon: <Wrench size={20} />, roles: TENANT },
+    ],
+  },
+  { label: 'Agreements & payments', icon: <FileText size={15} />, roles: PRO, exclusive: true, defaultOpen: true,
+    items: [
+      { label: 'Agreements', labelKey: 'nav.agreements', path: '/agreements', icon: <FileText size={20} />, roles: PRO },
+      { label: 'Payments', labelKey: 'nav.payments', path: '/payments', icon: <CreditCard size={20} />, roles: ['landlord'] },
+      { label: 'Payouts', path: '/storefront/payments', icon: <Banknote size={20} />, roles: PRO },
+      { label: 'Subscription', labelKey: 'nav.subscription', path: '/subscription', icon: <Crown size={20} />, roles: PRO },
+    ],
+  },
+  { label: 'Business', icon: <Briefcase size={15} />, roles: PRO, exclusive: true, defaultOpen: false,
+    items: [
+      { label: 'Viewings', labelKey: 'nav.viewings', path: '/agent/viewings', icon: <CalendarCheck size={20} />, roles: PRO },
+      { label: 'Applications', labelKey: 'nav.applications', path: '/applications', icon: <FileCheck size={20} />, roles: PRO },
+      { label: 'Tenants', labelKey: 'nav.tenants', path: '/tenants', icon: <Users size={20} />, roles: PRO },
+      { label: 'News posts', path: '/storefront/posts', icon: <PenTool size={20} />, roles: PRO },
+      { label: 'AI Writer', labelKey: 'nav.aiWriter', path: '/ai-writer', icon: <Sparkles size={20} />, roles: PRO },
+      { label: 'Website analytics', path: '/storefront/analytics', icon: <BarChart3 size={20} />, roles: PRO },
+      { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord'] },
+      { label: 'Commissions', labelKey: 'nav.commissions', path: '/agent/commissions', icon: <Coins size={20} />, roles: PRO },
+      { label: 'Agency & team', path: '/agent/agency', icon: <ContactRound size={20} />, roles: PRO },
+      { label: 'Expenses', labelKey: 'nav.expenses', path: '/landlord/expenses', icon: <Receipt size={20} />, roles: PRO },
+      { label: 'Vacancy', labelKey: 'nav.vacancy', path: '/landlord/vacancy', icon: <Building2 size={20} />, roles: PRO },
+      { label: 'Documents', labelKey: 'nav.documents', path: '/documents', icon: <FolderOpen size={20} />, roles: PRO },
+      { label: 'Maintenance', labelKey: 'nav.maintenance', path: '/maintenance', icon: <Wrench size={20} />, roles: PRO },
+      { label: 'Rent estimator', path: '/pricing', icon: <TrendingUp size={20} />, roles: PRO },
+    ],
+  },
+  { label: 'More', icon: <LayoutGrid size={15} />, roles: JOURNEY, exclusive: true, defaultOpen: false,
+    items: [
+      { label: 'Rental passport', labelKey: 'nav.passport', path: '/passport', icon: <Award size={20} />, roles: TENANT },
+      { label: 'My Profile', labelKey: 'nav.myProfile', path: '/my-profile', icon: <UserCircle size={20} />, roles: TENANT },
+      { label: 'Fair rent check', path: '/pricing', icon: <TrendingUp size={20} />, roles: TENANT },
+      { label: 'Property Map', path: '/properties/map', icon: <Map size={20} />, roles: JOURNEY },
+      { label: 'News', labelKey: 'nav.blog', path: '/dashboard/blog', icon: <BookOpen size={20} />, roles: JOURNEY },
+      { label: 'Rental Laws', labelKey: 'nav.rentalLaws', path: '/legal', icon: <Scale size={20} />, roles: JOURNEY },
+      { label: 'Disputes', labelKey: 'nav.disputes', path: '/disputes', icon: <AlertTriangle size={20} />, roles: ['tenant', 'landlord'] },
+      { label: 'Insurance', labelKey: 'nav.insurance', path: '/insurance', icon: <ShieldPlus size={20} />, roles: JOURNEY },
+      { label: 'RentGuard', labelKey: 'nav.rentguard', path: '/savings', icon: <PiggyBank size={20} />, roles: TENANT },
+      { label: 'Financing', labelKey: 'nav.financing', path: '/financing', icon: <Banknote size={20} />, roles: TENANT },
+      { label: 'My Mandates', labelKey: 'nav.myMandates', path: '/financing/mandates', icon: <ShieldCheck size={20} />, roles: TENANT },
+      { label: 'Credit Score', labelKey: 'nav.creditScore', path: '/credit-score', icon: <Star size={20} />, roles: TENANT },
+      { label: 'Achievements', labelKey: 'nav.achievements', path: '/achievements', icon: <Trophy size={20} />, roles: TENANT },
+      { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: JOURNEY },
+      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: JOURNEY },
+    ],
+  },
+
+  // Every other role keeps its existing menu.
+  { label: 'Overview', icon: <LayoutGrid size={15} />, labelKey: 'nav.overview', roles: ['government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'], defaultOpen: true,
+    items: [
+      { label: 'Dashboard', labelKey: 'nav.dashboard', path: '/dashboard', icon: <Home size={20} />, roles: ['government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
+      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: ['government', 'admin', 'financier', 'employer', 'service_provider', 'business', 'developer'] },
       // Not financier: /analytics renders the tenant view for them; their
       // portfolio KPIs are on the financier dashboard.
-      { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'government', 'admin'] },
+      { label: 'Analytics', labelKey: 'nav.analytics', path: '/analytics', icon: <BarChart3 size={20} />, roles: ['government', 'admin'] },
     ],
   },
-  { label: 'Rentals', icon: <Building2 size={15} />, labelKey: 'nav.rentals', roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business'], defaultOpen: true,
+  { label: 'Rentals', icon: <Building2 size={15} />, labelKey: 'nav.rentals', roles: ['admin', 'service_provider', 'government', 'legal_officer', 'financier', 'employer', 'business', 'developer'], defaultOpen: true,
     items: [
-      { label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Property Map', path: '/properties/map', icon: <Map size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'government'] },
-      { label: 'Discover', labelKey: 'nav.discover', path: '/discover', icon: <Sparkles size={20} />, roles: ['tenant'] },
-      { label: 'Saved', labelKey: 'nav.saved', path: '/saved', icon: <Heart size={20} />, roles: ['tenant'] },
-      { label: 'Tenants', labelKey: 'nav.tenants', path: '/tenants', icon: <Users size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Applications', labelKey: 'nav.applications', path: '/applications', icon: <FileCheck size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Agreements', labelKey: 'nav.agreements', path: '/agreements', icon: <FileText size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Payments', labelKey: 'nav.payments', path: '/payments', icon: <CreditCard size={20} />, roles: ['tenant', 'landlord', 'admin'] },
-      { label: 'Documents', labelKey: 'nav.documents', path: '/documents', icon: <FolderOpen size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Maintenance', labelKey: 'nav.maintenance', path: '/maintenance', icon: <Wrench size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Insurance', labelKey: 'nav.insurance', path: '/insurance', icon: <ShieldPlus size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Subscription', labelKey: 'nav.subscription', path: '/subscription', icon: <Crown size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Storefront', path: '/storefront', icon: <Store size={20} />, roles: ['landlord', 'property_manager', 'business', 'developer'] },
-      { label: 'Payments & Payouts', path: '/storefront/payments', icon: <Banknote size={20} />, roles: ['landlord', 'property_manager', 'business', 'developer'] },
-      { label: 'Storefront Analytics', path: '/storefront/analytics', icon: <BarChart3 size={20} />, roles: ['landlord', 'property_manager', 'business', 'developer'] },
-      { label: 'Posts', path: '/storefront/posts', icon: <PenTool size={20} />, roles: ['landlord', 'property_manager', 'business', 'developer'] },
-      { label: 'AI Writer', labelKey: 'nav.aiWriter', path: '/ai-writer', icon: <PenTool size={20} />, roles: ['landlord', 'property_manager', 'admin'] },
-      { label: 'Pricing', labelKey: 'nav.pricing', path: '/pricing', icon: <TrendingUp size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin'] },
-      { label: 'Workers', labelKey: 'nav.workers', path: '/workers', icon: <Wrench size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
-      { label: 'Local Services', labelKey: 'nav.localServices', path: '/local-services', icon: <Store size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider', 'business'] },
-      { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'admin', 'service_provider'] },
-    ],
-  },
-  { label: 'Portfolio', icon: <Briefcase size={15} />, labelKey: 'nav.portfolio', roles: ['landlord', 'property_manager'], defaultOpen: true,
-    items: [
-      { label: 'Leads', labelKey: 'nav.leads', path: '/agent/leads', icon: <Inbox size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Viewings', labelKey: 'nav.viewings', path: '/agent/viewings', icon: <CalendarCheck size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Commissions', labelKey: 'nav.commissions', path: '/agent/commissions', icon: <Coins size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Agency & Delegation', path: '/agent/agency', icon: <ContactRound size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Expenses', labelKey: 'nav.expenses', path: '/landlord/expenses', icon: <Receipt size={20} />, roles: ['landlord', 'property_manager'] },
-      { label: 'Vacancy', labelKey: 'nav.vacancy', path: '/landlord/vacancy', icon: <Building2 size={20} />, roles: ['landlord', 'property_manager'] },
-    ],
-  },
-  { label: 'Financial', icon: <PiggyBank size={15} />, labelKey: 'nav.financial', roles: ['tenant'], defaultOpen: true,
-    items: [
-      { label: 'RentGuard', labelKey: 'nav.rentguard', path: '/savings', icon: <PiggyBank size={20} />, roles: ['tenant'] },
-      { label: 'Financing', labelKey: 'nav.financing', path: '/financing', icon: <Banknote size={20} />, roles: ['tenant'] },
-      { label: 'My Mandates', labelKey: 'nav.myMandates', path: '/financing/mandates', icon: <ShieldCheck size={20} />, roles: ['tenant'] },
-      { label: 'Credit Score', labelKey: 'nav.creditScore', path: '/credit-score', icon: <Star size={20} />, roles: ['tenant'] },
-      { label: 'Passport', labelKey: 'nav.passport', path: '/passport', icon: <Award size={20} />, roles: ['tenant'] },
-      { label: 'Achievements', labelKey: 'nav.achievements', path: '/achievements', icon: <Trophy size={20} />, roles: ['tenant'] },
-      { label: 'My Profile', labelKey: 'nav.myProfile', path: '/my-profile', icon: <UserCircle size={20} />, roles: ['tenant'] },
+      { label: 'Properties', labelKey: 'nav.properties', path: '/properties', icon: <Building2 size={20} />, roles: ['admin'] },
+      { label: 'Property Map', path: '/properties/map', icon: <Map size={20} />, roles: ['admin', 'government'] },
+      { label: 'Applications', labelKey: 'nav.applications', path: '/applications', icon: <FileCheck size={20} />, roles: ['admin'] },
+      { label: 'Agreements', labelKey: 'nav.agreements', path: '/agreements', icon: <FileText size={20} />, roles: ['admin'] },
+      { label: 'Payments', labelKey: 'nav.payments', path: '/payments', icon: <CreditCard size={20} />, roles: ['admin'] },
+      { label: 'Documents', labelKey: 'nav.documents', path: '/documents', icon: <FolderOpen size={20} />, roles: ['admin'] },
+      { label: 'Maintenance', labelKey: 'nav.maintenance', path: '/maintenance', icon: <Wrench size={20} />, roles: ['admin'] },
+      { label: 'Insurance', labelKey: 'nav.insurance', path: '/insurance', icon: <ShieldPlus size={20} />, roles: ['admin'] },
+      { label: 'Storefront', path: '/storefront', icon: <Store size={20} />, roles: ['business', 'developer'] },
+      { label: 'Payments & Payouts', path: '/storefront/payments', icon: <Banknote size={20} />, roles: ['business', 'developer'] },
+      { label: 'Storefront Analytics', path: '/storefront/analytics', icon: <BarChart3 size={20} />, roles: ['business', 'developer'] },
+      { label: 'Posts', path: '/storefront/posts', icon: <PenTool size={20} />, roles: ['business', 'developer'] },
+      { label: 'AI Writer', labelKey: 'nav.aiWriter', path: '/ai-writer', icon: <PenTool size={20} />, roles: ['admin'] },
+      { label: 'Pricing', labelKey: 'nav.pricing', path: '/pricing', icon: <TrendingUp size={20} />, roles: ['admin'] },
+      { label: 'Workers', labelKey: 'nav.workers', path: '/workers', icon: <Wrench size={20} />, roles: ['admin', 'service_provider'] },
+      { label: 'Local Services', labelKey: 'nav.localServices', path: '/local-services', icon: <Store size={20} />, roles: ['government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider', 'business'] },
+      { label: 'My Bookings', labelKey: 'nav.myBookings', path: '/bookings', icon: <Calendar size={20} />, roles: ['admin', 'service_provider'] },
     ],
   },
   { label: 'Lending', icon: <Banknote size={15} />, labelKey: 'nav.lending', roles: ['financier'], defaultOpen: true,
@@ -143,13 +206,13 @@ const navGroups: NavGroup[] = [
       { label: 'Payroll Reports', labelKey: 'nav.payrollReports', path: '/employer/reports', icon: <BarChart3 size={20} />, roles: ['employer'] },
     ],
   },
-  { label: 'Support', icon: <LifeBuoy size={15} />, labelKey: 'nav.support', roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,
+  { label: 'Support', icon: <LifeBuoy size={15} />, labelKey: 'nav.support', roles: ['government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'], defaultOpen: false,
     items: [
-      { label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'] },
-      { label: 'Disputes', labelKey: 'nav.disputes', path: '/disputes', icon: <AlertTriangle size={20} />, roles: ['tenant', 'landlord', 'government', 'legal_officer', 'admin'] },
-      { label: 'Rental Laws', labelKey: 'nav.rentalLaws', path: '/legal', icon: <Scale size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier', 'employer'] },
-      { label: 'Blog', labelKey: 'nav.blog', path: '/dashboard/blog', icon: <BookOpen size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin'] },
-      { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: ['tenant', 'landlord', 'property_manager', 'government', 'legal_officer', 'admin', 'financier'] },
+      { label: 'Messages', labelKey: 'nav.messages', path: '/messages', icon: <MessageSquare size={20} />, roles: ['government', 'legal_officer', 'admin', 'financier', 'employer', 'service_provider'] },
+      { label: 'Disputes', labelKey: 'nav.disputes', path: '/disputes', icon: <AlertTriangle size={20} />, roles: ['government', 'legal_officer', 'admin'] },
+      { label: 'Rental Laws', labelKey: 'nav.rentalLaws', path: '/legal', icon: <Scale size={20} />, roles: ['government', 'legal_officer', 'admin', 'financier', 'employer'] },
+      { label: 'Blog', labelKey: 'nav.blog', path: '/dashboard/blog', icon: <BookOpen size={20} />, roles: ['government', 'legal_officer', 'admin'] },
+      { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: ['government', 'legal_officer', 'admin', 'financier'] },
     ],
   },
   { label: 'Administration', icon: <Shield size={15} />, labelKey: 'nav.administration', roles: ['government', 'admin', 'super_admin'], defaultOpen: false,
@@ -240,13 +303,15 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const { data: regulatedFeatures } = useRegulatedFeatures()
 
   const visibleGroups = navGroups
-    .filter((g) => isSuperAdmin || g.roles.includes(activeRole))
+    .filter((g) => g.roles.includes(activeRole) || (isSuperAdmin && !g.exclusive))
     .map((g) => ({
       ...g,
       items: g.items
         .filter((i) => {
           // Regulated financial services appear only once the operator enables them.
           if (!isPathAvailable(i.path, regulatedFeatures ?? null)) return false
+          // Paused for this phase (Workers, Local Services, My Bookings).
+          if (isPathPausedFor(i.path, activeRole)) return false
           if (!isSuperAdmin && !i.roles.includes(activeRole)) return false
           // On portals, hide items that don't overlap with portal roles
           if (isPortal && !isSuperAdmin && !i.roles.some((r) => allowedRoles.includes(r))) return false
