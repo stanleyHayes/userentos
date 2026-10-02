@@ -361,6 +361,7 @@ export interface Address {
   city: string
   region: string
   digitalAddress?: string // Ghana Post GPS
+  neighborhood?: string
 }
 
 export interface RentalAgreement {

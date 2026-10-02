@@ -14,6 +14,7 @@ import {
   Copy, Check, Sparkles, Star, FileText, MessageCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../../../packages/shared/listingTypes'
 
 const TONES = [
   { value: 'professional', label: 'Professional' },
@@ -107,6 +108,8 @@ export function AIWritingAssistantPage() {
 
   // Listing generation state
   const [listingInput, setListingInput] = useState({
+    // Rent, sale or short let: the AI states what the price is for.
+    listingType: 'rent' as ListingType,
     propertyType: 'apartment',
     location: '',
     bedrooms: 2,
@@ -295,7 +298,10 @@ export function AIWritingAssistantPage() {
       {tab === 'listing' && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
           <Card className="space-y-6 p-5 sm:p-6">
-            <AIFormSection title="Property basics" description="Start with the facts a renter uses to decide whether the listing is relevant." icon={<Wand2 size={18} />}>
+            <AIFormSection title="Property basics" description="Start with the facts a renter or buyer uses to decide whether the listing is relevant." icon={<Wand2 size={18} />}>
+              <Select id="listing-type" label="Listing" value={listingInput.listingType} onChange={e => setListingInput(p => ({ ...p, listingType: e.target.value as ListingType }))}
+                options={LISTING_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+              />
               <FormGrid columns={2}>
                 <Select id="prop-type" label="Property Type" value={listingInput.propertyType} onChange={e => setListingInput(p => ({ ...p, propertyType: e.target.value }))}
                   options={[
@@ -315,7 +321,7 @@ export function AIWritingAssistantPage() {
               <FormGrid columns={3}>
                 <Input id="bedrooms" label="Bedrooms" type="number" value={String(listingInput.bedrooms)} onChange={e => setListingInput(p => ({ ...p, bedrooms: Number.isNaN(Number(e.target.value)) ? 0 : Number(e.target.value) }))} />
                 <Input id="bathrooms" label="Bathrooms" type="number" value={String(listingInput.bathrooms)} onChange={e => setListingInput(p => ({ ...p, bathrooms: Number.isNaN(Number(e.target.value)) ? 0 : Number(e.target.value) }))} />
-                <Input id="price" label="Price (GHS/month)" type="number" value={String(listingInput.price || '')} onChange={e => setListingInput(p => ({ ...p, price: Number(e.target.value) }))} />
+                <Input id="price" label={`${listingTypeMeta(listingInput.listingType).priceLabel} (GHS)`} type="number" value={String(listingInput.price || '')} onChange={e => setListingInput(p => ({ ...p, price: Number(e.target.value) }))} />
               </FormGrid>
 
               <FormGrid columns={2}>

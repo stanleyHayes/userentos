@@ -107,3 +107,25 @@ export function applySeo(tags: SeoTags): void {
 
   setNoIndex(tags.noIndex === true)
 }
+
+/**
+ * schema.org structured data (JSON-LD) for this route, replacing whatever the
+ * previous route left under the same id; null removes it. Lets search engines
+ * show a listing's price and photos, or an article's author, in results.
+ */
+export function setJsonLd(id: string, data: Record<string, unknown> | null): void {
+  const existing = document.head.querySelector(`script[type="application/ld+json"][data-seo="${id}"]`)
+  if (!data) {
+    existing?.remove()
+    return
+  }
+  const el = existing ?? (() => {
+    const script = document.createElement('script')
+    script.type = 'application/ld+json'
+    script.dataset.seo = id
+    document.head.appendChild(script)
+    return script
+  })()
+  // "<" is escaped so a title containing </script> cannot end the tag early.
+  el.textContent = JSON.stringify(data).replace(/</g, '\\u003c')
+}

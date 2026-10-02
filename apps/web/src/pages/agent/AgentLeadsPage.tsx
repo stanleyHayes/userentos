@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -7,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { cn, formatDate } from '@/lib/utils'
 import { useAgentLeads, useUpdateLeadStatus, type AgentLead, type LeadStatus } from '@/hooks/useAgent'
-import { Handshake, Phone, Mail, Building2, ArrowRight, XCircle, Loader2 } from 'lucide-react'
+import { Handshake, Phone, Mail, Building2, ArrowRight, XCircle, Loader2, MessageCircle, Globe, Heart } from 'lucide-react'
 
 const STATUS_FILTERS: { value: LeadStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
@@ -36,13 +37,24 @@ const NEXT_STEP: Partial<Record<LeadStatus, { status: LeadStatus; label: string 
   applied: { status: 'closed', label: 'Close deal' },
 }
 
-function LeadCard({ lead }: { lead: AgentLead }) {
+const CHANNELS: Record<'interest' | 'whatsapp' | 'website', { label: string; icon: React.ReactNode; className: string }> = {
+  interest: { label: 'Interested', icon: <Heart size={10} />, className: 'bg-primary/10 text-primary dark:bg-cyan-300/10 dark:text-cyan-200' },
+  whatsapp: { label: 'WhatsApp', icon: <MessageCircle size={10} />, className: 'bg-[#25D366]/15 text-[#128C4B] dark:text-[#4ADE80]' },
+  website: { label: 'Your website', icon: <Globe size={10} />, className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
+}
+
+function LeadCard({ lead, highlighted }: { lead: AgentLead; highlighted: boolean }) {
   const updateStatus = useUpdateLeadStatus()
   const next = NEXT_STEP[lead.status]
   const active = lead.status !== 'closed' && lead.status !== 'lost'
+  const ref = useRef<HTMLDivElement>(null)
+  // An SMS or notification links to /agent/leads?lead=<id>: bring that lead into view.
+  useEffect(() => { if (highlighted) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, [highlighted])
+  const channels = lead.channels?.length ? lead.channels : [lead.channel ?? 'interest']
 
   return (
-    <Card className="flex flex-col gap-3">
+    <div ref={ref} className="h-full">
+    <Card className={cn('flex h-full flex-col gap-3', highlighted && 'ring-2 ring-primary dark:ring-cyan-300')}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate font-semibold text-primary-dark dark:text-white">{lead.contactName}</h3>
@@ -53,6 +65,14 @@ function LeadCard({ lead }: { lead: AgentLead }) {
           </p>
         </div>
         <Badge variant={STATUS_VARIANTS[lead.status]} className="flex-shrink-0 text-[10px] capitalize">{lead.status}</Badge>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {channels.map((channel) => (
+          <span key={channel} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold', CHANNELS[channel].className)}>
+            {CHANNELS[channel].icon} {CHANNELS[channel].label}
+          </span>
+        ))}
       </div>
 
       <div className="neumorphic-inset rounded-xl p-3 space-y-1.5">
@@ -96,10 +116,13 @@ function LeadCard({ lead }: { lead: AgentLead }) {
         </div>
       )}
     </Card>
+    </div>
   )
 }
 
 export function AgentLeadsPage() {
+  const [searchParams] = useSearchParams()
+  const highlightedLead = searchParams.get('lead')
   const [status, setStatus] = useState<LeadStatus | ''>('')
   const { data, isLoading } = useAgentLeads({ status })
   const items = data?.items ?? []
@@ -108,8 +131,8 @@ export function AgentLeadsPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Portfolio"
-        title="Leads"
-        description="People interested in your listings — work each lead through the pipeline."
+        title="Leads & enquiries"
+        description="Everyone who asked about your listings — on WhatsApp, your website or RentOS. Work each one through the pipeline."
         icon={<Handshake size={22} />}
       />
 
@@ -137,11 +160,11 @@ export function AgentLeadsPage() {
         <EmptyState
           preset="general"
           title={status ? `No ${status} leads` : 'No leads yet'}
-          description={status ? 'Try another pipeline stage.' : 'When someone taps “I’m interested” on one of your listings, their contact details land here.'}
+          description={status ? 'Try another pipeline stage.' : 'When someone taps “I’m interested”, opens WhatsApp while signed in, or uses your website’s contact form, they land here — and you get an SMS.'}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {items.map((lead) => <LeadCard key={lead.id} lead={lead} />)}
+          {items.map((lead) => <LeadCard key={lead.id} lead={lead} highlighted={lead.id === highlightedLead} />)}
         </div>
       )}
     </div>

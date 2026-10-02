@@ -16,6 +16,9 @@ export interface AgentLead {
   status: LeadStatus
   propertyTitle: string | null
   createdAt: string
+  /** How the enquiry arrived: "I'm interested", a WhatsApp tap, or the agent's website contact form. */
+  channel?: 'interest' | 'whatsapp' | 'website'
+  channels?: ('interest' | 'whatsapp' | 'website')[]
 }
 
 export interface AgentViewing {

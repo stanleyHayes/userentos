@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -16,7 +16,7 @@ import { useState } from 'react'
 import {
   ArrowLeft, MapPin, Trash2, Bed, Bath, Car, Sofa, Ruler, Building2, Eye,
   Heart, MessageSquare, Shield, Check, X as XIcon, AlertTriangle, Star,
-  User, Phone, Clock, Lock, Share2,
+  User, Phone, Clock, Lock,
   Wifi, Zap, Droplets, ShieldCheck, TreePine, Dumbbell, Wind, Tv, WashingMachine,
   Cctv, DoorOpen, Waves, ParkingCircle, Fuel, CreditCard, CheckCircle2,
   Accessibility, Ear, CalendarDays, Loader2,
@@ -37,6 +37,10 @@ import { ReportContentButton } from '@/components/ReportContentDialog'
 import type { Property, Application, RentalAgreement, Conversation, PropertyStatus } from '@/types'
 import type { PaginatedResponse } from '@/types'
 import { useRegulatedFeatureEnabled } from '@/hooks/useApi'
+import { ShareListingButton } from '@/components/listings/ShareListing'
+import { WhatsAppEnquiryButton } from '@/pages/property/PublicPropertyPage'
+import { usePublicListing } from '@/lib/publicListing'
+import { acceptsRentalApplications, listingPath, listingTypeMeta } from '../../../../../packages/shared/listingTypes'
 
 type PropertyDetail = Property & { landlordName?: string; landlordVerified?: boolean }
 
@@ -58,6 +62,7 @@ export function PropertyDetailPage() {
   // A minimum credit score can't be met while credit scoring is off.
   const creditScoresOffered = useRegulatedFeatureEnabled('credit_reporting') === true
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const qc = useQueryClient()
   const [activeImage, setActiveImage] = useState(0)
@@ -146,6 +151,23 @@ export function PropertyDetailPage() {
   const [showInterest, setShowInterest] = useState(false)
   const [interestMessage, setInterestMessage] = useState('')
   const [leadSent, setLeadSent] = useState(false)
+  // The public page's "Message on RentOS" lands here with ?contact=1: open the
+  // message box once the listing has loaded (adjusting state during render,
+  // not in an effect), and drop the flag from the URL when it closes.
+  const wantsContact = searchParams.get('contact') === '1'
+  const [contactOpenedFor, setContactOpenedFor] = useState<string | null>(null)
+  if (wantsContact && property && user && property.landlordId !== user.id && contactOpenedFor !== property.id) {
+    setContactOpenedFor(property.id)
+    setShowContact(true)
+  }
+  function closeContact() {
+    setShowContact(false)
+    if (searchParams.has('contact')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('contact')
+      setSearchParams(next, { replace: true })
+    }
+  }
   const [showViewing, setShowViewing] = useState(false)
   const [viewingDate, setViewingDate] = useState('')
   const [viewingTime, setViewingTime] = useState('')
@@ -194,6 +216,10 @@ export function PropertyDetailPage() {
   const images = p.images?.length > 0 ? p.images : []
   const pastAgreements = (agreementsData?.items ?? []).filter((a) => a.propertyId === id)
   const prefs = p.preferences
+  const purpose = listingTypeMeta(p.listingType)
+  const isRental = acceptsRentalApplications(p.listingType)
+  const isPublic = p.listingStatus === 'approved' || p.listingStatus === 'published'
+  const shareUrl = `${window.location.origin}${listingPath(p.listingRef ?? p.id)}`
 
   return (
     <div className="space-y-5 max-w-6xl mx-auto relative">
@@ -202,7 +228,8 @@ export function PropertyDetailPage() {
       <div className="flex items-center justify-between">
         <button onClick={() => navigate('/properties')} className="flex items-center gap-1.5 text-xs text-muted dark:text-gray-400 hover:text-primary-dark dark:hover:text-white transition-colors"><ArrowLeft size={14} /> Listings</button>
         <div className="flex gap-1">
-          <Button variant="outline" size="sm"><Share2 size={14} /></Button>
+          {/* Only a live listing has a public page to share. */}
+          {isPublic && <ShareListingButton url={shareUrl} title={p.title} summary={`${p.address?.neighborhood ? `${p.address.neighborhood}, ` : ''}${p.address?.city ?? ''} · ${formatCurrency(p.rentAmount)}${purpose.priceSuffix}`} />}
           {isTenant && <Button variant="outline" size="sm" onClick={() => toggleFavorite(id!)} disabled={isToggling}><Heart size={14} className={isFavorited ? 'fill-danger text-danger' : ''} /></Button>}
           {isOwner && <Button variant="ghost" size="sm" className="text-danger" onClick={() => { if (confirm('Delete?')) deleteMutation.mutate() }}><Trash2 size={14} /></Button>}
         </div>
@@ -227,6 +254,7 @@ export function PropertyDetailPage() {
               <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
               <div className="relative">
                 <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#0f1f33]">{purpose.label}</span>
                   <Badge variant={statusVariant[p.status as PropertyStatus]}>{p.status?.replace('_', ' ')}</Badge>
                   {p.listingStatus && (
                     <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'}>{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>
@@ -239,12 +267,13 @@ export function PropertyDetailPage() {
                 </div>
                 {p.landlordName && <p className="mt-2 flex items-center gap-1 text-xs text-white/75">{p.landlordVerified && <ShieldCheck size={13} className="text-emerald-300" />} Listed by {p.landlordName}{p.landlordVerified ? ' · ID reviewed by RentOS' : ''}</p>}
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">Listed rent</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">{purpose.priceLabel}</p>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="font-display text-3xl font-extrabold">{formatCurrency(p.rentAmount)}</span>
-                    <span className="text-xs text-white/65">/mo</span>
+                    <span className="text-xs text-white/65">{purpose.priceSuffix}</span>
                   </div>
-                  <p className="mt-1 text-xs text-white/62">{p.advanceMonths} months advance · {formatCurrency(p.rentAmount * p.advanceMonths)} upfront</p>
+                  {isRental && <p className="mt-1 text-xs text-white/62">{p.advanceMonths} months advance · {formatCurrency(p.rentAmount * p.advanceMonths)} upfront</p>}
+                  {p.listingRef && <p className="mt-1 font-mono text-[10px] text-white/50">Ref {p.listingRef}</p>}
                 </div>
               </div>
             </div>
@@ -272,8 +301,12 @@ export function PropertyDetailPage() {
                 </div>
               )}
 
+              {canInquire && isPublic && <PublicWhatsApp listingKey={p.listingRef ?? p.id} />}
+
               {isTenant && p.status === 'available' && (
                 <TenantActions
+                  canApply={isRental}
+                  purposeLabel={purpose.value === 'sale' ? 'buy it' : 'book it'}
                   existingApplication={existingApplication}
                   showQualificationWarning={!!qualification && !qualification.qualified}
                   onApply={() => setShowApply(true)}
@@ -291,7 +324,7 @@ export function PropertyDetailPage() {
                   coordinates={p.coordinates}
                   rejectionReason={p.rejectionReason}
                   reviewIssues={p.reviewIssues}
-                  listing={{ title: p.title, description: p.description, rentAmount: p.rentAmount, rules: p.rules }}
+                  listing={{ title: p.title, description: p.description, rentAmount: p.rentAmount, listingType: p.listingType, rules: p.rules }}
                   publishErrors={publishErrors}
                   onPublish={() => publishMutation.mutate()}
                   isPublishing={publishMutation.isPending}
@@ -469,7 +502,7 @@ export function PropertyDetailPage() {
           )}
         </div>
 
-      <ContactLandlordModal open={showContact} onClose={() => setShowContact(false)} title={p.title} />
+      <ContactLandlordModal open={showContact} onClose={closeContact} title={p.title} />
 
       <RejectListingModal
         open={showRejectModal}
@@ -675,4 +708,11 @@ function DetailCell({ icon, label, value, highlight }: { icon?: React.ReactNode;
       <p className={`text-sm font-bold capitalize ${highlight ? 'text-primary dark:text-blue-400' : 'text-primary-dark dark:text-white'}`}>{value}</p>
     </div>
   )
+}
+
+/** The WhatsApp enquiry button, fed by the listing's public record (it knows whether the agent has WhatsApp). */
+function PublicWhatsApp({ listingKey }: { listingKey: string }) {
+  const { data: listing } = usePublicListing(listingKey)
+  if (!listing?.agent?.whatsapp) return null
+  return <WhatsAppEnquiryButton listing={listing} />
 }

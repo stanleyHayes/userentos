@@ -5,11 +5,13 @@ import TextField from '@mui/material/TextField'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useUpdateProperty } from '@/hooks/useApi'
+import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../../../../packages/shared/listingTypes'
 
 export interface EditableListing {
   title: string
   description: string
   rentAmount: number
+  listingType?: ListingType
   rules?: string[]
 }
 
@@ -31,6 +33,7 @@ export function EditListingModal({ open, onClose, propertyId, listing }: EditLis
   const [title, setTitle] = useState(listing.title)
   const [description, setDescription] = useState(listing.description)
   const [rent, setRent] = useState(String(listing.rentAmount ?? ''))
+  const [listingType, setListingType] = useState<ListingType>(listing.listingType ?? 'rent')
   const [rules, setRules] = useState((listing.rules ?? []).join('\n'))
   const updateProperty = useUpdateProperty()
   const qc = useQueryClient()
@@ -45,6 +48,7 @@ export function EditListingModal({ open, onClose, propertyId, listing }: EditLis
       title: title.trim(),
       description: description.trim(),
       rentAmount,
+      listingType,
       rules: rules.split('\n').map((r) => r.trim()).filter(Boolean),
     }, {
       onSuccess: () => {
@@ -59,6 +63,16 @@ export function EditListingModal({ open, onClose, propertyId, listing }: EditLis
   return (
     <Modal open={open} onClose={onClose} title="Edit listing" className="max-w-2xl">
       <div className="space-y-4">
+        <TextField
+          select
+          label="Listing type"
+          value={listingType}
+          onChange={(e) => setListingType(e.target.value as ListingType)}
+          fullWidth
+          slotProps={{ select: { native: true } }}
+        >
+          {LISTING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </TextField>
         <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required />
         <TextField
           label="Description"
@@ -71,7 +85,7 @@ export function EditListingModal({ open, onClose, propertyId, listing }: EditLis
           helperText="Include anything a reviewer asked you to state, such as service charges or what the rent covers."
         />
         <TextField
-          label="Monthly rent (GHS)"
+          label={`${listingTypeMeta(listingType).priceLabel} (GHS)`}
           type="number"
           value={rent}
           onChange={(e) => setRent(e.target.value)}

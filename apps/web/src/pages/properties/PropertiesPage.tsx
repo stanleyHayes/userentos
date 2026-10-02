@@ -24,6 +24,7 @@ import { SponsoredBadge } from '@/components/ui/SponsoredBadge'
 import toast from 'react-hot-toast'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
+import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../../../packages/shared/listingTypes'
 
 // Discover's swipe feed is the tenant's "For you" view of this page (one
 // Properties section, product brief §06); it loads only when opened.
@@ -68,6 +69,7 @@ const SORT_OPTIONS = [
 ]
 
 interface Filters {
+  listingType: ListingType | ''
   search: string; type: string; region: string; city: string
   minRent: string; maxRent: string; minBedrooms: string; minBathrooms: string
   furnished: boolean; parking: boolean; amenities: string[]
@@ -83,6 +85,7 @@ type PropertyCard = Property & {
 }
 
 const defaultFilters: Filters = {
+  listingType: '',
   search: '', type: '', region: '', city: '',
   minRent: '', maxRent: '', minBedrooms: '', minBathrooms: '',
   furnished: false, parking: false, amenities: [],
@@ -114,6 +117,7 @@ export function PropertiesPage() {
   // Paid placements are opt-in per request. This browse page labels them (both
   // card layouts carry SponsoredBadge), so it is the one place that asks.
   else queryParams.set('placement', 'search_top')
+  if (filters.listingType) queryParams.set('listingType', filters.listingType)
   if (debouncedSearch) queryParams.set('search', debouncedSearch)
   if (filters.type) queryParams.set('type', filters.type)
   if (filters.region) queryParams.set('region', filters.region)
@@ -248,6 +252,25 @@ export function PropertiesPage() {
           <SwipeFeedPage embedded />
         </Suspense>
       ) : (<>
+      {/* What a listing is for: rent, sale or short let (brief §04). */}
+      <div role="tablist" aria-label="Listing type" className="flex flex-wrap gap-1.5">
+        {[{ value: '' as const, label: 'All' }, ...LISTING_TYPES.map((t) => ({ value: t.value, label: t.label }))].map((t) => {
+          const selected = filters.listingType === t.value
+          return (
+            <button
+              key={t.value || 'all'}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => uf('listingType', t.value)}
+              className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${selected ? 'border-primary bg-primary text-white dark:border-cyan-300 dark:bg-cyan-300 dark:text-[#071018]' : 'border-border text-muted hover:border-primary/40 hover:text-primary-dark dark:border-[#252a3a] dark:text-gray-400'}`}
+            >
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Search bar + filter controls */}
       <div className="flex flex-col gap-3">
         {/* Search input — full width */}
@@ -357,8 +380,8 @@ export function PropertiesPage() {
               </TextField>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-              <TextField type="number" label="Min Rent (GHS)" placeholder="0" value={filters.minRent} onChange={(e) => uf('minRent', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-              <TextField type="number" label="Max Rent (GHS)" placeholder="Any" value={filters.maxRent} onChange={(e) => uf('maxRent', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField type="number" label={`Min ${filters.listingType ? listingTypeMeta(filters.listingType).priceLabel.toLowerCase() : 'price'} (GHS)`} placeholder="0" value={filters.minRent} onChange={(e) => uf('minRent', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField type="number" label={`Max ${filters.listingType ? listingTypeMeta(filters.listingType).priceLabel.toLowerCase() : 'price'} (GHS)`} placeholder="Any" value={filters.maxRent} onChange={(e) => uf('maxRent', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
               <TextField type="number" label="Min Bedrooms" placeholder="Any" value={filters.minBedrooms} onChange={(e) => uf('minBedrooms', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
               <TextField type="number" label="Min Bathrooms" placeholder="Any" value={filters.minBathrooms} onChange={(e) => uf('minBathrooms', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
             </div>
@@ -462,8 +485,9 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
             ) : (
               <Building2 size={40} className="text-primary/20" />
             )}
-            <div className="absolute top-3 left-3 flex gap-1.5">
+            <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
               {p.sponsored && <SponsoredBadge className="backdrop-blur" />}
+              <span className="rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white backdrop-blur dark:bg-cyan-300/90 dark:text-[#071018]">{listingTypeMeta(p.listingType).label}</span>
               <Badge variant={statusVariant[p.status as PropertyStatus]} className="backdrop-blur">{p.status?.replace('_', ' ')}</Badge>
               {p.listingStatus && p.listingStatus !== 'approved' && (
                 <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'} className="backdrop-blur">{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>
@@ -473,7 +497,7 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
               {p.furnished && <span className="bg-white/80 dark:bg-black/50 backdrop-blur text-[10px] font-semibold px-2 py-0.5 rounded-full text-primary-dark dark:text-white"><Sofa size={10} className="inline mr-0.5" />Furnished</span>}
             </div>
             <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-black/40 to-transparent" />
-            <p className="absolute bottom-2 left-3 text-white text-lg font-extrabold font-display">{formatCurrency(p.rentAmount)}<span className="text-xs font-normal opacity-70">/mo</span></p>
+            <p className="absolute bottom-2 left-3 text-white text-lg font-extrabold font-display">{formatCurrency(p.rentAmount)}<span className="text-xs font-normal opacity-70">{listingTypeMeta(p.listingType).compactSuffix}</span></p>
           </div>
 
           {/* Body */}
@@ -545,8 +569,9 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
           ) : (
             <Building2 size={28} className="text-primary/20" />
           )}
-          <div className="absolute top-2 left-2 flex gap-1">
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
             {p.sponsored && <SponsoredBadge className="text-[10px]" />}
+            <span className="rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white dark:bg-cyan-300/90 dark:text-[#071018]">{listingTypeMeta(p.listingType).shortLabel}</span>
             <Badge variant={statusVariant[p.status as PropertyStatus]} className="text-[10px]">{p.status?.replace('_', ' ')}</Badge>
             {p.listingStatus && p.listingStatus !== 'approved' && (
               <Badge variant={listingStatusVariant[p.listingStatus] ?? 'default'} className="text-[10px]">{listingStatusLabel[p.listingStatus] ?? p.listingStatus}</Badge>
@@ -563,7 +588,7 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
                   {p.address?.city}, {p.address?.region}
                 </div>
               </div>
-              <p className="text-lg font-extrabold font-display text-primary dark:text-blue-400 flex-shrink-0">{formatCurrency(p.rentAmount)}<span className="text-[10px] font-normal text-muted dark:text-gray-500">/mo</span></p>
+              <p className="text-lg font-extrabold font-display text-primary dark:text-blue-400 flex-shrink-0">{formatCurrency(p.rentAmount)}<span className="text-[10px] font-normal text-muted dark:text-gray-500">{listingTypeMeta(p.listingType).compactSuffix}</span></p>
             </div>
           </div>
           <div className="flex items-center gap-3 mt-2">

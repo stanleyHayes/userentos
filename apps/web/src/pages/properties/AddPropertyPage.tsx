@@ -13,6 +13,7 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import { FormGrid } from '@/components/ui/FormGrid'
 import { useCreateProperty, useUploadPropertyImages, useMySubscription } from '@/hooks/useApi'
 import type { Property, PropertyType } from '@/types'
+import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../../../packages/shared/listingTypes'
 import {
   ArrowLeft, ArrowRight, Upload, X, ImagePlus, Check,
   Building2, MapPin, DollarSign, Bed, Users, ScrollText, Loader2, AlertTriangle, Crown,
@@ -31,6 +32,8 @@ const STEPS = [
   { label: 'Requirements', icon: <Users size={16} /> },
   { label: 'Rules', icon: <ScrollText size={16} /> },
 ]
+/** Tenant requirements (step 5) mean nothing for a property that is being sold. */
+const REQUIREMENTS_STEP = 5
 
 export function AddPropertyPage() {
   const navigate = useNavigate()
@@ -47,6 +50,8 @@ export function AddPropertyPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
+    // What the listing is for decides the price wording and which terms apply.
+    listingType: 'rent' as ListingType,
     title: '', description: '', type: 'apartment',
     // Location
     street: '', city: '', region: 'Greater Accra', neighborhood: '', digitalAddress: '',
@@ -96,6 +101,13 @@ export function AddPropertyPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const listing = listingTypeMeta(form.listingType)
+  const isRental = form.listingType === 'rent'
+  const skipsStep = (index: number) => index === REQUIREMENTS_STEP && form.listingType === 'sale'
+  const visibleSteps = STEPS.map((s, index) => ({ ...s, index })).filter((s) => !skipsStep(s.index))
+  const nextStep = (from: number) => { let n = from + 1; while (skipsStep(n)) n++; return n }
+  const prevStep = (from: number) => { let n = from - 1; while (skipsStep(n)) n--; return n }
+
   function canProceed(): boolean {
     switch (step) {
       case 0: return !!(form.title && form.description && form.type)
@@ -117,6 +129,7 @@ export function AddPropertyPage() {
           title: form.title,
           description: form.description,
           type: form.type as PropertyType,
+          listingType: form.listingType,
           address: {
             street: form.street,
             city: form.city,
@@ -126,8 +139,8 @@ export function AddPropertyPage() {
           },
           coordinates: form.coordinates,
           rentAmount: Number(form.rentAmount),
-          rentDurationMonths: Number(form.rentDurationMonths),
-          advanceMonths: Number(form.advanceMonths),
+          // Lease length and advance belong to rentals only.
+          ...(isRental ? { rentDurationMonths: Number(form.rentDurationMonths), advanceMonths: Number(form.advanceMonths) } : {}),
           bedrooms: Number(form.bedrooms),
           bathrooms: Number(form.bathrooms),
           furnished: form.furnished,
@@ -138,7 +151,7 @@ export function AddPropertyPage() {
           availableFrom: form.availableFrom || undefined,
           rules: form.rules ? form.rules.split('\n').filter(Boolean) : [],
           amenities: form.amenities,
-          preferences: {
+          ...(form.listingType === 'sale' ? {} : { preferences: {
             maxOccupants: Number(form.maxOccupants),
             allowPets: form.allowPets,
             allowSmokers: form.allowSmokers,
@@ -148,7 +161,7 @@ export function AddPropertyPage() {
             maxAge: Number(form.maxAge),
             requireReferences: form.requireReferences,
             requireEmploymentProof: form.requireEmploymentProof,
-          },
+          } }),
         } as unknown as Partial<Property>)
         propertyId = property.id
         setCreatedPropertyId(propertyId)
@@ -201,7 +214,7 @@ export function AddPropertyPage() {
           <PageHeader
             eyebrow="Rentals"
             title="Add New Property"
-            description="Fill in the details for your rental listing."
+            description="One listing appears on your website and in the RentOS registry, with its own link to share."
             icon={<Building2 size={22} />}
           />
         </div>
@@ -209,9 +222,10 @@ export function AddPropertyPage() {
 
       {/* Step Indicator */}
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
-        {STEPS.map((s, i) => (
+        {visibleSteps.map(({ index: i, ...s }) => (
           <button
             key={s.label}
+            type="button"
             onClick={() => i < step && setStep(i)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
               i === step
@@ -236,6 +250,27 @@ export function AddPropertyPage() {
                 <h2 className="text-base font-bold text-primary-dark dark:text-white mb-1">Basic Information</h2>
                 <p className="text-xs text-muted dark:text-gray-500">Tell us about the property you are listing</p>
               </div>
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-primary-dark dark:text-gray-300">What are you listing?</legend>
+                <div role="radiogroup" aria-label="Listing type" className="grid grid-cols-3 gap-2">
+                  {LISTING_TYPES.map((t) => {
+                    const selected = form.listingType === t.value
+                    return (
+                      <button
+                        key={t.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => u('listingType', t.value)}
+                        className={`rounded-xl border px-3 py-3 text-left transition-colors ${selected ? 'border-primary bg-primary/8 text-primary dark:border-cyan-300/50 dark:bg-cyan-300/10 dark:text-cyan-200' : 'border-border text-primary-dark hover:border-primary/40 dark:border-[#252a3a] dark:text-gray-300'}`}
+                      >
+                        <span className="block text-sm font-bold">{t.label}</span>
+                        <span className="block text-[11px] text-muted dark:text-gray-500">{t.priceLabel}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </fieldset>
               <Input id="title" label="Property Title" value={form.title} onChange={(e) => u('title', e.target.value)} required placeholder="e.g. 2-Bedroom Apartment, East Legon" />
               <Textarea id="desc" label="Description" value={form.description} onChange={(e) => u('description', e.target.value)} required placeholder="Describe the property in detail — layout, condition, surroundings, nearby amenities..." rows={5} aiContext="property description" />
               <Select id="type" label="Property Type" value={form.type} onChange={(e) => u('type', e.target.value)}
@@ -278,17 +313,19 @@ export function AddPropertyPage() {
           <Card className="animate-fade-up">
             <CardContent className="space-y-6">
               <div>
-                <h2 className="text-base font-bold text-primary-dark dark:text-white mb-1">Pricing & Terms</h2>
-                <p className="text-xs text-muted dark:text-gray-500">Set the rent and lease terms</p>
+                <h2 className="text-base font-bold text-primary-dark dark:text-white mb-1">{isRental ? 'Pricing & Terms' : 'Price'}</h2>
+                <p className="text-xs text-muted dark:text-gray-500">{isRental ? 'Set the rent and lease terms' : form.listingType === 'sale' ? 'The asking price for the property' : 'What a night costs'}</p>
               </div>
-              <FormGrid columns={3}>
-                <Input id="rent" label="Monthly Rent (GHS)" type="number" value={form.rentAmount} onChange={(e) => u('rentAmount', e.target.value)} required min="1" placeholder="e.g. 2500" />
-                <Input id="duration" label="Lease Duration (months)" type="number" value={form.rentDurationMonths} onChange={(e) => u('rentDurationMonths', e.target.value)} min="1" />
-                <Input id="advance" label="Advance Months" type="number" value={form.advanceMonths} onChange={(e) => u('advanceMonths', e.target.value)} min="0" max="6" />
+              <FormGrid columns={isRental ? 3 : 1}>
+                <Input id="rent" label={`${listing.priceLabel} (GHS)`} type="number" value={form.rentAmount} onChange={(e) => u('rentAmount', e.target.value)} required min="1" placeholder={form.listingType === 'sale' ? 'e.g. 850000' : form.listingType === 'short_let' ? 'e.g. 450' : 'e.g. 2500'} />
+                {isRental && <Input id="duration" label="Lease Duration (months)" type="number" value={form.rentDurationMonths} onChange={(e) => u('rentDurationMonths', e.target.value)} min="1" />}
+                {isRental && <Input id="advance" label="Advance Months" type="number" value={form.advanceMonths} onChange={(e) => u('advanceMonths', e.target.value)} min="0" max="6" />}
               </FormGrid>
-              <p className="text-[11px] text-muted dark:text-gray-500">
-                Per Ghana's Rent Act, advance rent should not exceed 6 months for residential properties.
-              </p>
+              {isRental && (
+                <p className="text-[11px] text-muted dark:text-gray-500">
+                  Per Ghana's Rent Act, advance rent should not exceed 6 months for residential properties.
+                </p>
+              )}
               <DatePicker label="Available From" value={form.availableFrom} onChange={(v) => u('availableFrom', v)} minDate={new Date().toISOString().slice(0, 10)} />
             </CardContent>
           </Card>
@@ -489,7 +526,7 @@ export function AddPropertyPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => step === 0 ? navigate('/properties') : setStep(step - 1)}
+            onClick={() => step === 0 ? navigate('/properties') : setStep(prevStep(step))}
           >
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </Button>
@@ -504,7 +541,7 @@ export function AddPropertyPage() {
                 )}
               </Button>
             ) : (
-              <Button type="button" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
+              <Button type="button" onClick={() => setStep(nextStep(step))} disabled={!canProceed()}>
                 Next <ArrowRight size={14} />
               </Button>
             )}

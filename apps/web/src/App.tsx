@@ -69,7 +69,7 @@ const DataProtectionPage = lazy(() => import('@/pages/legal/DataProtectionPage')
 const RentalLawsPage = lazy(() => import('@/pages/RentalLawsPage').then((m) => ({ default: m.RentalLawsPage })))
 const PublicBlogDetailPage = lazy(() => import('@/pages/PublicBlogDetailPage').then((m) => ({ default: m.PublicBlogDetailPage })))
 const PublicRegistryPage = lazy(() => import('@/pages/PublicRegistryPage').then((m) => ({ default: m.PublicRegistryPage })))
-const PublicRegistryDetailPage = lazy(() => import('@/pages/PublicRegistryDetailPage').then((m) => ({ default: m.PublicRegistryDetailPage })))
+const PublicPropertyPage = lazy(() => import('@/pages/property/PublicPropertyPage').then((m) => ({ default: m.PublicPropertyPage })))
 const PackagesPage = lazy(() => import('@/pages/admin/PackagesPage').then((m) => ({ default: m.PackagesPage })))
 const PackageEditorPage = lazy(() => import('@/pages/admin/PackageEditorPage').then((m) => ({ default: m.PackageEditorPage })))
 const InsuranceClaimsPage = lazy(() => import('@/pages/admin/InsuranceClaimsPage').then((m) => ({ default: m.InsuranceClaimsPage })))
@@ -201,7 +201,9 @@ export default function App() {
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/article/:slug" element={<PublicBlogDetailPage />} />
             <Route path="/registry" element={<PublicRegistryPage />} />
-            <Route path="/registry/:id" element={<PublicRegistryDetailPage />} />
+            {/* A listing's shareable page (brief §04); old /registry/<id> links land on it too. */}
+            <Route path="/property/:ref" element={<PublicPropertyPage />} />
+            <Route path="/registry/:id" element={<PublicPropertyPage />} />
             <Route path="/passport/:token" element={<PublicPassportPage />} />
             <Route path="/agency/:slug" element={<PublicAgencyPage />} />
             <Route path="/developments" element={<PublicDevelopmentsPage />} />
