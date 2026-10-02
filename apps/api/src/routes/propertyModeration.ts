@@ -23,9 +23,11 @@ import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { notifyPropertyApproved, notifyPropertyRejected, notifyPropertyChangesRequested } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
+import { listingIndexPaths, submitToIndexNow } from '../services/indexNow.js'
+import { clearLandingCache } from '../services/seoLanding.js'
 import {
   canReview, canTransition, isSuperAdminPrincipal,
-  ACTION_PERMISSION, ACTION_TARGET, REVIEWABLE_STATUSES,
+  ACTION_PERMISSION, ACTION_TARGET, PUBLICLY_VISIBLE_STATUSES, REVIEWABLE_STATUSES,
   type ReviewStatus,
 } from '../services/propertyReview.js'
 
@@ -250,6 +252,8 @@ router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
   }
   property.reviewIssues = action === 'request_changes' ? issues : []
   await property.save()
+  // Search pages list public listings from a short cache; this decision changes what they show.
+  if (PUBLICLY_VISIBLE_STATUSES.includes(from) !== PUBLICLY_VISIBLE_STATUSES.includes(to)) clearLandingCache()
 
   await PropertyReview.create({
     propertyId: property._id.toString(),
@@ -269,6 +273,8 @@ router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
   // a recorded moderation decision.
   try {
     if (action === 'approve') {
+      // Search engines hear about the new page straight away (fire and forget).
+      void submitToIndexNow(listingIndexPaths(property))
       await notifyPropertyApproved(property.landlordId, property.title)
       checkAndAward(property.landlordId, 'first_property_listed', { propertyId: property._id.toString() })
         .catch(() => undefined)

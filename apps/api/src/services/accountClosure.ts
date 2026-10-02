@@ -22,6 +22,7 @@ import { recordErasure } from './erasureLedger.js'
 import { hostingProvider } from './hosting/index.js'
 import { recordAuditEntry } from '../utils/audit.js'
 import { logger } from '../utils/logger.js'
+import { clearLandingCache } from './seoLanding.js'
 
 /**
  * Closing an account — the one path for self-service deletion, an admin
@@ -147,6 +148,8 @@ export async function unpublishAccount(uid: string, now = new Date(), hostOption
     () => WebhookSubscription.deleteMany({ userId: uid }),
   ]
   const results = await Promise.allSettled(operations.map((operation) => Promise.resolve().then(operation)))
+  // Their listings are withdrawn and the account is closed: the search pages drop them on their next request.
+  clearLandingCache()
   if (results.some((result) => result.status === 'rejected')) {
     throw new Error('Unpublishing the account was incomplete')
   }

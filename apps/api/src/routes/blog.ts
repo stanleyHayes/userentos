@@ -9,6 +9,7 @@ import { User } from '../models/User.js'
 import { REGULATED_FEATURES, isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { Storefront } from '../models/Storefront.js'
 import { storefrontUrl } from '../services/storefront.js'
+import { submitToIndexNow } from '../services/indexNow.js'
 
 const router = Router()
 
@@ -182,6 +183,7 @@ router.post('/', authenticate, requireRole('admin', 'government', 'legal_officer
     // The news feed orders RentOS and website posts together by publish date.
     ...(parsed.data.published ? { publishedAt: new Date() } : {}),
   })
+  if (post.status === 'published') void submitToIndexNow([`/article/${post.slug}`, '/blog'])
   success(res, { ...post.toObject(), id: post._id.toString() }, 'Post created', 201)
 })
 
@@ -222,6 +224,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'government', 'legal_off
     error(res, 'Post not found', 404)
     return
   }
+  if (post.status === 'published') void submitToIndexNow([`/article/${post.slug}`, '/blog'])
   success(res, { ...post, id: (post._id as Types.ObjectId).toString() })
 })
 

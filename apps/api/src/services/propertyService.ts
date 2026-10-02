@@ -5,6 +5,7 @@ import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { hasDelegatedScope } from './delegation.js'
 import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
+import { clearLandingCache } from './seoLanding.js'
 import { recordErasure, completeErasure } from './erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
 import { LISTING_TYPES, RENTAL_LISTINGS, type ListingType } from './listings.js'
@@ -248,11 +249,14 @@ export class PropertyService {
       }
       property.coordinates = { lat, lng }
     }
-    if (contentChanged && (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(property.listingStatus)) {
+    const wasPublic = (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(property.listingStatus)
+    if (contentChanged && wasPublic) {
       property.listingStatus = 'pending_review'
       this.logger.info(`Property ${id} content changed — returned to pending_review`)
     }
     await property.save()
+    // A public listing changed (or left the public pages): the search pages reload on their next request.
+    if (wasPublic) clearLandingCache()
 
     this.logger.info(`Property updated: ${id} by user ${userId}`)
     return { data: { ...property.toObject(), id: property._id.toString() } }
@@ -272,9 +276,11 @@ export class PropertyService {
     // the photos, then the record — which stays if the file host does not
     // confirm, so a retry can finish the job.
     const assets = propertyImageAssets(property)
+    const wasPublic = (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(property.listingStatus ?? '')
     const entryId = await recordErasure({ subjectId: userId, scope: 'property', source: 'owner', recordIds: [id], storageAssets: assets })
     await eraseStoredAssets(assets)
     await property.deleteOne()
+    if (wasPublic) clearLandingCache()
     await completeErasure(entryId)
     this.logger.info(`Property deleted: ${id} by user ${userId}`)
     return { data: null, message: 'Property deleted' }

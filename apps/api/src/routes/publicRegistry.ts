@@ -11,6 +11,7 @@ import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 import { visitorHash } from '../utils/visitorHash.js'
 import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 import { LISTING_TYPES, RENTAL_LISTINGS, isRentalListing, listingUrl, normalizeListingRef, whatsappEnquiryText, whatsappLink } from '../services/listings.js'
+import { listingSeo } from '../services/seo.js'
 import { listingContact } from '../services/listingContact.js'
 import { agentForProperty, recordEnquiry } from '../services/leads.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
@@ -290,9 +291,14 @@ router.get(
       resolved?.agentId ? listingContact(resolved.agentId) : null,
     ])
     const rental = isRentalListing(doc.listingType)
+    // The title, description and structured data the server renders for this page (services/seo.ts), for the app to keep.
+    const seo = listingSeo(doc)
     success(res, {
       ...sanitize(doc),
       url: doc.listingRef ? listingUrl(doc.listingRef) : null,
+      // The address search engines index it at: /property/<description>-<ref>.
+      canonicalUrl: seo.canonical,
+      seo: { title: seo.title, description: seo.description, jsonLd: seo.jsonLd },
       description: doc.description ?? '',
       images: Array.isArray(doc.images) ? doc.images : [],
       amenities: doc.amenities ?? [],

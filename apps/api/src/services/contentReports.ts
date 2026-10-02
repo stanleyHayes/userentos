@@ -25,6 +25,7 @@ import { Worker } from '../models/Worker.js'
 import { ServiceBooking } from '../models/ServiceBooking.js'
 import { recomputeWorkerRating } from './workerRating.js'
 import { envNumber } from '../utils/env.js'
+import { clearLandingCache } from './seoLanding.js'
 
 /** How many reports one account may file per rolling hour. */
 export const REPORTS_PER_HOUR = envNumber('ABUSE_REPORTS_PER_HOUR', 10)
@@ -147,6 +148,8 @@ export async function removeReportedContent(
         { _id: id },
         { $set: { listingStatus: 'suspended', rejectionReason: reason } },
       )
+      // The search pages stop showing it on their next request.
+      if (res.matchedCount > 0) clearLandingCache()
       return res.matchedCount > 0
     }
     case 'storefront': {

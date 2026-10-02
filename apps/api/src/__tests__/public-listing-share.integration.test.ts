@@ -48,6 +48,11 @@ describe.skipIf(!hasTestMongo)('public listing page data for shared links', () =
       const { data } = await response.json()
       expect(data).toMatchObject({ id, title: `Share ${status}`, city: 'Accra', rentAmount: 1500, bedrooms: 2, listingStatus: status, image: 'https://example.test/photo.jpg', landlordIdentityVerified: true })
       expect(JSON.stringify(data)).not.toContain('3 Share St')
+      // The page keeps what the server rendered for it: its descriptive address, title and structured data.
+      expect(data.canonicalUrl).toMatch(/\/property\/2-bedroom-apartment-for-rent-in-accra-[2-9a-z]{7}$/)
+      expect(data.seo.title).toBe('2-bedroom apartment for rent in Accra · GHS 1,500/month | RentOS')
+      expect(data.seo.jsonLd.map((d: { '@type': string }) => d['@type'])).toEqual(['RealEstateListing', 'BreadcrumbList'])
+      expect(data.seo.jsonLd[0]).toMatchObject({ url: data.canonicalUrl, offers: { price: 1500, priceSpecification: { unitCode: 'MON' } } })
     }
   })
 
