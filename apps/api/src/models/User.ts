@@ -48,6 +48,10 @@ export interface IUser extends Document {
    * version — the behaviour they already had.
    */
   subscriptionPlanVersion?: number
+  /** Paid rental-passport exports not yet used (GH₵5 each, services/actionFees.ts). */
+  passportExportCredits?: number
+  /** A used export may be retried until then. */
+  passportExportUnlockedUntil?: Date
   subscriptionPaymentId?: string
   subscriptionSnapshotJson?: string
   subscriptionStartDate?: Date
@@ -112,6 +116,8 @@ const userSchema = new Schema<IUser>({
   professionalType: { type: String, enum: ['agent', 'agency', 'property_manager'] },
   subscriptionPackageId: { type: String },
   subscriptionPlanVersion: { type: Number },
+  passportExportCredits: { type: Number, default: 0, min: 0 },
+  passportExportUnlockedUntil: Date,
   subscriptionPaymentId: String,
   subscriptionSnapshotJson: String,
   subscriptionStartDate: { type: Date },

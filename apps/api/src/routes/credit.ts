@@ -70,7 +70,7 @@ async function calculateScore(userId: string) {
     Payment.find({
       tenantId: userId,
       agreementId: { $in: agreements.map((a) => (a._id as Types.ObjectId).toString()) },
-      purpose: { $nin: ['wallet_deposit', 'subscription'] },
+      purpose: { $nin: ['wallet_deposit', 'subscription', 'agreement_fee', 'passport_export'] },
       status: { $in: ['completed', 'failed'] },
     }).sort({ createdAt: 1 }).lean(),
     SavingsPlan.find({ userId }).lean(),

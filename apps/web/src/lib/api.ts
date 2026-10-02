@@ -12,11 +12,11 @@ class ApiClient {
 
   /** Parse a response body as JSON, tolerating non-JSON infrastructure error
    * pages (proxy 502/504 HTML) and empty bodies. */
-  private async parseBody(res: Response): Promise<{ error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null }> {
+  private async parseBody(res: Response): Promise<{ error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null; code?: string; fee?: unknown }> {
     const text = await res.text()
     if (!text) return {}
     try {
-      return JSON.parse(text) as { error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null }
+      return JSON.parse(text) as { error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null; code?: string; fee?: unknown }
     } catch {
       return {}
     }
@@ -74,9 +74,14 @@ class ApiClient {
       // The status lets screens tell "doesn't exist" apart from "couldn't load".
       // A message stopped by contact protection also says so, and which
       // decision to appeal (lib/contactProtection.ts).
+      // A GH₵5 fee answers 402 with its price (lib/actionFees.ts), and a payment
+      // already under way answers 409 with that payment, to resume it.
       throw Object.assign(new Error(data.error || `Request failed (${res.status})`), {
         status: res.status,
         ...(data.blocked ? { blocked: true, reason: data.reason ?? null, decisionId: data.decisionId ?? null } : {}),
+        ...(data.code ? { code: data.code } : {}),
+        ...(data.fee ? { fee: data.fee } : {}),
+        ...(data.data ? { data: data.data } : {}),
       })
     }
 

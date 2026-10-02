@@ -8,7 +8,7 @@
 
 import { Achievement } from '../models/Achievement.js'
 import { PaymentStreak } from '../models/PaymentStreak.js'
-import { Payment } from '../models/Payment.js'
+import { Payment, NOT_ACTION_FEE } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { Property } from '../models/Property.js'
@@ -133,7 +133,7 @@ export async function recomputeStreak(userId: string): Promise<{
   lastPaymentMonth?: string
   awarded: AchievementCode[]
 }> {
-  const completedPayments = await Payment.find({ tenantId: userId, status: 'completed' })
+  const completedPayments = await Payment.find({ tenantId: userId, status: 'completed', ...NOT_ACTION_FEE })
     .select('paidAt createdAt')
     .lean()
 

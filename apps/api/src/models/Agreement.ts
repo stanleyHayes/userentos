@@ -1,5 +1,6 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 import { checkAgreementCompliance } from '../services/legal/agreementCompliance.js'
+import { feeActive } from '../services/actionFees.js'
 
 /** One immutable record per signature — see services/agreementEvidence.ts. */
 export interface ISignatureEvidence {
@@ -43,6 +44,10 @@ export interface IAgreement extends Document {
   renewalDeclinedAt?: Date
   /** When both signatures made the lease active. Counted, per city, by the weekly business digest. */
   activatedAt?: Date
+  /** Set at creation while the GH₵5 signing fee is on; older agreements are never charged. */
+  signingFeeRequired?: boolean
+  signingFeePaidAt?: Date
+  signingFeePaymentId?: string
   /** ISO timestamp of last lease-expiry reminder (idempotency for scheduler) */
   lastLeaseReminderAt?: string
 }
@@ -90,7 +95,16 @@ const agreementSchema = new Schema<IAgreement>({
   renewalDeclinedAt: Date,
   activatedAt: Date,
   lastLeaseReminderAt: String,
+  signingFeeRequired: { type: Boolean, immutable: true },
+  signingFeePaidAt: Date,
+  signingFeePaymentId: String,
 }, { timestamps: true })
+
+// The signing fee applies to agreements created while it is on, and only those
+// (product brief §08: existing agreements are grandfathered).
+agreementSchema.pre('save', async function () {
+  if (this.isNew && this.signingFeeRequired === undefined && await feeActive('agreement_fee')) this.signingFeeRequired = true
+})
 
 // Includes application-created drafts and other model-based creation paths.
 agreementSchema.pre('validate', function () {

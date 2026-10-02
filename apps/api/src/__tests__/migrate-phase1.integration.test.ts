@@ -6,6 +6,7 @@ import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { Storefront } from '../models/Storefront.js'
 import { BlogPost } from '../models/BlogPost.js'
+import { FeatureFlag } from '../models/FeatureFlag.js'
 import { migratePhase1 } from '../scripts/migratePhase1.js'
 import { testMongoUri, hasTestMongo } from './testMongo.js'
 
@@ -82,6 +83,10 @@ describe.skipIf(!hasTestMongo)('Phase 1 production migration', () => {
 
     const post = await BlogPost.collection.findOne({ slug: 'phase1-old-article' })
     expect(post?.publishedAt).toEqual(new Date('2026-03-01'))
+
+    // The admin switches exist, and are off.
+    const switches = await FeatureFlag.find({ key: { $in: ['fees.agreement_signing', 'fees.passport_export', 'listings.direct_whatsapp'] } }).lean()
+    expect(switches.map((f) => [f.key, f.enabled]).sort()).toEqual([['fees.agreement_signing', false], ['fees.passport_export', false], ['listings.direct_whatsapp', false]])
   })
 
   it('changes nothing when run again', async () => {
@@ -94,6 +99,7 @@ describe.skipIf(!hasTestMongo)('Phase 1 production migration', () => {
       'Listings: every property has a reference.',
       'Websites: no private contact details stored.',
       'News: every published post has a publish date.',
+      'Switches: already present.',
     ]))
     expect(await PlanEntitlement.countDocuments()).toBe(before)
     expect((await SubscriptionPackage.findOne({ slug: 'professional' }).lean())?.version).toBe(2)

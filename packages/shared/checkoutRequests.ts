@@ -62,5 +62,7 @@ export function createCheckoutRequests(deps: {
 /** Every POST that starts a real collection; the API refuses these without an Idempotency-Key (428). */
 export function isProviderCheckout(path: string, body: unknown): boolean {
   return path === '/payments' || path === '/savings/wallet/deposit' || path === '/marketplace/payments/initialize'
+    // The GH₵5 pay-per-action fees (apps/api/src/services/actionFees.ts).
+    || /^\/agreements\/[a-f0-9]{24}\/signing-fee$/i.test(path) || path === '/tenant-passport/export-fee'
     || (path === '/subscriptions/subscribe' && !!body && typeof body === 'object' && 'method' in body && !!body.method)
 }

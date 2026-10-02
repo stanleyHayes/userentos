@@ -19,6 +19,7 @@
  * completed payment is only logged.
  */
 
+import { applyActionFee } from './actionFeeCheckout.js'
 import { Payment } from '../../models/Payment.js'
 import { activatePaidSubscription } from './paidSubscription.js'
 import { recoverRentReceipt } from './recoverRentReceipts.js'
@@ -244,6 +245,9 @@ async function applyCompletion(completed: IPayment, opts: FinalizeOptions): Prom
   if (completed.walletCreditIntent) {
     try { await recoverPaymentWalletCredit(String(completed._id)) }
     catch { logger.error('[Payments] Confirmed payment credit deferred to scheduled recovery') }
+  } else if (completed.purpose === 'agreement_fee' || completed.purpose === 'passport_export') {
+    try { await applyActionFee(completed) }
+    catch (err) { logger.error(`[Payments:${opts.source}] CRITICAL: fee payment ${completed.reference} completed but its unlock failed: ${(err as Error).message}`) }
   } else if (completed.purpose === 'subscription') {
     try {
       if (completed.subscriptionTerms) {

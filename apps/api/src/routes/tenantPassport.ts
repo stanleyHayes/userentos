@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import { feeActive, feeQuote, feeRequiredBody } from '../services/actionFees.js'
+import { startActionFeeCheckout, usePassportExport } from '../services/payments/actionFeeCheckout.js'
 import type { Request, Response } from 'express'
 import { Types } from 'mongoose'
 import jwt from 'jsonwebtoken'
@@ -14,7 +16,7 @@ import { signDownloadToken } from '../services/authService.js'
 import { User } from '../models/User.js'
 import { CreditScore } from '../models/CreditScore.js'
 import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
-import { Payment } from '../models/Payment.js'
+import { Payment, NOT_ACTION_FEE } from '../models/Payment.js'
 import { Agreement } from '../models/Agreement.js'
 import { TenantProfile } from '../models/TenantProfile.js'
 import { signedTenancyFilter } from '../services/tenancyRelationship.js'
@@ -86,7 +88,7 @@ async function buildPassportData(userId: string, audience: PassportAudience = 'o
   const [user, creditScoreDoc, payments, agreements, tenantProfile] = await Promise.all([
     User.findById(userId).lean().catch(() => null),
     creditScoreOffered ? CreditScore.findOne({ userId }).lean().catch(() => null) : null,
-    Payment.find({ tenantId: userId }).lean().catch(() => [] as never[]),
+    Payment.find({ tenantId: userId, ...NOT_ACTION_FEE }).lean().catch(() => [] as never[]),
     // Only leases the tenant signed: a landlord's draft naming them is not history.
     Agreement.find(signedTenancyFilter({ tenantId: userId })).lean().catch(() => [] as never[]),
     TenantProfile.findOne({ userId }).lean().catch(() => null),
@@ -497,8 +499,40 @@ async function streamPassportPdfResponse(
 
 // Mint a short-lived, download-only token for the PDF. This replaces putting
 // the full session JWT in ?token= URLs (which leaked into logs/history).
+/**
+ * Exporting the passport (a PDF or a share link) costs GH₵5 per export while
+ * that fee is on (product brief §08); viewing it never does. One paid export
+ * covers retries for half an hour. False after answering 402.
+ */
+async function takeExport(req: Request, res: Response): Promise<boolean> {
+  if (!(await feeActive('passport_export'))) return true
+  if (await usePassportExport(req.user!.userId)) return true
+  res.status(402).json(feeRequiredBody('passport_export', 'Exporting your rental passport costs GH₵5. Pay once to download it or create a share link.'))
+  return false
+}
+
+/** What the passport page shows next to Download and Share. */
+async function exportStatus(userId: string) {
+  const [active, user] = await Promise.all([
+    feeActive('passport_export'),
+    User.findById(userId).select('passportExportCredits passportExportUnlockedUntil').lean(),
+  ])
+  const unlockedUntil = user?.passportExportUnlockedUntil && user.passportExportUnlockedUntil > new Date() ? user.passportExportUnlockedUntil : null
+  return { active, amount: feeQuote('passport_export').amount, currency: 'GHS', credits: user?.passportExportCredits ?? 0, unlockedUntil }
+}
+
 const documentLinkHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!(await takeExport(req, res))) return
   success(res, { token: signDownloadToken('passport-pdf', req.user!.userId, req.user!.sessionVersion, req.user!.sid) })
+})
+
+const exportStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  success(res, await exportStatus(req.user!.userId))
+})
+
+const exportFeeHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!(await feeActive('passport_export'))) { error(res, 'Passport exports are free right now', 409); return }
+  await startActionFeeCheckout(req, res, { purpose: 'passport_export', subjectId: req.user!.userId, narration: 'RentOS: rental passport export' })
 })
 
 // Authenticated PDF — accepts a download-purpose token only (Bearer or ?token=).
@@ -526,6 +560,7 @@ function buildPublicUrl(_req: Request, token: string): string {
 
 // Generate a 30-day shareable URL token
 const shareHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!(await takeExport(req, res))) return
   const userId = req.user!.userId
   const expiresInSec = 60 * 60 * 24 * 30 // 30 days
   const expiresAt = new Date(Date.now() + expiresInSec * 1000).toISOString()
@@ -599,6 +634,8 @@ async function isShareRevoked(userId: string, iat?: number): Promise<boolean> {
 // canonical paths.
 router.get('/me/pdf', authenticateDownload('passport-pdf'), myPdfHandler)
 router.post('/me/document-link', authenticate, documentLinkHandler)
+router.get('/me/export-status', authenticate, exportStatusHandler)
+router.post('/export-fee', authenticate, exportFeeHandler)
 router.get('/me/json', authenticate, myJsonHandler)
 router.get('/me', authenticate, myJsonHandler)
 

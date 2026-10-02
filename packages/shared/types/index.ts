@@ -386,6 +386,8 @@ export interface RentalAgreement {
   tenantSignatureName?: string
   /** SHA-256 of the current terms; a signer must send back the hash they reviewed. */
   termsHash?: string
+  /** The GH₵5 signing fee (product brief §08): due until paid, while the fee is on. */
+  signingFee?: { due: boolean; paidAt: string | null; amount?: number; currency?: 'GHS' }
   /** Statement the signer accepts (detail/create/update responses only). */
   signatureConsentStatement?: string
   signatureEvidence?: SignatureEvidence[]
@@ -425,6 +427,8 @@ export interface ComplianceFlag {
 
 export interface Payment {
   id: string
+  /** What it paid for; older records are rent. The fees are the GH₵5 pay-per-action charges. */
+  purpose?: 'rent' | 'wallet_deposit' | 'subscription' | 'agreement_fee' | 'passport_export'
   agreementId: string
   tenantId: string
   landlordId: string

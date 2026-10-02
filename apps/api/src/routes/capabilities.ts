@@ -4,7 +4,7 @@ import { authenticate, requireRole } from '../middleware/auth.js'
 import { CapabilityRecord } from '../models/CapabilityRecord.js'
 import type { CapabilityKind } from '../models/CapabilityRecord.js'
 import { Agreement } from '../models/Agreement.js'
-import { Payment } from '../models/Payment.js'
+import { Payment, NOT_ACTION_FEE } from '../models/Payment.js'
 import { Property } from '../models/Property.js'
 import { FinancingApplication } from '../models/FinancingApplication.js'
 import { FinancingOffer } from '../models/FinancingOffer.js'
@@ -195,7 +195,7 @@ router.get('/financier/decision/:applicationId', authenticate, requireRole('fina
     CreditScore.findOne({ userId: applicantId }).lean(),
     // A credit decision must not count leases the applicant never signed.
     Agreement.find(signedTenancyFilter({ tenantId: applicantId })).lean(),
-    Payment.find({ tenantId: applicantId }).lean(),
+    Payment.find({ tenantId: applicantId, ...NOT_ACTION_FEE }).lean(),
   ])
   success(res, {
     application,

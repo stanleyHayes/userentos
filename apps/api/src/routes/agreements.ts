@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express'
+import { agreementFeeDue, feeRequiredBody } from '../services/actionFees.js'
+import { startActionFeeCheckout } from '../services/payments/actionFeeCheckout.js'
 import { Types } from 'mongoose'
 import QRCode from 'qrcode'
 import { authenticate, authenticateDownload } from '../middleware/auth.js'
@@ -141,13 +143,31 @@ router.get('/tenants', authenticate, asyncHandler(async (req: Request, res: Resp
 // download token for the PDF. The token is only valid for document downloads
 // (5 min), so a leaked URL never grants account access.
 router.post('/:id/document-link', authenticate, asyncHandler(async (req: Request, res: Response) => {
-  const agreement = await Agreement.findById(param(req.params.id)).select('tenantId landlordId').lean()
+  const agreement = await Agreement.findById(param(req.params.id)).select('tenantId landlordId signingFeeRequired signingFeePaidAt').lean()
   if (!agreement) { error(res, 'Agreement not found', 404); return }
   const userId = req.user!.userId
   if (agreement.tenantId !== userId && agreement.landlordId !== userId) {
     error(res, 'Not a party to this agreement', 403); return
   }
+  // Taking the agreement out of RentOS is the paid part; viewing it stays free.
+  if (await agreementFeeDue(agreement)) {
+    res.status(402).json(feeRequiredBody('agreement_fee', 'Downloading this agreement needs its one-time GH₵5 signing fee, which unlocks signing and the PDF for both of you.'))
+    return
+  }
   success(res, { token: signDownloadToken('agreement-document', userId, req.user!.sessionVersion, req.user!.sid) })
+}))
+
+// POST /agreements/:id/signing-fee — pay the GH₵5 signing fee (product brief §08).
+// Either party may pay; one payment unlocks signing and the PDF for both.
+router.post('/:id/signing-fee', authenticate, asyncHandler(async (req: Request, res: Response) => {
+  const agreement = await Agreement.findById(param(req.params.id)).select('tenantId landlordId status signingFeeRequired signingFeePaidAt').lean()
+  if (!agreement) { error(res, 'Agreement not found', 404); return }
+  const userId = req.user!.userId
+  if (agreement.tenantId !== userId && agreement.landlordId !== userId) { error(res, 'Not a party to this agreement', 403); return }
+  if (agreement.signingFeePaidAt) { error(res, 'This agreement is already unlocked', 409); return }
+  if (!(await agreementFeeDue(agreement))) { error(res, 'No fee is due for this agreement', 409); return }
+  if (['terminated', 'expired'].includes(agreement.status)) { error(res, `This agreement is ${agreement.status}`, 409); return }
+  await startActionFeeCheckout(req, res, { purpose: 'agreement_fee', subjectId: String(agreement._id), narration: 'RentOS: agreement signing and download' })
 }))
 
 // GET /agreements/:id/document.pdf — downloadable signed Rental Agreement PDF

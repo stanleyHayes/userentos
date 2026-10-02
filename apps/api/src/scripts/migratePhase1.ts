@@ -19,6 +19,9 @@
  * 4. News: published posts without a publish date take their creation date,
  *    so the feed orders RentOS and website posts together.
  * 5. Indexes for the new collections and fields (production autoIndex may be off).
+ * 6. Admin switches, created OFF so they show on the feature flags page:
+ *    the GH₵5 agreement and passport fees (turn on once Paystack is set up)
+ *    and the direct WhatsApp button.
  *
  * Usage (no shell needed, e.g. a Render one-off job):
  *   node dist/scripts/migratePhase1.js --apply
@@ -40,7 +43,10 @@ import { Conversation } from '../models/Conversation.js'
 import { DeviceToken } from '../models/DeviceToken.js'
 import { Lead } from '../models/Lead.js'
 import { ContentReport } from '../models/ContentReport.js'
+import { FeatureFlag } from '../models/FeatureFlag.js'
 import { generateListingRef } from '../services/listings.js'
+import { ACTION_FEES } from '../services/actionFees.js'
+import { DIRECT_WHATSAPP_FLAG } from '../services/listingContact.js'
 
 export interface MigrationReport {
   apply: boolean
@@ -146,6 +152,19 @@ async function backfillPublishedAt(apply: boolean, steps: string[]) {
   if (apply && count) await BlogPost.collection.updateMany(filter, [{ $set: { publishedAt: { $ifNull: ['$createdAt', '$$NOW'] } } }])
 }
 
+const SWITCHES = [
+  { key: ACTION_FEES.agreement_fee.flag, description: 'Charge GH₵5 once per agreement when the tenant signs (unlocks signing and the PDF). Needs a live payment provider.' },
+  { key: ACTION_FEES.passport_export.flag, description: 'Charge GH₵5 per rental passport export (PDF or share link). Needs a live payment provider.' },
+  { key: DIRECT_WHATSAPP_FLAG, description: "Show a direct WhatsApp button with the agent's own number on listings. Off keeps enquiries on RentOS." },
+]
+
+async function createSwitches(apply: boolean, steps: string[]) {
+  const existing = new Set((await FeatureFlag.find({ key: { $in: SWITCHES.map((s) => s.key) } }).select('key').lean()).map((f) => f.key))
+  const missing = SWITCHES.filter((s) => !existing.has(s.key))
+  steps.push(missing.length ? `Switches: creating ${missing.map((s) => s.key).join(', ')} (off).` : 'Switches: already present.')
+  if (apply) for (const s of missing) await FeatureFlag.updateOne({ key: s.key }, { $setOnInsert: { key: s.key, description: s.description, enabled: false } }, { upsert: true })
+}
+
 async function buildIndexes(apply: boolean, steps: string[]) {
   const models = [TrustDecision, Conversation, DeviceToken, Lead, ContentReport, Property, Storefront, BlogPost] as unknown as Model<never>[]
   steps.push(`Indexes: ${apply ? 'built' : 'would build'} for ${models.map((m) => m.collection.collectionName).join(', ')}.`)
@@ -161,6 +180,7 @@ export async function migratePhase1({ apply }: { apply: boolean }): Promise<Migr
   await stripWebsiteContacts(apply, steps)
   await backfillPublishedAt(apply, steps)
   await buildIndexes(apply, steps)
+  await createSwitches(apply, steps)
   return { apply, steps }
 }
 

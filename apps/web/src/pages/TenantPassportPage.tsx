@@ -22,6 +22,13 @@ import { useMyPassportPreview, useGenerateShareLink } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import { api } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { feeRequired } from '@/lib/actionFees'
+import { FeeCheckoutModal } from '@/components/payments/FeeCheckoutModal'
+
+/** GET /tenant-passport/me/export-status: whether exports cost GH₵5 right now (brief §08). */
+interface ExportStatus { active: boolean; amount: number; credits: number; unlockedUntil: string | null }
+type ExportAction = 'download' | 'share'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -39,6 +46,14 @@ export function TenantPassportPage() {
   const [shareHistory, setShareHistory] = useState<ShareEntry[]>([])
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  // A paid export waiting to happen: set when the API asks for the fee, run when the payer presses Continue.
+  const [feeFor, setFeeFor] = useState<ExportAction | null>(null)
+  const [paidFor, setPaidFor] = useState<ExportAction | null>(null)
+  const exportStatus = useQuery({
+    queryKey: ['passport-export-status'],
+    queryFn: () => api.get<ExportStatus>('/tenant-passport/me/export-status'),
+    enabled: isTenant,
+  })
 
   if (!isTenant) {
     return (
@@ -61,6 +76,10 @@ export function TenantPassportPage() {
     try {
       const { token: downloadToken } = await api.post<{ token: string }>('/tenant-passport/me/document-link', {})
       window.open(`${API_BASE}/tenant-passport/me/pdf?token=${encodeURIComponent(downloadToken)}`, '_blank', 'noopener,noreferrer')
+      void exportStatus.refetch()
+    } catch (err) {
+      if (feeRequired(err)) setFeeFor('download')
+      else useToastStore.getState().addToast(err instanceof Error ? err.message : 'Could not prepare the download', 'error')
     } finally {
       setDownloading(false)
     }
@@ -83,10 +102,26 @@ export function TenantPassportPage() {
       } catch {
         useToastStore.getState().addToast('Share link generated', 'success')
       }
+      void exportStatus.refetch()
     } catch (err: unknown) {
+      if (feeRequired(err)) { setFeeFor('share'); return }
       const message = err instanceof Error ? err.message : 'Failed to generate share link'
       useToastStore.getState().addToast(message, 'error')
     }
+  }
+
+  // Exports cost GH₵5 each while the fee is on, unless one is paid for or still in its retry window.
+  const status = exportStatus.data
+  const priced = !!status?.active && status.credits === 0 && !status.unlockedUntil
+  const price = priced ? ` · GH₵${status!.amount}` : ''
+
+  function closeFeeModal() {
+    const ready = paidFor
+    setFeeFor(null)
+    setPaidFor(null)
+    // Pressing Continue after paying carries out the export the payer asked for.
+    if (ready === 'download') void handleDownload()
+    else if (ready === 'share') void handleGenerateLink()
   }
 
   const handleCopy = async (url: string) => {
@@ -125,7 +160,7 @@ export function TenantPassportPage() {
           <div className="flex flex-wrap gap-3 mt-5">
             <Button variant="secondary" size="md" onClick={handleDownload} disabled={downloading}>
               <Download size={16} />
-              Download PDF
+              Download PDF{price}
             </Button>
             <Button
               variant="outline"
@@ -135,11 +170,31 @@ export function TenantPassportPage() {
               disabled={generate.isPending}
             >
               <LinkIcon size={16} />
-              {generate.isPending ? 'Generating…' : 'Generate Share Link'}
+              {generate.isPending ? 'Generating…' : `Generate Share Link${price}`}
             </Button>
           </div>
+          {status?.active && (
+            <p className="mt-3 text-xs text-blue-100">
+              {status.credits > 0
+                ? `${status.credits} paid export${status.credits === 1 ? '' : 's'} ready. Viewing your passport is always free.`
+                : status.unlockedUntil
+                  ? 'Your last export is still open: download again or create a link at no extra cost for a few minutes.'
+                  : `Each export (a PDF or a share link) costs GH₵${status.amount}. Viewing your passport is always free.`}
+            </p>
+          )}
         </div>
       </Card>
+
+      <FeeCheckoutModal
+        open={feeFor !== null}
+        onClose={closeFeeModal}
+        endpoint="/tenant-passport/export-fee"
+        amount={status?.amount ?? 5}
+        title={feeFor === 'share' ? 'Create a share link' : 'Download your passport'}
+        onPaid={() => { setPaidFor(feeFor); void exportStatus.refetch() }}
+      >
+        Pays for one export of your rental passport: {feeFor === 'share' ? 'a link landlords can open for 30 days' : 'the PDF'}. If something goes wrong, you can export again at no extra cost for 30 minutes.
+      </FeeCheckoutModal>
 
       {/* Identity */}
       {data?.user && (

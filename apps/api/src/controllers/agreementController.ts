@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { agreementFeeDue, feeActive, feeQuote, feeRequiredBody } from '../services/actionFees.js'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 import { Agreement } from '../models/Agreement.js'
@@ -45,6 +46,12 @@ function isStaff(req: Request): boolean {
   return !req.user!.suspended && (roles.includes('admin') || roles.includes('super_admin') || roles.includes('government'))
 }
 
+/** Whether this agreement's GH₵5 signing fee is still to pay (services/actionFees.ts). */
+function signingFeeView(agreement: { signingFeeRequired?: boolean; signingFeePaidAt?: Date | null }, feeOn: boolean) {
+  const due = feeOn && !!agreement.signingFeeRequired && !agreement.signingFeePaidAt
+  return { due, paidAt: agreement.signingFeePaidAt ?? null, ...(due ? { amount: feeQuote('agreement_fee').amount, currency: 'GHS' } : {}) }
+}
+
 /** API view: adds the terms fingerprint signers must echo back, and hides the
  *  counterparty's signing IP/device from the other party. */
 function agreementView<T extends AgreementTerms & { signatureEvidence?: { userId?: string }[] }>(agreement: T, req: Request, extra: Record<string, unknown> = {}) {
@@ -80,7 +87,10 @@ export const agreementController = {
       userIds.add(a.tenantId)
       userIds.add(a.landlordId)
     }
-    const users = await User.find({ _id: { $in: [...userIds] } }).select('firstName lastName email phone').lean()
+    const [users, feeOn] = await Promise.all([
+      User.find({ _id: { $in: [...userIds] } }).select('firstName lastName email phone').lean(),
+      feeActive('agreement_fee'),
+    ])
     const userMap = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]))
 
     const items = agreements.map((a) => {
@@ -96,6 +106,7 @@ export const agreementController = {
         tenantEmail: showContact ? tenant?.email : undefined,
         tenantPhone: showContact ? tenant?.phone : undefined,
         landlordName: landlord ? `${landlord.firstName} ${landlord.lastName}` : undefined,
+        signingFee: signingFeeView(a, feeOn),
       })
     })
     success(res, { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
@@ -110,7 +121,7 @@ export const agreementController = {
     if (!isStaff(req) && agreement.tenantId !== userId && agreement.landlordId !== userId) {
       error(res, 'Not authorized to view this agreement', 403); return
     }
-    success(res, agreementView(agreement, req, { signatureConsentStatement: SIGNATURE_CONSENT_STATEMENT }))
+    success(res, agreementView(agreement, req, { signatureConsentStatement: SIGNATURE_CONSENT_STATEMENT, signingFee: signingFeeView(agreement, await feeActive('agreement_fee')) }))
   },
 
   create: async (req: Request, res: Response) => {
@@ -187,6 +198,11 @@ export const agreementController = {
     }
     const signatureField = role === 'landlord' ? 'landlordSignature' : 'tenantSignature'
     if (agreement[signatureField]) { error(res, 'You have already signed this version of the agreement', 409); return }
+    // Product brief §08: the tenant pays GH₵5 once, when about to sign; it unlocks the PDF for both parties.
+    if (role === 'tenant' && await agreementFeeDue(agreement)) {
+      res.status(402).json(feeRequiredBody('agreement_fee', 'Signing this agreement needs a one-time GH₵5 fee, which also unlocks its PDF for both of you.'))
+      return
+    }
 
     // The signature must attach to exactly the terms the signer reviewed. If
     // the landlord edited them in the meantime, the signer has to look again.

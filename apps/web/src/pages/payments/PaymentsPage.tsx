@@ -21,6 +21,15 @@ import type { PaymentStatus, Payment } from '@/types'
 import { RentReceiptControl } from './RentReceiptControl'
 import { CancelPaymentControl } from './CancelPaymentControl'
 
+/** What each payment was for: rent, a plan, a wallet top-up, or a GH₵5 fee (brief §08). */
+const PURPOSE_LABELS: Record<string, string> = {
+  rent: 'Rent',
+  subscription: 'Subscription',
+  wallet_deposit: 'Wallet top-up',
+  agreement_fee: 'Agreement signing fee',
+  passport_export: 'Passport export',
+}
+
 const statusVariant: Record<PaymentStatus, 'warning' | 'default' | 'success' | 'danger' | 'muted'> = {
   pending: 'warning',
   processing: 'default',
@@ -134,7 +143,7 @@ export function PaymentsPage() {
       <PageHeader
         eyebrow="Money"
         title="Payments"
-        description={isTenant ? 'Track your rent payments.' : 'Track received payments.'}
+        description={isTenant ? 'Your rent and other payments, with receipts for rent.' : 'Track received payments.'}
         icon={<CreditCard size={22} />}
       >
         {isTenant && rentCollectionEnabled && (
@@ -256,7 +265,10 @@ export function PaymentsPage() {
                 <tbody>
                   {payments.map((payment) => (
                     <tr key={payment.id} className="border-b border-border/50 dark:border-[#252a3a]/60 last:border-0 hover:bg-[var(--rentos-card-muted)] transition-colors cursor-pointer" onClick={() => setSelectedPayment(payment)}>
-                      <td className="py-3 px-2 font-mono text-xs text-primary-dark dark:text-gray-200">{payment.reference}</td>
+                      <td className="py-3 px-2">
+                        <span className="block font-mono text-xs text-primary-dark dark:text-gray-200">{payment.reference}</span>
+                        <span className="text-[11px] text-muted dark:text-gray-500">{PURPOSE_LABELS[payment.purpose ?? 'rent']}</span>
+                      </td>
                       <td className="py-3 px-2 text-muted dark:text-gray-400">{formatDate(payment.createdAt)}</td>
                       <td className="py-3 px-2 text-muted dark:text-gray-400 capitalize">{payment.method.replace('_', ' ')}</td>
                       <td className="py-3 px-2 text-right font-medium text-primary-dark dark:text-white">{formatCurrency(payment.amount)}</td>
@@ -347,11 +359,17 @@ export function PaymentsPage() {
                 <p className="font-medium text-primary-dark dark:text-white mt-0.5">{formatDate(selectedPayment.paidAt ?? selectedPayment.createdAt)}</p>
               </div>
               <div>
-                <span className="text-muted dark:text-gray-400">Agreement</span>
-                <p className="font-mono text-xs text-primary-dark dark:text-white mt-0.5">{selectedPayment.agreementId?.slice(0, 12)}...</p>
+                <span className="text-muted dark:text-gray-400">For</span>
+                <p className="font-medium text-primary-dark dark:text-white mt-0.5">{PURPOSE_LABELS[selectedPayment.purpose ?? 'rent']}</p>
               </div>
+              {(selectedPayment.purpose ?? 'rent') === 'rent' && selectedPayment.agreementId && (
+                <div>
+                  <span className="text-muted dark:text-gray-400">Agreement</span>
+                  <p className="font-mono text-xs text-primary-dark dark:text-white mt-0.5">{selectedPayment.agreementId.slice(0, 12)}...</p>
+                </div>
+              )}
             </div>
-            {['completed', 'refunded'].includes(selectedPayment.status) && (user?.id === selectedPayment.tenantId || user?.id === selectedPayment.landlordId) && (
+            {(selectedPayment.purpose ?? 'rent') === 'rent' && ['completed', 'refunded'].includes(selectedPayment.status) && (user?.id === selectedPayment.tenantId || user?.id === selectedPayment.landlordId) && (
               <RentReceiptControl key={selectedPayment.id} paymentId={selectedPayment.id} />
             )}
             <CancelPaymentControl key={`cancel-${selectedPayment.id}`} payment={selectedPayment} onCancelled={setSelectedPayment} />

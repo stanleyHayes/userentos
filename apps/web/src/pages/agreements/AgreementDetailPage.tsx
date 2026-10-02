@@ -12,6 +12,9 @@ import TextField from '@mui/material/TextField'
 import { useAuthStore } from '@/stores/authStore'
 import { isPathPausedFor } from '../../../../../packages/shared/productScope'
 import { api } from '@/lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { feeRequired } from '@/lib/actionFees'
+import { FeeCheckoutModal } from '@/components/payments/FeeCheckoutModal'
 import { useAgreement, useSignAgreement, useUpdateAgreement, useMoveOuts, useProperty, useBusinesses, businessCategoryLabel } from '@/hooks/useApi'
 import { useRenewalOffers, useCreateRenewalOffer, useRespondToRenewal } from '@/hooks/useRenewals'
 import { accentFromColorClass, formatCurrency, formatDate } from '@/lib/utils'
@@ -91,6 +94,8 @@ export function AgreementDetailPage() {
   const [signatureName, setSignatureName] = useState('')
   const [signConsent, setSignConsent] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [payingFee, setPayingFee] = useState(false)
+  const queryClient = useQueryClient()
   const [editForm, setEditForm] = useState({
     rentAmount: '',
     securityDeposit: '',
@@ -120,6 +125,10 @@ export function AgreementDetailPage() {
 
   const isParty = user?.id === agreement.tenantId || user?.id === agreement.landlordId
   const canDownloadPdf = isParty && agreement.status === 'active'
+  // The GH₵5 signing fee (brief §08): the tenant pays once before signing; it unlocks the PDF for both parties.
+  const feeDue = agreement.signingFee?.due === true
+  const feeAmount = agreement.signingFee?.amount ?? 5
+  const tenantMustPay = feeDue && user?.id === agreement.tenantId
 
   // Begin move-out eligibility: within 30 days of endDate OR already past endDate,
   // and no MoveOut row yet.
@@ -153,6 +162,7 @@ export function AgreementDetailPage() {
       const { token: downloadToken } = await api.post<{ token: string }>(`/agreements/${agreement.id}/document-link`, {})
       window.open(`${apiBase}/agreements/${agreement.id}/document.pdf?token=${encodeURIComponent(downloadToken)}`, '_blank', 'noopener,noreferrer')
     } catch (err) {
+      if (feeRequired(err)) { setPayingFee(true); return }
       // Without this the promise rejected unhandled: the spinner stopped and
       // absolutely nothing else happened, so a failed download looked like a
       // dead button on a document people need for a tenancy.
@@ -200,8 +210,10 @@ export function AgreementDetailPage() {
       setShowSignModal(false)
       setSignatureName('')
       setSignConsent(false)
-    } catch {
-      // Error is displayed via mutation.isError
+    } catch (err) {
+      // The fee was switched on after this page loaded: pay, then sign.
+      if (feeRequired(err)) { setShowSignModal(false); setPayingFee(true) }
+      // Other errors are displayed via mutation.isError
     }
   }
 
@@ -503,18 +515,42 @@ export function AgreementDetailPage() {
             <PenTool size={20} className="text-amber-500" />
             <div>
               <p className="text-sm font-semibold text-primary-dark dark:text-white">Signature Required</p>
-              <p className="text-xs text-muted dark:text-gray-400">Review the details below and sign to activate this agreement</p>
+              <p className="text-xs text-muted dark:text-gray-400">
+                {tenantMustPay
+                  ? `Reading it is free. A one-time GH₵${feeAmount} fee unlocks signing and the PDF for both of you.`
+                  : 'Review the details below and sign to activate this agreement'}
+              </p>
             </div>
           </div>
-          <Button
-            data-testid="agreement-sign-button"
-            onClick={() => setShowSignModal(true)}
-            disabled={signAgreement.isPending}
-          >
-            {signAgreement.isPending ? 'Signing...' : 'Sign Agreement'}
-          </Button>
+          {tenantMustPay ? (
+            <Button data-testid="agreement-pay-fee-button" onClick={() => setPayingFee(true)}>
+              Pay GH₵{feeAmount} to sign
+            </Button>
+          ) : (
+            <Button
+              data-testid="agreement-sign-button"
+              onClick={() => setShowSignModal(true)}
+              disabled={signAgreement.isPending}
+            >
+              {signAgreement.isPending ? 'Signing...' : 'Sign Agreement'}
+            </Button>
+          )}
         </div>
       )}
+
+      <FeeCheckoutModal
+        open={payingFee}
+        onClose={() => setPayingFee(false)}
+        endpoint={`/agreements/${agreement.id}/signing-fee`}
+        amount={feeAmount}
+        title="Unlock signing and download"
+        onPaid={() => {
+          void queryClient.invalidateQueries({ queryKey: ['agreement', agreement.id] })
+          toast.success(user?.id === agreement.tenantId ? 'Paid. You can sign the agreement now.' : 'Paid. The agreement PDF is unlocked.')
+        }}
+      >
+        One payment covers signing this agreement and downloading its PDF, for you and the {user?.id === agreement.tenantId ? 'landlord' : 'tenant'}. Reading it in RentOS is always free.
+      </FeeCheckoutModal>
 
       {/* Signature modal */}
       <Modal open={showSignModal} onClose={() => setShowSignModal(false)} title="Sign Agreement">

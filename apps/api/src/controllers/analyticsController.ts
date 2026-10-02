@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
 import { Agreement } from '../models/Agreement.js'
-import { Payment } from '../models/Payment.js'
+import { Payment, NOT_ACTION_FEE } from '../models/Payment.js'
 import { SavingsPlan } from '../models/SavingsPlan.js'
 import { Wallet } from '../models/Wallet.js'
 import { Dispute } from '../models/Dispute.js'
@@ -207,9 +207,9 @@ export const analyticsController = {
     } else {
       const [agreements, payments, recentPayments, pendingPayments, plans, wallet, allDisputes, applications, pendingApplications] = await Promise.all([
         Agreement.find({ tenantId: userId }).lean(),
-        Payment.find({ tenantId: userId, status: 'completed', ...dateFilter(start, end, 'paidAt') }).lean(),
-        Payment.find({ tenantId: userId, status: 'completed', paidAt: { $gte: sixMonthsStart(now) } }).lean(),
-        Payment.find({ tenantId: userId, status: 'pending' }).lean(),
+        Payment.find({ tenantId: userId, status: 'completed', ...dateFilter(start, end, 'paidAt'), ...NOT_ACTION_FEE }).lean(),
+        Payment.find({ tenantId: userId, status: 'completed', paidAt: { $gte: sixMonthsStart(now) }, ...NOT_ACTION_FEE }).lean(),
+        Payment.find({ tenantId: userId, status: 'pending', ...NOT_ACTION_FEE }).lean(),
         SavingsPlan.find({ userId }).lean(),
         Wallet.findOne({ userId }).lean(),
         Dispute.find({ filedBy: userId }).lean(),

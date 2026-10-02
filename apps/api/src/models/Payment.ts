@@ -4,7 +4,14 @@ import type { ReceiptContext } from '../services/payments/receiptContext.js'
 import { rentPeriodError, type RentPeriod } from '../services/payments/rentPeriod.js'
 import mongoose, { Schema, type Document } from 'mongoose'
 
-export type PaymentPurpose = 'rent' | 'wallet_deposit' | 'subscription'
+/** agreement_fee and passport_export are the GH₵5 pay-per-action fees (services/actionFees.ts). */
+export type PaymentPurpose = 'rent' | 'wallet_deposit' | 'subscription' | 'agreement_fee' | 'passport_export'
+
+/**
+ * Rent history, streaks, analytics and credit leave out the GH₵5 action fees:
+ * paying to sign or export a document is not paying rent.
+ */
+export const NOT_ACTION_FEE: { purpose: { $nin: PaymentPurpose[] } } = { purpose: { $nin: ['agreement_fee', 'passport_export'] } }
 
 export interface IPayment extends Document {
   /** Required for rent payments; absent for wallet deposits / subscriptions. */
@@ -28,6 +35,8 @@ export interface IPayment extends Document {
   subscriptionCoverageEndsAt?: Date
   /** Client-supplied idempotency key — retries return the original payment. Unique per payer. */
   idempotencyKey?: string
+  /** When a fee payment's unlock was applied (once; see applyActionFee). */
+  feeAppliedAt?: Date
   /**
    * Set while this payment is in flight for an obligation that may only have
    * one in-flight collection (a rent period, a paid subscription checkout).
@@ -105,7 +114,8 @@ const paymentSchema = new Schema<IPayment>({
   method: { type: String, required: true, enum: ['mtn_momo', 'telecel_cash', 'airteltigo_money', 'bank_transfer'] },
   status: { type: String, required: true, enum: ['pending', 'processing', 'completed', 'failed', 'refunded'], default: 'pending' },
   reference: { type: String, required: true, unique: true },
-  purpose: { type: String, required: true, enum: ['rent', 'wallet_deposit', 'subscription'], default: 'rent', index: true },
+  purpose: { type: String, required: true, enum: ['rent', 'wallet_deposit', 'subscription', 'agreement_fee', 'passport_export'], default: 'rent', index: true },
+  feeAppliedAt: Date,
   purposeMeta: { type: Schema.Types.Mixed },
   subscriptionActivatedAt: Date,
   subscriptionActivationResult: { type: String, enum: ['applied', 'superseded', 'expired'] },
