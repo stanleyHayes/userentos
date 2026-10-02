@@ -81,4 +81,5 @@ Settings changed on Vercel (`userentos`):
 
 Still open:
 - An SMS provider for agent alerts: `ARKESEL_API_KEY` and `SMS_SENDER_ID`, or the Twilio variables. Without them SMS is skipped, and agents get the in-app and email alerts only.
-- **Paystack keys (`PAYSTACK_SECRET_KEY`).** Production runs payments in live mode without one, so every collection fails, including the GH₵150 Professional subscription, until it is set. This predates the release. Set it before turning on the GH₵5 fee switches.
+- **Paystack keys (`PAYSTACK_SECRET_KEY`).** Production runs payments in live mode without one, so no payment can be taken, including the GH₵150 Professional subscription, until it is set. This predates the release. Set it (the `sk_live_` key from Paystack › Settings › API Keys & Webhooks) before turning on the GH₵5 fee switches.
+  - 2 October 2026, evening: subscribing answered 500 ("Internal server error"), because the checkout recorded a payment and then failed to reach Paystack. Fixed in `30b8122`: without the key no mobile-money method is offered, and every checkout answers "Payments are not available right now. Please try again later." before recording anything. The one payment the failure left open (a GH₵150 subscription attempt that never reached Paystack) was marked failed, so that subscriber can pay once the key is set.
