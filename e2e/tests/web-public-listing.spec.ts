@@ -34,7 +34,7 @@ test('a shared listing link opens the public page while signed out', async ({ pa
   const requested = await signedOut(page, { status: 200, data: listing })
   await page.goto(`/registry/${id}`)
   await expect(page.getByRole('heading', { name: listing.title })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByText('Reviewed listing on RentOS', { exact: true })).toBeVisible()
+  await expect(page.getByText(/Listing reviewed by RentOS before it was published/)).toBeVisible()
   expect(new URL(page.url()).pathname).toBe(`/registry/${id}`)
   expect(requested).toContain(`/api/public/properties/${id}`)
 })

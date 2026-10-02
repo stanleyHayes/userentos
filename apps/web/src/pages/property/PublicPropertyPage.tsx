@@ -357,7 +357,7 @@ export function PublicPropertyPage() {
     const canonical = listing.url ?? `${window.location.origin}${listingPath(listing.ref ?? listing.id)}`
     applySeo({
       title: `${listing.title} — ${typeLabel} ${purpose} in ${listing.city || 'Ghana'} | RentOS`,
-      description: `${typeLabel} ${purpose} in ${place || 'Ghana'}: ${formatListingPrice(listing.rentAmount, listing.listingType)}${listing.bedrooms ? `, ${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'}` : ''}. ${listing.description.slice(0, 120)}`,
+      description: `${typeLabel} ${purpose} in ${place || 'Ghana'}: ${formatListingPrice(listing.rentAmount, listing.listingType)}${listing.bedrooms ? `, ${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'}` : ''}. ${(listing.description ?? '').slice(0, 120)}`,
       canonical,
       image: listing.images?.[0] ?? listing.image ?? undefined,
       siteName: 'RentOS Ghana',

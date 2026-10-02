@@ -7,6 +7,9 @@ test.skip(!process.env.PLAYWRIGHT_BASE_URL, 'Requires a web dev server at PLAYWR
 
 const tenant = { id: '507f1f77bcf86cd799439161', email: 'browse@rentos.test', firstName: 'Abena', lastName: 'Browser', phone: '0241234567', roles: ['tenant'], activeRole: 'tenant' }
 const landlord = { ...tenant, id: '507f1f77bcf86cd799439162', email: 'owner@rentos.test', roles: ['landlord'], activeRole: 'landlord' }
+// Local Services is paused for tenants, landlords and property managers in
+// Phase 1 (packages/shared/productScope.ts); service providers keep it.
+const provider = { ...tenant, roles: ['service_provider'], activeRole: 'service_provider' }
 
 const property = (id: string, title: string, extra: Record<string, unknown> = {}) => ({
   id, _id: id, title, description: 'Fixture listing', type: 'apartment', status: 'available', listingStatus: 'approved',
@@ -71,7 +74,7 @@ const directoryItem = (isFeatured?: boolean) => ({
 
 test('local services labels a paid business "Sponsored" and tags new-mover offers', async ({ page }) => {
   const queries = recordQueries(page, '/businesses')
-  await signInWithMockedApi(page, tenant, ({ path }) => {
+  await signInWithMockedApi(page, provider, ({ path }) => {
     if (path === '/businesses') return { data: { items: [directoryItem(true)] } }
     if (path === `/businesses/${businessId}`) return { data: directoryItem() }
     return undefined
@@ -86,7 +89,7 @@ test('local services labels a paid business "Sponsored" and tags new-mover offer
   expect(queries.some((q) => q.get('placement') === 'directory')).toBe(true)
 })
 
-test('the agreement page\'s move-in essentials stay in organic order', async ({ page }) => {
+test('while Local Services is paused, a tenant\'s agreement page shows no move-in essentials and asks for no businesses', async ({ page }) => {
   const agreementId = '507f1f77bcf86cd799439191'
   const propertyId = '507f1f77bcf86cd799439192'
   const queries = recordQueries(page, '/businesses')
@@ -105,9 +108,10 @@ test('the agreement page\'s move-in essentials stay in organic order', async ({ 
   })
   await page.goto(`/agreements/${agreementId}`)
 
-  await expect(page.getByText('Move-in essentials near Accra')).toBeVisible({ timeout: 20_000 })
-  expect(queries.length).toBeGreaterThan(0)
-  expect(queries.every((q) => q.get('city') === 'Accra' && !q.has('placement'))).toBe(true)
+  // Phase 1 (brief §06): Local Services is paused for tenants, so its offers stay off the agreement page too.
+  await expect(page.getByRole('heading', { name: /Agreement #/ })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('Move-in essentials near Accra')).toHaveCount(0)
+  expect(queries).toHaveLength(0)
 })
 
 test('the privacy policy describes paid placements', async ({ page }) => {

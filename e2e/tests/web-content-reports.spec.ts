@@ -7,6 +7,10 @@ test.skip(!process.env.PLAYWRIGHT_BASE_URL, 'Requires a web dev server at PLAYWR
 
 const tenant = { id: '507f1f77bcf86cd799439061', email: 'reporter@rentos.test', firstName: 'Ama', lastName: 'Reporter', phone: '0241234567', roles: ['tenant'], activeRole: 'tenant' }
 const landlord = { ...tenant, id: '507f1f77bcf86cd799439062', email: 'owner@rentos.test', firstName: 'Kojo', roles: ['landlord'], activeRole: 'landlord' }
+// Workers and Local Services are paused for tenants, landlords and property
+// managers in Phase 1 (packages/shared/productScope.ts); service providers
+// keep them, so they report businesses and workers here.
+const provider = { ...tenant, roles: ['service_provider'], activeRole: 'service_provider' }
 
 type Report = { targetType: string; targetId: string; reason: string; details?: string }
 
@@ -120,7 +124,7 @@ const businessApi: MockHandler = ({ path }) => {
 
 test('a business and a business review are reported with their own target types', async ({ page }) => {
   const reports: Report[] = []
-  await signInWithMockedApi(page, tenant, reportsApi(reports, businessApi, (body) =>
+  await signInWithMockedApi(page, provider, reportsApi(reports, businessApi, (body) =>
     body.targetType === 'business' ? { status: 409, error: 'You have already reported this — our team is looking at it.' } : undefined))
   await page.goto('/local-services')
   await page.getByRole('heading', { name: 'Fixture Movers' }).click()
@@ -146,7 +150,7 @@ test('a business and a business review are reported with their own target types'
 })
 
 test('a business owner sees no report control for their own business', async ({ page }) => {
-  await signInWithMockedApi(page, { ...tenant, id: business.ownerId }, businessApi)
+  await signInWithMockedApi(page, { ...provider, id: business.ownerId }, businessApi)
   await page.goto('/local-services')
   await page.getByRole('heading', { name: 'Fixture Movers' }).click()
   const sheet = page.getByRole('dialog', { name: 'Fixture Movers' })
@@ -174,7 +178,7 @@ const workerApi: MockHandler = ({ path }) => {
 
 test('a worker and a worker review (keyed by booking) are reported', async ({ page }) => {
   const reports: Report[] = []
-  await signInWithMockedApi(page, tenant, reportsApi(reports, workerApi))
+  await signInWithMockedApi(page, provider, reportsApi(reports, workerApi))
   await page.goto(`/workers/${workerId}`)
   await expect(page.getByText('Left water everywhere and shouted at us.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Report review' })).toHaveCount(1)
@@ -192,7 +196,7 @@ test('a worker and a worker review (keyed by booking) are reported', async ({ pa
 })
 
 test('a worker sees no report control on their own profile', async ({ page }) => {
-  await signInWithMockedApi(page, { ...tenant, id: workerUserId }, workerApi)
+  await signInWithMockedApi(page, { ...provider, id: workerUserId }, workerApi)
   await page.goto(`/workers/${workerId}`)
   await expect(page.getByText('Left water everywhere and shouted at us.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Report worker' })).toHaveCount(0)
