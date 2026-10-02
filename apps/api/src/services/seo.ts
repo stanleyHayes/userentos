@@ -235,10 +235,18 @@ const SITE_FIELDS = 'slug name tagline about heroSubtitle canonicalDomain brandi
 
 const platformHostname = () => new URL(publicBaseUrl()).hostname
 
+/**
+ * RentOS's own hosts. Always the platform, whatever PUBLIC_BASE_URL says: if
+ * it were mis-set (it once named the API host), www.userentos.com would read
+ * as an agent website called "www" and the home page would go out as a
+ * noindexed 404.
+ */
+const OWN_HOSTS = new Set(['userentos.com', 'www.userentos.com'])
+
 /** Is this the platform itself (userentos.com, www, a preview or local host)? */
 function isPlatformHost(host: string): boolean {
   const name = host.split(':')[0]
-  return name === platformHostname() || name === `www.${platformHostname()}` || name === 'localhost' || name.endsWith('.vercel.app')
+  return OWN_HOSTS.has(name) || name === platformHostname() || name === `www.${platformHostname()}` || name === 'localhost' || name.endsWith('.vercel.app')
 }
 
 async function siteForHost(host: string): Promise<SiteRecord | null> {

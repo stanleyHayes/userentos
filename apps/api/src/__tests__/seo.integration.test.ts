@@ -88,6 +88,21 @@ describe.skipIf(!hasTestMongo)('page metadata and sitemaps for crawlers and link
     expect(site).not.toContain('userentos.com/property')
   })
 
+  it('treats userentos.com and www as the platform even when PUBLIC_BASE_URL names another host', async () => {
+    const saved = process.env.PUBLIC_BASE_URL
+    process.env.PUBLIC_BASE_URL = 'https://api.userentos.com'
+    try {
+      for (const own of ['www.userentos.com', 'userentos.com']) {
+        const page = await pageMeta(own, '/blog')
+        expect(page?.status).not.toBe(404)
+        expect(page?.noindex).toBeFalsy()
+      }
+    } finally {
+      if (saved === undefined) delete process.env.PUBLIC_BASE_URL
+      else process.env.PUBLIC_BASE_URL = saved
+    }
+  })
+
   it('leaves pages it does not know to the browser', async () => {
     expect(await pageMeta('userentos.com', '/dashboard')).toBeNull()
     expect((await pageMeta('userentos.com', '/rental-laws'))?.canonical).toBe('https://userentos.com/rental-laws')
