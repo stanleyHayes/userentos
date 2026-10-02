@@ -17,8 +17,10 @@ export interface PageMeta {
   replaceSiteJsonLd: boolean
 }
 
-export const API_URL = (process.env.SEO_API_URL || process.env.VITE_API_URL || 'https://api.userentos.com/api').replace(/\/$/, '')
-export const SITE_URL = (process.env.VITE_SITE_URL || 'https://userentos.com').replace(/\/$/, '')
+// Server-side fetches need an absolute URL; the browser build also accepts a relative VITE_API_URL ("/api").
+const absolute = (value: string | undefined) => (value && /^https?:\/\//.test(value) ? value : undefined)
+export const API_URL = (absolute(process.env.SEO_API_URL) || absolute(process.env.VITE_API_URL) || 'https://api.userentos.com/api').replace(/\/$/, '')
+export const SITE_URL = (absolute(process.env.VITE_SITE_URL) || 'https://userentos.com').replace(/\/$/, '')
 
 const HOSTNAME = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:\d{1,5})?$/
 
