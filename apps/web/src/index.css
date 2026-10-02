@@ -1196,8 +1196,13 @@ h1.font-display, h2.font-display {
   100% { transform: translateY(0); opacity: 1; }
 }
 
-/* News posts on professionals' RentOS websites (pages/site). */
+/* Professionals' RentOS websites (pages/site): their brand colour as the accent,
+   lifted toward white in dark mode so it stays readable on dark surfaces. */
+.site-accent { color: var(--site-color, #1e3a5f); }
+.dark .site-accent { color: color-mix(in oklab, var(--site-color, #1e3a5f) 45%, white); }
+
+/* News posts on those websites: prose-rentos, with pictures full width and links in the brand colour. */
 .site-prose { font-size: 1.05rem; }
-.site-prose h1, .site-prose h2, .site-prose h3 { font-family: var(--font-serif); font-weight: 600; color: #0f172a; }
 .site-prose a { color: var(--site-color, #1e3a5f); border-bottom-color: color-mix(in oklab, var(--site-color, #1e3a5f) 30%, transparent); }
+.dark .site-prose a { color: color-mix(in oklab, var(--site-color, #1e3a5f) 45%, white); }
 .site-prose img { width: 100%; height: auto; border-radius: 1rem; margin: 1.75rem 0; }

@@ -86,20 +86,20 @@ export function FeeCheckoutModal({ open, onClose, endpoint, amount, title, child
     <Modal open={open} onClose={close} title={title}>
       {stage === 'paid' ? (
         <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <CheckCircle2 size={40} className="text-emerald-500" />
+          <span className="neumorphic-icon grid h-14 w-14 place-items-center rounded-2xl text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={28} /></span>
           <p className="font-semibold text-primary-dark dark:text-white">Payment confirmed</p>
           <Button onClick={close}>Continue</Button>
         </div>
       ) : stage === 'waiting' ? (
         <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <Smartphone size={36} className="text-primary dark:text-blue-400" />
+          <span className="neumorphic-icon grid h-14 w-14 place-items-center rounded-2xl text-primary dark:text-cyan-300"><Smartphone size={26} /></span>
           <p className="font-semibold text-primary-dark dark:text-white">Approve GH₵{amount} on your phone</p>
           <p className="max-w-sm text-sm text-muted dark:text-gray-400">{message ?? 'Check your phone for the mobile money prompt and enter your PIN.'}</p>
           <p className="inline-flex items-center gap-2 text-xs text-muted"><Loader2 size={14} className="animate-spin" /> Waiting for confirmation…</p>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl bg-surface p-4 text-sm text-primary-dark dark:bg-white/[0.04] dark:text-gray-200">
+          <div className="neumorphic-inset rounded-2xl p-4 text-sm text-primary-dark dark:text-gray-200">
             <p className="font-display text-2xl font-extrabold">GH₵{amount}<span className="ml-1 text-sm font-semibold text-muted">one-time</span></p>
             <div className="mt-1 text-muted dark:text-gray-400">{children}</div>
           </div>

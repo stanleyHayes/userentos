@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ImagePlus, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { POST_IMAGE_ACCEPT, uploadPostImage } from '@/hooks/useAuthoring'
+import { Input } from '@/components/ui/Input'
 
 /** A post's cover picture: on every news card and at the top of the article. */
 export function CoverImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
@@ -28,7 +29,7 @@ export function CoverImageField({ value, onChange }: { value: string; onChange: 
           type="button"
           onClick={() => input.current?.click()}
           disabled={uploading}
-          className="group relative grid aspect-[16/9] w-full shrink-0 place-items-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-surface/70 text-muted transition hover:border-primary/50 hover:text-primary sm:w-60 dark:border-[#2a3042] dark:bg-white/[0.03]"
+          className="neumorphic-inset group relative grid aspect-[16/9] w-full shrink-0 place-items-center overflow-hidden rounded-xl border-2 border-dashed border-border/70 text-muted transition hover:border-primary/50 hover:text-primary sm:w-60 dark:border-white/10"
         >
           {value && <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           <span className={`relative z-10 flex flex-col items-center gap-1.5 text-xs font-semibold ${value ? 'rounded-lg bg-black/55 px-3 py-2 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100' : ''}`}>
@@ -51,14 +52,7 @@ export function CoverImageField({ value, onChange }: { value: string; onChange: 
             )}
           </div>
           {showLink && (
-            <input
-              type="url"
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="https://…"
-              aria-label="Cover picture link"
-              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-primary-dark outline-none focus:border-primary dark:border-[#2a3042] dark:bg-[#0c0e1a] dark:text-white"
-            />
+            <Input id="cover-picture-link" type="url" label="Picture link" value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://…" />
           )}
         </div>
       </div>

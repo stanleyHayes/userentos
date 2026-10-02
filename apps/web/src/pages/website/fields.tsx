@@ -1,8 +1,7 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
-import { ImagePlus, Loader2, RefreshCw, Sparkles, X } from 'lucide-react'
+import { useId, useRef, useState } from 'react'
+import { ImagePlus, Loader2, RefreshCw, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useUploadStorefrontImage, useAIGenerate, type StorefrontImagePurpose } from '@/hooks/useApi'
-import { isContactBlocked } from '@/lib/contactProtection'
+import { useUploadStorefrontImage, type StorefrontImagePurpose } from '@/hooks/useApi'
 import { cn } from '@/lib/utils'
 
 /** One picture on the website: upload, see it, replace it. Uploads save straight away. */
@@ -29,7 +28,7 @@ export function ImageSlot({ purpose, url, label, hint, aspect = 'aspect-[16/9]',
         disabled={upload.isPending}
         aria-label={compact ? label : undefined}
         className={cn(
-          'group relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-border bg-surface/70 text-muted transition hover:border-primary/50 hover:text-primary dark:border-[#2a3042] dark:bg-white/[0.03]',
+          'neumorphic-inset group relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-border/70 text-muted transition hover:border-primary/50 hover:text-primary dark:border-white/10',
           round ? 'aspect-square max-w-[140px] rounded-2xl' : compact ? 'aspect-square rounded-xl' : `${aspect} rounded-2xl`,
         )}
       >
@@ -79,7 +78,7 @@ export function ChipsInput({ label, values, onChange, placeholder, max = 12 }: {
   return (
     <div>
       <label htmlFor={inputId} className="mb-1.5 block text-sm font-semibold text-primary-dark dark:text-white">{label}</label>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-white p-2 dark:border-[#2a3042] dark:bg-[#0c0e1a]">
+      <div className="neumorphic-inset flex flex-wrap items-center gap-2 rounded-xl p-2">
         {values.map((value) => (
           <span key={value} className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 pl-3 pr-1.5 text-sm font-medium text-primary dark:bg-blue-500/15 dark:text-blue-300">
             {value}
@@ -99,34 +98,5 @@ export function ChipsInput({ label, values, onChange, placeholder, max = 12 }: {
         )}
       </div>
     </div>
-  )
-}
-
-/**
- * "Help me write": turns the owner's notes into polished copy they can edit
- * before saving. Contact details in the result are stopped when it is saved,
- * like anything else on the website.
- */
-export function AiWriteButton({ notes, context, onResult, children }: {
-  notes: string
-  context: string
-  onResult: (text: string) => void
-  children?: ReactNode
-}) {
-  const generate = useAIGenerate()
-  return (
-    <button
-      type="button"
-      disabled={generate.isPending || notes.trim().length < 3}
-      title={notes.trim().length < 3 ? 'Write a few notes first, then let RentOS polish them' : undefined}
-      onClick={() => generate.mutate({ prompt: notes.trim(), context }, {
-        onSuccess: ({ text }) => onResult(text.trim()),
-        onError: (err) => { if (isContactBlocked(err)) toast.error(err.message) },
-      })}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-300"
-    >
-      {generate.isPending ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-      {generate.isPending ? 'Writing…' : children ?? 'Help me write'}
-    </button>
   )
 }

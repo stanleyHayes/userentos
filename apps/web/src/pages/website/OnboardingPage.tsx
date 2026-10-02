@@ -7,13 +7,16 @@ import { useAuthStore, useAuthRehydrate } from '@/stores/authStore'
 import { SplashScreen } from '@/components/ui/SplashScreen'
 import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
+import { buttonVariants } from '@/components/ui/buttonVariants'
+import { Textarea } from '@/components/ui/Textarea'
+import { IconWatermark, LogoWatermark } from '@/components/ui/Watermark'
 import {
   useMyStorefront, useCreateStorefront, useUpdateStorefront, usePublishStorefront, useSlugAvailability, useProperties, useMyEntitlements,
 } from '@/hooks/useApi'
 import { isContactBlocked, type ContactBlockedError } from '@/lib/contactProtection'
 import { ContactBlockedNotice } from '@/components/trust/ContactBlockedNotice'
 import { websiteUrl } from '@/lib/site'
-import { ImageSlot, ChipsInput, AiWriteButton } from './fields'
+import { ImageSlot, ChipsInput } from './fields'
 
 const noop = () => {}
 const STEPS = ['Business', 'Look', 'Properties', 'About', 'Launch'] as const
@@ -99,17 +102,19 @@ function Wizard() {
   if (isLoading) return <SplashScreen onFinished={noop} />
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] dark:bg-[#0b0e17]">
-      <header className="border-b border-border/60 bg-white dark:border-[#252a3a] dark:bg-[#111422]">
+    <div className="public-shell-bg relative min-h-screen overflow-hidden">
+      <IconWatermark icon={Globe} className="-left-16 top-24 size-64 rotate-[-12deg]" />
+      <LogoWatermark className="-bottom-20 -right-10 size-72 rotate-12" />
+      <header className="relative">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
-          <Logo size={30} />
-          <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary-dark dark:hover:text-white"><X size={16} /> Finish later</Link>
+          <Logo size={30} theme="dark" />
+          <Link to="/dashboard" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-muted transition-colors hover:bg-white/60 hover:text-primary dark:hover:bg-white/5"><X size={14} /> Finish later</Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="relative mx-auto max-w-3xl px-4 py-8">
         {/* Progress */}
-        <ol className="mb-8 grid grid-cols-5 gap-2" aria-label="Steps">
+        <ol className="mb-8 grid grid-cols-5 gap-2 animate-fade-down" aria-label="Steps">
           {STEPS.map((label, i) => (
             <li key={label} className="text-center">
               <div className={`h-1.5 rounded-full ${i <= step ? 'bg-primary dark:bg-blue-500' : 'bg-border dark:bg-[#252a3a]'}`} />
@@ -120,7 +125,7 @@ function Wizard() {
 
         {blocked && <ContactBlockedNotice error={blocked} onDismiss={() => setBlocked(null)} />}
 
-        <div className="rounded-3xl bg-white p-6 shadow-[0_10px_40px_rgba(15,31,51,0.06)] dark:bg-[#141827] md:p-8">
+        <div className="surface-card page-enter rounded-[2rem] border p-5 sm:p-7">
           {step === 0 && (
             <div className="space-y-5">
               <div>
@@ -172,10 +177,10 @@ function Wizard() {
                 <h1 className="font-display text-2xl font-extrabold text-primary-dark dark:text-white">Your properties</h1>
                 <p className="mt-1 text-sm text-muted dark:text-gray-400">Every property you list appears on your website and in the RentOS Registry, from the same listing — never twice.</p>
               </div>
-              <div className="flex items-center gap-4 rounded-2xl bg-surface p-4 dark:bg-white/[0.03]">
-                <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-300"><Building2 size={22} /></span>
-                <p className="flex-1 text-sm text-primary-dark dark:text-white">{listingCount ? `You have ${listingCount} ${listingCount === 1 ? 'listing' : 'listings'}. Published ones show on your website.` : 'No listings yet. Add your first property — it takes a few minutes.'}</p>
-                <a href="/properties/new" target="_blank" rel="noreferrer"><Button variant="outline" size="sm"><Plus size={14} /> Add a property</Button></a>
+              <div className="neumorphic-inset flex flex-wrap items-center gap-4 rounded-2xl p-4">
+                <span className="neumorphic-icon grid h-12 w-12 place-items-center rounded-2xl text-primary dark:text-cyan-300"><Building2 size={22} /></span>
+                <p className="min-w-0 flex-1 text-sm text-primary-dark dark:text-white">{listingCount ? `You have ${listingCount} ${listingCount === 1 ? 'listing' : 'listings'}. Published ones show on your website.` : 'No listings yet. Add your first property; it takes a few minutes.'}</p>
+                <a href="/properties/new" target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'sm' })}><Plus size={14} /> Add a property</a>
               </div>
               <Nav onBack={() => setStep(1)} onNext={() => setStep(3)} nextLabel={listingCount ? 'Continue' : 'Skip for now'} />
             </div>
@@ -187,13 +192,15 @@ function Wizard() {
                 <h1 className="font-display text-2xl font-extrabold text-primary-dark dark:text-white">Tell people about you</h1>
                 <p className="mt-1 text-sm text-muted dark:text-gray-400">A few notes are enough — let RentOS write them up, then edit as you like.</p>
               </div>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label htmlFor="ob-about" className="text-sm font-semibold text-primary-dark dark:text-white">About your business</label>
-                  <AiWriteButton notes={about.about} context="business description (an agency's About Us page)" onResult={(text) => setAbout((a) => ({ ...a, about: text }))} />
-                </div>
-                <textarea id="ob-about" value={about.about} onChange={(e) => setAbout((a) => ({ ...a, about: e.target.value }))} rows={6} maxLength={4000} placeholder="e.g. Founded 2018. Lettings and sales in East Legon and Spintex. Known for quick viewings and honest advice." className="w-full rounded-xl border border-border bg-white px-3.5 py-3 text-sm text-primary-dark outline-none focus:border-primary dark:border-[#2a3042] dark:bg-[#0c0e1a] dark:text-white" />
-              </div>
+              <Textarea
+                id="ob-about"
+                label="About your business"
+                value={about.about}
+                onChange={(e) => setAbout((a) => ({ ...a, about: e.target.value.slice(0, 4000) }))}
+                rows={6}
+                placeholder="e.g. Founded 2018. Lettings and sales in East Legon and Spintex. Known for quick viewings and honest advice."
+                aiContext="business description (an agency's About Us page)"
+              />
               <ChipsInput label="Services" values={about.services} onChange={(services) => setAbout((a) => ({ ...a, services }))} placeholder="e.g. Lettings, Sales, Property management" />
               <ChipsInput label="Areas you cover" values={about.serviceAreas} onChange={(serviceAreas) => setAbout((a) => ({ ...a, serviceAreas }))} placeholder="e.g. East Legon, Spintex" />
               <Nav onBack={() => setStep(2)} onNext={() => void saveAbout()} busy={update.isPending} nextLabel="Continue" />
@@ -202,14 +209,14 @@ function Wizard() {
 
           {step === 4 && storefront && (
             <div className="space-y-6 text-center">
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-600"><Check size={30} /></span>
+              <span className="neumorphic-icon mx-auto grid h-16 w-16 place-items-center rounded-2xl text-emerald-600 dark:text-emerald-400"><Check size={30} /></span>
               <div>
                 <h1 className="font-display text-2xl font-extrabold text-primary-dark dark:text-white">Your website is ready</h1>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted dark:text-gray-400">Have a look, then launch it. Share the address on WhatsApp, Instagram and Facebook — enquiries come to your RentOS leads with an SMS alert.</p>
               </div>
-              <p className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 font-mono text-sm text-primary dark:bg-white/[0.05] dark:text-blue-300"><Globe size={15} />{websiteUrl(storefront).replace('https://', '')}</p>
+              <p className="neumorphic-inset inline-flex items-center gap-2 rounded-full px-4 py-2 font-mono text-sm text-primary dark:text-blue-300"><Globe size={15} />{websiteUrl(storefront).replace('https://', '')}</p>
               <div className="flex flex-wrap justify-center gap-3">
-                <a href={`/s/${storefront.slug}`} target="_blank" rel="noreferrer"><Button variant="outline"><ExternalLink size={16} /> Preview</Button></a>
+                <a href={`/s/${storefront.slug}`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline' })}><ExternalLink size={16} /> Preview</a>
                 <Button disabled={publish.isPending} onClick={() => void launch(true)}>{publish.isPending ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />} Launch website</Button>
               </div>
               <button type="button" onClick={() => void launch(false)} className="text-sm font-semibold text-muted hover:text-primary-dark dark:hover:text-white">Save as draft and finish later</button>

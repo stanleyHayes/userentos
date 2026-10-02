@@ -72,7 +72,7 @@ export function DomainsCard({ storefront, canUseDomain }: { storefront: Storefro
         ) : (
           <ul className="space-y-3">
             {domains.map((d) => (
-              <li key={d.id} className="rounded-xl bg-surface/60 p-3 dark:bg-white/[0.03]">
+              <li key={d.id} className="neumorphic-inset rounded-xl p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono text-sm text-primary-dark dark:text-white">{d.domain}</span>
                   <div className="flex items-center gap-2">
@@ -84,7 +84,7 @@ export function DomainsCard({ storefront, canUseDomain }: { storefront: Storefro
                 </div>
 
                 {d.status === 'pending' && (
-                  <div className="mt-2 space-y-1.5 rounded-lg bg-white p-2.5 text-xs dark:bg-[#0c0e1a]">
+                  <div className="surface-card mt-2 space-y-1.5 rounded-lg border p-2.5 text-xs">
                     <p className="text-muted dark:text-gray-400">Add this TXT record at your DNS provider:</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 truncate font-mono text-[11px] text-primary-dark dark:text-white">{d.verificationToken}</code>

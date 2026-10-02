@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
-import { BadgeCheck, MapPin, Clock, ArrowRight } from 'lucide-react'
+import { BadgeCheck, MapPin, Clock, ArrowRight, Building2, Home } from 'lucide-react'
+import { IconWatermark } from '@/components/ui/Watermark'
 import { useSite, sitePath, PROFESSIONAL_LABEL } from '@/lib/site'
-import { SectionHeading } from './parts'
+import { SectionHeading, PageIntro, Chip } from './parts'
 
 /** The owner's story, team photos, what they do and where. */
 export function SiteAbout() {
@@ -9,39 +10,39 @@ export function SiteAbout() {
   return (
     <>
       <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6 md:pt-16">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--site-color)] opacity-80">About us</p>
-        <h1 className="mt-1 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">{site.tagline || `About ${site.name}`}</h1>
-        <div className="mt-5 flex flex-wrap gap-2 text-sm">
-          {site.professionalType && <span className="rounded-full bg-white px-3.5 py-1.5 font-medium text-slate-700 ring-1 ring-slate-900/10">{PROFESSIONAL_LABEL[site.professionalType] ?? 'Real estate'}</span>}
-          {site.identityVerified && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 font-medium text-emerald-800 ring-1 ring-emerald-600/20"><BadgeCheck size={15} /> Identity reviewed by RentOS</span>}
-          {site.contact.city && <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 font-medium text-slate-700 ring-1 ring-slate-900/10"><MapPin size={14} />{site.contact.city}</span>}
-          {site.contact.hours && <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 font-medium text-slate-700 ring-1 ring-slate-900/10"><Clock size={14} />{site.contact.hours}</span>}
+        <PageIntro eyebrow="About us" title={site.tagline || `About ${site.name}`} />
+        <div className="mt-5 flex flex-wrap gap-2">
+          {site.professionalType && <Chip>{PROFESSIONAL_LABEL[site.professionalType] ?? 'Real estate'}</Chip>}
+          {site.identityVerified && <Chip icon={<BadgeCheck size={15} className="text-emerald-600 dark:text-emerald-400" />}>Identity reviewed by RentOS</Chip>}
+          {site.contact.city && <Chip icon={<MapPin size={14} className="site-accent" />}>{site.contact.city}</Chip>}
+          {site.contact.hours && <Chip icon={<Clock size={14} className="site-accent" />}>{site.contact.hours}</Chip>}
         </div>
       </section>
 
       <section className="mx-auto mt-10 max-w-6xl px-4 sm:px-6">
         <div className={`grid gap-10 ${site.aboutImageUrl ? 'md:grid-cols-[1.1fr_1fr]' : ''}`}>
-          <div className="whitespace-pre-line text-lg leading-relaxed text-slate-700">{site.about || `${site.name} helps people find homes to rent and buy. Every enquiry is handled on RentOS.`}</div>
+          <div className="whitespace-pre-line text-lg leading-relaxed text-primary-dark/80 dark:text-gray-300">{site.about || `${site.name} helps people find homes to rent and buy. Every enquiry is handled on RentOS.`}</div>
           {site.aboutImageUrl && <img src={site.aboutImageUrl} alt="" className="aspect-[4/5] w-full rounded-3xl object-cover md:sticky md:top-24" />}
         </div>
       </section>
 
       {(site.services.length > 0 || site.serviceAreas.length > 0) && (
         <section className="mx-auto mt-16 max-w-6xl px-4 sm:px-6">
-          <div className="grid gap-10 rounded-3xl bg-white p-6 ring-1 ring-slate-900/5 md:grid-cols-2 md:p-10">
+          <div className="surface-card relative grid gap-10 overflow-hidden rounded-3xl border p-6 md:grid-cols-2 md:p-10">
+            <IconWatermark icon={Building2} className="-bottom-10 -right-8 size-56 rotate-[-10deg]" />
             {site.services.length > 0 && (
-              <div>
+              <div className="relative">
                 <SectionHeading eyebrow="What we do" title="Services" />
                 <ul className="space-y-3">
-                  {site.services.map((service) => <li key={service} className="flex items-center gap-3 text-base text-slate-700"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />{service}</li>)}
+                  {site.services.map((service) => <li key={service} className="flex items-center gap-3 text-base text-primary-dark dark:text-gray-200"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />{service}</li>)}
                 </ul>
               </div>
             )}
             {site.serviceAreas.length > 0 && (
-              <div>
+              <div className="relative">
                 <SectionHeading eyebrow="Where we work" title="Areas we cover" />
                 <ul className="flex flex-wrap gap-2">
-                  {site.serviceAreas.map((area) => <li key={area} className="inline-flex items-center gap-1.5 rounded-full bg-[#f7f5f2] px-4 py-2 text-sm font-medium text-slate-700"><MapPin size={13} className="text-[var(--site-color)]" />{area}</li>)}
+                  {site.serviceAreas.map((area) => <li key={area}><Chip icon={<MapPin size={13} className="site-accent" />}>{area}</Chip></li>)}
                 </ul>
               </div>
             )}
@@ -59,9 +60,10 @@ export function SiteAbout() {
       )}
 
       <section className="mx-auto mt-16 max-w-6xl px-4 sm:px-6">
-        <Link to={sitePath(base, '/properties')} className="group flex items-center justify-between rounded-3xl px-6 py-8 text-[var(--site-on-color)] md:px-10" style={{ background: color }}>
-          <span className="font-serif text-2xl font-semibold md:text-3xl">See our properties</span>
-          <ArrowRight size={28} className="transition group-hover:translate-x-1" />
+        <Link to={sitePath(base, '/properties')} className="group relative flex items-center justify-between overflow-hidden rounded-3xl px-6 py-8 shadow-[0_18px_56px_rgba(15,31,51,0.16)] md:px-10" style={{ background: color, color: 'var(--site-on-color)' }}>
+          <IconWatermark icon={Home} tone="brand" className="-right-4 -top-10 size-44 rotate-[-10deg]" />
+          <span className="relative font-display text-2xl font-extrabold md:text-3xl">See our properties</span>
+          <ArrowRight size={28} className="relative transition group-hover:translate-x-1" />
         </Link>
       </section>
     </>

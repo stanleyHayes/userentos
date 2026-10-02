@@ -1,5 +1,6 @@
 import { ArrowUpRight } from 'lucide-react'
 import { bylineOf, type NewsAttribution } from '@/lib/news'
+import { buttonVariants } from '@/components/ui/buttonVariants'
 
 /** The author's logo (or initial); the RentOS initial for RentOS's own articles. */
 export function NewsAvatar({ post, className = 'h-8 w-8 text-xs' }: { post: NewsAttribution; className?: string }) {
@@ -22,7 +23,7 @@ export function MoreFromWebsite({ post }: { post: NewsAttribution }) {
   const byline = bylineOf(post)
   if (!byline.url) return null
   return (
-    <a href={byline.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-dark transition-colors hover:border-primary/40 hover:text-primary dark:border-[#252a3a] dark:text-white dark:hover:text-blue-300">
+    <a href={byline.url} target="_blank" rel="noopener" className={buttonVariants({ variant: 'outline' })}>
       More from {byline.name} <ArrowUpRight size={14} />
     </a>
   )

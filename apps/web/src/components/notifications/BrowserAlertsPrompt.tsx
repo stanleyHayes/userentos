@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { buttonVariants } from '@/components/ui/buttonVariants'
 import { BellRing, X } from 'lucide-react'
 import { enableBrowserAlerts, useBrowserAlerts } from '@/lib/browserAlerts'
 
@@ -28,7 +29,7 @@ export function BrowserAlertsBanner() {
         type="button"
         disabled={busy}
         onClick={async () => { setBusy(true); await enableBrowserAlerts(); setBusy(false) }}
-        className="flex-shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-light disabled:opacity-60 dark:bg-blue-500"
+        className={buttonVariants({ size: 'sm', className: 'flex-shrink-0' })}
       >
         Turn on
       </button>
@@ -64,7 +65,7 @@ export function BrowserAlertsSetting() {
           type="button"
           disabled={busy}
           onClick={async () => { setBusy(true); await enableBrowserAlerts(); setBusy(false) }}
-          className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-light disabled:opacity-60 dark:bg-blue-500"
+          className={buttonVariants({ size: 'sm', className: 'shrink-0' })}
         >
           Turn on
         </button>

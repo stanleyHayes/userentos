@@ -92,7 +92,7 @@ function DecisionCard({ item }: { item: Decision }) {
       </div>
 
       {/* Masked: digits, emails, links and handles were removed before storage. */}
-      <p className="rounded-lg bg-surface px-3 py-2 font-mono text-xs leading-relaxed text-primary-dark dark:bg-[#0c0e1a] dark:text-gray-300">{item.maskedExcerpt || '(empty)'}</p>
+      <p className="neumorphic-inset rounded-lg px-3 py-2 font-mono text-xs leading-relaxed text-primary-dark dark:text-gray-300">{item.maskedExcerpt || '(empty)'}</p>
 
       <div className="flex flex-wrap gap-1.5">
         {item.reasonCodes.map((code) => (
@@ -166,7 +166,7 @@ export function AdminTrustPage() {
             {s.reasons.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {s.reasons.map((r) => (
-                  <span key={r.code} className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-semibold text-primary-dark dark:bg-[#0c0e1a] dark:text-gray-200">{human(r.code)} · {r.count}</span>
+                  <span key={r.code} className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-semibold text-primary-dark dark:bg-white/[0.04] dark:text-gray-200">{human(r.code)} · {r.count}</span>
                 ))}
                 {s.channels.map((c) => (
                   <span key={c.channel} className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">{c.channel} · {c.count}</span>
@@ -183,7 +183,7 @@ export function AdminTrustPage() {
             key={v.key}
             type="button"
             onClick={() => { setView(v.key); setPage(1) }}
-            className={cn('rounded-full px-3 py-1.5 text-xs font-semibold transition-colors', view === v.key ? 'bg-primary text-white dark:bg-blue-500' : 'bg-surface text-muted hover:text-primary-dark dark:bg-[#0c0e1a] dark:text-gray-400')}
+            className={cn('rounded-full px-3 py-1.5 text-xs font-semibold transition-colors', view === v.key ? 'bg-primary text-white dark:bg-blue-500' : 'bg-surface text-muted hover:text-primary dark:bg-white/[0.04] dark:text-gray-400')}
           >
             {v.label}
           </button>

@@ -64,9 +64,9 @@ export function SiteApp({ slug: hostSlug }: { slug?: string }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f7f5f2]">
-        <div className="h-16 border-b border-slate-900/5 bg-white" />
-        <div className="h-[420px] animate-pulse bg-slate-200" />
+      <div className="public-shell-bg min-h-screen">
+        <div className="surface-card h-16 border-b" />
+        <div className="h-[420px] animate-pulse bg-primary/5 dark:bg-white/[0.03]" />
       </div>
     )
   }

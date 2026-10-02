@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye } from 'lucide-react'
+import { Search, BookOpen, Calendar, ArrowLeft, ArrowRight, Share2, User, Clock, PenSquare, Trash2, Plus, ChevronLeft, ChevronRight, FileText, TrendingUp, Eye, Newspaper } from 'lucide-react'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import { GridSkeleton } from '@/components/ui/Skeleton'
@@ -17,6 +17,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/stores/authStore'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
+import { DoodleUnderline } from '@/components/ui/Doodles'
+import { IconWatermark } from '@/components/ui/Watermark'
 
 interface BlogPost extends NewsArticle {
   id: string; title: string; slug: string; excerpt: string; content: string
@@ -42,6 +44,7 @@ export function BlogPage() {
   const [page, setPage] = useState(1)
   const [scope, setScope] = useState<Source>('all')
   const { attach: pillAttach, style: pillStyle, visible: pillVisible } = useSlidingIndicator<HTMLDivElement>(tag ?? '__all__')
+  const { attach: scopeAttach, style: scopeStyle, visible: scopeVisible } = useSlidingIndicator<HTMLDivElement>(scope)
 
   const user = useAuthStore((s) => s.user)
   const isAdmin = user && ADMIN_ROLES.includes(user.activeRole)
@@ -233,7 +236,9 @@ export function BlogPage() {
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="relative overflow-hidden">
+          <DoodleUnderline className="absolute -top-1 -right-1 text-primary/10 dark:text-blue-400/10 w-12 h-12 pointer-events-none" />
+          <IconWatermark icon={Newspaper} className="right-10 top-1/2 size-28 -translate-y-1/2 rotate-[-8deg]" />
           <h1 className="text-2xl font-extrabold font-display text-primary-dark dark:text-white tracking-tight">RentOS Real Estate News</h1>
           <p className="text-sm text-muted dark:text-gray-400 mt-1">Guides from RentOS and market news from agents across Ghana</p>
         </div>
@@ -246,15 +251,17 @@ export function BlogPage() {
         )}
       </div>
 
-      <div role="tablist" aria-label="Source" className="flex flex-wrap gap-1.5">
+      <div ref={scopeAttach} role="tablist" aria-label="Source" className="relative isolate flex flex-wrap gap-1.5">
+        <span aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-primary border border-primary transition-[transform,width,height] duration-300 ease-out" style={{ ...scopeStyle, opacity: scopeVisible ? 1 : 0 }} />
         {SOURCES.map((s) => (
           <button
             key={s.value}
             type="button"
             role="tab"
+            data-tab-key={s.value}
             aria-selected={scope === s.value}
             onClick={() => { setScope(s.value); setTag(undefined); setPage(1) }}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${scope === s.value ? 'bg-primary-dark text-white dark:bg-white dark:text-primary-dark' : 'bg-surface text-muted hover:text-primary-dark dark:bg-white/5 dark:text-gray-400 dark:hover:text-white'}`}
+            className={`relative z-10 text-sm font-semibold px-4 py-2 rounded-full border transition-colors ${scope === s.value ? 'text-white border-transparent' : 'border-border dark:border-[#252a3a] text-muted dark:text-gray-400 hover:border-primary/50'}`}
           >
             {s.label}
           </button>
