@@ -80,6 +80,11 @@ export function safeAppRoute(value: unknown): string | null {
   const path = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath
 
   if (REFUSED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) return null
+  // Message alerts link to the web inbox with the conversation picked; the app opens the chat itself.
+  if (path === '/messages') {
+    const conversation = new URLSearchParams(query.slice(1)).get('conversationId')
+    if (conversation && new RegExp(`^${ID}$`).test(conversation)) return `/chat/${conversation}`
+  }
   // Only screens that exist keep their query string; aliases drop it.
   if (MOBILE_SCREENS.has(path)) return `${path}${query}`
   for (const [pattern, target] of WEB_ALIASES) {

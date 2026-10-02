@@ -19,7 +19,7 @@ export interface ReportTarget {
   noun: string
 }
 
-type Reason = 'scam_or_fraud' | 'misleading_listing' | 'not_available' | 'offensive_content' | 'spam' | 'duplicate' | 'illegal' | 'other'
+type Reason = 'scam_or_fraud' | 'misleading_listing' | 'not_available' | 'offensive_content' | 'spam' | 'duplicate' | 'illegal' | 'off_platform_contact' | 'other'
 
 const LISTING_REASONS: { value: Reason; label: string }[] = [
   { value: 'scam_or_fraud', label: 'Scam or fraud' },
@@ -28,6 +28,7 @@ const LISTING_REASONS: { value: Reason; label: string }[] = [
   { value: 'duplicate', label: 'Duplicate listing' },
   { value: 'offensive_content', label: 'Offensive or abusive content' },
   { value: 'illegal', label: 'Illegal or discriminatory' },
+  { value: 'off_platform_contact', label: 'Shares contact details or asks to deal outside RentOS' },
   { value: 'other', label: 'Something else' },
 ]
 
@@ -37,6 +38,7 @@ const CONTENT_REASONS: { value: Reason; label: string }[] = [
   { value: 'misleading_listing', label: 'False or misleading' },
   { value: 'scam_or_fraud', label: 'Scam or fraud' },
   { value: 'illegal', label: 'Illegal content' },
+  { value: 'off_platform_contact', label: 'Shares contact details or asks to deal outside RentOS' },
   { value: 'other', label: 'Something else' },
 ]
 

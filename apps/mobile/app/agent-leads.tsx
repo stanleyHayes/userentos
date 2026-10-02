@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator,
-  TouchableOpacity, Alert, Linking,
+  TouchableOpacity, Alert,
 } from 'react-native'
-import { Stack } from 'expo-router'
+import { Stack, router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
@@ -13,11 +13,15 @@ import { api } from '../lib/api'
 
 type LeadStatus = 'new' | 'contacted' | 'viewing' | 'applied' | 'closed' | 'lost'
 
+/**
+ * The enquirer's phone and email are not shown (contact protection): agents
+ * reply in RentOS messages, and the enquirer gets an alert.
+ */
 interface Lead {
   id: string
   contactName: string
-  contactPhone: string
-  contactEmail?: string
+  /** The enquirer has a RentOS account to reply to. */
+  canReply?: boolean
   message?: string
   status: LeadStatus
   propertyTitle: string | null
@@ -67,6 +71,20 @@ export default function AgentLeadsScreen() {
   const qc = useQueryClient()
   const [filter, setFilter] = useState<LeadStatus | 'all'>('all')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [replyingId, setReplyingId] = useState<string | null>(null)
+
+  // Opens (or reuses) the conversation with the enquirer.
+  async function reply(lead: Lead) {
+    setReplyingId(lead.id)
+    try {
+      const { conversationId } = await api.post<{ conversationId: string }>(`/agent/leads/${lead.id}/conversation`, {})
+      router.push(`/chat/${conversationId}`)
+    } catch (err) {
+      Alert.alert('Could not open the conversation', (err as Error).message)
+    } finally {
+      setReplyingId(null)
+    }
+  }
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['agent-leads', filter],
@@ -164,26 +182,22 @@ export default function AgentLeadsScreen() {
                   </View>
                 </View>
 
-                <View style={s.contactRow}>
-                  <TouchableOpacity
-                    style={[s.contactChip, { borderColor: c.border }]}
-                    onPress={() => Linking.openURL(`tel:${lead.contactPhone}`)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="call-outline" size={13} color={c.primary} />
-                    <Text style={[s.contactChipText, { color: c.primary }]}>{lead.contactPhone}</Text>
-                  </TouchableOpacity>
-                  {lead.contactEmail ? (
+                {lead.canReply !== false ? (
+                  <View style={s.contactRow}>
                     <TouchableOpacity
                       style={[s.contactChip, { borderColor: c.border }]}
-                      onPress={() => Linking.openURL(`mailto:${lead.contactEmail}`)}
+                      onPress={() => void reply(lead)}
+                      disabled={replyingId === lead.id}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
                     >
-                      <Ionicons name="mail-outline" size={13} color={c.primary} />
-                      <Text style={[s.contactChipText, { color: c.primary }]} numberOfLines={1}>Email</Text>
+                      {replyingId === lead.id ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name="chatbubble-ellipses-outline" size={13} color={c.primary} />}
+                      <Text style={[s.contactChipText, { color: c.primary }]}>Reply on RentOS</Text>
                     </TouchableOpacity>
-                  ) : null}
-                </View>
+                  </View>
+                ) : (
+                  <Text style={[s.cardSub, { color: c.muted }]}>This enquirer no longer has a RentOS account.</Text>
+                )}
 
                 {lead.message ? (
                   <Text style={[s.message, { color: c.textLight }]} numberOfLines={4}>"{lead.message}"</Text>

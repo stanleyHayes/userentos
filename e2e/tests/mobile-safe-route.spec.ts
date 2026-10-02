@@ -75,6 +75,9 @@ test('web notification paths map to their mobile screens', () => {
   expect(safeAppRoute('/payments?status=due')).toBe('/payments?status=due')
   expect(safeAppRoute('/disputes/')).toBe('/disputes')
   expect(safeAppRoute('/messages#top')).toBe('/messages')
+  // Message alerts name the conversation the way the web inbox does; the app opens that chat.
+  expect(safeAppRoute('/messages?conversationId=6abf72734892798f2f269be6')).toBe('/chat/6abf72734892798f2f269be6')
+  expect(safeAppRoute('/messages?conversationId=../../auth')).toBe('/messages?conversationId=../../auth')
   for (const route of ['/', '/payments', '/savings', '/disputes', '/maintenance', '/insurance', '/profile-access', '/profile', '/achievements', '/messages', '/applications', '/properties']) {
     expect(safeAppRoute(route)).toBe(route)
     expect(screenExists(route), route).toBe(true)

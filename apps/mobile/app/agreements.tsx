@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isFeeRequired } from '../lib/actionFees'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as SecureStore from 'expo-secure-store'
@@ -162,7 +163,9 @@ export default function AgreementsScreen() {
       setSignTarget(null)
       await load()
     } catch (e) {
-      Alert.alert('Could not sign', (e as { message?: string }).message || 'Please try again')
+      // GH₵5 signing fee (brief §08): a digital unlock, which the app does not sell.
+      if (isFeeRequired(e)) Alert.alert('Signing fee', 'Signing this agreement needs a one-time GH₵5 fee, which can\'t be paid in the app. Reading it here stays free.')
+      else Alert.alert('Could not sign', (e as { message?: string }).message || 'Please try again')
     } finally { setSigning(null) }
   }
 

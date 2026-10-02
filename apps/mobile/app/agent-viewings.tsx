@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator,
-  TouchableOpacity, Alert, Linking,
+  TouchableOpacity, Alert,
 } from 'react-native'
-import { Stack } from 'expo-router'
+import { Stack, router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
@@ -12,10 +12,12 @@ import { api } from '../lib/api'
 
 type ViewingStatus = 'requested' | 'confirmed' | 'completed' | 'cancelled'
 
+/** The viewer's phone is not shown (contact protection); the agent messages them on RentOS. */
 interface Viewing {
   id: string
   viewerName: string
-  viewerPhone: string
+  requesterId?: string
+  propertyId?: string
   date: string
   time: string
   notes?: string
@@ -72,6 +74,15 @@ function ViewingsList({ asRequester }: { asRequester: boolean }) {
   const c = useThemeColors()
   const qc = useQueryClient()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  async function messageViewer(v: Viewing) {
+    try {
+      const conversation = await api.post<{ id: string }>('/chat/conversations', { participantId: v.requesterId, propertyId: v.propertyId })
+      router.push(`/chat/${conversation.id}`)
+    } catch (err) {
+      Alert.alert('Could not open the conversation', (err as Error).message)
+    }
+  }
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['agent-viewings', asRequester],
@@ -159,14 +170,17 @@ function ViewingsList({ asRequester }: { asRequester: boolean }) {
                   <Ionicons name="time-outline" size={13} color={c.primary} />
                   <Text style={[s.metaText, { color: c.text }]}>{v.time}</Text>
                 </View>
-                <TouchableOpacity
-                  style={[s.metaBox, neuInset(c)]}
-                  onPress={() => Linking.openURL(`tel:${v.viewerPhone}`)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="call-outline" size={13} color={c.primary} />
-                  <Text style={[s.metaText, { color: c.primary }]}>{v.viewerPhone}</Text>
-                </TouchableOpacity>
+                {!asRequester && v.requesterId ? (
+                  <TouchableOpacity
+                    style={[s.metaBox, neuInset(c)]}
+                    onPress={() => void messageViewer(v)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={13} color={c.primary} />
+                    <Text style={[s.metaText, { color: c.primary }]}>Message</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               {v.notes ? (

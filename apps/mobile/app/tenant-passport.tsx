@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isFeeRequired } from '../lib/actionFees'
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { api } from '../lib/api'
@@ -44,7 +45,11 @@ export default function TenantPassportScreen() {
     try {
       const result = await api.post<{ url: string }>('/tenant-passport/share', {})
       await Share.share({ message: `View my RentOS Tenant Passport: ${result.url}` })
-    } catch (error) { Alert.alert('Could not share', (error as Error).message) }
+    } catch (error) {
+      // GH₵5 per export (brief §08): a digital unlock, which the app does not sell.
+      if (isFeeRequired(error)) Alert.alert('Export fee', 'Sharing your passport counts as an export, which costs GH₵5 and can\'t be paid in the app. Viewing it here stays free.')
+      else Alert.alert('Could not share', (error as Error).message)
+    }
   }
 
   return (

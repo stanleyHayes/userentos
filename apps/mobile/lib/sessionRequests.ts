@@ -39,9 +39,17 @@ export function createSessionRequests(dependencies: {
     }
     const text = await response.text()
     check()
-    let data: { error?: string; data?: unknown } = {}
+    let data: { error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null; code?: string; fee?: unknown } = {}
     try { data = text ? JSON.parse(text) : {} } catch { data = {} }
-    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`)
+    // Screens tell a stopped message (contact protection), a fee (402) and a
+    // payment already under way (409, with that payment) apart by these.
+    if (!response.ok) throw Object.assign(new Error(data.error || `Request failed (${response.status})`), {
+      status: response.status,
+      ...(data.blocked ? { blocked: true, reason: data.reason ?? null, decisionId: data.decisionId ?? null } : {}),
+      ...(data.code ? { code: data.code } : {}),
+      ...(data.fee ? { fee: data.fee } : {}),
+      ...(data.data ? { data: data.data } : {}),
+    })
     return data.data
   }
 }

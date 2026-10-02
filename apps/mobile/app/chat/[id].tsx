@@ -1,4 +1,5 @@
 import { createMessageSnapshots } from '../../lib/messageSnapshots'
+import { isContactBlocked, showContactBlocked } from '../../lib/contactProtection'
 import { joinSocketRoom } from '../../../../packages/shared/socketRoom'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Vibration, Alert } from 'react-native'
@@ -80,6 +81,7 @@ export default function ChatScreen() {
     Alert.alert(targetType === 'user' ? 'Report user' : 'Report message', 'Choose the reason for reporting this message.', [
       { text: 'Abuse or offensive content', onPress: () => { void submit('offensive_content') } },
       { text: 'Scam or spam', onPress: () => { void submit('scam_or_fraud') } },
+      { text: 'Sharing contact details or moving the deal off RentOS', onPress: () => { void submit('off_platform_contact') } },
       { text: 'Cancel', style: 'cancel' },
     ])
   }
@@ -254,7 +256,11 @@ export default function ChatScreen() {
       messageSnapshots.current.record(id, msg)
       setMessages((prev) => prev.some(m => m.id === optimistic.id) ? [msg, ...prev.filter(m => m.id !== optimistic.id && m.id !== msg.id)] : prev)
     }
-    catch { pendingMessages.current.delete(optimistic.id); messageSnapshots.current.remove(id, optimistic.id); setMessages((prev) => prev.filter((m) => m.id !== optimistic.id)); setInputText(text) }
+    catch (error) {
+      pendingMessages.current.delete(optimistic.id); messageSnapshots.current.remove(id, optimistic.id); setMessages((prev) => prev.filter((m) => m.id !== optimistic.id)); setInputText(text)
+      // Stopped by contact protection: say why, keep the text, offer a review.
+      if (isContactBlocked(error)) showContactBlocked(error)
+    }
     finally { setSending(false) }
   }
 
