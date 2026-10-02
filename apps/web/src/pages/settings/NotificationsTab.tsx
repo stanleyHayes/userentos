@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { useSettings, useUpdateSettings } from '@/hooks/useApi'
 import { Bell, Mail, Phone, CreditCard, ChevronRight } from 'lucide-react'
+import { BrowserAlertsSetting } from '@/components/notifications/BrowserAlertsPrompt'
 import { parseNotificationPreferences, type NotificationPreferenceKey } from '../../../../../packages/shared/notificationPreferences'
 
 const notificationPrefs: { key: NotificationPreferenceKey; label: string; desc: string; icon: React.ReactNode }[] = [
   { key: 'email', label: 'Email Notifications', desc: 'Receive updates via email', icon: <Mail size={16} /> },
   { key: 'sms', label: 'SMS Notifications', desc: 'Get text message alerts', icon: <Phone size={16} /> },
-  { key: 'push', label: 'Push Notifications', desc: 'Browser push alerts', icon: <Bell size={16} /> },
+  { key: 'push', label: 'Push Notifications', desc: 'Alerts on your phone and in your browser', icon: <Bell size={16} /> },
   { key: 'payment', label: 'Payment Reminders', desc: 'Rent due date reminders', icon: <CreditCard size={16} /> },
   { key: 'savings', label: 'Savings Alerts', desc: 'Goal progress & milestones', icon: <ChevronRight size={16} /> },
 ]
@@ -87,6 +88,9 @@ export function NotificationsTab() {
                   </button>
                 </div>
               ))}
+            </div>
+            <div className="mt-2 border-t border-border/30 dark:border-[#252a3a]/30">
+              <BrowserAlertsSetting />
             </div>
             {failed && (
               <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 text-sm text-red-700 dark:text-red-400">

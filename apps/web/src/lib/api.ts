@@ -12,11 +12,11 @@ class ApiClient {
 
   /** Parse a response body as JSON, tolerating non-JSON infrastructure error
    * pages (proxy 502/504 HTML) and empty bodies. */
-  private async parseBody(res: Response): Promise<{ error?: string; data?: unknown }> {
+  private async parseBody(res: Response): Promise<{ error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null }> {
     const text = await res.text()
     if (!text) return {}
     try {
-      return JSON.parse(text) as { error?: string; data?: unknown }
+      return JSON.parse(text) as { error?: string; data?: unknown; blocked?: boolean; reason?: string | null; decisionId?: string | null }
     } catch {
       return {}
     }
@@ -72,7 +72,12 @@ class ApiClient {
 
     if (!res.ok) {
       // The status lets screens tell "doesn't exist" apart from "couldn't load".
-      throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status })
+      // A message stopped by contact protection also says so, and which
+      // decision to appeal (lib/contactProtection.ts).
+      throw Object.assign(new Error(data.error || `Request failed (${res.status})`), {
+        status: res.status,
+        ...(data.blocked ? { blocked: true, reason: data.reason ?? null, decisionId: data.decisionId ?? null } : {}),
+      })
     }
 
     return data.data as T

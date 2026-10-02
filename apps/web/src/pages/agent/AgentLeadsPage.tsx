@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { cn, formatDate } from '@/lib/utils'
-import { useAgentLeads, useUpdateLeadStatus, type AgentLead, type LeadStatus } from '@/hooks/useAgent'
-import { Handshake, Phone, Mail, Building2, ArrowRight, XCircle, Loader2, MessageCircle, Globe, Heart } from 'lucide-react'
+import { useAgentLeads, useUpdateLeadStatus, useOpenLeadConversation, type AgentLead, type LeadStatus } from '@/hooks/useAgent'
+import { Handshake, Building2, ArrowRight, XCircle, Loader2, MessageCircle, MessagesSquare, Globe, Heart, ShieldCheck } from 'lucide-react'
 
 const STATUS_FILTERS: { value: LeadStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
@@ -45,6 +45,8 @@ const CHANNELS: Record<'interest' | 'whatsapp' | 'website', { label: string; ico
 
 function LeadCard({ lead, highlighted }: { lead: AgentLead; highlighted: boolean }) {
   const updateStatus = useUpdateLeadStatus()
+  const openConversation = useOpenLeadConversation()
+  const navigate = useNavigate()
   const next = NEXT_STEP[lead.status]
   const active = lead.status !== 'closed' && lead.status !== 'lost'
   const ref = useRef<HTMLDivElement>(null)
@@ -75,14 +77,21 @@ function LeadCard({ lead, highlighted }: { lead: AgentLead; highlighted: boolean
         ))}
       </div>
 
-      <div className="neumorphic-inset rounded-xl p-3 space-y-1.5">
-        <a href={`tel:${lead.contactPhone}`} className="flex items-center gap-2 text-xs font-semibold text-primary hover:underline dark:text-blue-400">
-          <Phone size={12} className="flex-shrink-0" /> {lead.contactPhone}
-        </a>
-        {lead.contactEmail && (
-          <a href={`mailto:${lead.contactEmail}`} className="flex items-center gap-2 text-xs font-semibold text-primary hover:underline dark:text-blue-400">
-            <Mail size={12} className="flex-shrink-0" /> {lead.contactEmail}
-          </a>
+      {/* Enquirers' phone numbers and emails stay private: the agent replies on RentOS. */}
+      <div className="neumorphic-inset flex flex-wrap items-center justify-between gap-2 rounded-xl p-3">
+        <span className="flex items-center gap-1.5 text-[11px] text-muted dark:text-gray-400">
+          <ShieldCheck size={12} className="flex-shrink-0 text-accent" /> Replies stay on RentOS
+        </span>
+        {lead.canReply === false ? (
+          <span className="text-xs text-muted dark:text-gray-500">This person closed their account</span>
+        ) : (
+          <Button
+            size="sm"
+            disabled={openConversation.isPending}
+            onClick={() => openConversation.mutate(lead.id, { onSuccess: ({ conversationId }) => navigate(`/messages?conversationId=${conversationId}`) })}
+          >
+            {openConversation.isPending ? <Loader2 size={13} className="animate-spin" /> : <MessagesSquare size={13} />} Reply on RentOS
+          </Button>
         )}
       </div>
 
@@ -132,7 +141,7 @@ export function AgentLeadsPage() {
       <PageHeader
         eyebrow="Portfolio"
         title="Leads & enquiries"
-        description="Everyone who asked about your listings — on WhatsApp, your website or RentOS. Work each one through the pipeline."
+        description="Everyone who asked about your listings, from RentOS or your website. Reply in RentOS messages and work each one through the pipeline."
         icon={<Handshake size={22} />}
       />
 

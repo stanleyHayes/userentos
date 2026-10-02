@@ -1,67 +1,40 @@
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { api } from '@/lib/api'
+import { syncBrowserAlerts, unsubscribeBrowserAlerts } from '@/lib/browserAlerts'
 
-let registered = false
-let generation = 0
+let synced: string | null = null
 
-/** Reset on logout so the NEXT user on the same tab registers their own push. */
+/** Sign out: this browser stops receiving the account's push alerts. */
 useAuthStore.subscribe((state, prev) => {
   if (prev.isAuthenticated && !state.isAuthenticated) {
-    registered = false
-    // Invalidate any in-flight registration from the previous user
-    generation++
+    synced = null
+    void unsubscribeBrowserAlerts()
   }
 })
 
+/**
+ * Keeps this browser's push subscription registered for the signed-in
+ * account (only once the person has allowed notifications; this never asks),
+ * and opens the page a clicked notification points to.
+ */
 export function usePushNotifications() {
-  const token = useAuthStore((s) => s.token)
+  const userId = useAuthStore((s) => s.user?.id)
+  const navigate = useNavigate()
 
   useEffect(() => {
-    if (!token || registered) return
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) return
+    if (!userId || synced === userId) return
+    synced = userId
+    void syncBrowserAlerts()
+  }, [userId])
 
-    // Web push needs the server's VAPID public key; without it
-    // pushManager.subscribe() always throws. Skip silently until configured.
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
-    if (!vapidKey) return
-
-    function urlBase64ToUint8Array(base64String: string): Uint8Array {
-      const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-      const rawData = window.atob(base64)
-      return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)))
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: string } | undefined
+      if (data?.type === 'rentos:navigate' && typeof data.url === 'string' && data.url.startsWith('/')) navigate(data.url)
     }
-
-    // Snapshot the generation so a stale resolution can't set `registered`
-    const gen = generation
-
-    async function registerPush() {
-      try {
-        const permission = await Notification.requestPermission()
-        if (permission !== 'granted') return
-
-        const registration = await navigator.serviceWorker.ready
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey!) as BufferSource,
-        })
-
-        const subscriptionJSON = subscription.toJSON()
-        if (subscriptionJSON.endpoint) {
-          await api.post('/push/register', {
-            token: subscriptionJSON.endpoint,
-            platform: 'web',
-          })
-          // A logout during the awaits above bumps the generation — don't let
-          // this stale resolution block the next user's registration.
-          if (generation === gen) registered = true
-        }
-      } catch {
-        // Push not supported or permission denied — fail silently
-      }
-    }
-
-    registerPush()
-  }, [token])
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [navigate])
 }

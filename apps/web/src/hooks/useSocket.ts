@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { showBackgroundAlert } from '@/lib/browserAlerts'
 import { io, Socket } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -133,9 +134,11 @@ export function useSocket(): Socket | null {
       const handleExpiry = () => { void recovery.run() }
       s.on('session:expired', handleExpiry)
 
-      // Listen for real-time notifications → show toast
-      const handleNotification = (data: { title: string; message: string }) => {
+      // Listen for real-time notifications → show toast, and a system
+      // notification when this tab is in the background (lib/browserAlerts.ts).
+      const handleNotification = (data: { title: string; message: string; actionUrl?: string }) => {
         useToastStore.getState().addToast(`${data.title}: ${data.message}`, 'info')
+        void showBackgroundAlert(data)
       }
       s.on('notification:new', handleNotification)
 

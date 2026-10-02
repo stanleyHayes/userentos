@@ -244,6 +244,7 @@ const navGroups: NavGroup[] = [
       { label: 'Model Performance', path: '/admin/model-performance', icon: <Gauge size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Content Reports', path: '/admin/content-reports', icon: <Scale size={20} />, roles: ['admin', 'super_admin'] },
       { label: 'Complaint Review', path: '/admin/complaint-review', icon: <Scale size={20} />, roles: ['admin', 'super_admin'] },
+      { label: 'Contact Protection', path: '/admin/contact-protection', icon: <ShieldCheck size={20} />, roles: ['admin', 'super_admin'] },
     ],
   },
   { label: 'Platform Admin', icon: <Crown size={15} />, labelKey: 'nav.platformAdmin', roles: ['admin', 'super_admin'], defaultOpen: false,

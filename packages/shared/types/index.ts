@@ -172,15 +172,16 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'rent_payment' | 'inves
 // published Terms or Privacy Policy text changes materially — every user whose
 // stored acceptance is older is then asked to accept again.
 
-export const TERMS_VERSION = '2026-09-25'
-export const PRIVACY_VERSION = '2026-09-26'
+export const TERMS_VERSION = '2026-10-02'
+export const PRIVACY_VERSION = '2026-10-02'
 /**
- * The privacy version before the current one. Account creation also accepts
- * it for a while after a bump, because store builds of the app (no over-the-
- * air updates) and web tabs loaded before the deploy still send it; the
- * account is then asked to accept the current version straight away.
+ * The versions before the current ones. Account creation also accepts them
+ * for a while after a bump, because store builds of the app (no over-the-air
+ * updates) and web tabs loaded before the deploy still send them; the account
+ * is then asked to accept the current versions straight away.
  */
-export const PREVIOUS_PRIVACY_VERSION = '2026-09-25'
+export const PREVIOUS_TERMS_VERSION = '2026-09-25'
+export const PREVIOUS_PRIVACY_VERSION = '2026-09-26'
 
 /** Evidence of a user's acceptance (Act 843 s.20; store terms). */
 export interface UserConsents {

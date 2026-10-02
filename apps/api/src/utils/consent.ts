@@ -1,6 +1,6 @@
 import type { Request } from 'express'
 import { z } from 'zod'
-import { TERMS_VERSION, PRIVACY_VERSION, PREVIOUS_PRIVACY_VERSION } from '../types/index.js'
+import { TERMS_VERSION, PRIVACY_VERSION, PREVIOUS_TERMS_VERSION, PREVIOUS_PRIVACY_VERSION } from '../types/index.js'
 import type { IUserConsents } from '../models/User.js'
 
 const STALE_VERSION = 'The Terms of Service or Privacy Policy has been updated. Please reload and review the current version before continuing.'
@@ -21,13 +21,14 @@ export type Acceptance = z.infer<typeof acceptanceSchema>
 
 /**
  * Account creation (registration, invitation acceptance): the same, except
- * the previous Privacy Policy version is also accepted. App builds already in
+ * the previous Terms and Privacy Policy versions are also accepted. App builds already in
  * people's hands send the version they were built with, and there are no
  * over-the-air updates, so after a bump every sign-up from them was refused.
  * The version actually accepted is what gets stored, so isConsentRequired()
  * is true and the new account is asked to accept the current version.
  */
 export const signupAcceptanceSchema = acceptanceSchema.extend({
+  termsVersion: z.union([z.literal(TERMS_VERSION), z.literal(PREVIOUS_TERMS_VERSION)], { error: STALE_VERSION }),
   privacyVersion: z.union([z.literal(PRIVACY_VERSION), z.literal(PREVIOUS_PRIVACY_VERSION)], { error: STALE_VERSION }),
 })
 

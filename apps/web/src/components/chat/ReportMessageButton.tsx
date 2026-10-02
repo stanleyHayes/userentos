@@ -24,7 +24,7 @@ export function ReportMessageButton({ messageId, targetType = 'message' }: { mes
     <Modal open={open} onClose={() => { if (!pending) setOpen(false) }} title={targetType === 'user' ? 'Report user' : 'Report message'}>
       <p className="text-sm mb-4">The moderation team will review your report. You can also block this contact from the conversation header.</p>
       <label className="block mb-4">Reason<select aria-label="Report reason" className="block w-full border rounded p-2 bg-transparent" value={reason} onChange={event => setReason(event.target.value)}>
-        <option value="offensive_content">Abuse or offensive content</option><option value="spam">Spam</option><option value="scam_or_fraud">Scam or fraud</option><option value="illegal">Illegal content</option><option value="other">Other</option>
+        <option value="offensive_content">Abuse or offensive content</option><option value="spam">Spam</option><option value="scam_or_fraud">Scam or fraud</option><option value="off_platform_contact">Asked to talk, deal or pay outside RentOS</option><option value="illegal">Illegal content</option><option value="other">Other</option>
       </select></label>
       <label className="block mb-4">Additional details (optional)<textarea aria-label="Report details" className="block w-full border rounded p-2 bg-transparent" value={details} maxLength={2000} onChange={event => setDetails(event.target.value)} /></label>
       {error && <p role="alert" className="text-red-600 mb-3">{error}</p>}

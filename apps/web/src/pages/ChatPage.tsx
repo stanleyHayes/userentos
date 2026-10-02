@@ -1,4 +1,7 @@
 import { joinSocketRoom } from '../../../../packages/shared/socketRoom'
+import { isContactBlocked, type ContactBlockedError } from '@/lib/contactProtection'
+import { ContactBlockedNotice } from '@/components/trust/ContactBlockedNotice'
+import { BrowserAlertsBanner } from '@/components/notifications/BrowserAlertsPrompt'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useSearchParams } from 'react-router-dom'
@@ -101,6 +104,7 @@ export function ChatPage() {
   const { data: conversations, isLoading: convosLoading } = useConversations()
   const { data: messagesData } = useMessages(activeConversationId)
   const sendMessage = useSendMessage()
+  const [blockedError, setBlockedError] = useState<ContactBlockedError | null>(null)
   const markRead = useMarkConversationRead()
 
   const messages = messagesData?.items ?? []
@@ -350,9 +354,14 @@ export function ChatPage() {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     }
 
+    setBlockedError(null)
     sendMessage.mutate(
       { conversationId: activeConversationId, text: messageText.trim() },
-      { onSuccess: () => setMessageText('') }
+      {
+        onSuccess: () => setMessageText(''),
+        // Stopped by contact protection: keep the text, explain, offer a review.
+        onError: (err) => { if (isContactBlocked(err)) setBlockedError(err) },
+      }
     )
   }, [messageText, activeConversationId, sendMessage, socket])
 
@@ -399,7 +408,7 @@ export function ChatPage() {
         <PageHeader
           eyebrow="Conversations"
           title="Messages"
-          description="Chat with landlords, tenants, and property managers."
+          description="Chat with agents, landlords and tenants. Keep the conversation, viewing and payment on RentOS, where you are protected."
           icon={<MessageSquare size={22} />}
         />
         <Button onClick={() => setShowNewConversation(true)} className="gap-1.5">
@@ -407,6 +416,8 @@ export function ChatPage() {
           <span className="hidden sm:inline">New Message</span>
         </Button>
       </div>
+
+      <BrowserAlertsBanner />
 
       {/* Main chat container */}
       <Card className="flex-1 flex overflow-hidden !p-0">
@@ -634,6 +645,10 @@ export function ChatPage() {
 
               {/* Message input */}
               <div className="border-t border-border/60 dark:border-[#252a3a]/60 p-3 flex-shrink-0">
+                {blockedError && <ContactBlockedNotice error={blockedError} onDismiss={() => setBlockedError(null)} />}
+                {sendMessage.isError && !blockedError && (
+                  <p role="alert" className="mb-2 text-xs text-danger">{sendMessage.error instanceof Error ? sendMessage.error.message : 'Message not sent. Try again.'}</p>
+                )}
                 <div className="flex items-center gap-2">
                   <input
                     ref={inputRef}

@@ -10,9 +10,11 @@ export interface AgentLead {
   id: string
   propertyId: string
   contactName: string
-  contactPhone: string
-  contactEmail?: string
   message?: string
+  /** The RentOS conversation where the agent replies (enquirers' numbers are private). */
+  conversationId?: string
+  /** False when the enquirer has closed their account. */
+  canReply?: boolean
   status: LeadStatus
   propertyTitle: string | null
   createdAt: string
@@ -25,7 +27,8 @@ export interface AgentViewing {
   id: string
   propertyId: string
   viewerName: string
-  viewerPhone: string
+  /** The viewer's account, to message them on RentOS (their number is private). */
+  requesterId?: string
   date: string
   time: string
   status: ViewingStatus
@@ -65,11 +68,23 @@ export function useAgentLeads(filter: { status?: LeadStatus | ''; propertyId?: s
   })
 }
 
-/** POST /agent/leads/property/:propertyId — express interest in a listing. */
+/**
+ * POST /agent/leads/property/:propertyId — express interest in a listing. It
+ * opens a RentOS conversation with the agent; a message the contact screen
+ * stops comes back as a blocked error, shown in the form (not as a toast).
+ */
 export function useCreateLead() {
   return useMutation({
     mutationFn: ({ propertyId, message }: { propertyId: string; message?: string }) =>
       api.post<AgentLead>(`/agent/leads/property/${propertyId}`, { ...(message ? { message } : {}) }),
+    onError: (e: Error) => { if (!(e as { blocked?: boolean }).blocked) toast.error(e.message) },
+  })
+}
+
+/** "Reply on RentOS": the conversation with the enquirer, opened if needed. */
+export function useOpenLeadConversation() {
+  return useMutation({
+    mutationFn: (leadId: string) => api.post<{ conversationId: string }>(`/agent/leads/${leadId}/conversation`, {}),
     onError: (e: Error) => toast.error(e.message),
   })
 }

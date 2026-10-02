@@ -47,7 +47,7 @@ export function TermsPage() {
           title: 'What RentOS Does — and Does Not Do',
           content: (
             <>
-              <p>RentOS provides tools for finding and listing rental properties, applying, creating and signing tenancy agreements, recording and paying rent, saving towards rent, handling maintenance and disputes, and learning about Ghanaian rental law.</p>
+              <p>RentOS provides tools for finding homes to rent or buy, listing property, messaging agents and landlords, booking viewings, applying, creating and signing tenancy agreements, recording and paying rent, running a business website on RentOS, handling maintenance and disputes, and learning about Ghanaian rental law.</p>
               {list([
                 'RentOS is not a party to any tenancy between landlords and tenants, and is not a landlord, estate agent, bank, lender, insurer or law firm.',
                 'Listings are written by landlords and agents. We review listings against our rules before they are published, but we do not inspect properties or confirm who owns them. View a property and check the landlord\'s documents before you pay anything.',
@@ -73,6 +73,23 @@ export function TermsPage() {
               <p className="mt-3"><strong>Reporting and blocking.</strong> You can report a message or a user and block a contact from any chat. To report anything else — a listing, review, storefront or article — email {mail(LEGAL_ENTITY.supportEmail)} with a link to it.</p>
               <p className="mt-2"><strong>What we do.</strong> Our moderators review reports. Where content breaches these Terms we remove it, and we suspend or close the account responsible, within 24 hours of the report. We may also remove content or restrict accounts without a report.</p>
               <p className="mt-2"><strong>Your content.</strong> You keep ownership of what you post. You give RentOS a non-exclusive, royalty-free licence to host, store, display and share it as needed to operate the Platform (for example, showing your listing to tenants). The licence ends when you delete the content or your account, except where the content has been shared with others as part of an agreement or dispute, or we must keep it by law.</p>
+            </>
+          ),
+        },
+        {
+          id: 'on-platform',
+          title: 'Keeping Deals on RentOS',
+          content: (
+            <>
+              <p>RentOS protects you by keeping each step of a deal where it can be seen and checked: the conversation, the viewing, the agreement and the payment. So, for anything you find, list or arrange through RentOS:</p>
+              {list([
+                'Keep enquiries, conversations, viewings, agreements and payments on RentOS. Agents, agencies, landlords and property managers receive enquiries through RentOS messages, with an alert by SMS, email or push notification.',
+                'Do not share or ask for phone numbers, email addresses, social-media handles, messaging-app links or other contact details in order to continue a conversation, viewing, agreement or payment outside RentOS, and do not ask anyone to pay outside RentOS.',
+                'Agents, agencies, landlords and property managers must not put contact details in listings, RentOS websites, profiles, posts or messages.',
+              ])}
+              <p className="mt-3"><strong>Automatic checks.</strong> To protect users, RentOS automatically checks messages and published text for contact details and for attempts to move a deal off RentOS, including details split across several messages or disguised. Text that does not pass is not sent or published; it stays with you to edit, and you can ask for a person to review the decision. The Privacy Policy explains what we keep.</p>
+              <p className="mt-2"><strong>Suspension.</strong> An agent, agency, landlord or property manager who takes, or tries to take, a user off RentOS to deal or be paid outside it will have their account suspended, which can include removing their listings, leads and RentOS website. Any user who repeatedly tries to share contact details or move deals off RentOS may also be suspended. Suspension decisions are made by a person, and you can appeal (see Suspension and Termination).</p>
+              <p className="mt-2"><strong>Deals outside RentOS are at your own risk.</strong> If you choose to communicate, view a property, sign an agreement or pay outside RentOS, RentOS's protections do not apply to it — screened messages, verified profiles, the record of your conversation and agreement, payment records and help with disputes — and RentOS is not liable for any loss, fraud or scam that results, including where you agreed to move the deal off RentOS. If anyone asks you to deal or pay outside RentOS, please report them.</p>
             </>
           ),
         },
@@ -142,7 +159,7 @@ export function TermsPage() {
         {
           id: 'suspension',
           title: 'Suspension and Termination',
-          content: <p>We may suspend or close an account that breaches these Terms, puts other users at risk, or where the law requires it. Where it is safe to do so we will tell you why. A suspended account keeps access to its existing agreements and rent payments and can still export or delete its data. You can appeal by emailing {mail(LEGAL_ENTITY.privacyEmail)}.</p>,
+          content: <p>We may suspend or close an account that breaches these Terms (including taking or trying to take deals off RentOS — see Keeping Deals on RentOS), puts other users at risk, or where the law requires it. Where it is safe to do so we will tell you why. A suspended account keeps access to its existing agreements and rent payments and can still export or delete its data. You can appeal by emailing {mail(LEGAL_ENTITY.privacyEmail)}. If a message of yours was stopped by mistake, ask for a review from the message itself.</p>,
         },
         {
           id: 'liability',
@@ -152,6 +169,7 @@ export function TermsPage() {
               <p>To the extent the law allows, RentOS is not liable for:</p>
               {list([
                 'the conduct of other users, or the condition, ownership or legality of any property listed;',
+                'anything arranged, paid or signed outside RentOS, including losses to fraud or scams after you agreed to continue a deal outside the Platform;',
                 'losses caused by payment providers, app stores or other third parties;',
                 'investment losses, refused applications or unpaid claims under a partner\'s product;',
                 'loss caused by inaccurate information you or other users provide;',

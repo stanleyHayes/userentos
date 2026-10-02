@@ -122,6 +122,7 @@ const AdminPromotionsPage = lazy(() => import('@/pages/admin/AdminPromotionsPage
 const AdminAuditLogPage = lazy(() => import('@/pages/admin/AdminAuditLogPage').then((m) => ({ default: m.AdminAuditLogPage })))
 const AdminModelPerformancePage = lazy(() => import('@/pages/admin/AdminModelPerformancePage').then((m) => ({ default: m.AdminModelPerformancePage })))
 const AdminComplaintReviewPage = lazy(() => import('@/pages/admin/AdminComplaintReviewPage').then((m) => ({ default: m.AdminComplaintReviewPage })))
+const AdminTrustPage = lazy(() => import('@/pages/admin/AdminTrustPage').then((m) => ({ default: m.AdminTrustPage })))
 const AdminReviewerOrgsPage = lazy(() => import('@/pages/admin/AdminReviewerOrgsPage').then((m) => ({ default: m.AdminReviewerOrgsPage })))
 const AdminTransactionsPage = lazy(() => import('@/pages/admin/AdminTransactionsPage').then((m) => ({ default: m.AdminTransactionsPage })))
 const AdminAffiliatesPage = lazy(() => import('@/pages/admin/AdminAffiliatesPage').then((m) => ({ default: m.AdminAffiliatesPage })))
@@ -317,6 +318,7 @@ export default function App() {
             <Route path="/admin/model-performance" element={<RequireRole roles={['admin', 'super_admin']}><AdminModelPerformancePage /></RequireRole>} />
             <Route path="/admin/content-reports" element={<RequireRole roles={['admin', 'super_admin']}><ContentReportsPage /></RequireRole>} />
             <Route path="/admin/complaint-review" element={<RequireRole roles={['admin', 'super_admin']}><AdminComplaintReviewPage /></RequireRole>} />
+            <Route path="/admin/contact-protection" element={<RequireRole roles={['admin', 'super_admin']}><AdminTrustPage /></RequireRole>} />
             <Route path="/admin/reviewer-organizations" element={<RequireRole roles={['admin']}><AdminReviewerOrgsPage /></RequireRole>} />
             <Route path="/admin/transactions" element={<RequireRole roles={['admin']}><AdminTransactionsPage /></RequireRole>} />
             <Route path="/admin/affiliates" element={<RequireRole roles={['admin']}><AdminAffiliatesPage /></RequireRole>} />

@@ -1,4 +1,6 @@
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { isContactBlocked } from '@/lib/contactProtection'
+import { ContactBlockedNotice } from '@/components/trust/ContactBlockedNotice'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -151,6 +153,7 @@ export function PropertyDetailPage() {
   const [showInterest, setShowInterest] = useState(false)
   const [interestMessage, setInterestMessage] = useState('')
   const [leadSent, setLeadSent] = useState(false)
+  const [leadConversationId, setLeadConversationId] = useState<string | null>(null)
   // The public page's "Message on RentOS" lands here with ?contact=1: open the
   // message box once the listing has loaded (adjusting state during render,
   // not in an effect), and drop the flag from the URL when it closes.
@@ -351,8 +354,11 @@ export function PropertyDetailPage() {
                     <div role="status" className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
                       <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-emerald-500" />
                       <div>
-                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Interest sent</p>
-                        <p className="mt-0.5 text-xs text-muted dark:text-gray-400">The agent will contact you.</p>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Message sent</p>
+                        <p className="mt-0.5 text-xs text-muted dark:text-gray-400">
+                          The agent will reply in your RentOS messages.{' '}
+                          {leadConversationId && <Link to={`/messages?conversationId=${leadConversationId}`} className="font-semibold text-primary underline dark:text-blue-400">Open the conversation</Link>}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -544,8 +550,9 @@ export function PropertyDetailPage() {
       <Modal open={showInterest} onClose={() => setShowInterest(false)} title="I'm interested">
         <div className="flex flex-col gap-3">
           <p className="text-xs leading-relaxed text-muted dark:text-gray-400">
-            Let the agent for <span className="font-semibold text-primary-dark dark:text-white">{p.title}</span> know you're interested — they'll get your name and phone number.
+            Tell the agent for <span className="font-semibold text-primary-dark dark:text-white">{p.title}</span> you're interested. Your message goes to them in RentOS messages, where they reply; your phone number and email stay private.
           </p>
+          {isContactBlocked(leadMutation.error) && <ContactBlockedNotice error={leadMutation.error} onDismiss={() => leadMutation.reset()} />}
           <TextField
             label="Message (optional)"
             value={interestMessage}
@@ -563,7 +570,7 @@ export function PropertyDetailPage() {
               onClick={() =>
                 leadMutation.mutate(
                   { propertyId: id!, ...(interestMessage.trim() ? { message: interestMessage.trim() } : {}) },
-                  { onSuccess: () => { setLeadSent(true); setShowInterest(false); setInterestMessage('') } },
+                  { onSuccess: (lead) => { setLeadSent(true); setLeadConversationId(lead.conversationId ?? null); setShowInterest(false); setInterestMessage('') } },
                 )
               }
             >

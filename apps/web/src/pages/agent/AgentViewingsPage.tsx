@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useCreateConversation } from '@/hooks/useApi'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -7,7 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/utils'
 import { useAgentViewings, useUpdateViewingStatus, type AgentViewing, type ViewingStatus } from '@/hooks/useAgent'
-import { CalendarDays, Phone, Building2, Clock, Check, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { CalendarDays, MessagesSquare, Building2, Clock, Check, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 
 const STATUS_FILTERS: { value: ViewingStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
@@ -26,6 +28,8 @@ const STATUS_VARIANTS: Record<ViewingStatus, 'default' | 'warning' | 'success' |
 
 function ViewingCard({ viewing, asRequester }: { viewing: AgentViewing; asRequester: boolean }) {
   const updateStatus = useUpdateViewingStatus()
+  const startConversation = useCreateConversation()
+  const navigate = useNavigate()
   const cancellable = viewing.status === 'requested' || viewing.status === 'confirmed'
   // Agents confirm requests and mark confirmed viewings complete; requesters
   // can only cancel (server enforces the same rule).
@@ -52,10 +56,16 @@ function ViewingCard({ viewing, asRequester }: { viewing: AgentViewing; asReques
         <span className="flex items-center gap-1.5 text-xs font-semibold text-primary-dark dark:text-white">
           <Clock size={12} className="text-muted dark:text-gray-500" /> {viewing.time}
         </span>
-        {!asRequester && (
-          <a href={`tel:${viewing.viewerPhone}`} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline dark:text-blue-400">
-            <Phone size={12} /> {viewing.viewerPhone}
-          </a>
+        {/* The viewer's number stays private: arrange it in RentOS messages. */}
+        {!asRequester && viewing.requesterId && (
+          <button
+            type="button"
+            disabled={startConversation.isPending}
+            onClick={() => startConversation.mutate({ participantId: viewing.requesterId!, propertyId: viewing.propertyId }, { onSuccess: (c) => navigate(`/messages?conversationId=${c.id}`) })}
+            className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60 dark:text-blue-400"
+          >
+            <MessagesSquare size={12} /> Message {viewing.viewerName.split(' ')[0] || 'viewer'}
+          </button>
         )}
       </div>
 
