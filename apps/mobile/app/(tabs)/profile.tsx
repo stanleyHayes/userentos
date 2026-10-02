@@ -69,6 +69,7 @@ export default function ProfileScreen() {
           { icon: 'person-circle-outline', label: 'Tenant Profile', onPress: () => router.push('/tenant-profile') },
           { icon: 'document-text-outline', label: 'Tenant Passport', onPress: () => router.push('/tenant-passport') },
         ] : []),
+        ...(isLandlord ? [{ icon: 'globe-outline' as const, label: 'My website', onPress: () => router.push('/my-website' as string) }] : []),
         ...(isLandlord ? [{ icon: 'trophy-outline' as const, label: 'Subscription', onPress: () => router.push('/subscription' as string) }] : []),
       ],
     },

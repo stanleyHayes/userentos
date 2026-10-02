@@ -22,7 +22,7 @@ const MOBILE_SCREENS: ReadonlySet<string> = new Set([
   '/legal-assistant', '/loans', '/local-services', '/maintenance', '/my-business',
   '/notifications', '/payout-account', '/pricing', '/privacy', '/profile-access',
   '/rights-check', '/saved-properties', '/settings', '/subscription', '/tenant-passport',
-  '/tenant-profile', '/tenants', '/users-admin', '/workers',
+  '/tenant-profile', '/tenants', '/users-admin', '/workers', '/my-website',
 ])
 
 export const NOTIFICATIONS_FALLBACK = '/notifications'
@@ -61,6 +61,7 @@ const WEB_ALIASES: ReadonlyArray<readonly [RegExp, (id: string) => string]> = [
   [route('/agent/leads'), () => '/agent-leads'],
   [route('/agent/viewings'), () => '/agent-viewings'],
   [route('/agent/commissions'), () => '/agent-commissions'],
+  [route('/(?:website|onboarding|storefront)'), () => '/my-website'],
   [route('/employer/(?:profile|employees|payroll|reports)'), () => '/employer'],
 ]
 
