@@ -67,6 +67,10 @@ Before pushing:
 - **Builds:** a clean checkout built the API the way the Render Dockerfile does, and the pruned production build booted with `NODE_ENV=production`. `vercel build --prod` succeeded with the project's production settings.
 - **Review:** the full diff was reviewed area by area. These fixes came out of it: fee unlocks are now idempotent and retried by a recovery job; RentOS's own hosts always count as the platform; moderation reports never go back to an older strike count; the page renderer ignores a relative API address.
 
+After pushing (`main` at 25757b7):
+- Render and Vercel deployed. `migratePhase1 --apply` ran against production; a repeat dry run reports every step up to date.
+- Smoke test passed: app routes, link previews and canonical URLs on `www`, `robots.txt`, `sitemap.xml`, `/property/<ref>` previews, no agent contact details in the public registry, plans (Starter free, Professional GH₵150), and the browser-alert key.
+
 Settings changed on Render (`rentos-api`):
 - `ANTHROPIC_MODEL=claude-opus-5-5`.
 - `PUBLIC_API_URL=https://api.userentos.com`, then `PUBLIC_BASE_URL=https://www.userentos.com`. `PUBLIC_BASE_URL` previously named the API host, so every emailed link pointed at the API. Payment callbacks use `PUBLIC_API_URL`.
@@ -77,4 +81,4 @@ Settings changed on Vercel (`userentos`):
 
 Still open:
 - An SMS provider for agent alerts: `ARKESEL_API_KEY` and `SMS_SENDER_ID`, or the Twilio variables. Without them SMS is skipped, and agents get the in-app and email alerts only.
-- Paystack keys, before turning on the GH₵5 fee switches.
+- **Paystack keys (`PAYSTACK_SECRET_KEY`).** Production runs payments in live mode without one, so every collection fails, including the GH₵150 Professional subscription, until it is set. This predates the release. Set it before turning on the GH₵5 fee switches.
