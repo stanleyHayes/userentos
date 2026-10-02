@@ -59,4 +59,4 @@ Regulated services (rent collection, wallet, financing, insurance, payroll, cred
 - API: 240 test files, 2,308 tests passing.
 - Web: typecheck, lint and production build pass; 31 mocked browser specs pass.
 - Mobile: typecheck passes.
-- Full browser suite against a local stack: see the latest run in the release notes.
+- Full browser suite against a local stack: 254 passed, 100 skipped (mobile specs that need the Expo web build), 1 timing flake (`payout-availability.spec.ts`, which passes 6 of 6 when run alone).
