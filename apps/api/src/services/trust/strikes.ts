@@ -37,20 +37,30 @@ export async function escalate(authorId: string, strikes: number, now = new Date
     const codes = [...new Set(recent.flatMap((d) => d.reasonCodes))].join(', ')
     const details = `Contact protection: ${strikes} messages stopped in the last ${STRIKE_WINDOW_DAYS} days for sharing contact details or moving the deal off RentOS (${codes}). Review the attempts in Admin → Contact protection before deciding.`
     const label = recent.map((d) => `[${d.channel}, ${d.createdAt.toISOString().slice(0, 10)}] ${d.maskedExcerpt}`).join('\n').slice(0, 2000)
-    const open = await ContentReport.findOneAndUpdate(
-      { reporterId: SYSTEM_REPORTER_ID, targetType: 'user', targetId: authorId, status: { $in: ['open', 'reviewing'] }, reason: 'off_platform_contact' },
-      { $set: { details, targetLabel: label } },
+    const openReport = { reporterId: SYSTEM_REPORTER_ID, targetType: 'user', targetId: authorId, status: { $in: ['open', 'reviewing'] }, reason: 'off_platform_contact' } as const
+    // Escalations run without waiting for each other, so an older one can
+    // finish last: update only a report that does not already describe more.
+    const bringUpToDate = () => ContentReport.findOneAndUpdate(
+      { ...openReport, $or: [{ strikes: { $exists: false } }, { strikes: { $lte: strikes } }] },
+      { $set: { details, targetLabel: label, strikes } },
     )
-    if (open) return
-    await ContentReport.create({
-      reporterId: SYSTEM_REPORTER_ID,
-      targetType: 'user',
-      targetId: authorId,
-      targetOwnerId: authorId,
-      targetLabel: label,
-      reason: 'off_platform_contact',
-      details,
-    })
+    if (await bringUpToDate() || await ContentReport.exists(openReport)) return
+    try {
+      await ContentReport.create({
+        reporterId: SYSTEM_REPORTER_ID,
+        targetType: 'user',
+        targetId: authorId,
+        targetOwnerId: authorId,
+        targetLabel: label,
+        reason: 'off_platform_contact',
+        details,
+        strikes,
+      })
+    } catch (err) {
+      if ((err as { code?: number }).code !== 11000) throw err
+      // Another escalation created it a moment ago: update that one instead.
+      await bringUpToDate()
+    }
   } catch (err) {
     // Another open system report about this account (for another reason) holds the one-open-report slot.
     if ((err as { code?: number }).code === 11000) return

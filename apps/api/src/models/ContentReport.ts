@@ -75,6 +75,8 @@ export interface IContentReport extends Document {
   pendingAction?: ReportAction
   pendingNote?: string
   ipAddress?: string
+  /** Contact protection reports: how many stopped messages the details describe, so a late update never replaces a newer one. */
+  strikes?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -95,6 +97,7 @@ const contentReportSchema = new Schema<IContentReport>({
   pendingAction: { type: String, enum: REPORT_ACTIONS },
   pendingNote: String,
   ipAddress: String,
+  strikes: Number,
 }, { timestamps: true })
 
 // The queue is always read as "oldest open first", per target.
