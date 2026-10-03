@@ -30,6 +30,11 @@ async function login(page: Page, role: string, methodsFail = false) {
   await page.getByText('Profile', { exact: true }).last().click()
 }
 
+// Home, still mounted behind the Profile tab, has a Payments shortcut too: use the Account menu.
+async function openPayments(page: Page) {
+  await page.getByText('Account', { exact: true }).locator('xpath=..').getByText('Payments', { exact: true }).click()
+}
+
 test('native subscription renders server benefits and yearly pricing with available rails only', async ({ page }) => {
   await login(page, 'landlord')
   await page.getByText('Subscription', { exact: true }).click()
@@ -42,7 +47,7 @@ test('native subscription renders server benefits and yearly pricing with availa
 
 test('native rent payment keeps provider instructions visible', async ({ page }) => {
   await login(page, 'tenant')
-  await page.getByText('Payments', { exact: true }).click()
+  await openPayments(page)
   await page.getByRole('button', { name: 'Make payment', exact: true }).click()
   await page.getByText('Test tenancy', { exact: true }).click()
   await page.getByText('Bank Transfer', { exact: true }).click()
@@ -110,7 +115,7 @@ test('mobile rent checkout reuses its key after a lost response', async ({ page 
     if (keys.length === 1) return route.abort('connectionreset')
     return route.fulfill({ json: { success: true, data: { instructions: 'Recovered original checkout' } } })
   })
-  await page.getByText('Payments', { exact: true }).click()
+  await openPayments(page)
   await page.getByRole('button', { name: 'Make payment', exact: true }).click()
   await page.getByText('Test tenancy', { exact: true }).click()
   await page.getByText('Bank Transfer', { exact: true }).click()
@@ -126,7 +131,7 @@ test('mobile rent checkout reuses its key after a lost response', async ({ page 
 
 test('native rent payment shows a load error instead of inventing payment methods', async ({ page }) => {
   await login(page, 'tenant', true)
-  await page.getByText('Payments', { exact: true }).click()
+  await openPayments(page)
   await page.getByRole('button', { name: 'Make payment', exact: true }).click()
   await expect(page.getByText('Could not load payment options. Close this form and try again.', { exact: true })).toBeVisible()
   await expect(page.getByText('Bank Transfer', { exact: true })).toHaveCount(0)
@@ -207,7 +212,7 @@ for (const role of ['tenant', 'landlord']) test(`mobile ${role} can retrieve a r
     if (calls === 1) return route.fulfill({ status: 409, json: { error: 'Receipt details unavailable. Try again.' } })
     return route.fulfill({ json: { success: true, data: { paymentStatus: 'refunded', receipt: { number: 'RNT-FIXTURE', paymentReference: payment.reference, amount: 1000, currency: 'GHS', tenantName: 'Akosua Ŋutifafa', landlordName: 'Kofi Mensah', propertyTitle: 'Apartment 4', premisesAddress: '10 Independence Avenue, Accra', furnished: false, periodStart: '2026-09-01', periodEnd: '2026-09-30', paidAt: '2026-09-01T08:00:00.000Z', issuedAt: '2026-09-01T08:01:00.000Z' } } } })
   })
-  await page.getByText('Payments', { exact: true }).click()
+  await openPayments(page)
   await expect(page.getByRole('button', { name: 'View receipt FOREIGN', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'View receipt RECEIPT-FIXTURE', exact: true }).click()
   await expect(page.getByText('Receipt details unavailable. Try again.', { exact: true })).toBeVisible()
@@ -234,7 +239,7 @@ test('mobile payment history exposes older receipts and retains server totals ac
     const item = { id: `payment-${requestedPage}`, tenantId: '507f1f77bcf86cd799439011', landlordId: 'landlord', amount: 1000, method: 'bank_transfer', status: 'completed', reference: requestedPage === 2 ? 'OLDER-RECEIPT' : 'NEWER-RECEIPT', createdAt: '2026-09-01T00:00:00Z' }
     return route.fulfill({ json: { success: true, data: { items: [item], page: requestedPage, total: 21, totalPages: 2, summary: { totalPaid: 21000 } } } })
   })
-  await page.getByText('Payments', { exact: true }).click()
+  await openPayments(page)
   await expect(page.getByText('Could not load payment history. Please try again.', { exact: true })).toBeVisible()
   await expect(page.getByText('No payments yet', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Retry payment history', exact: true }).click()

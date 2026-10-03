@@ -7,6 +7,7 @@ import { neuCard, neuInset } from '../lib/neu'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { ListSkeleton } from '../components/Skeleton'
+import { useRegulatedFeatureEnabled } from '../hooks/useRegulatedFeatures'
 
 interface TenantAgreement {
   id: string; status: string; rentAmount: number; startDate: string; endDate: string
@@ -22,6 +23,8 @@ export default function TenantsScreen() {
   const c = useThemeColors()
   const router = useRouter()
   const [tenants, setTenants] = useState<Tenant[]>([])
+  // Without rent collection (regulated, off in production) RentOS records no rent: no "paid" figures.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selected, setSelected] = useState<Tenant | null>(null)
@@ -98,7 +101,7 @@ export default function TenantsScreen() {
               </View>
               <View style={s.rightCol}>
                 <View style={[s.statusDot, { backgroundColor: active ? c.accent : c.muted }]} />
-                <Text style={[s.paidText, { color: c.accent }]}>{formatCurrency(totalPaid)}</Text>
+                {rentCollection && <Text style={[s.paidText, { color: c.accent }]}>{formatCurrency(totalPaid)}</Text>}
               </View>
             </TouchableOpacity>
           )
@@ -132,8 +135,13 @@ export default function TenantsScreen() {
                     <Text style={[s.statLabel, { color: c.muted }]}>Agreements</Text>
                   </View>
                   <View style={[s.statBox, neuInset(c)]}>
-                    <Text style={[s.statValue, { color: c.accent }]}>{formatCurrency(selected.agreements.reduce((s, a) => s + a.totalPaid, 0))}</Text>
-                    <Text style={[s.statLabel, { color: c.muted }]}>Total Paid</Text>
+                    {rentCollection ? (<>
+                      <Text style={[s.statValue, { color: c.accent }]}>{formatCurrency(selected.agreements.reduce((s, a) => s + a.totalPaid, 0))}</Text>
+                      <Text style={[s.statLabel, { color: c.muted }]}>Total Paid</Text>
+                    </>) : (<>
+                      <Text style={[s.statValue, { color: c.accent }]}>{selected.agreements.filter((a) => a.status === 'active').length}</Text>
+                      <Text style={[s.statLabel, { color: c.muted }]}>Active</Text>
+                    </>)}
                   </View>
                 </View>
 
@@ -154,8 +162,10 @@ export default function TenantsScreen() {
                       </View>
                       <View style={s.agreementStats}>
                         <Text style={[s.agreementRent, { color: c.primary }]}>{formatCurrency(a.rentAmount)}/mo</Text>
-                        <Text style={[s.agreementPaid, { color: c.accent }]}>{formatCurrency(a.totalPaid)} paid</Text>
-                        <Text style={[s.agreementPayments, { color: c.muted }]}>{a.paymentCount} payments</Text>
+                        {rentCollection && (<>
+                          <Text style={[s.agreementPaid, { color: c.accent }]}>{formatCurrency(a.totalPaid)} paid</Text>
+                          <Text style={[s.agreementPayments, { color: c.muted }]}>{a.paymentCount} payments</Text>
+                        </>)}
                       </View>
                     </View>
                   )

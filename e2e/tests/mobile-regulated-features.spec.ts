@@ -30,7 +30,8 @@ test('unlicensed regulated services are hidden and refuse direct navigation', as
   await expect(page.getByText('Edit Profile', { exact: true })).toBeVisible()
   await expect(page.getByText('Credit Score', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Payout account', { exact: true })).toHaveCount(0)
-  await page.getByText('Payments', { exact: true }).click()
+  // Home, still mounted behind the Profile tab, has a Payments shortcut too: use the Account menu.
+  await page.getByText('Account', { exact: true }).locator('xpath=..').getByText('Payments', { exact: true }).click()
   await expect(page.getByText('No payments yet', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Make payment', exact: true })).toHaveCount(0)
   // A deep link or push tap must not open the screen either.

@@ -6,12 +6,16 @@ import { neuCard, neuInset } from '../lib/neu'
 import { formatCompact } from '../lib/format'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
+import { useRegulatedFeatureEnabled } from '../hooks/useRegulatedFeatures'
 
 const screenW = Dimensions.get('window').width
 
 export default function AnalyticsScreen() {
   const c = useThemeColors()
   const user = useAuthStore((s) => s.user)
+  // Rent collection and the wallet are regulated services, off in production: no money figures without them.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
+  const wallet = useRegulatedFeatureEnabled('wallet') === true
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -65,11 +69,16 @@ export default function AnalyticsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kpiStrip}>
           <KPICard icon="business" label="Properties" value={String(a.totalProperties ?? 0)} color={c.primary} c={c} />
           <KPICard icon="people" label="Tenants" value={String(a.activeTenants ?? 0)} color={c.accent} c={c} />
-          <KPICard icon="cash" label="Revenue" value={formatCompact(Number(a.totalRevenue ?? 0))} color={c.secondary} c={c} />
-          <KPICard icon="trending-up" label="Collection" value={`${Math.min(100, Number(a.collectionRate ?? 0))}%`} color="#8b5cf6" c={c} />
+          {rentCollection ? (<>
+            <KPICard icon="cash" label="Revenue" value={formatCompact(Number(a.totalRevenue ?? 0))} color={c.secondary} c={c} />
+            <KPICard icon="trending-up" label="Collection" value={`${Math.min(100, Number(a.collectionRate ?? 0))}%`} color="#8b5cf6" c={c} />
+          </>) : (
+            <KPICard icon="document-text" label="Applications" value={String(a.totalApplications ?? 0)} color={c.secondary} c={c} />
+          )}
         </ScrollView>
 
-        {/* Monthly Revenue */}
+        {/* Monthly Revenue: only while RentOS collects rent */}
+        {rentCollection && (
         <View style={[s.card, neuCard(c)]}>
           <Text style={[s.cardTitle, { color: c.text }]}>Monthly Revenue</Text>
           {months.length === 0 ? (
@@ -91,6 +100,7 @@ export default function AnalyticsScreen() {
             </View>
           )}
         </View>
+        )}
 
         {/* Breakdown */}
         <View style={[s.card, neuCard(c)]}>
@@ -115,13 +125,31 @@ export default function AnalyticsScreen() {
     <ScrollView style={[s.container, { backgroundColor: c.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
       {/* KPI Strip */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kpiStrip}>
-        <KPICard icon="cash" label="Total Paid" value={formatCompact(Number(a.totalPaid ?? 0))} color={c.primary} c={c} />
-        <KPICard icon="receipt" label="Payments" value={String(a.paymentCount ?? 0)} color={c.accent} c={c} />
-        <KPICard icon="wallet" label="Saved" value={formatCompact(Number(a.totalSaved ?? 0))} color={c.secondary} c={c} />
-        <KPICard icon="trending-up" label="Progress" value={`${savingsPct}%`} color="#8b5cf6" c={c} />
+        {rentCollection ? (<>
+          <KPICard icon="cash" label="Total Paid" value={formatCompact(Number(a.totalPaid ?? 0))} color={c.primary} c={c} />
+          <KPICard icon="receipt" label="Payments" value={String(a.paymentCount ?? 0)} color={c.accent} c={c} />
+        </>) : (<>
+          <KPICard icon="document-text" label="Agreements" value={String(a.activeAgreements ?? 0)} color={c.primary} c={c} />
+          <KPICard icon="clipboard" label="Applications" value={String(a.totalApplications ?? 0)} color={c.accent} c={c} />
+        </>)}
+        {wallet && (<>
+          <KPICard icon="wallet" label="Saved" value={formatCompact(Number(a.totalSaved ?? 0))} color={c.secondary} c={c} />
+          <KPICard icon="trending-up" label="Progress" value={`${savingsPct}%`} color="#8b5cf6" c={c} />
+        </>)}
       </ScrollView>
 
-      {/* Savings Breakdown */}
+      {/* Savings, only while the wallet is offered; otherwise what the tenant has in motion */}
+      {!wallet && (
+        <View style={[s.card, neuCard(c)]}>
+          <Text style={[s.cardTitle, { color: c.text }]}>Your Activity</Text>
+          <View style={s.breakdownRow}>
+            <BreakdownPill label="Applications" value={String(a.totalApplications ?? 0)} color={c.primary} c={c} />
+            <BreakdownPill label="Pending" value={String(a.pendingApplications ?? 0)} color={c.secondary} c={c} />
+            <BreakdownPill label="Disputes" value={String(a.openDisputes ?? 0)} color={c.danger} c={c} />
+          </View>
+        </View>
+      )}
+      {wallet && (
       <View style={[s.card, neuCard(c)]}>
         <Text style={[s.cardTitle, { color: c.text }]}>Savings Overview</Text>
         <View style={s.breakdownRow}>
@@ -130,9 +158,10 @@ export default function AnalyticsScreen() {
           <BreakdownPill label="Plans" value={String(a.activePlans ?? 0)} color={c.secondary} c={c} />
         </View>
       </View>
+      )}
 
       {/* Progress */}
-      {Number(a.savingsTarget ?? 0) > 0 && (
+      {wallet && Number(a.savingsTarget ?? 0) > 0 && (
         <View style={[s.card, neuCard(c)]}>
           <View style={s.progressHeader}>
             <Text style={[s.cardTitle, { color: c.text, marginBottom: 0 }]}>Savings Progress</Text>

@@ -1,5 +1,6 @@
 import { test, expect, type Locator } from '@playwright/test'
 import { signInWithMockedApi } from '../helpers/mockedWeb'
+import { noRegulatedFeatures } from '../helpers/regulatedFeatures'
 
 // Runs against a Vite dev server with every API response mocked:
 //   PLAYWRIGHT_BASE_URL=http://localhost:5602 npx playwright test -c playwright.web-mocked.config.ts
@@ -36,6 +37,50 @@ test('the landlord dashboard shows a store-billed plan, a capped collection rate
   const recent = page.getByText('Recent Payments').locator('xpath=../..')
   await expect(recent.getByText(/^Tenant /).first()).toHaveText('Tenant newest00...')
   expect(requested).toContain('/analytics/me')
+})
+
+test('without rent collection the landlord sees leases and applications, not money RentOS never collected', async ({ page }) => {
+  // Rent collection is a regulated service, off in production: GH₵0 revenue, a red 0% collection
+  // rate and "GH₵0 paid" on every tenant read as a failing business.
+  const agreement = (id: string, status: string, totalPaid: number) => ({
+    id, status, rentAmount: 1800, startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-12-31T00:00:00.000Z', propertyId: `prop-${id}`, propertyTitle: `Flat ${id}`,
+    propertyAddress: { street: '3 Lease Lane', city: 'Accra', region: 'Greater Accra' }, propertyType: 'apartment', totalPaid, paymentCount: totalPaid ? 2 : 0, lastPaymentDate: null,
+  })
+  await signInWithMockedApi(page, landlord, ({ method, path }) => {
+    if (method !== 'GET') return undefined
+    if (path === '/platform/features') return { data: noRegulatedFeatures }
+    if (path === '/analytics/me') {
+      return { data: { totalProperties: 2, activeTenants: 1, activeAgreements: 1, totalApplications: 4, pendingApplications: 2, collectionRate: 0, totalRevenue: 0, thisMonthRevenue: 0, overduePayments: 1, overdueAmount: 1500, avgRentAmount: 1800, monthlyIncome: {} } }
+    }
+    if (path === '/subscriptions/my-subscription') {
+      return { data: { package: { id: 'free', name: 'Starter', price: 0, billingCycle: 'monthly', maxProperties: 3, benefits: [] }, billingSource: 'free', propertyCount: 2, maxProperties: 3, canAddProperty: true } }
+    }
+    if (path === '/agreements/tenants') {
+      return { data: { items: [{ id: tenant.id, firstName: 'Ama', lastName: 'Tenant', email: tenant.email, isVerified: true, agreements: [agreement('a1', 'active', 3600), agreement('a2', 'expired', 0)] }] } }
+    }
+    return undefined
+  })
+
+  await page.goto('/dashboard')
+  await expect(page.getByText('Asking rents')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('2 waiting')).toBeVisible()
+  await expect(page.getByText('1 active agreement.')).toBeVisible()
+  await expect(page.getByText('Leases and renewals')).toBeVisible()
+  for (const money of ['Revenue', 'Financial Summary', 'Collection rate', 'Recent Payments', 'Track income', /overdue payment/, /collection rate across/]) {
+    await expect(page.getByText(money, { exact: typeof money === 'string' })).toHaveCount(0)
+  }
+
+  await page.goto('/tenants')
+  await expect(page.getByText('Ama Tenant')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('Total Collected')).toHaveCount(0)
+  await expect(page.getByText(/ paid$/)).toHaveCount(0)
+  await page.getByText('Ama Tenant').click()
+  const details = page.getByRole('dialog')
+  await expect(details.getByText('Flat a1')).toBeVisible()
+  await expect(details.getByText('Ended', { exact: true })).toBeVisible()
+  for (const money of ['Total Paid', 'Payments', 'Payment Progress', 'paid']) {
+    await expect(details.getByText(money, { exact: true })).toHaveCount(0)
+  }
 })
 
 test('the subscription page says how far over the limit a downgraded landlord is, never more than 100%', async ({ page }) => {

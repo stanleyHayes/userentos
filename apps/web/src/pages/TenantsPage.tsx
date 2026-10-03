@@ -16,6 +16,7 @@ import {
   Search, AlertTriangle,
 } from 'lucide-react'
 import { DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
+import { useRegulatedFeatureEnabled } from '@/hooks/useApi'
 
 interface TenantAgreement {
   id: string
@@ -52,6 +53,9 @@ export function TenantsPage() {
     queryKey: ['my-tenants'],
     queryFn: () => api.get<{ items: Tenant[] }>('/agreements/tenants'),
   })
+  // Without rent collection (a regulated service, off in production) RentOS records no rent, so
+  // "GH₵0 paid" and empty payment bars would be wrong: lease dates and counts are shown instead.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
   const [search, setSearch] = useState('')
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
   const [page, setPage] = useState(1)
@@ -88,7 +92,9 @@ export function TenantsPage() {
           {[
             { label: 'Active Tenants', value: String(activeTenants.length), icon: <Users size={18} />, color: '#059669', sub: `of ${tenants.length} total` },
             { label: 'Monthly Rent', value: formatCurrency(totalRent), icon: <CreditCard size={18} />, color: '#2563eb', sub: 'from active leases' },
-            { label: 'Total Collected', value: formatCurrency(totalCollected), icon: <CheckCircle size={18} />, color: '#d97706' },
+            rentCollection
+              ? { label: 'Total Collected', value: formatCurrency(totalCollected), icon: <CheckCircle size={18} />, color: '#d97706' }
+              : { label: 'Agreements', value: String(tenants.reduce((sum, t) => sum + t.agreements.length, 0)), icon: <CheckCircle size={18} />, color: '#d97706', sub: 'all time' },
             { label: 'Properties Rented', value: String(new Set(tenants.flatMap((t) => t.agreements.filter((a) => a.status === 'active').map((a) => a.propertyId))).size), icon: <Building2 size={18} />, color: '#7c3aed' },
           ].map((kpi) => (
             <DashboardMetricCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} accent={kpi.color} />
@@ -162,7 +168,7 @@ export function TenantsPage() {
                         )}
                         <div className="flex items-center gap-3 text-[11px]">
                           <span className="text-muted dark:text-gray-500">{tenant.agreements.length} agreement{tenant.agreements.length !== 1 ? 's' : ''}</span>
-                          <span className="font-bold text-accent">{formatCurrency(totalPaid)} paid</span>
+                          {rentCollection && <span className="font-bold text-accent">{formatCurrency(totalPaid)} paid</span>}
                         </div>
                       </div>
                     </div>
@@ -218,12 +224,22 @@ export function TenantsPage() {
                 <p className="text-[10px] text-muted dark:text-gray-500">Agreements</p>
               </div>
               <div className="rounded-xl bg-surface dark:bg-[#0c0e1a] p-3 text-center">
-                <p className="text-lg font-extrabold text-accent">{formatCurrency(selectedTenant.agreements.reduce((s, a) => s + a.totalPaid, 0))}</p>
-                <p className="text-[10px] text-muted dark:text-gray-500">Total Paid</p>
+                {rentCollection ? (<>
+                  <p className="text-lg font-extrabold text-accent">{formatCurrency(selectedTenant.agreements.reduce((s, a) => s + a.totalPaid, 0))}</p>
+                  <p className="text-[10px] text-muted dark:text-gray-500">Total Paid</p>
+                </>) : (<>
+                  <p className="text-lg font-extrabold text-accent">{selectedTenant.agreements.filter((a) => a.status === 'active').length}</p>
+                  <p className="text-[10px] text-muted dark:text-gray-500">Active</p>
+                </>)}
               </div>
               <div className="rounded-xl bg-surface dark:bg-[#0c0e1a] p-3 text-center">
-                <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.reduce((s, a) => s + a.paymentCount, 0)}</p>
-                <p className="text-[10px] text-muted dark:text-gray-500">Payments</p>
+                {rentCollection ? (<>
+                  <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.reduce((s, a) => s + a.paymentCount, 0)}</p>
+                  <p className="text-[10px] text-muted dark:text-gray-500">Payments</p>
+                </>) : (<>
+                  <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.filter((a) => a.status !== 'active').length}</p>
+                  <p className="text-[10px] text-muted dark:text-gray-500">Ended</p>
+                </>)}
               </div>
             </div>
 
@@ -270,7 +286,7 @@ export function TenantsPage() {
                         </div>
 
                         {/* Payment progress */}
-                        {paidPercent !== null && (
+                        {rentCollection && paidPercent !== null && (
                           <div>
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[10px] text-muted dark:text-gray-500">Payment Progress</span>
@@ -285,7 +301,8 @@ export function TenantsPage() {
                           </div>
                         )}
 
-                        {/* Bottom row */}
+                        {/* Bottom row: payments, only while RentOS collects rent */}
+                        {rentCollection && (
                         <div className="flex items-center justify-between pt-2 border-t border-border/20 dark:border-[#252a3a]/20">
                           <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1.5">
@@ -304,6 +321,7 @@ export function TenantsPage() {
                             </span>
                           )}
                         </div>
+                        )}
                       </div>
                     </div>
                   )

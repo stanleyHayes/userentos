@@ -48,6 +48,7 @@ export default function HomeScreen() {
   const [activeAgreement, setActiveAgreement] = useState<AgreementItem | null>(null)
   // The wallet is a regulated service: its figures show only where the operator offers it.
   const walletEnabled = useRegulatedFeatureEnabled('wallet') === true
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
 
   async function load() {
     try {
@@ -99,7 +100,10 @@ export default function HomeScreen() {
     ? [
         { icon: 'business-outline' as const, label: 'Properties', value: String(analytics?.totalProperties ?? 0), color: '#3b82f6' },
         { icon: 'people-outline' as const, label: 'Tenants', value: String(analytics?.activeTenants ?? 0), color: '#10b981' },
-        { icon: 'cash-outline' as const, label: 'Revenue', value: formatCompact(analytics?.totalRevenue ?? 0), color: '#f59e0b' },
+        // No money figure while RentOS does not collect rent (a regulated service, off in production).
+        rentCollection
+          ? { icon: 'cash-outline' as const, label: 'Revenue', value: formatCompact(analytics?.totalRevenue ?? 0), color: '#f59e0b' }
+          : { icon: 'document-text-outline' as const, label: 'Applications', value: String(analytics?.totalApplications ?? 0), color: '#f59e0b' },
         { icon: 'alert-circle-outline' as const, label: 'Disputes', value: String(analytics?.openDisputes ?? 0), color: '#ef4444' },
       ]
     : [

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DashboardActionItem, DashboardActionPanel, DashboardHero, DashboardMetricCard } from '@/components/dashboard/DashboardPrimitives'
 import { useAuthStore } from '@/stores/authStore'
-import { useMyAnalytics, useProperties, usePayments, useNotifications, useAgreements, useDisputes, useMySubscription, useMaintenanceRequests } from '@/hooks/useApi'
+import { useMyAnalytics, useProperties, usePayments, useNotifications, useAgreements, useDisputes, useMySubscription, useMaintenanceRequests, useRegulatedFeatureEnabled } from '@/hooks/useApi'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   Building2, Users, CreditCard, AlertTriangle, ChevronRight,
@@ -32,6 +32,9 @@ const statusColors: Record<string, string> = {
 export function LandlordDashboard() {
   const user = useAuthStore((s) => s.user)
   const { data: analytics, isLoading } = useMyAnalytics()
+  // Rent collection is a regulated service, off in production: without it there is no money to
+  // report, and GH₵0 revenue with a red 0% collection rate read as failure. Shown once known to be on.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
   const { data: propertiesData } = useProperties({ mine: true })
   const { data: paymentsData } = usePayments({ status: 'completed' })
   const { data: notifData } = useNotifications()
@@ -115,17 +118,28 @@ export function LandlordDashboard() {
           accent="#10b981"
           href="/tenants"
         />
-        <DashboardMetricCard
-          label="Revenue"
-          value={formatCurrency(Number(a?.thisMonthRevenue ?? a?.totalRevenue ?? 0))}
-          sub={revenueChange !== 0
-            ? `${revenueChange > 0 ? '+' : ''}${revenueChange}% vs last month`
-            : 'This month'}
-          icon={<DollarSign size={18} />}
-          accent="#f59e0b"
-          href="/payments"
-          trend={revenueChange}
-        />
+        {rentCollection ? (
+          <DashboardMetricCard
+            label="Revenue"
+            value={formatCurrency(Number(a?.thisMonthRevenue ?? a?.totalRevenue ?? 0))}
+            sub={revenueChange !== 0
+              ? `${revenueChange > 0 ? '+' : ''}${revenueChange}% vs last month`
+              : 'This month'}
+            icon={<DollarSign size={18} />}
+            accent="#f59e0b"
+            href="/payments"
+            trend={revenueChange}
+          />
+        ) : (
+          <DashboardMetricCard
+            label="Applications"
+            value={String(a?.totalApplications ?? 0)}
+            sub={`${a?.pendingApplications ?? 0} waiting`}
+            icon={<Users size={18} />}
+            accent="#f59e0b"
+            href="/applications"
+          />
+        )}
         <DashboardMetricCard
           label="Occupancy"
           value={`${occupancyRate}%`}
@@ -137,9 +151,9 @@ export function LandlordDashboard() {
       </div>
 
       {/* Alert banners */}
-      {(Number(a?.overduePayments ?? 0) > 0 || Number(a?.expiringLeases ?? 0) > 0 || openMaintenance.length > 0) && (
+      {((rentCollection && Number(a?.overduePayments ?? 0) > 0) || Number(a?.expiringLeases ?? 0) > 0 || openMaintenance.length > 0) && (
         <div className="flex flex-wrap gap-2">
-          {Number(a?.overduePayments ?? 0) > 0 && (
+          {rentCollection && Number(a?.overduePayments ?? 0) > 0 && (
             <Link to="/payments" className="flex items-center gap-2 rounded-lg bg-danger/8 dark:bg-danger/12 border border-danger/20 px-3 py-2 hover:bg-danger/12 transition-colors">
               <AlertTriangle size={14} className="text-danger flex-shrink-0" />
               <span className="text-xs font-semibold text-danger">{a?.overduePayments} overdue payment{Number(a?.overduePayments) > 1 ? 's' : ''}</span>
@@ -174,13 +188,23 @@ export function LandlordDashboard() {
           tone={Number(a?.pendingApplications ?? 0) > 0 ? 'warning' : 'success'}
           meta={String(a?.pendingApplications ?? 0)}
         />
-        <DashboardActionItem
-          title={Number(a?.overduePayments ?? 0) > 0 ? 'Overdue rent' : 'Collections'}
-          description={Number(a?.overduePayments ?? 0) > 0 ? `${formatCurrency(Number(a?.overdueAmount ?? 0))} is overdue.` : `${collectionRate}% collection rate across active leases.`}
-          icon={<CreditCard size={16} />}
-          href="/payments"
-          tone={Number(a?.overduePayments ?? 0) > 0 ? 'danger' : 'default'}
-        />
+        {rentCollection ? (
+          <DashboardActionItem
+            title={Number(a?.overduePayments ?? 0) > 0 ? 'Overdue rent' : 'Collections'}
+            description={Number(a?.overduePayments ?? 0) > 0 ? `${formatCurrency(Number(a?.overdueAmount ?? 0))} is overdue.` : `${collectionRate}% collection rate across active leases.`}
+            icon={<CreditCard size={16} />}
+            href="/payments"
+            tone={Number(a?.overduePayments ?? 0) > 0 ? 'danger' : 'default'}
+          />
+        ) : (
+          <DashboardActionItem
+            title="Agreements"
+            description={`${a?.activeAgreements ?? 0} active agreement${Number(a?.activeAgreements ?? 0) === 1 ? '' : 's'}${Number(a?.expiringLeases ?? 0) > 0 ? `, ${a?.expiringLeases} ending soon` : ''}.`}
+            icon={<CreditCard size={16} />}
+            href="/agreements"
+            tone="default"
+          />
+        )}
         <DashboardActionItem
           title={openMaintenance.length > 0 ? 'Maintenance queue' : 'Maintenance clear'}
           description={openMaintenance.length > 0 ? `${openMaintenance.length} open request${openMaintenance.length === 1 ? '' : 's'} to coordinate.` : 'No open maintenance requests.'}
@@ -203,7 +227,8 @@ export function LandlordDashboard() {
         {/* Left: Revenue chart + payments (8 cols) */}
         <div className="lg:col-span-8 space-y-4 sm:space-y-6">
 
-          {/* Revenue chart */}
+          {/* Revenue chart: only while RentOS collects rent */}
+          {rentCollection && (
           <Card className="overflow-hidden p-0">
             <div className="p-4 sm:p-5 pb-0">
               <div className="flex items-center justify-between mb-1 gap-2">
@@ -277,6 +302,7 @@ export function LandlordDashboard() {
               </div>
             )}
           </Card>
+          )}
 
           {/* Disputes & Agreements row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -336,19 +362,23 @@ export function LandlordDashboard() {
                     <p className="text-[10px] text-muted dark:text-gray-500">Expiring soon</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-muted dark:text-gray-500">Collection rate</span>
-                  <span className="font-bold text-primary-dark dark:text-white">{collectionRate}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-surface dark:bg-[#0c0e1a] overflow-hidden mt-1.5">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, collectionRate)}%`,
-                      backgroundColor: collectionRate >= 80 ? '#10b981' : collectionRate >= 50 ? '#f59e0b' : '#ef4444',
-                    }}
-                  />
-                </div>
+                {rentCollection && (
+                  <>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted dark:text-gray-500">Collection rate</span>
+                      <span className="font-bold text-primary-dark dark:text-white">{collectionRate}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-surface dark:bg-[#0c0e1a] overflow-hidden mt-1.5">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, collectionRate)}%`,
+                          backgroundColor: collectionRate >= 80 ? '#10b981' : collectionRate >= 50 ? '#f59e0b' : '#ef4444',
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -508,7 +538,9 @@ export function LandlordDashboard() {
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: 'Tenants', desc: 'Manage tenants', icon: <Users size={18} />, href: '/tenants', gradient: 'from-accent/10 to-emerald-500/10 dark:from-accent/20 dark:to-emerald-500/20', iconColor: 'text-accent' },
-              { label: 'Payments', desc: 'Track income', icon: <CreditCard size={18} />, href: '/payments', gradient: 'from-secondary/10 to-amber-500/10 dark:from-secondary/20 dark:to-amber-500/20', iconColor: 'text-secondary' },
+              rentCollection
+                ? { label: 'Payments', desc: 'Track income', icon: <CreditCard size={18} />, href: '/payments', gradient: 'from-secondary/10 to-amber-500/10 dark:from-secondary/20 dark:to-amber-500/20', iconColor: 'text-secondary' }
+                : { label: 'Agreements', desc: 'Leases and renewals', icon: <Calendar size={18} />, href: '/agreements', gradient: 'from-secondary/10 to-amber-500/10 dark:from-secondary/20 dark:to-amber-500/20', iconColor: 'text-secondary' },
               { label: 'Disputes', desc: `${openDisputes.length} open`, icon: <AlertTriangle size={18} />, href: '/disputes', gradient: 'from-red-500/10 to-rose-500/10 dark:from-red-500/20 dark:to-rose-500/20', iconColor: 'text-danger' },
               { label: 'Analytics', desc: 'Full insights', icon: <PieChart size={18} />, href: '/analytics', gradient: 'from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20', iconColor: 'text-violet-500' },
             ].map((link) => (
@@ -526,9 +558,10 @@ export function LandlordDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Financial Summary */}
         <Card>
-          <CardHeader><CardTitle className="text-sm">Financial Summary</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">{rentCollection ? 'Financial Summary' : 'Asking rents'}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {rentCollection && (<>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted dark:text-gray-400">Total Revenue</span>
                 <span className="text-xs font-bold text-primary-dark dark:text-white">{formatCurrency(Number(a?.totalRevenue ?? 0))}</span>
@@ -545,7 +578,8 @@ export function LandlordDashboard() {
                 <span className="text-xs text-muted dark:text-gray-400">Overdue</span>
                 <span className="text-xs font-bold text-danger">{formatCurrency(Number(a?.overdueAmount ?? 0))}</span>
               </div>
-              <div className="border-t border-border/30 dark:border-[#252a3a]/30 pt-2 flex items-center justify-between">
+              </>)}
+              <div className={`${rentCollection ? 'border-t border-border/30 dark:border-[#252a3a]/30 pt-2 ' : ''}flex items-center justify-between`}>
                 <span className="text-xs text-muted dark:text-gray-400">Avg Rent/Property</span>
                 <span className="text-xs font-bold text-primary-dark dark:text-white">{formatCurrency(Number(a?.avgRentAmount ?? 0))}</span>
               </div>

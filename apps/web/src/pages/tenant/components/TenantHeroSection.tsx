@@ -57,7 +57,7 @@ export function TenantHeroSection({ greeting, firstName, profileComplete, profil
       {/* === KPI strip === */}
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <DashboardMetricCard icon={<FileText size={18} />} label="Agreements" value={String(a?.activeAgreements ?? 0)} sub="Active" accent="#3b82f6" href="/agreements" />
-        <DashboardMetricCard icon={<CreditCard size={18} />} label="Next Payment" value={formatCurrency(a?.nextPaymentAmount ?? 0)} sub={activeAgreement ? `Due ${formatDate(nextPaymentDueDate(activeAgreement.startDate)).split(' ').slice(0,2).join(' ')}` : 'No active lease'} accent="#f59e0b" href="/payments" />
+        <DashboardMetricCard icon={<CreditCard size={18} />} label="Next Payment" value={formatCurrency(a?.nextPaymentAmount ?? 0)} sub={activeAgreement ? `Due ${formatDate(nextPaymentDueDate(activeAgreement.startDate)).split(' ').slice(0,2).join(' ')}` : 'No active lease'} accent="#f59e0b" href={rentCollectionEnabled ? '/payments' : '/agreements'} />
         {walletEnabled ? (
           <>
             <DashboardMetricCard icon={<PiggyBank size={18} />} label="Total Saved" value={formatCurrency(a?.totalSaved ?? 0)} sub={`${a?.savingsProgress ?? 0}% of target`} accent="#10b981" href="/savings" />
