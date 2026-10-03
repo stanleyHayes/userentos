@@ -120,16 +120,18 @@ export default function PaymentsScreen() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodEnd < periodStart) { Alert.alert('Error', 'Enter the rent period as YYYY-MM-DD, with the end on or after the start.'); return }
     setSubmitting(true)
     try {
-      const result = await api.post<{ instructions?: string }>('/payments', {
+      const result = await api.post<{ payment?: { status?: string }; instructions?: string }>('/payments', {
         agreementId: selectedAgreement,
         rentPeriod: { startDate: periodStart, endDate: periodEnd },
         amount: Number(amount),
         method: selectedMethod,
         phone: phone.trim() || undefined,
       })
-      setPaymentInstructions(result.instructions || 'Your payment is pending confirmation. Check your payment history for its status.')
+      const confirmed = result.payment?.status === 'completed'
+      const note = confirmed ? 'This payment has already been confirmed.' : (result.instructions || 'Your payment is pending confirmation. Check your payment history for its status.')
+      setPaymentInstructions(note)
       resetModal()
-      Alert.alert('Payment initiated', result.instructions || 'Your payment is pending confirmation. Check your payment history for its status.')
+      Alert.alert(confirmed ? 'Payment confirmed' : 'Payment initiated', note)
       await load()
     } catch (e) {
       const _err = e as { message?: string }

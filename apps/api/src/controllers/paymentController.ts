@@ -9,7 +9,7 @@ import { Agreement } from '../models/Agreement.js'
 import { success, error } from '../utils/response.js'
 import { param, escapeRegex } from '../utils/params.js'
 import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
-import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
+import { answerRetry, isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused, respondCollectionUncertain } from '../services/payments/checkout.js'
 import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { recordAudit } from '../utils/audit.js'
 import { round2 } from '../utils/money.js'
@@ -58,8 +58,7 @@ export const paymentController = {
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
       if (!existing) return false
       if (!samePayload(existing, amount)) { error(res, 'Idempotency-Key was already used for a different payment', 409); return true }
-      success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-      return true
+      return answerRetry(res, existing)
     }
     if (await replayed(requestedAmount)) return
 
@@ -168,7 +167,11 @@ export const paymentController = {
         const refused = await recordRefusedCollection(payment._id.toString(), err.reason).catch(() => null)
         if (refused) { respondCollectionRefused(res, refused, err.reason); return }
       }
-      if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+      if (payment) {
+        await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+        respondCollectionUncertain(res, payment, err)
+        return
+      }
       throw err
     }
   },

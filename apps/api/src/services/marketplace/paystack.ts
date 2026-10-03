@@ -22,6 +22,11 @@ import { toMinorUnits } from './split.js'
 const BASE_URL = envOr('PAYSTACK_BASE_URL', 'https://api.paystack.co')
 const REQUEST_TIMEOUT_MS = 20_000
 
+/** Whether the secret key is present; the key itself never leaves this module. */
+export function paystackConfigured(): boolean {
+  return !!process.env.PAYSTACK_SECRET_KEY?.trim()
+}
+
 function secretKey(): string {
   const key = process.env.PAYSTACK_SECRET_KEY
   if (!key) throw new Error('PAYSTACK_SECRET_KEY is not set — marketplace payments cannot run')

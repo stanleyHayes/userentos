@@ -2,7 +2,7 @@
  * Marketplace payments: seller onboarding, split initialization and
  * verification (spec §8).
  */
-import { Router } from 'express'
+import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 import crypto from 'crypto'
@@ -20,9 +20,10 @@ import { validateCoupon } from '../services/marketplace/coupons.js'
 import {
   listBanks, resolveAccount, createSubaccount, updateSubaccount,
   initializeSplitTransaction, verifyTransaction,
-  initializePlatformTransaction,
+  initializePlatformTransaction, paystackConfigured,
 } from '../services/marketplace/paystack.js'
 import { logger } from '../utils/logger.js'
+import { getMode } from '../services/payments/index.js'
 import { applySuccessfulCharge, BINDING_KEY, SETTLEABLE_STATUSES } from '../services/marketplace/settle.js'
 import { resolveQuote } from '../services/marketplace/pricing.js'
 import { reconcileCheckout } from '../services/marketplace/reconcile.js'
@@ -32,11 +33,25 @@ const router = Router()
 
 const mask = (accountNumber: string) => `••••${accountNumber.slice(-4)}`
 
-router.get('/banks', authenticate, asyncHandler(async (_req, res) => {
+/**
+ * Live payments without the provider's secret key: answer before touching any
+ * record. A provider call would fail, and its raw error (which names the
+ * missing setting) used to reach the payer and be saved on their payout account.
+ */
+function paymentsConfigured(_req: Request, res: Response, next: NextFunction) {
+  if (getMode() === 'live' && !paystackConfigured()) {
+    error(res, 'Payments are not available right now. Please try again later.', 503)
+    return
+  }
+  next()
+}
+
+router.get('/banks', authenticate, paymentsConfigured, asyncHandler(async (_req, res) => {
   try {
     success(res, { items: await listBanks() })
   } catch (err) {
-    error(res, `Could not load the bank list: ${(err as Error).message}`, 502)
+    logger.warn(`[Marketplace] bank list failed: ${(err as Error).message}`)
+    error(res, 'Could not load the bank list. Try again shortly.', 502)
   }
 }))
 
@@ -59,7 +74,7 @@ const onboardSchema = z.object({
  * spec requires ready_to_receive_payments to follow provider success, not the
  * form submission.
  */
-router.post('/account', authenticate, asyncHandler(async (req, res) => {
+router.post('/account', authenticate, paymentsConfigured, asyncHandler(async (req, res) => {
   const parsed = onboardSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const { businessName, bankCode, bankName, accountNumber } = parsed.data
@@ -134,14 +149,16 @@ router.post('/account', authenticate, asyncHandler(async (req, res) => {
     })
     success(res, { ...account.toObject(), id: String(account._id) }, 'Payout account ready', 201)
   } catch (err) {
-    const reason = (err as Error).message
-    if (existing) {
+    // The provider's own words stay in the log: they can name server settings.
+    logger.warn(`[Marketplace] payout account set-up failed for ${userId}: ${(err as Error).message}`)
+    // A failed change leaves a working account as it was; only an account that
+    // was never ready records the failure.
+    if (existing && !existing.readyToReceivePayments) {
       existing.status = 'failed'
-      existing.readyToReceivePayments = false
-      existing.failureReason = reason
+      existing.failureReason = 'The provider could not set up this account. Check the bank details and try again.'
       await existing.save()
     }
-    error(res, `Could not set up payouts with the provider: ${reason}`, 502)
+    error(res, 'Could not set up payouts with the provider. Check the bank details and try again.', 502)
   }
 }))
 
@@ -209,7 +226,7 @@ const COUPON_HOLD_MS = 30 * 60_000
  * `optionalAuth` is global and the handler simply carried on with req.user
  * undefined.
  */
-router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
+router.post('/initialize', authenticate, paymentsConfigured, asyncHandler(async (req, res) => {
   const parsed = initSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
   const input = parsed.data
@@ -349,7 +366,8 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
       }, 'Payment initialized', 201)
     } catch (err) {
       await failCheckout(transaction)
-      error(res, `Could not start the payment: ${(err as Error).message}`, 502)
+      logger.warn(`[Marketplace] platform checkout ${reference} failed to start: ${(err as Error).message}`)
+      error(res, 'Could not start the payment. Try again shortly.', 502)
     }
     return
   }
@@ -465,7 +483,8 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
     }, 'Payment initialized', 201)
   } catch (err) {
     await failCheckout(transaction)
-    error(res, `Could not start the payment: ${(err as Error).message}`, 502)
+    logger.warn(`[Marketplace] checkout ${reference} failed to start: ${(err as Error).message}`)
+    error(res, 'Could not start the payment. Try again shortly.', 502)
   }
 }))
 
@@ -476,7 +495,7 @@ router.post('/initialize', authenticate, asyncHandler(async (req, res) => {
  * otherwise drive settlement of an order that is not theirs and read its
  * economics back.
  */
-router.get('/verify/:reference', authenticate, asyncHandler(async (req, res) => {
+router.get('/verify/:reference', authenticate, paymentsConfigured, asyncHandler(async (req, res) => {
   const reference = param(req.params.reference)
   const isAdmin = req.user!.roles.some((r) => r === 'admin' || r === 'super_admin')
   const transaction = await MarketplaceTransaction.findOne(isAdmin ? { reference } : { reference, buyerId: req.user!.userId })
@@ -496,7 +515,8 @@ router.get('/verify/:reference', authenticate, asyncHandler(async (req, res) => 
       sellerExpectedAmount: transaction.sellerExpectedAmount,
     })
   } catch (err) {
-    error(res, `Could not verify with the provider: ${(err as Error).message}`, 502)
+    logger.warn(`[Marketplace] verification of ${reference} failed: ${(err as Error).message}`)
+    error(res, 'Could not check this payment with the provider yet. Try again shortly.', 502)
   }
 }))
 

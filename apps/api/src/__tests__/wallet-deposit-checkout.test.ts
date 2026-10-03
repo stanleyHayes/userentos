@@ -69,10 +69,13 @@ it('rejects an unavailable rail before creating a record', async () => {
   expect(res.status).toHaveBeenCalledWith(422)
   expect(Payment.create).not.toHaveBeenCalled()
 })
-it('preserves an uncertain initiation without changing it to failed', async () => {
+it('preserves an uncertain initiation without changing it to failed, and says it is being checked', async () => {
   initiate.mockRejectedValueOnce(new Error('Response lost'))
-  await expect(savingsController.deposit(request() as never, response() as never)).rejects.toThrow('Response lost')
+  const res = response()
+  await savingsController.deposit(request() as never, res as never)
   expect(recordUncertainCollection).toHaveBeenCalledWith('new-payment')
+  expect(res.status).toHaveBeenCalledWith(502)
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'PAYMENT_UNCONFIRMED' }))
 })
 it.each([0.001, Number.MAX_SAFE_INTEGER])('rejects an uncollectable amount %s before persistence', async amount => {
   const res = response()

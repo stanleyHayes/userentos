@@ -39,10 +39,13 @@ const HELD = /^(amount_mismatch|currency_unverified)/
  * Payments the payer may call off themselves, because nothing will resolve
  * them soon without a provider webhook: a bank transfer (pay by reference, no
  * status lookup), a collection on a direct telco rail (no verified lookup
- * either), or one whose initiation was interrupted. Each holds its
- * obligation's one in-flight slot, so without this a tenant who picked bank
- * transfer could not switch to mobile money for that rent period. A Paystack
- * collection in progress is not cancellable: reconciliation settles it.
+ * either), or one whose initiation was interrupted on a rail other than
+ * Paystack. Each holds its obligation's one in-flight slot, so without this a
+ * tenant who picked bank transfer could not switch to mobile money for that
+ * rent period. A Paystack collection is never cancellable, even when its start
+ * was interrupted: Paystack may already have sent the prompt, and a late
+ * approval revives the cancelled payment beside the payer's new one (two
+ * charges). Reconciliation settles it instead.
  */
 export const PAYER_CANCELLABLE: Record<string, unknown> = {
   status: { $in: ['pending', 'processing'] },
@@ -50,7 +53,7 @@ export const PAYER_CANCELLABLE: Record<string, unknown> = {
   $or: [
     { method: 'bank_transfer' },
     { collectionSource: { $in: ['bank_transfer', 'mtn_momo', 'telecel_cash', 'airteltigo_money'] } },
-    { collectionInitiationUncertainAt: { $exists: true } },
+    { collectionInitiationUncertainAt: { $exists: true }, collectionSource: { $ne: 'paystack' } },
   ],
 }
 
@@ -59,7 +62,7 @@ export function isPayerCancellable(payment: Pick<IPayment, 'status' | 'failureRe
     && !HELD.test(payment.failureReason ?? '')
     && (payment.method === 'bank_transfer'
       || ['bank_transfer', 'mtn_momo', 'telecel_cash', 'airteltigo_money'].includes(payment.collectionSource ?? '')
-      || !!payment.collectionInitiationUncertainAt)
+      || (!!payment.collectionInitiationUncertainAt && payment.collectionSource !== 'paystack'))
 }
 
 /**

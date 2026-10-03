@@ -16,6 +16,9 @@
  */
 import type { Request, Response } from 'express'
 import type { Types } from 'mongoose'
+import { Payment } from '../../models/Payment.js'
+import { logger } from '../../utils/logger.js'
+import { success } from '../../utils/response.js'
 
 const MAX_KEY_LENGTH = 200
 
@@ -63,5 +66,57 @@ export function respondCollectionInProgress<T extends { _id: unknown; providerIn
     error: 'A payment for this is already in progress. Finish or wait for it before starting another.',
     code: 'PAYMENT_IN_PROGRESS',
     data: { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions },
+  })
+}
+
+interface RetryPayment { _id: unknown; status: string; idempotencyKey?: string | null; providerInstructions?: string }
+
+/**
+ * Answers a retry that found the payment created under its Idempotency-Key,
+ * or frees that key and returns false so the caller starts a fresh attempt.
+ *
+ * - Failed or refunded: nothing is being collected under the key any more.
+ *   Replaying it as "Payment already initiated" told the payer a dead payment
+ *   was under way, and the web read a reply without instructions as
+ *   "Subscription activated!". The client keeps the key after any error, so
+ *   its next identical attempt lands here and must start over.
+ * - Completed, or under way with the provider's instructions: answered as it
+ *   stands, so the client can show the outcome or resume.
+ * - Under way without instructions (the start was interrupted): 409 in
+ *   progress, which the payer can check again or cancel.
+ */
+export async function answerRetry(res: Response, existing: RetryPayment, extra: Record<string, unknown> = {}): Promise<boolean> {
+  if (existing.status === 'failed' || existing.status === 'refunded') {
+    await Payment.updateOne({ _id: existing._id as Types.ObjectId, status: existing.status, idempotencyKey: existing.idempotencyKey ?? undefined }, { $unset: { idempotencyKey: 1 } })
+    return false
+  }
+  const payment = { ...existing, id: (existing._id as Types.ObjectId).toString() }
+  if (existing.status === 'completed') {
+    success(res, { payment, ...extra }, 'Payment completed')
+    return true
+  }
+  if (existing.providerInstructions) {
+    success(res, { payment, instructions: existing.providerInstructions, ...extra }, 'Payment already initiated')
+    return true
+  }
+  respondCollectionInProgress(res, existing)
+  return true
+}
+
+/**
+ * The provider did not answer clearly (an outage, a timeout, a lost reply)
+ * after the payment was recorded. The caller has held it as uncertain for
+ * reconciliation; the payer is told what is happening instead of "Internal
+ * server error", and a retry with the same details finds this payment.
+ */
+export function respondCollectionUncertain(res: Response, payment: { _id: unknown }, err: unknown) {
+  const failure = err as { name?: string; message?: string } | null
+  logger.warn(`[Payments] collection ${String(payment._id)} not confirmed by the provider: ${failure?.message ?? 'unknown error'}`)
+  const timedOut = failure?.name === 'TimeoutError' || failure?.name === 'AbortError'
+  res.status(timedOut ? 504 : 502).json({
+    success: false,
+    error: "We couldn't confirm this payment yet. We're checking it with the provider; try again in a few minutes.",
+    code: 'PAYMENT_UNCONFIRMED',
+    data: { payment: { id: (payment._id as Types.ObjectId).toString() } },
   })
 }

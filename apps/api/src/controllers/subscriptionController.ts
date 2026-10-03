@@ -14,7 +14,7 @@ import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
 import { recordAudit } from '../utils/audit.js'
 import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from '../services/payments/index.js'
-import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from '../services/payments/checkout.js'
+import { answerRetry, isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused, respondCollectionUncertain } from '../services/payments/checkout.js'
 import { CollectionRefusedError, type ProviderId } from '../services/payments/types.js'
 import { captureSubscriptionTerms } from '../services/payments/subscriptionTerms.js'
 import { currentPaidSubscription } from '../services/payments/paidSubscription.js'
@@ -181,8 +181,7 @@ export const subscriptionController = {
       const existing = await Payment.findOne({ idempotencyKey, tenantId: req.user!.userId }).lean()
       if (!existing) return false
       if (!matchesRetry(existing)) { error(res, 'Idempotency-Key was already used for a different subscription or payment method', 409); return true }
-      success(res, { payment: { ...existing, id: (existing._id as Types.ObjectId).toString() }, instructions: existing.providerInstructions }, 'Payment already initiated')
-      return true
+      return answerRetry(res, existing)
     }
     if (await replayed()) return
 
@@ -285,7 +284,11 @@ export const subscriptionController = {
       }
       // A timeout may follow provider acceptance. Keep the original key and
       // payment available for reconciliation; never downgrade a raced webhook.
-      if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+      if (payment) {
+        await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+        respondCollectionUncertain(res, payment, err)
+        return
+      }
       throw err
     }
   },

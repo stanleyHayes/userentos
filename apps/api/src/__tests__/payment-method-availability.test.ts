@@ -56,14 +56,14 @@ describe('payment rail availability', () => {
     expect(isMethodAvailable('bank_transfer')).toBe(false)
   })
 
-  it('offers every mobile-money rail once Paystack is configured — they ride Paystack', () => {
+  it('offers MTN and AirtelTigo once Paystack is configured, but not Telecel until its voucher step exists', () => {
+    // Paystack asks Telecel payers for a USSD voucher that RentOS cannot send back yet.
     live()
     vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_live_configured')
     vi.stubEnv('BANK_DEPOSIT_ACCOUNT', '')
     const methods = availableMethods()
-    expect(methods).toEqual(
-      expect.arrayContaining(['mtn_momo', 'telecel_cash', 'airteltigo_money']),
-    )
+    expect(methods).toEqual(expect.arrayContaining(['mtn_momo', 'airteltigo_money']))
+    expect(methods).not.toContain('telecel_cash')
   })
 
   it('offers no mobile money without a Paystack key, and checkouts say to try again later', () => {

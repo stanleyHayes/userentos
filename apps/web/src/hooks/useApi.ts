@@ -1590,7 +1590,7 @@ export function useSubscribe() {
     // Paid packages: returns { payment, instructions } — activation happens
     // server-side once the payment is verified (webhook/simulator finalize).
     mutationFn: (body: { packageId: string; method?: string; phone?: string }) =>
-      api.post<{ payment?: { reference: string }; instructions?: string }>('/subscriptions/subscribe', body),
+      api.post<{ payment?: { id: string; reference: string; status: string }; instructions?: string }>('/subscriptions/subscribe', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-subscription'] })
     },

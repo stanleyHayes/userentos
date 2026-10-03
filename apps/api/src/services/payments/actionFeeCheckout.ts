@@ -14,7 +14,7 @@ import { User } from '../../models/User.js'
 import { success, error } from '../../utils/response.js'
 import { logger } from '../../utils/logger.js'
 import { collectionCorrelator, getProvider, isMethodAvailable, unavailableMethodError } from './index.js'
-import { isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused } from './checkout.js'
+import { answerRetry, isDuplicateKey, requireIdempotencyKey, respondCollectionInProgress, respondCollectionRefused, respondCollectionUncertain } from './checkout.js'
 import { CollectionRefusedError, type ProviderId } from './types.js'
 import { recordCollectionInitiation, recordRefusedCollection, recordUncertainCollection } from './collectionInitiation.js'
 import { ACTION_FEES, PASSPORT_EXPORT_WINDOW_MS, feeQuote, type ActionFeePurpose } from '../actionFees.js'
@@ -47,8 +47,7 @@ export async function startActionFeeCheckout(req: Request, res: Response, checko
     if (existing.purpose !== checkout.purpose || existing.purposeMeta?.subjectId !== checkout.subjectId || existing.method !== method) {
       error(res, 'Idempotency-Key was already used for a different payment', 409); return true
     }
-    success(res, { payment: { ...existing, id: String(existing._id) }, instructions: existing.providerInstructions, fee }, 'Payment already initiated')
-    return true
+    return answerRetry(res, existing, { fee })
   }
   if (await replayed()) return
 
@@ -103,7 +102,11 @@ export async function startActionFeeCheckout(req: Request, res: Response, checko
       const refused = await recordRefusedCollection(payment._id.toString(), err.reason).catch(() => null)
       if (refused) { respondCollectionRefused(res, refused, err.reason); return }
     }
-    if (payment) await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+    if (payment) {
+      await recordUncertainCollection(payment._id.toString()).catch(() => undefined)
+      respondCollectionUncertain(res, payment, err)
+      return
+    }
     throw err
   }
 }

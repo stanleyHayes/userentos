@@ -10,7 +10,7 @@ import { paymentInProgress, type FeePayment } from '@/lib/actionFees'
 
 const FALLBACK_METHODS = [
   { id: 'mtn_momo', label: 'MTN Mobile Money' },
-  { id: 'telecel_cash', label: 'Telecel Cash' },
+  // Telecel waits for its voucher step (apps/api/src/services/payments/index.ts).
   { id: 'airteltigo_money', label: 'AirtelTigo Money' },
 ]
 const POLL_MS = 2500

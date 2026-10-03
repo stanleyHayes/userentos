@@ -167,8 +167,11 @@ describe('subscriptionController.subscribe idempotency', () => {
     initiateCollection.mockRejectedValueOnce(new Error('provider down'))
 
     const res = makeRes()
-    await expect(subscriptionController.subscribe(makeReq('key-4'), res as unknown as Response)).rejects.toThrow('provider down')
+    await subscriptionController.subscribe(makeReq('key-4'), res as unknown as Response)
 
+    // The payer hears it is being checked, not "Internal server error".
+    expect(res.statusCode).toBe(502)
+    expect(res.body).toMatchObject({ success: false, code: 'PAYMENT_UNCONFIRMED', data: { payment: { id: 'pay-new' } } })
     expect(created.status).toBe('pending')
     expect(created.save).not.toHaveBeenCalled()
     expect(Payment.updateOne).toHaveBeenCalledWith(

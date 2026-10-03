@@ -54,7 +54,13 @@ export function isMethodAvailable(method: ProviderId): boolean {
   if (method === 'bank_transfer') {
     return !!envOptional('BANK_DEPOSIT_ACCOUNT') && !!envOptional('BANK_PSP_WEBHOOK_SECRET')
   }
-  if (getRail() === 'paystack') return !!envOptional('PAYSTACK_SECRET_KEY')
+  if (getRail() === 'paystack') {
+    // Paystack asks Telecel (vod) payers for a voucher made by USSD, which the
+    // merchant must send back (submit OTP). RentOS has no step for it yet, so
+    // those charges would hang until they expire: not offered until it does.
+    if (method === 'telecel_cash') return false
+    return !!envOptional('PAYSTACK_SECRET_KEY')
+  }
   return true
 }
 

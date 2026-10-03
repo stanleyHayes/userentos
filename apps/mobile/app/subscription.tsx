@@ -95,21 +95,30 @@ export default function SubscriptionScreen() {
     }
     setPaying(true)
     try {
-      const res = await api.post<{ instructions?: string }>('/subscriptions/subscribe', {
+      const res = await api.post<{ payment?: { status?: string }; instructions?: string }>('/subscriptions/subscribe', {
         packageId: payPkg.id,
         method: payMethod,
         phone: payPhone.trim(),
       })
       setPayPkg(null)
       setPayPhone('')
-      Alert.alert(
-        'Payment initiated',
-        res.instructions ?? 'Approve the payment on your phone — your plan activates once it is confirmed.',
-      )
-      setTimeout(() => void load(), 3500)
-      setTimeout(() => void load(), 8000)
+      if (res.payment?.status === 'completed') {
+        // A retry of a payment that has already gone through.
+        Alert.alert('Subscription active', 'Your payment was confirmed and your plan is active.')
+        void load()
+      } else {
+        Alert.alert(
+          'Payment initiated',
+          res.instructions ?? 'Approve the payment on your phone — your plan activates once it is confirmed.',
+        )
+        setTimeout(() => void load(), 3500)
+        setTimeout(() => void load(), 8000)
+      }
     } catch (e) {
-      Alert.alert('Error', (e as { message?: string }).message || 'Failed to subscribe')
+      const failure = e as { message?: string; status?: number; code?: string }
+      // A payment already under way, or not confirmed yet: there is nothing to fix in the form.
+      const title = failure.code === 'PAYMENT_IN_PROGRESS' || failure.code === 'PAYMENT_UNCONFIRMED' ? 'Payment in progress' : 'Error'
+      Alert.alert(title, failure.message || 'Failed to subscribe')
     } finally { setPaying(false) }
   }
 

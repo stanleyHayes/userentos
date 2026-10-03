@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { createHash, randomUUID } from 'node:crypto'
-import { createCheckoutRequests, isProviderCheckout } from '../../packages/shared/checkoutRequests'
+import { CHECKOUT_KEY_LIFETIME_MS, createCheckoutRequests, isProviderCheckout } from '../../packages/shared/checkoutRequests'
 
 function fixture() {
   const saved = new Map<string, string>()
@@ -13,6 +13,8 @@ function fixture() {
   return { saved, deps, run: createCheckoutRequests(deps) }
 }
 const payload = JSON.stringify({ agreementId: 'agreement', amount: 100, phone: '0241234567' })
+/** The saved attempts themselves (each also has a separate "saved at" entry). */
+const attempts = (saved: Map<string, string>) => [...saved].filter(([name]) => !name.startsWith('rentos_checkout_v1_at_')).map(([, value]) => value)
 test('a lost checkout response survives restart using the original key without stored payment details', async () => {
   const f = fixture(); const keys: string[] = []
   await expect(f.run('owner', '/payments', payload, async key => { keys.push(key); throw new Error('Response lost') })).rejects.toThrow('Response lost')
@@ -78,7 +80,7 @@ test('timeout aborts a stalled transport and retains the original attempt even i
   expect(transportSignal.aborted).toBe(true)
   finish('late acknowledgement')
   await Promise.resolve()
-  expect([...f.saved.values()]).toEqual([keyUsed])
+  expect(attempts(f.saved)).toEqual([keyUsed])
   await f.run('owner', '/payments', payload, async key => { expect(key).toBe(keyUsed) })
 })
 
@@ -87,5 +89,39 @@ test('caller cancellation retains the key and prevents a pre-cancelled transport
   let sends = 0
   await expect(f.run('owner', '/payments', payload, async () => { sends++ }, controller.signal)).rejects.toThrow('cancelled')
   expect(sends).toBe(0)
-  expect(f.saved.size).toBe(1)
+  expect(attempts(f.saved)).toHaveLength(1)
+})
+
+test('a saved attempt expires after a day, so the same details later start a new payment', async () => {
+  // Otherwise next month's identical subscription would replay last month's payment as "activated".
+  let clock = 1_000_000
+  const f = fixture(); const keys: string[] = []
+  const run = createCheckoutRequests({ ...f.deps, now: () => clock })
+  await expect(run('owner', '/payments', payload, async key => { keys.push(key); throw new Error('Response lost') })).rejects.toThrow('Response lost')
+  clock += CHECKOUT_KEY_LIFETIME_MS - 1
+  await expect(run('owner', '/payments', payload, async key => { keys.push(key); throw new Error('Lost again') })).rejects.toThrow('Lost again')
+  clock += 2
+  expect(await run('owner', '/payments', payload, async key => { keys.push(key); return 'new-payment' })).toBe('new-payment')
+  expect(keys[1]).toBe(keys[0])
+  expect(keys[2]).not.toBe(keys[0])
+  expect(f.saved.size).toBe(0)
+})
+
+test('an attempt saved before keys carried a timestamp is still replayed, then cleared', async () => {
+  const f = fixture(); const legacy = randomUUID()
+  const hash = await f.deps.digest(JSON.stringify(['owner', '/payments', JSON.parse(payload)]))
+  f.saved.set(`rentos_checkout_v1_${hash}`, legacy)
+  let used = ''
+  await f.run('owner', '/payments', payload, async key => { used = key; return 'original' })
+  expect(used).toBe(legacy)
+  expect(f.saved.size).toBe(0)
+})
+
+test('the saved attempt stays the bare key, so older code reading it is not blocked', async () => {
+  // A rollback, or a tab still on the previous version, rejects anything but the bare key.
+  const f = fixture()
+  await expect(f.run('owner', '/payments', payload, async () => { throw new Error('Response lost') })).rejects.toThrow('Response lost')
+  const [saved] = attempts(f.saved)
+  expect(saved).toMatch(/^[a-zA-Z0-9-]{16,100}$/)
+  expect(f.saved.size).toBe(2)
 })

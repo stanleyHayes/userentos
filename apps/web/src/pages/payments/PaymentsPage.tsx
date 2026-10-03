@@ -58,7 +58,7 @@ const historicalMethods = [
  */
 const FALLBACK_PAYABLE = [
   { id: 'mtn_momo', label: 'MTN Mobile Money' },
-  { id: 'telecel_cash', label: 'Telecel Cash' },
+  // Telecel waits for its voucher step (apps/api/src/services/payments/index.ts).
   { id: 'airteltigo_money', label: 'AirtelTigo Money' },
 ]
 
@@ -442,7 +442,8 @@ function MakePaymentModal({
         method: form.method,
         phone: form.phone.trim() || undefined,
       })
-      celebrate('payment', 'Payment initiated!')
+      // A retry can find the payment already confirmed.
+      celebrate('payment', result?.payment?.status === 'completed' ? 'Payment confirmed!' : 'Payment initiated!')
       onClose()
       setForm({ agreementId: defaultAgreementId, amount: '', periodStart: '', periodEnd: '', method: 'mtn_momo', phone: user?.phone ?? '' })
       if (result?.instructions) {

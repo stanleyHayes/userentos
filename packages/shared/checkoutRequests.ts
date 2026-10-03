@@ -1,3 +1,10 @@
+/**
+ * How long a saved attempt stays retryable. Long enough to survive a lost
+ * response or an app restart, short enough that the same details next month
+ * start a new payment instead of replaying last month's.
+ */
+export const CHECKOUT_KEY_LIFETIME_MS = 24 * 60 * 60 * 1000
+
 /** Keep the same attempt across a lost response or app restart. Persist hashes,
  * never the payment payload. A successful response resolves the attempt. */
 export function createCheckoutRequests(deps: {
@@ -8,21 +15,31 @@ export function createCheckoutRequests(deps: {
   remove(key: string): Promise<void>
   timeoutMs?: number
   lock?<T>(key: string, work: () => Promise<T>): Promise<T>
+  now?(): number
 }) {
+  const now = deps.now ?? (() => Date.now())
   const active = new Map<string, Promise<unknown>>()
   return async function checkout<T>(owner: string, path: string, payload: string, send: (key: string, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (!owner) throw new Error('Sign in before starting a payment.')
     const hash = await deps.digest(JSON.stringify([owner, path, JSON.parse(payload)]))
     const storageKey = `rentos_checkout_v1_${hash}`
+    // When the attempt was saved, kept apart so the key entry stays the bare key older code reads.
+    const savedAtKey = `rentos_checkout_v1_at_${hash}`
     const pending = active.get(storageKey)
     if (pending) return pending as Promise<T>
     const prepare = async () => {
       let key = await deps.read(storageKey)
       if (key !== null && !/^[a-zA-Z0-9-]{16,100}$/.test(key)) throw new Error('Saved payment retry information is invalid. Contact support before trying another payment.')
+      if (key) {
+        // Attempts saved before the timestamp existed have none and stay retryable.
+        const savedAt = Number(await deps.read(savedAtKey))
+        if (Number.isFinite(savedAt) && savedAt > 0 && now() - savedAt > CHECKOUT_KEY_LIFETIME_MS) key = null
+      }
       if (!key) {
         key = deps.randomId()
         // Fail before sending if persistence is unavailable.
         await deps.write(storageKey, key)
+        await deps.write(savedAtKey, String(now()))
       }
       return key
     }
@@ -48,7 +65,11 @@ export function createCheckoutRequests(deps: {
         signal?.removeEventListener('abort', cancel)
       }
       // If cleanup fails, retaining the key safely replays the known payment.
-      const cleanup = async () => { if (await deps.read(storageKey) === key) await deps.remove(storageKey) }
+      const cleanup = async () => {
+        if (await deps.read(storageKey) !== key) return
+        await deps.remove(storageKey)
+        await deps.remove(savedAtKey)
+      }
       await (deps.lock ? deps.lock(storageKey, cleanup) : cleanup()).catch(() => undefined)
       return result
     }
