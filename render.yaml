@@ -36,6 +36,14 @@ services:
       # paystack (default) or direct — see apps/api/.env.example.
       - key: PAYMENTS_RAIL
         value: paystack
+      # The one key for every Paystack payment, in and out: the GH₵150 plan,
+      # the GH₵5 fees, rent and payouts. Your sk_live_ key from Paystack ›
+      # Settings › API Keys & Webhooks. Set its value in the Render dashboard
+      # (rentos-api › Environment), never here. Without it, live mode offers
+      # no payment method. Also set Paystack's live webhook URL to
+      # https://api.userentos.com/api/webhooks/paystack.
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
       - key: PAYSTACK_COLLECTION_EMAIL
         sync: false
       - key: PAYMENTS_PROVIDER_MODE
@@ -116,8 +124,7 @@ services:
       # paths are aliases of it, kept so events are not lost while switching.
       - key: PAYOUT_PROVIDER
         value: paystack
-      - key: PAYSTACK_SECRET_KEY
-        sync: false
+      # PAYSTACK_SECRET_KEY (under Payments above) also sends payouts.
       - key: PAYSTACK_BASE_URL
         sync: false
 
