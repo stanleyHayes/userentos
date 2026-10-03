@@ -12,7 +12,7 @@ import { Router, type Request } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import type { Types } from 'mongoose'
-import { authenticate, optionalAuth, requireRole } from '../middleware/auth.js'
+import { authenticate, isSuperAdmin, optionalAuth, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { trackLimiter, enquiryLimiter } from '../middleware/rateLimit.js'
 import { uploadToCloudinary } from '../utils/cloudinary.js'
@@ -20,7 +20,7 @@ import { eraseStoredAssets } from '../services/propertyImages.js'
 import { recordEnquiry, findOpenLead } from '../services/leads.js'
 import { openEnquiryConversation, sendFailureBody } from '../services/conversations.js'
 import { screenFields, blockedBody } from '../services/trust/screen.js'
-import { normalizeListingRef } from '../services/listings.js'
+import { normalizeListingRef, PROPERTY_PROFESSIONAL_ROLES } from '../services/listings.js'
 import { Storefront } from '../models/Storefront.js'
 import { StorefrontDomain } from '../models/StorefrontDomain.js'
 import { StorefrontEvent } from '../models/StorefrontEvent.js'
@@ -110,7 +110,8 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
   })
 }))
 
-router.post('/', authenticate, asyncHandler(async (req, res) => {
+// A property website is for property professionals; any account used to be able to launch one.
+router.post('/', authenticate, requireRole(...PROPERTY_PROFESSIONAL_ROLES), asyncHandler(async (req, res) => {
   const parsed = createSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
 
@@ -220,6 +221,10 @@ router.patch('/me', authenticate, asyncHandler(async (req, res) => {
 router.post('/me/publish', authenticate, asyncHandler(async (req, res) => {
   const parsed = z.object({ published: z.boolean() }).safeParse(req.body ?? {})
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
+  // Launching needs a property professional; any owner may still take a website down.
+  if (parsed.data.published && !isSuperAdmin(req) && !req.user!.roles.some((role) => (PROPERTY_PROFESSIONAL_ROLES as readonly string[]).includes(role))) {
+    error(res, 'Insufficient permissions', 403); return
+  }
   const storefront = await Storefront.findOne({ ownerId: req.user!.userId })
   if (!storefront) { error(res, 'Create your website first', 404); return }
   if (storefront.status !== 'active') { error(res, 'This website is suspended. Contact support.', 409); return }

@@ -13,12 +13,40 @@ import { api } from '../lib/api'
 import { AITextInput } from '../components/AITextInput'
 import { createPhotoUploadKeys, photoPart, photosToUpload, submitListing } from '../lib/propertyPhotos'
 import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../packages/shared/listingTypes'
+import { isPropertyProfessional } from '../../../packages/shared/productScope'
+import { useAuthStore } from '../stores/authStore'
 
 const REGIONS = ['Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central', 'Northern', 'Volta', 'Upper East', 'Upper West', 'Bono', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North']
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
 const AMENITIES = ['Water', 'Electricity', 'WiFi', 'Parking', 'Security', 'AC', 'Generator', 'Swimming Pool', 'Gym', 'Garden', 'Garage', 'Elevator', 'Balcony', 'Laundry', 'CCTV']
 
 export default function AddPropertyScreen() {
+  // Menus only offer this screen to landlords and agents, but a deep link or an old shortcut can still open it.
+  const roles = useAuthStore((st) => st.user?.roles)
+  // Until the real profile loads (an offline or slow start), roles are empty: wait rather than turn a landlord away.
+  const pending = useAuthStore((st) => st.profilePending)
+  if (pending) return <ProfileLoading />
+  return isPropertyProfessional(roles) ? <AddPropertyForm /> : <ListingNotAvailable />
+}
+
+function ProfileLoading() {
+  const c = useThemeColors()
+  return <View style={{ flex: 1, justifyContent: 'center', backgroundColor: c.surface }}><ActivityIndicator accessibilityLabel="Loading your account" color={c.primary} /></View>
+}
+
+function ListingNotAvailable() {
+  const c = useThemeColors()
+  return (
+    <View style={{ flex: 1, padding: spacing.lg, backgroundColor: c.surface }}>
+      <Text accessibilityRole="header" style={{ color: c.primaryDark, fontSize: 18, fontFamily: 'Outfit_700Bold' }}>Listing is for landlords and agents</Text>
+      <Text style={{ color: c.text, marginTop: spacing.sm }}>
+        Landlords, agents and property managers list homes on RentOS. You can still browse every listing and message the person who listed it.
+      </Text>
+    </View>
+  )
+}
+
+function AddPropertyForm() {
   const c = useThemeColors()
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)

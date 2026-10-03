@@ -13,6 +13,8 @@ import {
   useAddStorefrontDomain, useVerifyStorefrontDomain, useMakeDomainCanonical, useRemoveStorefrontDomain,
   type StorefrontRecord,
 } from '@/hooks/useApi'
+import { useAuthStore } from '@/stores/authStore'
+import { isPropertyProfessional } from '../../../../../packages/shared/productScope'
 
 /**
  * Seller-facing storefront setup.
@@ -25,6 +27,8 @@ export function StorefrontSettingsPage() {
   const { data: storefront, isLoading } = useMyStorefront()
   const { data: entitlements } = useMyEntitlements()
   const features = entitlements?.features ?? {}
+  // Websites are open to landlords and agents for now; the API refuses other accounts a new one.
+  const professional = isPropertyProfessional(useAuthStore((s) => s.user?.roles))
 
   const canHaveStorefront = features['storefront.enabled'] === true
   const canBrand = features['storefront.custom_branding'] === true
@@ -42,6 +46,8 @@ export function StorefrontSettingsPage() {
 
       {isLoading ? (
         <ListSkeleton rows={3} />
+      ) : !storefront && !professional ? (
+        <EmptyState icon={<Store size={28} />} title="Websites are coming later for your account" description="RentOS websites are open to landlords, agents and property managers for now." />
       ) : !canHaveStorefront && !storefront ? (
         <EmptyState
           preset="general"

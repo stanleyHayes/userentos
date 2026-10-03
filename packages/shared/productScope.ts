@@ -10,6 +10,18 @@
 
 export const DEFAULT_SIGNUP_ROLES = ['tenant', 'property_manager'] as const
 
+/**
+ * Accounts that list property and run a property website: landlords & owners,
+ * agents / agencies / property managers, and staff. A tenant, worker or
+ * business account cannot (the API refuses with 403). Mirrors
+ * PROPERTY_PROFESSIONAL_ROLES in apps/api/src/services/listings.ts.
+ */
+export const PROPERTY_PROFESSIONAL_ROLES = ['landlord', 'property_manager', 'admin', 'super_admin'] as const
+
+export function isPropertyProfessional(roles: readonly string[] | undefined | null): boolean {
+  return !!roles?.some((role) => (PROPERTY_PROFESSIONAL_ROLES as readonly string[]).includes(role))
+}
+
 /** What kind of professional a property_manager account is. */
 export const PROFESSIONAL_TYPES = [
   { value: 'agent', label: 'Agent', description: 'I find tenants and buyers for property owners' },

@@ -8,10 +8,14 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PropertyMap } from '@/components/map/PropertyMap'
 import { usePropertyPins } from '@/hooks/useApi'
+import { useAuthStore } from '@/stores/authStore'
+import { isPropertyProfessional } from '../../../../../packages/shared/productScope'
 
 const TYPES = ['apartment', 'house', 'room', 'studio', 'townhouse', 'hostel', 'shared_room', 'commercial', 'warehouse']
 
 export function PropertyMapPage() {
+  // Only landlords and agents can list; everyone else just browses the map.
+  const canList = isPropertyProfessional(useAuthStore((s) => s.user?.roles))
   const [type, setType] = useState('')
   const [maxRent, setMaxRent] = useState('')
 
@@ -78,8 +82,8 @@ export function PropertyMapPage() {
             <EmptyState
               icon={<MapPin size={28} />}
               title="No listings to plot yet"
-              description="Only approved listings with a pinned location appear here. Set a location when adding a property."
-              action={{ label: 'Add a property', href: '/properties/new' }}
+              description={canList ? 'Only approved listings with a pinned location appear here. Set a location when adding a property.' : 'Only approved listings with a pinned location appear here.'}
+              action={canList ? { label: 'Add a property', href: '/properties/new' } : undefined}
             />
           </div>
         ) : (

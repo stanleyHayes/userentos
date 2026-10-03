@@ -16,6 +16,7 @@ import { bootHtml, bootPath } from '@/lib/prerender'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { RequireRole, NotPaused } from '@/components/layout/RequireRole'
+import { PROPERTY_PROFESSIONAL_ROLES } from '../../../packages/shared/productScope'
 import { PublicLayout } from '@/components/layout/PublicLayout'
 import { LandingPage } from '@/pages/LandingPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -269,7 +270,7 @@ export default function App() {
             <Route path="/properties" element={<PropertiesPage />} />
             {/* Discover is the "For you" view of Properties now. */}
             <Route path="/discover" element={<Navigate to="/properties?view=for-you" replace />} />
-            <Route path="/properties/new" element={<AddPropertyPage />} />
+            <Route path="/properties/new" element={<RequireRole roles={[...PROPERTY_PROFESSIONAL_ROLES]}><AddPropertyPage /></RequireRole>} />
             <Route path="/properties/map" element={<PropertyMapPage />} />
             <Route path="/properties/:id" element={<PropertyDetailPage />} />
             <Route path="/agreements" element={<AgreementsPage />} />

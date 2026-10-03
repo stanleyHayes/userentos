@@ -35,6 +35,15 @@ export function generateListingRef(): string {
 }
 
 /**
+ * Accounts that list property and run a property website: landlords & owners,
+ * agents / agencies / property managers, and staff. Any other account (a
+ * tenant, a worker, a business) used to be able to create and publish
+ * listings and launch a public website by calling the API directly.
+ * Mirrors packages/shared/productScope.ts (the API image does not ship it).
+ */
+export const PROPERTY_PROFESSIONAL_ROLES = ['landlord', 'property_manager', 'admin', 'super_admin'] as const
+
+/**
  * Normalizes a reference typed or shared in any case; null if it can't be one.
  * Accepts a listing's descriptive address too ("2-bedroom-house-for-rent-in-osu-accra-rx7k2p9"):
  * the reference is its last part.

@@ -117,7 +117,6 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Agreements', labelKey: 'nav.agreements', path: '/agreements', icon: <FileText size={20} />, roles: PRO },
       { label: 'Payments', labelKey: 'nav.payments', path: '/payments', icon: <CreditCard size={20} />, roles: ['landlord'] },
-      { label: 'Payouts', path: '/storefront/payments', icon: <Banknote size={20} />, roles: PRO },
       { label: 'Subscription', labelKey: 'nav.subscription', path: '/subscription', icon: <Crown size={20} />, roles: PRO },
     ],
   },

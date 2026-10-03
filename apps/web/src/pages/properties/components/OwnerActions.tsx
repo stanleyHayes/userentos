@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { useUploadPropertyImages } from '@/hooks/useApi'
+import { useAuthStore } from '@/stores/authStore'
+import { isPropertyProfessional } from '../../../../../../packages/shared/productScope'
 import { Send, MessageSquare, MapPin, Pencil } from 'lucide-react'
 import { SetLocationModal } from './SetLocationModal'
 import { EditListingModal, type EditableListing } from './EditListingModal'
@@ -29,6 +31,8 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
   const uploadImages = useUploadPropertyImages()
   const [locationOpen, setLocationOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  // Photos and review are for landlords and agents (the API refuses others); any owner can still edit or withdraw.
+  const canList = isPropertyProfessional(useAuthStore((s) => s.user?.roles))
 
   // Fix what the reviewer raised, then send it back: two steps, two buttons.
   const editAndResubmit = (
@@ -36,9 +40,11 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
       <Button variant="outline" className="w-full" onClick={() => setEditOpen(true)}>
         <Pencil size={14} /> Edit listing
       </Button>
-      <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
-        <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Resubmit for review'}
-      </Button>
+      {canList && (
+        <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
+          <Send size={14} /> {isPublishing ? 'Resubmitting...' : 'Resubmit for review'}
+        </Button>
+      )}
     </>
   )
 
@@ -60,10 +66,14 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
           e.target.value = ''
         }}
       />
-      <Button variant="outline" className="w-full" onClick={() => imageInputRef.current?.click()} disabled={uploadImages.isPending}>
-        {uploadImages.isPending ? 'Uploading...' : 'Upload Images'}
-      </Button>
-      {listingStatus === 'draft' && (
+      {canList ? (
+        <Button variant="outline" className="w-full" onClick={() => imageInputRef.current?.click()} disabled={uploadImages.isPending}>
+          {uploadImages.isPending ? 'Uploading...' : 'Upload Images'}
+        </Button>
+      ) : (
+        <p className="text-xs text-muted dark:text-gray-400">Only landlords and agents can add photos and publish listings. You can still edit or withdraw this one.</p>
+      )}
+      {listingStatus === 'draft' && canList && (
         <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
           <Send size={14} /> {isPublishing ? 'Publishing...' : 'Publish for Review'}
         </Button>

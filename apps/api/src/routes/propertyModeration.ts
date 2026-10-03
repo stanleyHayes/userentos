@@ -12,7 +12,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import type { Types } from 'mongoose'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, requireRole } from '../middleware/auth.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { Property } from '../models/Property.js'
 import { PropertyReview } from '../models/PropertyReview.js'
@@ -24,6 +24,7 @@ import { recordAudit } from '../utils/audit.js'
 import { notifyPropertyApproved, notifyPropertyRejected, notifyPropertyChangesRequested } from '../services/notify.js'
 import { checkAndAward } from '../services/achievements.js'
 import { listingIndexPaths, submitToIndexNow } from '../services/indexNow.js'
+import { PROPERTY_PROFESSIONAL_ROLES } from '../services/listings.js'
 import { clearLandingCache } from '../services/seoLanding.js'
 import {
   canReview, canTransition, isSuperAdminPrincipal,
@@ -123,7 +124,7 @@ router.get('/:id/reviews', authenticate, asyncHandler(async (req, res) => {
  * A resubmission bumps reviewVersion rather than clearing anything, so the
  * previous cycle's decisions stay queryable.
  */
-router.post('/:id/submit', authenticate, asyncHandler(async (req, res) => {
+router.post('/:id/submit', authenticate, requireRole(...PROPERTY_PROFESSIONAL_ROLES), asyncHandler(async (req, res) => {
   const property = await Property.findById(param(req.params.id))
   if (!property) { error(res, 'Property not found', 404); return }
 

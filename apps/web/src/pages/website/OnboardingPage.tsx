@@ -17,6 +17,7 @@ import { isContactBlocked, type ContactBlockedError } from '@/lib/contactProtect
 import { ContactBlockedNotice } from '@/components/trust/ContactBlockedNotice'
 import { websiteUrl } from '@/lib/site'
 import { ImageSlot, ChipsInput } from './fields'
+import { isPropertyProfessional } from '../../../../../packages/shared/productScope'
 
 const noop = () => {}
 const STEPS = ['Business', 'Look', 'Properties', 'About', 'Launch'] as const
@@ -32,11 +33,14 @@ const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]
 export function OnboardingPage() {
   const authReady = useAuthRehydrate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const roles = useAuthStore((s) => s.user?.roles)
   if (!authReady) return <SplashScreen onFinished={noop} />
   if (!isAuthenticated) {
     try { sessionStorage.setItem('postAuthRedirect', '/onboarding') } catch { /* storage blocked */ }
     return <Navigate to="/login" replace />
   }
+  // A property website is for landlords and agents (the API refuses anyone else).
+  if (!isPropertyProfessional(roles)) return <Navigate to="/dashboard" replace />
   return <Wizard />
 }
 

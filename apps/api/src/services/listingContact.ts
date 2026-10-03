@@ -68,8 +68,9 @@ export async function listingContact(agentId: string): Promise<{ agent: ListingA
       name: storefront?.name ?? `${user.firstName} ${user.lastName}`.trim(),
       type: professional ? (PROFESSIONAL_LABELS[user.professionalType ?? ''] ?? 'Agent') : user.roles.includes('landlord') ? 'Landlord' : 'Owner',
       logoUrl: storefront?.branding?.logoUrl ?? user.profileImage ?? null,
-      websiteUrl: storefront ? storefrontUrl(storefront) : null,
-      storefrontSlug: storefront?.slug ?? null,
+      // A draft website answers 404 to the public, so only a launched one is linked.
+      websiteUrl: storefront && storefront.published !== false ? storefrontUrl(storefront) : null,
+      storefrontSlug: storefront && storefront.published !== false ? storefront.slug : null,
       identityVerified: user.verificationStatus === 'verified',
       whatsapp: Boolean(whatsappNumber),
     },

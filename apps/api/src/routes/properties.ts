@@ -14,6 +14,7 @@ import { getSmartRecommendations } from '../services/recommendations.js'
 import { cache } from '../services/cache.js'
 import { PUBLICLY_VISIBLE_STATUSES } from '../services/propertyReview.js'
 import { closedAccountIds } from '../services/closedAccounts.js'
+import { PROPERTY_PROFESSIONAL_ROLES } from '../services/listings.js'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
@@ -33,8 +34,10 @@ router.get('/:id/qualify', authenticate, asyncHandler(propertyController.qualify
 // NOTE: GET '/:id' is registered at the BOTTOM of this file so it does not shadow
 // the literal GET routes (/recommendations/smart, /nearby) defined later.
 router.post('/bulk', authenticate, requireRole('landlord', 'property_manager'), asyncHandler(propertyController.bulkCreate))
-router.post('/', authenticate, asyncHandler(propertyController.create))
-router.post('/:id/publish', authenticate, asyncHandler(propertyController.publish))
+// Listing property is for property professionals; PATCH, DELETE and photo removal stay owner-only so any owner can still withdraw.
+const lister = requireRole(...PROPERTY_PROFESSIONAL_ROLES)
+router.post('/', authenticate, lister, asyncHandler(propertyController.create))
+router.post('/:id/publish', authenticate, lister, asyncHandler(propertyController.publish))
 // Approving/rejecting a listing is an admin moderation action.
 // NOTE: POST /:id/review is served by propertyModeration.ts, which is mounted
 // on /api/properties BEFORE this router. The handler that used to be declared
@@ -43,7 +46,8 @@ router.post('/:id/publish', authenticate, asyncHandler(propertyController.publis
 // written against it failed validation against a route it never reached.
 router.patch('/:id', authenticate, asyncHandler(propertyController.update))
 router.delete('/:id', authenticate, asyncHandler(propertyController.delete))
-router.post('/:id/images', authenticate, upload.array('images', 10), asyncHandler(propertyController.uploadImages))
+router.post('/:id/images', authenticate, lister, upload.array('images', 10), asyncHandler(propertyController.uploadImages))
+// Removing a photo only reduces what is public: owner-only, like PATCH and DELETE.
 router.delete('/:id/images', authenticate, asyncHandler(propertyController.removeImage))
 router.post('/:id/favorite', authenticate, asyncHandler(propertyController.toggleFavorite))
 
