@@ -11,7 +11,7 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     services:
       mongo:
         image: mongo:7
@@ -47,6 +47,8 @@ jobs:
           npm ci
           npm ci --prefix apps/api
           npm ci --prefix apps/web
+          # Mobile specs import the app's own modules (and run it on Expo web below).
+          npm ci --prefix apps/mobile
           npm ci --prefix e2e
 
       - name: Sync shared types
@@ -75,6 +77,25 @@ jobs:
         run: DEV_CLIENT_PORT=${CLIENT_PORT:-5173} npm test
         working-directory: e2e
 
+      # Web UI specs with every API response mocked (playwright.web-mocked.config.ts):
+      # a second Vite server whose proxy points at nothing.
+      - name: Run mocked web specs
+        if: success() || failure()
+        run: |
+          (cd ../apps/web && VITE_PROXY_TARGET=http://localhost:3999 nohup npx vite --port 5602 --strictPort > ../../vite-mocked.log 2>&1 &)
+          npx --yes wait-on http://localhost:5602 --timeout 120000
+          PLAYWRIGHT_BASE_URL=http://localhost:5602 npx playwright test -c playwright.web-mocked.config.ts
+        working-directory: e2e
+
+      # The mobile app's screens on Expo web, with mocked API responses (playwright.mobile.config.ts).
+      - name: Run mobile specs on Expo web
+        if: success() || failure()
+        run: |
+          (cd ../apps/mobile && CI=1 EXPO_PUBLIC_API_URL=http://localhost:3402 nohup npx expo start --web --port 8190 > ../../expo-web.log 2>&1 &)
+          npx --yes wait-on http://localhost:8190 --timeout 240000
+          MOBILE_WEB_URL=http://localhost:8190 npx playwright test -c playwright.mobile.config.ts
+        working-directory: e2e
+
       - name: Upload Playwright HTML report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -88,5 +109,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-server-log
-          path: dev.log
+          path: |
+            dev.log
+            vite-mocked.log
+            expo-web.log
           retention-days: 7

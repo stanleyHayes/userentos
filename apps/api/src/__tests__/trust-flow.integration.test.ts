@@ -138,8 +138,16 @@ describe.skipIf(!hasTestMongo)('contact protection (TRUST-2) end to end', () => 
     expect(r2.message).toMatch(/suspended/)
     await screenOutbound({ text: 'kofi.mensah@gmail.com', authorId: author, channel: 'chat' })
     await screenOutbound({ text: 'IG @kofi_homes', authorId: author, channel: 'chat' })
+    // The report is filed in the background: wait for it, as a fixed pause was outlasted on a busy run.
+    const reportsFor = () => ContentReport.find({ reporterId: SYSTEM_REPORTER_ID, targetType: 'user', targetId: author }).lean()
+    let reports = await reportsFor()
+    for (let i = 0; i < 50 && reports.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      reports = await reportsFor()
+    }
+    // Then give the fourth strike the same time to file a second one, which it must not.
     await new Promise((resolve) => setTimeout(resolve, 150))
-    const reports = await ContentReport.find({ reporterId: SYSTEM_REPORTER_ID, targetType: 'user', targetId: author }).lean()
+    reports = await reportsFor()
     expect(reports).toHaveLength(1)
     expect(reports[0].reason).toBe('off_platform_contact')
     // Masked excerpts only: never the numbers, address or handle themselves.

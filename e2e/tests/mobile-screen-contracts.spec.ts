@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request } from '@playwright/test'
 import { allRegulatedFeatures } from '../helpers/regulatedFeatures'
+import { openProfileEntry } from '../helpers/mobileNav'
 const mobileUrl = process.env.MOBILE_WEB_URL
 test.skip(!mobileUrl, 'Requires Expo web at MOBILE_WEB_URL')
 
@@ -48,8 +49,7 @@ async function signIn(page: Page, user: typeof tenant, answer: (path: string, re
 }
 
 async function openFromProfile(page: Page, menuItem: string) {
-  await page.getByText('Profile', { exact: true }).last().click()
-  await page.getByText(menuItem, { exact: true }).click()
+  await openProfileEntry(page, menuItem)
 }
 
 // ── Government ──

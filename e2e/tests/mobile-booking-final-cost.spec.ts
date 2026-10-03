@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { allRegulatedFeatures } from '../helpers/regulatedFeatures'
+import { openProfileEntry } from '../helpers/mobileNav'
 const mobileUrl = process.env.MOBILE_WEB_URL
 test.skip(!mobileUrl, 'Requires Expo web at MOBILE_WEB_URL')
 
@@ -42,8 +43,7 @@ async function openBookings(page: Page, asWorker: boolean, patch: (body: Record<
   await page.getByPlaceholder('you@example.com').fill(customer.email)
   await page.getByPlaceholder('Enter your password').fill('E2e!Password123')
   await page.getByText('Sign in', { exact: true }).click()
-  await page.getByText('Profile', { exact: true }).last().click()
-  await page.getByText('My Bookings', { exact: true }).click()
+  await openProfileEntry(page, 'My Bookings')
   if (asWorker) await page.getByText('My Jobs', { exact: true }).click()
   await expect(page.getByText('Replace the burst pipe', { exact: true })).toBeVisible()
   return patches

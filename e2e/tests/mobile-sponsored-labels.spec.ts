@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { allRegulatedFeatures } from '../helpers/regulatedFeatures'
+import { openProfileEntry } from '../helpers/mobileNav'
 
 // The apps declare no ads (Google Play "Contains ads: No"), so they must never
 // ask the API for paid placements. These pin that, and that the labels are in
@@ -70,8 +71,7 @@ test('the properties tab asks for no paid placements, and labels one if the serv
 
 test('local services asks for organic order, labels a paid business and tags new-mover offers', async ({ page }) => {
   const requests = await signIn(page)
-  await page.getByText('Profile', { exact: true }).last().click()
-  await page.getByText('Local Services', { exact: true }).first().click()
+  await openProfileEntry(page, 'Local Services')
   await expect(page.getByText('Paid Furniture Co', { exact: true })).toBeVisible()
 
   await expect(page.getByLabel('Sponsored business')).toBeVisible()
