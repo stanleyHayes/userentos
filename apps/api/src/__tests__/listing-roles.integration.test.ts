@@ -101,6 +101,23 @@ describe.skipIf(!hasTestMongo)('only property professionals list property and la
     }
   })
 
+  it('lists an agent’s own drafts and reviews under mine=true, and never another owner’s', async () => {
+    // The mobile Properties tab opens on mine=true for agents and landlords.
+    const agent = String(ids.property_manager)
+    await Property.create([
+      { ...listing, title: `Mine draft ${tag}`, landlordId: agent, listingStatus: 'draft' },
+      { ...listing, title: `Mine changes ${tag}`, landlordId: agent, listingStatus: 'changes_requested', reviewIssues: ['Add a photo of the kitchen'] },
+      { ...listing, title: `Other draft ${tag}`, landlordId: String(ids.landlord), listingStatus: 'draft' },
+    ])
+    const titles = async (path: string) => ((await (await send('GET', path, 'property_manager')).json()) as { data: { items: { title: string; listingStatus?: string; reviewIssues?: string[] }[] } }).data.items
+    const mine = await titles(`/api/properties?mine=true&pageSize=100&search=${tag}`)
+    expect(mine.map((p) => p.title)).toEqual(expect.arrayContaining([`Mine draft ${tag}`, `Mine changes ${tag}`]))
+    expect(mine.map((p) => p.title)).not.toContain(`Other draft ${tag}`)
+    expect(mine.find((p) => p.title === `Mine changes ${tag}`)).toMatchObject({ listingStatus: 'changes_requested', reviewIssues: ['Add a photo of the kitchen'] })
+    // Browsing, another owner's draft stays hidden as well.
+    expect((await titles(`/api/properties?pageSize=100&search=${tag}`)).map((p) => p.title)).not.toContain(`Other draft ${tag}`)
+  })
+
   it('links a listing to its owner’s website only once the website is launched', async () => {
     const owner = String(ids.property_manager)
     await Storefront.create({ ownerType: 'user', ownerId: owner, slug: `gate${tag}`, name: 'Gate Homes', status: 'active', published: false })

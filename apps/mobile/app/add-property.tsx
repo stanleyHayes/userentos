@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker'
 import * as Crypto from 'expo-crypto'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { useQuery } from '@tanstack/react-query'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard, neuInset } from '../lib/neu'
 import { api } from '../lib/api'
@@ -58,6 +59,14 @@ function AddPropertyForm() {
   const savedRef = useRef<{ id: string; uploaded: string[] } | null>(null)
   const [saved, setSaved] = useState<{ id: string; uploaded: string[] } | null>(null)
   const uploadKey = useRef(createPhotoUploadKeys(() => Crypto.randomUUID())).current
+  // The plan's listing limit, shown before the form rather than as an error once it is all filled in.
+  const quota = useQuery({
+    queryKey: ['my-subscription', 'listing-quota'],
+    queryFn: () => api.get<{ propertyCount?: number; maxProperties?: number; canAddProperty?: boolean; isExpired?: boolean }>('/subscriptions/my-subscription'),
+  })
+  const listingLimit = quota.data?.maxProperties
+  const listingsUsed = quota.data?.propertyCount ?? 0
+  const limited = typeof listingLimit === 'number' && listingLimit !== -1
 
   const [form, setForm] = useState({
     // Rent, sale or short let: decides the price wording and which terms apply.
@@ -148,7 +157,13 @@ function AddPropertyForm() {
     const uploaded = [...(savedRef.current?.uploaded ?? []), ...photos.filter((uri) => !failed.includes(uri))]
     if (failed.length === 0) {
       rememberSaved(null)
-      Alert.alert('Success', !savedId ? 'Property listed successfully!' : photos.length ? 'Photos uploaded.' : 'Your listing is saved.', [
+      if (!savedId) {
+        // A new listing is a draft until RentOS reviews it: open it, where "Submit for review" is the next step.
+        view()
+        Alert.alert('Saved as a draft', 'Submit it for RentOS review to publish.')
+        return
+      }
+      Alert.alert('Success', photos.length ? 'Photos uploaded.' : 'Your listing is saved.', [
         { text: 'View', onPress: view },
         { text: 'OK', onPress: () => router.back() },
       ])
@@ -166,9 +181,30 @@ function AddPropertyForm() {
   }
 
   const missing = saved ? photosToUpload(images, new Set(saved.uploaded)).length : 0
+  // Retrying photos for a saved listing creates nothing, so the limit never blocks it.
+  const atLimit = !saved && quota.data?.canAddProperty === false
 
   return (
     <ScrollView style={[s.container, { backgroundColor: c.surface }]} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      {(limited || atLimit) && (
+        <View style={[s.section, s.quota, neuCard(c), atLimit && { borderWidth: 1, borderColor: c.danger + '40' }]} accessibilityLiveRegion="polite">
+          <Ionicons name={atLimit ? 'alert-circle-outline' : 'layers-outline'} size={20} color={atLimit ? c.danger : c.primary} />
+          <View style={{ flex: 1 }}>
+            {limited && <Text style={[s.quotaTitle, { color: c.primaryDark }]}>{listingsUsed} of {listingLimit} listing{listingLimit === 1 ? '' : 's'} used</Text>}
+            {atLimit && (
+              <Text style={[s.noticeText, { color: c.text }]}>
+                {quota.data?.isExpired ? 'Your plan has ended. Renew it to add another listing.' : 'Your plan is full. Upgrade to add another listing.'}
+              </Text>
+            )}
+          </View>
+          {(atLimit || (limited && listingsUsed >= listingLimit - 1)) && (
+            <TouchableOpacity accessibilityRole="link" onPress={() => router.push('/subscription')}>
+              <Text style={[s.noticeLink, { color: c.primary }]}>{quota.data?.isExpired ? 'Renew' : 'Upgrade'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {/* Basic Info */}
       <Section title="Basic Information" icon="home-outline" c={c}>
         <Text style={[s.fieldLabel, { color: c.text }]}>What are you listing?</Text>
@@ -301,9 +337,9 @@ function AddPropertyForm() {
 
       {/* Submit */}
       <TouchableOpacity
-        style={[s.submitBtn, { backgroundColor: c.primary }, submitting && { opacity: 0.6 }]}
+        style={[s.submitBtn, { backgroundColor: c.primary }, (submitting || atLimit) && { opacity: 0.6 }]}
         onPress={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || atLimit}
         activeOpacity={0.85}
         accessibilityRole="button"
       >
@@ -315,7 +351,7 @@ function AddPropertyForm() {
         ) : (
           <>
             <Ionicons name={saved ? 'refresh' : 'add-circle'} size={20} color="#fff" />
-            <Text style={s.submitBtnText}>{saved ? 'Retry photos' : 'List Property'}</Text>
+            <Text style={s.submitBtnText}>{saved ? 'Retry photos' : atLimit ? 'Plan limit reached' : 'Save listing'}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -381,4 +417,6 @@ const s = StyleSheet.create({
   submitBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Outfit_700Bold' },
   noticeText: { fontSize: 14, fontFamily: 'Outfit_500Medium', marginTop: spacing.sm },
   noticeLink: { fontSize: 14, fontFamily: 'Outfit_700Bold', paddingVertical: spacing.sm },
+  quota: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  quotaTitle: { fontSize: 14, fontFamily: 'Outfit_700Bold' },
 })

@@ -351,12 +351,13 @@ export function notifyAgreementFullySigned(userId: string, propertyTitle: string
   })
 }
 
-export function notifyPropertyApproved(landlordId: string, propertyTitle: string) {
+// Review decisions open the listing itself (web /properties/:id; the mobile app maps it to its listing screen).
+export function notifyPropertyApproved(landlordId: string, propertyTitle: string, propertyId: string) {
   return notify({
     userId: landlordId,
     title: 'Property Approved',
     message: `"${propertyTitle}" has been approved and is now live.`,
-    actionUrl: '/properties',
+    actionUrl: `/properties/${propertyId}`,
   })
 }
 
@@ -365,22 +366,22 @@ export function notifyPropertyApproved(landlordId: string, propertyTitle: string
  * included in the message because the owner needs to know WHAT to fix without
  * opening the app.
  */
-export function notifyPropertyChangesRequested(landlordId: string, propertyTitle: string, issues: string[]) {
+export function notifyPropertyChangesRequested(landlordId: string, propertyTitle: string, propertyId: string, issues: string[]) {
   const list = issues.length ? ` Please fix: ${issues.join('; ')}.` : ''
   return notify({
     userId: landlordId,
     title: 'Changes requested on your listing',
     message: `"${propertyTitle}" needs updates before it can be approved.${list}`,
-    actionUrl: '/properties',
+    actionUrl: `/properties/${propertyId}`,
   })
 }
 
-export function notifyPropertyRejected(landlordId: string, propertyTitle: string, reason?: string) {
+export function notifyPropertyRejected(landlordId: string, propertyTitle: string, propertyId: string, reason?: string) {
   return notify({
     userId: landlordId,
     title: 'Property Rejected',
     message: `"${propertyTitle}" was rejected.${reason ? ` Reason: ${reason}` : ''}`,
-    actionUrl: '/properties',
+    actionUrl: `/properties/${propertyId}`,
   })
 }
 

@@ -17,6 +17,7 @@ import { RejectListingModal } from '../../components/RejectListingModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 import { listingShareContent } from '../../lib/listingShare'
 import { acceptsRentalApplications, listingTypeMeta } from '../../../../packages/shared/listingTypes'
+import { listingStatusMeta, type ListingStatusTone } from '../../../../packages/shared/listingStatus'
 import { isContactBlocked, showContactBlocked } from '../../lib/contactProtection'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -26,6 +27,8 @@ interface Property {
   /** rent (absent on older listings), sale or short_let; rentAmount is the asking price for it. */
   listingType?: string; listingRef?: string
   status: string; listingStatus?: string; rejectionReason?: string
+  /** What the reviewer asked to change (changes_requested). */
+  reviewIssues?: string[]
   address: { street: string; city: string; region: string; digitalAddress?: string }
   rentAmount: number; amenities: string[]; rules: string[]
   bedrooms: number; bathrooms: number; parkingSpaces: number
@@ -160,19 +163,8 @@ export default function PropertyDetailScreen() {
   const canMessageReviewer = (user?.roles ?? []).some((r) => REVIEWER_ROLES.includes(r))
   const isGovOrAdmin = user?.activeRole === 'government' || user?.activeRole === 'admin'
 
-  const listingStatusColors: Record<string, string> = {
-    draft: '#6b7280',
-    pending_review: '#f59e0b',
-    approved: '#10b981',
-    rejected: '#ef4444',
-  }
-
-  const listingStatusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_review: 'Pending Review',
-    approved: 'Approved',
-    rejected: 'Rejected',
-  }
+  // All ten review statuses, worded as on web (packages/shared/listingStatus.ts).
+  const toneColor = (tone: ListingStatusTone) => tone === 'success' ? c.accent : tone === 'warning' ? c.warning : tone === 'danger' ? c.danger : c.muted
 
   const statusColors: Record<string, string> = {
     available: c.accent,
@@ -271,7 +263,7 @@ export default function PropertyDetailScreen() {
     setPublishing(true)
     try {
       await api.post(`/properties/${id}/publish`, {})
-      Alert.alert('Submitted', 'Your property has been submitted for review.')
+      Alert.alert('Submitted for review', 'RentOS will review your listing. We’ll let you know when it’s live, or what to change.')
       await load()
     } catch (err) {      const _err = err as { message?: string }
 
@@ -581,13 +573,14 @@ export default function PropertyDetailScreen() {
             <View style={[s.badge, { backgroundColor: statusColor + '20' }]}>
               <Text style={[s.badgeText, { color: statusColor }]}>{property.status.replace('_', ' ')}</Text>
             </View>
-            {property.listingStatus && (
-              <View style={[s.badge, { backgroundColor: (listingStatusColors[property.listingStatus] ?? c.muted) + '20' }]}>
-                <Text style={[s.badgeText, { color: listingStatusColors[property.listingStatus] ?? c.muted }]}>
-                  {listingStatusLabels[property.listingStatus] ?? property.listingStatus}
-                </Text>
-              </View>
-            )}
+            {property.listingStatus && (() => {
+              const review = listingStatusMeta(property.listingStatus)
+              return (
+                <View style={[s.badge, { backgroundColor: toneColor(review.tone) + '20' }]}>
+                  <Text style={[s.badgeText, { color: toneColor(review.tone) }]}>{review.label}</Text>
+                </View>
+              )
+            })()}
           </View>
         </View>
         <View style={s.location}>
@@ -754,10 +747,52 @@ export default function PropertyDetailScreen() {
                 ) : (
                   <>
                     <Ionicons name="paper-plane" size={18} color="#fff" />
-                    <Text style={s.primaryBtnText}>Publish for Review</Text>
+                    <Text style={s.primaryBtnText}>Submit for review</Text>
                   </>
                 )}
               </TouchableOpacity>
+            )}
+
+            {property.listingStatus === 'draft' && (
+              <Text style={[s.reviewHint, { color: c.muted }]}>Drafts are only visible to you. RentOS reviews each listing before it goes live.</Text>
+            )}
+
+            {(property.listingStatus === 'pending_review' || property.listingStatus === 'in_review') && (
+              <View style={[s.rejectionBox, { backgroundColor: c.warning + '12', borderColor: c.warning + '30' }]}>
+                <Ionicons name="time-outline" size={16} color={c.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rejectionTitle, { color: c.warning }]}>With RentOS for review</Text>
+                  <Text style={[s.rejectionText, { color: c.textLight }]}>We’ll let you know when it’s live, or what to change.</Text>
+                </View>
+              </View>
+            )}
+
+            {property.listingStatus === 'changes_requested' && (
+              <View style={{ gap: 8 }}>
+                <View style={[s.rejectionBox, { backgroundColor: c.warning + '12', borderColor: c.warning + '30' }]}>
+                  <Ionicons name="create-outline" size={16} color={c.warning} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.rejectionTitle, { color: c.warning }]}>Changes requested</Text>
+                    {(property.reviewIssues?.length ? property.reviewIssues : ['The reviewer asked for changes to this listing.']).map((issue, i) => (
+                      <Text key={i} style={[s.rejectionText, { color: c.textLight }]}>• {issue}</Text>
+                    ))}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: c.accent, opacity: publishing ? 0.6 : 1 }]}
+                  onPress={publishProperty}
+                  disabled={publishing}
+                >
+                  {publishing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="refresh" size={18} color="#fff" />
+                      <Text style={s.primaryBtnText}>Resubmit for review</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
 
             {property.listingStatus === 'rejected' && (
@@ -781,7 +816,7 @@ export default function PropertyDetailScreen() {
                   ) : (
                     <>
                       <Ionicons name="refresh" size={18} color="#fff" />
-                      <Text style={s.primaryBtnText}>Resubmit for Review</Text>
+                      <Text style={s.primaryBtnText}>Resubmit for review</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1643,6 +1678,7 @@ const s = StyleSheet.create({
   rejectionBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   rejectionTitle: { fontSize: 12, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
   rejectionText: { fontSize: 13, fontFamily: 'Outfit_400Regular', lineHeight: 20 },
+  reviewHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17, textAlign: 'center' },
 
   // Reviews styles
   reviewsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },

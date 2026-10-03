@@ -8,7 +8,7 @@ import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
 import { clearLandingCache } from './seoLanding.js'
 import { recordErasure, completeErasure } from './erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
-import { LISTING_TYPES, RENTAL_LISTINGS, type ListingType } from './listings.js'
+import { LISTING_TYPES, RENTAL_LISTINGS, countsTowardListingLimit, type ListingType } from './listings.js'
 
 interface CreatePropertyData {
   title: string
@@ -167,11 +167,12 @@ export class PropertyService {
     // back to the free-tier default, so no code here branches on a plan name.
     await this.propertyRepo.ensureQuotaIndex()
     for (let attempt = 0; attempt < 8; attempt++) {
-      // One projected read provides both the occupancy count and slot inventory.
-      // Legacy documents without a slot still consume quota. Always choosing the
-      // lowest vacant slot makes competing requests meet at the unique index.
-      const existing = await this.propertyRepo.findMany({ landlordId: userId }, { select: 'quotaSlot', lean: true })
-      try { await requireQuota(userId, 'property.limit', existing.length, 'Active property limit') }
+      // One projected read provides both the count and the slot inventory. Only
+      // listings live or on their way use the allowance (countsTowardListingLimit),
+      // but slots come from every listing the owner has, so competing requests
+      // still pick the same lowest vacant slot and meet at the unique index.
+      const existing = await this.propertyRepo.findMany({ landlordId: userId }, { select: 'quotaSlot listingStatus status', lean: true })
+      try { await requireQuota(userId, 'property.limit', existing.filter(countsTowardListingLimit).length, 'Active property limit') }
       catch (err) {
         if (err instanceof EntitlementError) return { error: err.message, status: 403 }
         throw err

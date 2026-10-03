@@ -9,6 +9,7 @@ import { StoreProduct } from '../models/StoreProduct.js'
 import { SubscriptionPackage } from '../models/SubscriptionPackage.js'
 import { User } from '../models/User.js'
 import { Property } from '../models/Property.js'
+import { COUNTED_LISTINGS_FILTER } from '../services/listings.js'
 import { Payment, type IPayment } from '../models/Payment.js'
 import { success, error } from '../utils/response.js'
 import { param } from '../utils/params.js'
@@ -117,7 +118,7 @@ export const subscriptionController = {
 
     const store = await effectiveStoreSubscription(req.user!.userId, user)
     if (store) {
-      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId, ...COUNTED_LISTINGS_FILTER })
       const limit = Number(store.snapshot.features['property.limit'])
       success(res, {
         package: { id: store.snapshot.planId, name: store.snapshot.planName, version: store.snapshot.planVersion, billingCycle: store.snapshot.billingCycle, benefits: store.snapshot.benefits, maxProperties: limit },
@@ -130,7 +131,7 @@ export const subscriptionController = {
     const isExpired = !!user.subscriptionEndDate && (!Number.isFinite(new Date(user.subscriptionEndDate).getTime()) || new Date(user.subscriptionEndDate).getTime() <= Date.now())
     const paid = await currentPaidSubscription(user)
     if (paid?.active && 'terms' in paid) {
-      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+      const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId, ...COUNTED_LISTINGS_FILTER })
       const limit = paid.active && 'terms' in paid ? Number(paid.features['property.limit']) : 0
       success(res, { package: paid.active && 'terms' in paid ? { id: paid.terms.packageId, name: paid.terms.packageName, version: paid.terms.packageVersion, price: paid.terms.amount, billingCycle: paid.terms.billingCycle, benefits: paid.terms.benefits, maxProperties: limit } : null, billingSource: 'provider', subscriptionStartDate: user.subscriptionStartDate, subscriptionEndDate: user.subscriptionEndDate, isExpired: !paid.active, propertyCount, maxProperties: limit, canAddProperty: paid.active && (limit === -1 || propertyCount < limit) })
       return
@@ -142,7 +143,7 @@ export const subscriptionController = {
     const pkg = assigned ?? fallback?.plan ?? null
     const resolved = assigned ? await resolvePackageEntitlements(assigned, user.subscriptionPlanVersion) : fallback!.entitlements
     const limit = Number(resolved.features['property.limit'])
-    const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId })
+    const propertyCount = await Property.countDocuments({ landlordId: req.user!.userId, ...COUNTED_LISTINGS_FILTER })
     success(res, {
       package: pkg ? { ...pkg, id: String(pkg._id), version: resolved.planVersion, maxProperties: limit } : null,
       billingSource: fallback ? 'free' : undefined,

@@ -276,13 +276,13 @@ router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
     if (action === 'approve') {
       // Search engines hear about the new page straight away (fire and forget).
       void submitToIndexNow(listingIndexPaths(property))
-      await notifyPropertyApproved(property.landlordId, property.title)
+      await notifyPropertyApproved(property.landlordId, property.title, property._id.toString())
       checkAndAward(property.landlordId, 'first_property_listed', { propertyId: property._id.toString() })
         .catch(() => undefined)
     } else if (action === 'reject') {
-      await notifyPropertyRejected(property.landlordId, property.title, note || reasonCode)
+      await notifyPropertyRejected(property.landlordId, property.title, property._id.toString(), note || reasonCode)
     } else if (action === 'request_changes') {
-      await notifyPropertyChangesRequested(property.landlordId, property.title, issues)
+      await notifyPropertyChangesRequested(property.landlordId, property.title, property._id.toString(), issues)
     }
   } catch {
     // logged by notify itself

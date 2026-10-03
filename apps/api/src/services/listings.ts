@@ -43,6 +43,26 @@ export function generateListingRef(): string {
  */
 export const PROPERTY_PROFESSIONAL_ROLES = ['landlord', 'property_manager', 'admin', 'super_admin'] as const
 
+/*
+ * The plan's listing allowance counts listings that are live or on their way:
+ * draft to published. A tenanted home, and a listing that was withdrawn,
+ * rejected, archived or suspended, leaves room for another (owner decision
+ * Q14: a landlord with tenanted homes was blocked from listing a vacant one).
+ * Listings from before review existed have no status and count.
+ */
+export const COUNTED_LISTING_STATUSES = ['draft', 'pending_review', 'in_review', 'changes_requested', 'approved', 'published'] as const
+
+export function countsTowardListingLimit(listing: { listingStatus?: string | null; status?: string | null }): boolean {
+  return listing.status !== 'occupied'
+    && (listing.listingStatus == null || (COUNTED_LISTING_STATUSES as readonly string[]).includes(listing.listingStatus))
+}
+
+/** The same rule as a query, for counting an owner's listings. */
+export const COUNTED_LISTINGS_FILTER = {
+  status: { $ne: 'occupied' },
+  $or: [{ listingStatus: { $in: [...COUNTED_LISTING_STATUSES] } }, { listingStatus: { $exists: false } }, { listingStatus: null }],
+}
+
 /**
  * Normalizes a reference typed or shared in any case; null if it can't be one.
  * Accepts a listing's descriptive address too ("2-bedroom-house-for-rent-in-osu-accra-rx7k2p9"):

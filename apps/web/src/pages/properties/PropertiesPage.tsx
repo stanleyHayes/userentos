@@ -25,6 +25,7 @@ import toast from 'react-hot-toast'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import type { Property, PropertyStatus } from '@/types'
 import { LISTING_TYPES, listingTypeMeta, type ListingType } from '../../../../../packages/shared/listingTypes'
+import { listingStatusLabel, listingStatusVariant } from './components/propertyStatusMaps'
 
 // Discover's swipe feed is the tenant's "For you" view of this page (one
 // Properties section, product brief §06); it loads only when opened.
@@ -34,17 +35,6 @@ const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | '
   available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
 }
 
-const listingStatusVariant: Record<string, 'default' | 'warning' | 'success' | 'danger'> = {
-  draft: 'default', pending_review: 'warning', in_review: 'warning', changes_requested: 'warning',
-  approved: 'success', published: 'success', rejected: 'danger', suspended: 'danger',
-  archived: 'default', withdrawn: 'default',
-}
-
-const listingStatusLabel: Record<string, string> = {
-  draft: 'Draft', pending_review: 'Pending Review', in_review: 'In Review', changes_requested: 'Changes Requested',
-  approved: 'Approved', published: 'Published', rejected: 'Rejected', suspended: 'Suspended',
-  archived: 'Archived', withdrawn: 'Withdrawn',
-}
 
 // Listings the owner can (re)submit for review from the card.
 const SUBMITTABLE = ['draft', 'rejected', 'changes_requested']

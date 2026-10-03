@@ -48,6 +48,21 @@ describe.skipIf(!hasTestMongo)('atomic property quota admission', () => {
     expect((await service.create(data, id)).status).toBe(201)
     expect((await Property.findOne({ landlordId: id }))!.quotaSlot).toBe(0)
   })
+  it('counts only listings live or on their way: tenanted, withdrawn, rejected and archived ones leave room', async () => {
+    // Owner decision Q14: a landlord with tenanted homes was blocked from listing a vacant one.
+    const id = owner(2)
+    await Property.create([
+      { ...data, landlordId: id, quotaSlot: 0, status: 'occupied', listingStatus: 'published' },
+      { ...data, landlordId: id, quotaSlot: 1, listingStatus: 'withdrawn' },
+      { ...data, landlordId: id, quotaSlot: 2, listingStatus: 'rejected' },
+      { ...data, landlordId: id, quotaSlot: 3, listingStatus: 'archived' },
+    ])
+    const responses = await Promise.all(Array.from({ length: 8 }, () => service.create(data, id)))
+    expect(responses.filter(r => r.status === 201)).toHaveLength(2)
+    // New listings take slots no other listing holds, and a draft counts.
+    expect((await Property.find({ landlordId: id, listingStatus: 'draft' }).lean()).map(p => p.quotaSlot).sort()).toEqual([4, 5])
+    expect((await service.create(data, id)).status).toBe(403)
+  })
   it('does not consume capacity on validation failure', async () => {
     const id = owner(1)
     await expect(service.create({ ...data, title: '' }, id)).rejects.toThrow()

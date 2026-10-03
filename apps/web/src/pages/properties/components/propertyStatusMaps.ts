@@ -1,22 +1,16 @@
 import type { PropertyStatus } from '@/types'
+import { LISTING_STATUSES, type ListingStatusTone } from '../../../../../../packages/shared/listingStatus'
 
 export const statusVariant: Record<PropertyStatus, 'success' | 'default' | 'danger' | 'warning'> = {
   available: 'success', occupied: 'default', under_dispute: 'danger', maintenance_required: 'warning',
 }
 
-// Every review status the API can set (services/propertyReview.ts), so none
-// shows as a raw string.
-export const listingStatusVariant: Record<string, 'default' | 'warning' | 'success' | 'danger'> = {
-  draft: 'default', pending_review: 'warning', in_review: 'warning', changes_requested: 'warning',
-  approved: 'success', published: 'success', rejected: 'danger', suspended: 'danger',
-  archived: 'default', withdrawn: 'default',
-}
+// Every review status the API can set, worded as on mobile (packages/shared/listingStatus.ts).
+export const listingStatusVariant: Record<string, ListingStatusTone> =
+  Object.fromEntries(Object.entries(LISTING_STATUSES).map(([status, meta]) => [status, meta.tone]))
 
-export const listingStatusLabel: Record<string, string> = {
-  draft: 'Draft', pending_review: 'Pending Review', in_review: 'In Review', changes_requested: 'Changes Requested',
-  approved: 'Approved', published: 'Published', rejected: 'Rejected', suspended: 'Suspended',
-  archived: 'Archived', withdrawn: 'Withdrawn',
-}
+export const listingStatusLabel: Record<string, string> =
+  Object.fromEntries(Object.entries(LISTING_STATUSES).map(([status, meta]) => [status, meta.label]))
 
 /** Reason codes offered on rejection — the API requires one. */
 export const REJECT_REASONS = [

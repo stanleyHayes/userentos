@@ -10,12 +10,15 @@ import { PropertyGridSkeleton } from '../../components/Skeleton'
 import { SponsoredBadge } from '../../components/SponsoredBadge'
 import { useAuthStore } from '../../stores/authStore'
 import { LISTING_TYPES, listingTypeMeta } from '../../../../packages/shared/listingTypes'
+import { listingStatusMeta, type ListingStatusTone } from '../../../../packages/shared/listingStatus'
 
 interface Property {
   id: string; title: string; description: string; type: string
   /** rent (absent on older listings), sale or short_let. */
   listingType?: string
   status: string; address: { street: string; city: string; region: string }
+  /** Where the listing is in RentOS review; the owner's own listings include drafts and rejections. */
+  listingStatus?: string
   rentAmount: number; amenities: string[]; images?: string[]
   /** Paid placement. The API sets it only when asked with placement=search_top, which this app does not send. */
   sponsored?: boolean
@@ -30,6 +33,10 @@ const statusFilters = [
 export default function PropertiesScreen() {
   const c = useThemeColors()
   const router = useRouter()
+  const role = useAuthStore((st) => st.user?.activeRole)
+  // Agents and landlords open on their own listings (drafts and reviews included) and can switch to browsing.
+  const isLister = role === 'landlord' || role === 'property_manager'
+  const [scope, setScope] = useState<'mine' | 'all'>(isLister ? 'mine' : 'all')
   const [properties, setProperties] = useState<Property[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -46,12 +53,15 @@ export default function PropertiesScreen() {
     maintenance_required: c.warning,
   }
 
-  const load = useCallback(async (searchQuery?: string, status?: string, purpose?: string) => {
+  const toneColor = (tone: ListingStatusTone) => tone === 'success' ? c.accent : tone === 'warning' ? c.warning : tone === 'danger' ? c.danger : c.muted
+
+  const load = useCallback(async (searchQuery?: string, status?: string, purpose?: string, inScope?: 'mine' | 'all') => {
     try {
       const params = new URLSearchParams()
       const q = searchQuery ?? search
       const st = status ?? statusFilter
       const lt = purpose ?? listingType
+      if ((inScope ?? scope) === 'mine') params.append('mine', 'true')
       if (q.trim()) params.append('search', q.trim())
       if (st) params.append('status', st)
       if (lt) params.append('listingType', lt)
@@ -65,7 +75,7 @@ export default function PropertiesScreen() {
       setLoading(false)
       setSearching(false)
     }
-  }, [search, statusFilter, listingType])
+  }, [search, statusFilter, listingType, scope])
 
   useEffect(() => { load() }, [])
   useEffect(() => { return () => { if (debounceRef.current) clearTimeout(debounceRef.current) } }, [])
@@ -94,8 +104,16 @@ export default function PropertiesScreen() {
     load(search, statusFilter, value)
   }
 
+  function handleScope(value: 'mine' | 'all') {
+    setScope(value)
+    setSearching(true)
+    load(search, statusFilter, listingType, value)
+  }
+
   function renderProperty({ item }: { item: Property }) {
-    const statusColor = statusColors[item.status] ?? c.muted
+    // Own listings show where they are in review; the marketplace shows availability.
+    const review = scope === 'mine' ? listingStatusMeta(item.listingStatus) : null
+    const statusColor = review ? toneColor(review.tone) : statusColors[item.status] ?? c.muted
     return (
       <TouchableOpacity style={[s.card, neuCard(c)]} activeOpacity={0.7} onPress={() => router.push(`/property/${item.id}`)}>
         {item.images && item.images.length > 0 ? (
@@ -110,7 +128,7 @@ export default function PropertiesScreen() {
             <Text style={[s.cardTitle, { color: c.primaryDark }]} numberOfLines={1}>{item.title}</Text>
             {item.sponsored && <View style={s.sponsoredGap}><SponsoredBadge label="Sponsored listing" /></View>}
             <View style={[s.badge, { backgroundColor: statusColor + '20' }]}>
-              <Text style={[s.badgeText, { color: statusColor }]}>{item.status.replace('_', ' ')}</Text>
+              <Text style={[s.badgeText, { color: statusColor }]}>{review ? review.label : item.status.replace('_', ' ')}</Text>
             </View>
           </View>
           <View style={s.location}>
@@ -131,6 +149,22 @@ export default function PropertiesScreen() {
     <View style={[s.container, { backgroundColor: c.surface }]}>
       {/* Search Bar */}
       <View style={[s.searchContainer, { backgroundColor: c.white, borderBottomColor: c.border }]}>
+        {isLister && (
+          <View style={[s.scopeRow, neuInset(c)]} accessibilityRole="tablist">
+            {([{ value: 'mine', label: 'My listings' }, { value: 'all', label: 'Browse' }] as const).map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: scope === option.value }}
+                style={[s.scopeBtn, scope === option.value && neuCard(c, 10)]}
+                onPress={() => handleScope(option.value)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.scopeText, { color: scope === option.value ? c.primary : c.muted }]}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={[s.searchBar, neuInset(c)]}>
           <Ionicons name="search" size={18} color={c.muted} />
           <TextInput
@@ -192,7 +226,13 @@ export default function PropertiesScreen() {
           ) : (
             <View style={s.empty}>
               <Ionicons name="business-outline" size={48} color={c.muted} />
-              <Text style={[s.emptyText, { color: c.muted }]}>No properties found</Text>
+              <Text style={[s.emptyText, { color: c.muted }]}>{scope === 'mine' ? 'You have no listings yet' : 'No properties found'}</Text>
+              {scope === 'mine' && (
+                <TouchableOpacity style={[s.emptyAction, { backgroundColor: c.primary }]} onPress={() => router.push('/add-property')} activeOpacity={0.85}>
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={s.emptyActionText}>Add a property</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         }
@@ -200,7 +240,6 @@ export default function PropertiesScreen() {
 
       {/* FAB for landlords */}
       {(() => {
-        const role = useAuthStore.getState().user?.activeRole
         if (role === 'landlord' || role === 'property_manager' || role === 'admin') {
           return (
             <TouchableOpacity
@@ -245,5 +284,10 @@ const s = StyleSheet.create({
   typeLabel: { fontSize: 11, fontFamily: 'Outfit_400Regular', textTransform: 'capitalize', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
   emptyText: { fontSize: 14, fontFamily: 'Outfit_500Medium' },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginTop: spacing.sm },
+  emptyActionText: { fontSize: 13, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
+  scopeRow: { flexDirection: 'row', padding: 4, gap: 4, marginBottom: spacing.sm },
+  scopeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 10 },
+  scopeText: { fontSize: 13, fontFamily: 'Outfit_700Bold' },
   fab: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
 })
