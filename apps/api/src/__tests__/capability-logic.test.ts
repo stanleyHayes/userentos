@@ -12,10 +12,13 @@ describe('role capability workflow authorization', () => {
     expect(Object.keys(WORKFLOW_ROLES)).not.toContain('provider_payout')
   })
 
-  it('supports the dedicated developer role and delegated property roles', () => {
+  it('keeps off-plan listings to the developer journey', () => {
     expect(canCreateWorkflow('offplan_listing', ['developer'])).toBe(true)
-    expect(canCreateWorkflow('offplan_listing', ['property_manager'])).toBe(true)
-    expect(canCreateWorkflow('offplan_listing', ['tenant'])).toBe(false)
+    // Agents and landlords list property through Property; developer tools stay out of their menus.
+    for (const role of ['property_manager', 'landlord', 'tenant']) {
+      expect(canCreateWorkflow('offplan_listing', [role])).toBe(false)
+      expect(canCreateWorkflow('developer_profile', [role])).toBe(false)
+    }
   })
 })
 

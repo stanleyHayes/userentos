@@ -197,6 +197,9 @@ describe.skipIf(!hasTestMongo)('page metadata and sitemaps for crawlers and link
     // Signed-in pages are not public pages.
     expect(platform).not.toContain('<loc>https://userentos.com/properties</loc>')
     expect(platform).not.toContain('<loc>https://userentos.com/login</loc>')
+    // A short list nothing links to while the developer journey is closed: out of search.
+    expect(platform).not.toContain('<loc>https://userentos.com/developments</loc>')
+    expect((await pageMeta('userentos.com', '/developments'))?.noindex).toBe(true)
     expect(platform).toContain(`<loc>https://userentos.com/article/${tag}-deposits</loc>`)
     expect(platform).not.toContain(`${tag}-prices`)
 

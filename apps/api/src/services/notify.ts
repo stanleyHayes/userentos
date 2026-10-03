@@ -12,6 +12,7 @@ import { renderEmail, formatCedis } from './emailLayout.js'
 import { sendPushNotification } from './push.js'
 import { sendSMS, smsConfigured } from './sms.js'
 import { getIO } from './socket.js'
+import { regulatedFeatureStatus } from '../config/regulatedFeatures.js'
 
 /**
  * What a notification is about, which decides which of the user's toggles
@@ -412,11 +413,24 @@ export function notifyRentReminder(tenantId: string, amount: number, daysLeft: n
   })
 }
 
-export function notifyWelcome(userId: string, firstName: string) {
+/**
+ * The first message a new account sees, worded for what that account comes for.
+ * RentGuard is mentioned only while the wallet behind it is offered (it is a
+ * regulated service, off in production).
+ */
+export function notifyWelcome(userId: string, firstName: string, role?: string) {
+  const message = role === 'property_manager'
+    ? `Hi ${firstName}, your account is ready. Set up your free property website and add your first listing: RentOS reviews it before it goes live, and enquiries arrive in Leads and Messages.`
+    : role === 'landlord'
+      ? `Hi ${firstName}, your account is ready. Add your first property: RentOS reviews it before it goes live, and enquiries arrive in Leads and Messages.`
+      : role === 'tenant'
+        ? `Hi ${firstName}, your account is ready. Find a home, message the people who list it, and keep your tenancy on record.${regulatedFeatureStatus().wallet ? ' You can also save towards rent with RentGuard.' : ''}`
+        // Staff, regulators and other invited accounts: their dashboard shows what they can do.
+        : `Hi ${firstName}, your account is ready. Your dashboard shows what you can do on RentOS.`
   return notify({
     userId,
     title: 'Welcome to RentOS Ghana!',
-    message: `Hi ${firstName}, your account is ready. Start exploring rental properties, create agreements, and save with RentGuard.`,
+    message,
     actionUrl: '/dashboard',
   })
 }

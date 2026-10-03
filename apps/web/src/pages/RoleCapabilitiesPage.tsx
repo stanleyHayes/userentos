@@ -11,14 +11,14 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Download, Layers3, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { apiBase } from '@/lib/publicListing'
 
 type WorkflowKind = 'business_order' | 'business_campaign' | 'business_subscription' | 'housing_benefit' | 'developer_profile' | 'offplan_listing'
 interface Workflow { id: string; kind: WorkflowKind; status: string; data: Record<string, unknown>; createdAt: string }
 
 const modules: Record<string, { title: string; kind?: WorkflowKind; exportPath?: string }[]> = {
   tenant: [{ title: 'Export rental history', exportPath: '/capabilities/tenant/rental-history.csv' }],
-  landlord: [{ title: 'Developer profile', kind: 'developer_profile' }, { title: 'Off-plan listing', kind: 'offplan_listing' }],
-  property_manager: [{ title: 'Developer profile', kind: 'developer_profile' }, { title: 'Off-plan listing', kind: 'offplan_listing' }],
+  // Off-plan listings and developer profiles belong to the developer journey, which is not open yet.
   // Service providers withdraw earnings through Payouts (Savings), not a workflow.
   business: [
     { title: 'Order & fulfillment', kind: 'business_order' },
@@ -36,9 +36,11 @@ const modules: Record<string, { title: string; kind?: WorkflowKind; exportPath?:
 
 function download(path: string) {
   const token = useAuthStore.getState().token
-  fetch(`/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  // The API's own address: in production it is another host, and a relative /api reached the web app.
+  fetch(`${apiBase()}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     .then(async (response) => {
       if (!response.ok) throw new Error('Export failed')
+      if (!/text\/csv|application\/octet-stream/.test(response.headers.get('content-type') ?? '')) throw new Error('Export failed: the server did not send a CSV file')
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
@@ -136,7 +138,7 @@ export function RoleCapabilitiesPage() {
       <Card>
         <CardHeader><CardTitle>Active workflow ledger</CardTitle></CardHeader>
         <CardContent>
-          {!data?.items.length ? <EmptyState preset="general" title="No advanced workflows yet" description="Start one above when you are ready." compact /> : (
+          {!data?.items.length ? <EmptyState preset="general" title="No advanced workflows yet" description={available.some((module) => module.kind) ? 'Start one above when you are ready.' : 'Workflows you take part in appear here.'} compact /> : (
             <div className="space-y-2">{data.items.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
                 <div><p className="text-sm font-bold">{String(item.data.title || item.kind).replaceAll('_', ' ')}</p><p className="text-xs text-muted">{new Date(item.createdAt).toLocaleDateString()}</p></div>

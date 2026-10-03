@@ -193,7 +193,7 @@ export class AuthService {
 
     // Welcome notification (in_app + email) — best-effort; a transient failure
     // must not become an unhandled rejection (process-fatal without Sentry).
-    notifyWelcome(user._id.toString(), firstName).catch((err) =>
+    notifyWelcome(user._id.toString(), firstName, role).catch((err) =>
       this.logger.warn(`Welcome notification failed for ${email}: ${(err as Error).message}`),
     )
 

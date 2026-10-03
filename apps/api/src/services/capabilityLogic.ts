@@ -5,8 +5,9 @@ export const WORKFLOW_ROLES: Record<CapabilityKind, string[]> = {
   business_campaign: ['business'],
   business_subscription: ['business'],
   housing_benefit: ['employer'],
-  developer_profile: ['developer', 'property_manager', 'landlord', 'admin'],
-  offplan_listing: ['developer', 'property_manager', 'landlord', 'admin'],
+  // Developer journey only (paused in Phase 1); agents and landlords list property through Property.
+  developer_profile: ['developer', 'admin'],
+  offplan_listing: ['developer', 'admin'],
 }
 
 export function canCreateWorkflow(kind: CapabilityKind, roles: string[]) {

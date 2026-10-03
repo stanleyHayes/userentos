@@ -140,11 +140,12 @@ export const DEFAULT_SEO = {
 }
 
 /** Public pages with their own title (kept in step with PLATFORM_PAGES in apps/api/src/services/seo.ts). */
-const PAGE_SEO: Record<string, { title: string; description: string }> = {
+const PAGE_SEO: Record<string, { title: string; description: string; noIndex?: boolean }> = {
   '/registry': { title: 'Property registry: verified houses and apartments in Ghana | RentOS', description: 'Search reviewed homes for rent, for sale and for short stays across Ghana by city, price and property type, each with its own shareable page.' },
   '/blog': { title: 'RentOS Real Estate News: property news and guides for Ghana', description: 'Rental guides from RentOS and market news from agents and agencies across Ghana: prices, tenancy law, deposits and buying tips.' },
   '/rental-laws': { title: 'Ghana rental laws explained: tenant and landlord rights | RentOS', description: 'Plain-language guide to the Rent Act 1963 (Act 220), rent advance limits, deposits, evictions and the Rent Control Department.' },
-  '/developments': { title: 'New developments and off-plan homes in Ghana | RentOS', description: 'New-build and off-plan homes from property developers in Ghana, reviewed by RentOS before they are published.' },
+  // Out of search until the developer journey opens (PLATFORM_PAGES in the API agrees).
+  '/developments': { title: 'New developments and off-plan homes in Ghana | RentOS', description: 'New-build and off-plan homes from property developers in Ghana, reviewed by RentOS before they are published.', noIndex: true },
   '/register': { title: 'Create your free RentOS account', description: 'Join RentOS free as a tenant or as an agent, agency or property manager: find homes, list properties and get your own property website.' },
 }
 

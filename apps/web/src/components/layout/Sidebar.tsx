@@ -154,7 +154,8 @@ const navGroups: NavGroup[] = [
       { label: 'Credit Score', labelKey: 'nav.creditScore', path: '/credit-score', icon: <Star size={20} />, roles: TENANT },
       { label: 'Achievements', labelKey: 'nav.achievements', path: '/achievements', icon: <Trophy size={20} />, roles: TENANT },
       { label: 'Profile Access', labelKey: 'nav.profileAccess', path: '/profile-access', icon: <Lock size={20} />, roles: JOURNEY },
-      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: JOURNEY },
+      // Landlords have no workflows here since off-plan listings moved to the developer journey.
+      { label: 'Role Capabilities', path: '/role-capabilities', icon: <Layers3 size={20} />, roles: [...TENANT, 'property_manager'] },
     ],
   },
 

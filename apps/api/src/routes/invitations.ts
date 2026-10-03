@@ -255,7 +255,7 @@ router.post('/accept', async (req, res) => {
   })
 
   await Wallet.create({ userId: user._id.toString(), balance: 0, transactions: [] })
-  void notifyWelcome(user._id.toString(), firstName)
+  void notifyWelcome(user._id.toString(), firstName, user.activeRole)
 
   invitation.status = 'accepted'
   invitation.acceptedAt = new Date()

@@ -55,12 +55,13 @@ const PURPOSE: Record<string, string> = { rent: 'for rent', sale: 'for sale', sh
 const PURPOSE_SLUG: Record<string, string> = { rent: 'rent', sale: 'buy', short_let: 'short-stay' }
 
 /** The platform's static, indexable pages (also its sitemap). Signed-in pages such as /properties are not among them. */
-export const PLATFORM_PAGES: { path: string; priority: string; changefreq: string; title?: string; description?: string }[] = [
+export const PLATFORM_PAGES: { path: string; priority: string; changefreq: string; title?: string; description?: string; noindex?: boolean }[] = [
   { path: '/', priority: '1.0', changefreq: 'daily' },
   { path: '/registry', priority: '0.9', changefreq: 'daily', title: 'Property registry: verified houses and apartments in Ghana | RentOS', description: 'Search reviewed homes for rent, for sale and for short stays across Ghana by city, price and property type, each with its own shareable page.' },
   { path: '/blog', priority: '0.8', changefreq: 'daily', title: 'RentOS Real Estate News: property news and guides for Ghana', description: 'Rental guides from RentOS and market news from agents and agencies across Ghana: prices, tenancy law, deposits and buying tips.' },
   { path: '/rental-laws', priority: '0.8', changefreq: 'monthly', title: 'Ghana rental laws explained: tenant and landlord rights | RentOS', description: 'Plain-language guide to the Rent Act 1963 (Act 220), rent advance limits, deposits, evictions and the Rent Control Department.' },
-  { path: '/developments', priority: '0.6', changefreq: 'weekly', title: 'New developments and off-plan homes in Ghana | RentOS', description: 'New-build and off-plan homes from property developers in Ghana, reviewed by RentOS before they are published.' },
+  // Out of search until the developer journey opens: today it is a short list nothing links to.
+  { path: '/developments', priority: '0.6', changefreq: 'weekly', title: 'New developments and off-plan homes in Ghana | RentOS', description: 'New-build and off-plan homes from property developers in Ghana, reviewed by RentOS before they are published.', noindex: true },
   { path: '/support', priority: '0.4', changefreq: 'monthly' },
   { path: '/register', priority: '0.5', changefreq: 'yearly', title: 'Create your free RentOS account', description: 'Join RentOS free as a tenant or as an agent, agency or property manager: find homes, list properties and get your own property website.' },
   { path: '/privacy', priority: '0.3', changefreq: 'yearly' },
@@ -506,6 +507,7 @@ export async function pageMeta(rawHost: string, rawPath: string): Promise<PageMe
   if (page) {
     return {
       ...base,
+      noindex: base.noindex || page.noindex === true,
       canonical: `${publicBaseUrl()}${page.path === '/' ? '/' : page.path}`,
       ...(page.title ? { title: page.title } : {}),
       ...(page.description ? { description: page.description } : {}),
@@ -569,12 +571,12 @@ export async function sitemapXml(rawHost: string): Promise<string> {
     landingSitemapEntries(),
   ])
   // Spent in order (search pages, articles, then listings), so the file never passes 50,000 addresses.
-  const cap = SITEMAP_MAX - PLATFORM_PAGES.length
+  const cap = SITEMAP_MAX - PLATFORM_PAGES.filter((p) => !p.noindex).length
   const keptLandings = landings.slice(0, cap)
   const keptArticles = articles.slice(0, Math.max(0, cap - keptLandings.length))
   const room = Math.max(0, cap - keptLandings.length - keptArticles.length)
   return urlset([
-    ...PLATFORM_PAGES.map((p) => ({ loc: `${base}${p.path}`, changefreq: p.changefreq, priority: p.priority })),
+    ...PLATFORM_PAGES.filter((p) => !p.noindex).map((p) => ({ loc: `${base}${p.path}`, changefreq: p.changefreq, priority: p.priority })),
     ...keptLandings.map((l) => ({ loc: `${base}${l.path}`, lastmod: l.lastmod, changefreq: 'daily', priority: l.path.split('/').length <= 3 ? '0.9' : '0.8' })),
     ...listings.slice(0, room).map((l) => ({
       loc: `${base}${listingPathFor(l)}`,

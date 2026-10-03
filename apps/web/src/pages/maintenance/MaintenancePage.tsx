@@ -31,6 +31,7 @@ import {
   type MaintenanceRequest,
 } from '@/hooks/useApi'
 import { useAuthStore } from '@/stores/authStore'
+import { isPathPausedFor } from '../../../../../packages/shared/productScope'
 import { useToastStore } from '@/stores/toastStore'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 
@@ -211,12 +212,18 @@ export function MaintenancePage() {
 }
 
 // ─── Tenant list view ───
+/** "Find {trade} worker" leads to Workers, which is paused for the active journeys: offered only where it opens. */
+function useWorkersOpen(): boolean {
+  return !isPathPausedFor('/workers', useAuthStore((s) => s.user?.activeRole))
+}
+
 function TenantList({ items }: { items: MaintenanceRequest[] }) {
   const navigate = useNavigate()
+  const workersOpen = useWorkersOpen()
   return (
     <div className="space-y-3">
       {items.map((req) => {
-        const trade = CATEGORY_TO_TRADE[req.category]
+        const trade = workersOpen ? CATEGORY_TO_TRADE[req.category] : undefined
         return (
           <Card key={req.id} className="hover:shadow-md transition-shadow">
             <CardContent>
@@ -433,7 +440,8 @@ function KanbanCard({
   const update = useUpdateMaintenanceRequest()
   const complete = useCompleteMaintenance()
   const [open, setOpen] = useState(false)
-  const trade = CATEGORY_TO_TRADE[request.category]
+  const workersOpen = useWorkersOpen()
+  const trade = workersOpen ? CATEGORY_TO_TRADE[request.category] : undefined
 
   async function moveTo(status: Status) {
     setOpen(false)
