@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useThemeColors, spacing } from '../lib/theme'
 import { neuCard } from '../lib/neu'
 import { formatDate } from '../lib/format'
 import { api } from '../lib/api'
 import { PushPermissionPrompt } from '../components/PushPermissionPrompt'
+import { safeAppRoute, NOTIFICATIONS_FALLBACK } from '../lib/safeRoute'
 
 // Matches GET /notifications: the flag is `read`. Reading `isRead` (never
 // sent) showed every notification as unread on every load.
 interface Notification {
   id: string; title: string; message: string; type: string
   read: boolean; createdAt: string
+  actionUrl?: string
+}
+
+/** The screen a notification is about, or null when it has none (or would only reopen this list). */
+function destinationOf(item: Notification): string | null {
+  const route = safeAppRoute(item.actionUrl)
+  return route && route !== NOTIFICATIONS_FALLBACK ? route : null
 }
 
 const typeIcons: Record<string, string> = {
@@ -25,6 +34,7 @@ const typeIcons: Record<string, string> = {
 
 export default function NotificationsScreen() {
   const c = useThemeColors()
+  const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -58,11 +68,16 @@ export default function NotificationsScreen() {
 
   function renderNotification({ item }: { item: Notification }) {
     const icon = typeIcons[item.type] ?? 'notifications-outline'
+    const destination = destinationOf(item)
     return (
       <TouchableOpacity
         style={[s.card, neuCard(c), !item.read && { backgroundColor: c.primary + '05', borderLeftWidth: 3, borderLeftColor: c.primary }]}
-        onPress={() => { if (!item.read) markAsRead(item.id) }}
-        activeOpacity={item.read ? 1 : 0.7}
+        onPress={() => {
+          if (!item.read) void markAsRead(item.id)
+          if (destination) router.push(destination as never)
+        }}
+        activeOpacity={item.read && !destination ? 1 : 0.7}
+        accessibilityRole={destination ? 'link' : 'button'}
       >
         <View style={s.cardLeft}>
           <View style={[s.iconWrap, { backgroundColor: c.primary + '10' }]}>

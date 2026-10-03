@@ -26,7 +26,7 @@ import { useAppSocket } from '../hooks/useAppSocket'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { InAppNotificationProvider } from '../components/InAppNotification'
 import { RegulatedScreenGate } from '../components/RegulatedScreenGate'
-import { authRedirect } from '../lib/publicRoutes'
+import { authRedirect, takeSignUpLanding } from '../lib/publicRoutes'
 import { ConsentBanner } from '../components/ConsentBanner'
 
 ExpoSplashScreen.preventAutoHideAsync()
@@ -53,7 +53,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     // Signed-out users may stay on the auth group and the few public screens
     // (e.g. the rights check linked from login); everything else needs a session.
     const redirect = authRedirect(segments, isAuthenticated)
-    if (redirect) router.replace(redirect)
+    // Leaving the auth screens straight after sign-up: go where sign-up chose, not Home.
+    if (redirect) router.replace(((redirect === '/(tabs)' ? takeSignUpLanding() : null) ?? redirect) as never)
   }, [isAuthenticated, hydrated, segments])
 
   if (!hydrated) return null

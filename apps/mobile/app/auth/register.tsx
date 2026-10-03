@@ -14,6 +14,7 @@ import { buildAcceptance } from '../../../../packages/shared/legalVersions'
 import { isRoleOffered } from '../../../../packages/shared/regulatedFeatures'
 import { COMING_SOON_ACCOUNT_TYPES, PROFESSIONAL_TYPES, type ProfessionalType } from '../../../../packages/shared/productScope'
 import { useRegulatedFeatures, useSignupRoles } from '../../hooks/useRegulatedFeatures'
+import { setSignUpLanding } from '../../lib/publicRoutes'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -48,9 +49,9 @@ const STEPS: { label: string; icon: IconName }[] = [
  */
 const DETAILS_ROLES: UserRole[] = ['service_provider', 'business', 'employer', 'financier']
 
-/** Where a new account lands: agents set up their business; tenants start finding a home. */
+/** Where a new account lands: agents set up their website (web onboarding, linked from My website); tenants start finding a home. */
 function landingFor(role: UserRole): string {
-  if (role === 'property_manager') return '/onboarding'
+  if (role === 'property_manager') return '/my-website'
   if (role === 'tenant') return '/(tabs)/properties'
   return '/(tabs)'
 }
@@ -321,6 +322,8 @@ export default function RegisterScreen() {
       setLoading(false)
       return
     }
+    // The root guard leaves the auth screens the moment the session starts, for this landing.
+    setSignUpLanding(landingFor(role))
     login(auth.user as User, auth.token, auth.refreshToken)
 
     if (hasDetailsStep) {
@@ -336,7 +339,6 @@ export default function RegisterScreen() {
     }
 
     setLoading(false)
-    router.replace(landingFor(role) as never)
   }
 
   const heading = ROLE_TITLES[role]

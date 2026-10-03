@@ -345,7 +345,7 @@ export default function HomeScreen() {
               { icon: 'add-circle-outline' as const, label: 'Add Property', route: '/add-property', color: '#3b82f6' },
               { icon: 'people-circle-outline' as const, label: 'Leads', route: '/(tabs)/leads', color: '#10b981' },
               { icon: 'chatbubbles-outline' as const, label: 'Messages', route: '/(tabs)/messages', color: '#8b5cf6' },
-              { icon: 'globe-outline' as const, label: 'My Website', route: '/website', color: '#06b6d4' },
+              { icon: 'globe-outline' as const, label: 'My Website', route: '/my-website', color: '#06b6d4' },
               { icon: 'document-text-outline' as const, label: 'Agreements', route: '/agreements', color: '#f59e0b' },
               { icon: 'color-wand-outline' as const, label: 'AI Writer', route: '/ai-writer', color: '#ec4899' },
             ] : [

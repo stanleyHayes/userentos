@@ -10,6 +10,22 @@ const PUBLIC_SCREENS: ReadonlySet<string> = new Set(['rights-check'])
 
 export type AuthRedirect = '/auth/login' | '/(tabs)' | null
 
+let signUpLanding: string | null = null
+
+/**
+ * Sign-up chooses where a new account lands (an agent's website, a tenant's
+ * search). The root guard moves a signed-in user off the auth screens as soon
+ * as the session starts, so it must take this route, once, instead of Home:
+ * navigating from the sign-up screen itself lost the race and always landed on Home.
+ */
+export function setSignUpLanding(route: string) { signUpLanding = route }
+
+export function takeSignUpLanding(): string | null {
+  const route = signUpLanding
+  signUpLanding = null
+  return route
+}
+
 /** Where the root auth guard must send the user for the current route, if anywhere. */
 export function authRedirect(segments: readonly string[], isAuthenticated: boolean): AuthRedirect {
   const inAuthGroup = segments[0] === 'auth'

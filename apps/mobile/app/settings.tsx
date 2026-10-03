@@ -128,6 +128,7 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   const [cardMode, setCardMode] = useState<'view' | 'replace' | 'confirmRemove'>('view')
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [requesting, setRequesting] = useState(false)
   const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
 
   // The login payload may not carry the card, so read it from the account itself.
@@ -140,6 +141,7 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
   const savedCard = identity.data?.ghanaCardId || null
   const reviewed = hasIdReview(identity.data)
   const editingCard = !savedCard || cardMode === 'replace'
+  const reviewStatus = identity.data?.isVerified ? 'verified' : identity.data?.verificationStatus ?? 'none'
 
   function applyUpdate(updated: Record<string, unknown>) {
     useAuthStore.getState().updateUser(withoutCard(updated))
@@ -173,6 +175,19 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
     } catch (e) {
       setMessage({ tone: 'error', text: (e as { message?: string }).message || 'Failed to update profile' })
     } finally { setSaving(false) }
+  }
+
+  // The verified badge comes only from RentOS checking the card on file (POST /users/:id/verify-identity).
+  async function requestReview() {
+    setMessage(null)
+    setRequesting(true)
+    try {
+      const result = await api.post<{ verificationStatus?: 'pending' }>('/users/me/request-verification', {})
+      qc.setQueryData(identityKey, { ...identity.data, verificationStatus: result?.verificationStatus ?? 'pending' })
+      setMessage({ tone: 'success', text: 'ID review requested. RentOS will check your Ghana Card and let you know.' })
+    } catch (e) {
+      setMessage({ tone: 'error', text: (e as { message?: string }).message || 'Could not request an ID review' })
+    } finally { setRequesting(false) }
   }
 
   async function removeCard() {
@@ -267,6 +282,40 @@ function ProfileTab({ c }: { c: ReturnType<typeof useThemeColors> }) {
         <Text style={[s.cardHint, s.cardNote, { color: c.muted }]}>
           Changing your name or Ghana Card resets your ID review until RentOS reviews it again.
         </Text>
+      ) : null}
+
+      {!identity.isLoading && !identity.isError ? (
+        <View style={[s.idReview, neuInset(c)]}>
+          <Ionicons
+            name={reviewStatus === 'verified' ? 'shield-checkmark' : reviewStatus === 'pending' ? 'time-outline' : 'shield-outline'}
+            size={18}
+            color={reviewStatus === 'verified' ? c.accent : reviewStatus === 'pending' ? c.warning : c.muted}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[s.idReviewTitle, { color: c.text }]}>
+              {reviewStatus === 'verified' ? 'Identity verified' : reviewStatus === 'pending' ? 'ID review in progress' : 'Identity not verified'}
+            </Text>
+            <Text style={[s.cardHint, { color: c.muted }]}>
+              {reviewStatus === 'verified'
+                ? 'The verified badge shows on your profile across RentOS.'
+                : reviewStatus === 'pending'
+                  ? 'RentOS is checking your Ghana Card. We’ll let you know when it’s done.'
+                  : savedCard
+                    ? 'Your Ghana Card is on file. Request an ID review and RentOS will check it.'
+                    : 'Add your Ghana Card ID and save, then request an ID review. A verified badge builds trust with landlords and tenants.'}
+            </Text>
+            {reviewStatus === 'none' && savedCard && cardMode === 'view' ? (
+              <TouchableOpacity
+                style={[s.cardButton, s.idReviewButton, { backgroundColor: c.primary }, requesting && s.saveBtnDisabled]}
+                onPress={requestReview}
+                disabled={requesting}
+                accessibilityRole="button"
+              >
+                {requesting ? <ActivityIndicator color="#ffffff" /> : <Text style={s.cardButtonText}>Request ID review</Text>}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
       ) : null}
 
       {message ? (
@@ -669,6 +718,9 @@ const s = StyleSheet.create({
   cardButtonText: { fontSize: 13, fontFamily: 'Outfit_700Bold', color: '#ffffff' },
   cardHint: { fontSize: 12, fontFamily: 'Outfit_400Regular', lineHeight: 17 },
   cardNote: { marginTop: 8 },
+  idReview: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: spacing.md, paddingVertical: 12, marginTop: spacing.md },
+  idReviewTitle: { fontSize: 14, fontFamily: 'Outfit_600SemiBold', marginBottom: 2 },
+  idReviewButton: { alignSelf: 'flex-start', marginTop: 10 },
   profileMessage: { fontSize: 13, fontFamily: 'Outfit_500Medium', marginTop: spacing.md, lineHeight: 18 },
   // Theme
   optionGrid: { flexDirection: 'row', gap: 10 },

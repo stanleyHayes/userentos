@@ -30,6 +30,8 @@ async function ensureScore<T extends object>(profile: T): Promise<T> {
 router.get('/me', authenticate, async (req, res) => {
   let profile = await TenantProfile.findOne({ userId: req.user!.userId }).lean()
   if (!profile) {
+    // Only tenant accounts get one: opening this as an agent or landlord used to create an empty profile.
+    if (!req.user!.roles.includes('tenant')) { error(res, 'Tenant profiles are for tenant accounts', 404); return }
     const created = await TenantProfile.create({ userId: req.user!.userId })
     profile = created.toObject()
   }

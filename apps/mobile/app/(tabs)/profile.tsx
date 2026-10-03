@@ -76,9 +76,13 @@ export default function ProfileScreen() {
     {
       title: 'Property',
       items: [
-        { icon: 'shield-checkmark-outline', label: 'Verify Identity', onPress: () => router.push('/tenant-profile'), badge: user?.isVerified ? undefined : 'Action needed', color: user?.isVerified ? undefined : c.warning },
+        // The Ghana Card and the ID review are on the account, in Settings, for every account type.
+        { icon: 'shield-checkmark-outline', label: 'Verify Identity', onPress: () => router.push('/settings'), badge: user?.isVerified ? undefined : 'Action needed', color: user?.isVerified ? undefined : c.warning },
         { icon: 'heart-outline', label: 'Saved Properties', onPress: () => router.push('/saved-properties') },
-        ...(isLandlord ? [{ icon: 'people-outline' as const, label: 'My Tenants', onPress: () => router.push('/tenants' as string) }] : []),
+        ...(isLandlord ? [
+          { icon: 'people-outline' as const, label: 'My Tenants', onPress: () => router.push('/tenants' as string) },
+          { icon: 'construct-outline' as const, label: 'Maintenance', onPress: () => router.push('/maintenance' as string) },
+        ] : []),
         { icon: 'document-attach-outline', label: 'Applications', onPress: () => router.push('/applications') },
         { icon: 'document-text-outline', label: 'My Agreements', onPress: () => router.push('/agreements') },
         { icon: 'folder-outline', label: 'Documents', onPress: () => router.push('/documents') },

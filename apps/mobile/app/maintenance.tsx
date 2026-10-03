@@ -162,14 +162,17 @@ export default function MaintenanceScreen() {
         contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xl }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={c.primary} />}
       >
-        <TouchableOpacity
-          style={[s.newBtn, { backgroundColor: c.primary }]}
-          onPress={() => setShowCreate(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={s.newBtnText}>New Request</Text>
-        </TouchableOpacity>
+        {/* Only tenants raise requests: the API refuses everyone else. */}
+        {isTenant && (
+          <TouchableOpacity
+            style={[s.newBtn, { backgroundColor: c.primary }]}
+            onPress={() => setShowCreate(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={s.newBtnText}>New Request</Text>
+          </TouchableOpacity>
+        )}
 
         {!isTenant && (
           <ScrollView
