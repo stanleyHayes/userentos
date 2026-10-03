@@ -12,7 +12,8 @@ import { uploadToCloudinary } from '../utils/cloudinary.js'
 import { notify } from '../services/notify.js'
 import { embed } from '../services/embeddings.js'
 import { cache } from '../services/cache.js'
-import { canReview, canTransition, PUBLICLY_VISIBLE_STATUSES, type ReviewStatus } from '../services/propertyReview.js'
+import { canReview, canTransition, PUBLICLY_VISIBLE_STATUSES, reviewAfterContentChange, type ReviewStatus } from '../services/propertyReview.js'
+import { clearLandingCache } from '../services/seoLanding.js'
 import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 import { closedAccountIds, isClosedAccount } from '../services/closedAccounts.js'
 import { recordErasure, completeErasure } from '../services/erasureLedger.js'
@@ -516,16 +517,26 @@ export const propertyController = {
       success(res, { images: property.images }, 'Images uploaded'); return
     }
 
+    // A new photo is new content: a live listing goes back to review, and a review in progress moves to a new version.
+    const review = reviewAfterContentChange(property)
+    const wasPublic = PUBLICLY_VISIBLE_STATUSES.includes((property.listingStatus ?? 'draft') as ReviewStatus)
+
     if (uploadKey) {
       const { url, publicId } = await uploadToCloudinary(files[0].buffer, { folder: 'properties', resourceType: 'image' })
       // Only if no request with this key got there first (two copies of one
       // retried upload can both pass the check above).
       const stored = await Property.findOneAndUpdate(
         { _id: property._id, 'imageAssets.uploadKey': { $ne: uploadKey } },
-        { $push: { images: url, imageAssets: { url, publicId, uploadKey } } },
+        {
+          $push: { images: url, imageAssets: { url, publicId, uploadKey } },
+          ...(review ? { $set: { listingStatus: review.listingStatus }, $inc: { reviewVersion: 1 } } : {}),
+        },
         { returnDocument: 'after', projection: { images: 1 } },
       ).lean()
-      if (stored) { success(res, { images: stored.images }, 'Images uploaded'); return }
+      if (stored) {
+        if (wasPublic) clearLandingCache()
+        success(res, { images: stored.images }, 'Images uploaded'); return
+      }
       // The other copy was stored: this file never joined the listing.
       await eraseStoredAssets([{ publicId, resourceType: 'image', deliveryType: 'upload' }])
         .catch(() => console.warn('[Property] A duplicate listing photo could not be deleted from storage:', publicId))
@@ -544,7 +555,12 @@ export const propertyController = {
     // The storage id is kept with each photo so it can be erased with the listing.
     property.images.push(...uploaded.map((image) => image.url))
     property.imageAssets.push(...uploaded)
+    if (review) {
+      property.listingStatus = review.listingStatus
+      property.reviewVersion = review.reviewVersion
+    }
     await property.save()
+    if (wasPublic) clearLandingCache()
 
     success(res, { images: property.images }, 'Images uploaded')
   },

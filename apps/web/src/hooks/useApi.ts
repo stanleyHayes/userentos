@@ -704,12 +704,16 @@ export function useReviewProperty() {
       reasonCode?: string
       note?: string
       issues?: string[]
+      /** The version the reviewer opened: refused (409) if the owner changed the listing since. */
+      reviewVersion?: number
     }) => api.post<{ id: string; listingStatus: ReviewListingStatus }>(`/properties/${id}/review`, body),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['review-queue'] })
       qc.invalidateQueries({ queryKey: ['property-reviews', vars.id] })
       qc.invalidateQueries({ queryKey: ['properties'] })
     },
+    // A refused decision (e.g. the listing changed after it was opened): show the queue as it is now.
+    onError: () => { qc.invalidateQueries({ queryKey: ['review-queue'] }) },
   })
 }
 

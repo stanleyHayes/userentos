@@ -54,6 +54,46 @@ test('a moderator approves, and rejects with a reason code, from the listing pag
   expect(decisions.at(-1)).toEqual({ id: 'prop-reject', body: { action: 'reject', reasonCode: 'poor_media', note: 'The photos show a different building.' } })
 })
 
+test('a decision names the version reviewed; one made before the owner changed the listing is refused and the page reloads', async ({ page }) => {
+  let current = listing('prop-pinned', { reviewVersion: 3 })
+  const bodies: Record<string, unknown>[] = []
+  await signInWithMockedApi(page, admin, ({ method, path, body }) => {
+    if (method === 'GET' && path === '/properties/prop-pinned') return { data: current }
+    if (method === 'POST' && path === '/properties/prop-pinned/review') {
+      const decision = body as { reviewVersion?: number }
+      bodies.push(decision)
+      // The owner edited the listing after the moderator opened it.
+      if (decision.reviewVersion !== 4) {
+        current = { ...current, title: 'Listing prop-pinned (edited)', reviewVersion: 4 }
+        return { status: 409, code: 'REVIEW_VERSION_CHANGED', error: 'This listing changed after you opened it. Reload it and review the latest version.', data: { reviewVersion: 4 } }
+      }
+      current = { ...current, listingStatus: 'approved' }
+      return { data: { id: 'prop-pinned', listingStatus: 'approved' } }
+    }
+    return undefined
+  })
+
+  await page.goto('/properties/prop-pinned')
+  await page.getByRole('button', { name: 'Approve Listing' }).click({ timeout: 20_000 })
+  await expect(page.getByText('This listing changed after you opened it. Reload it and review the latest version.')).toBeVisible()
+  await expect(page.getByText('Listing prop-pinned (edited)').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Approve Listing' }).click()
+  await expect(page.getByRole('button', { name: 'Approve Listing' })).toHaveCount(0)
+  expect(bodies.map((b) => b.reviewVersion)).toEqual([3, 4])
+})
+
+test('an owner is told a live listing goes back to review before choosing new photos', async ({ page }) => {
+  await signInWithMockedApi(page, landlord, ({ method, path }) => {
+    if (method === 'GET' && path === '/properties/prop-live') return { data: listing('prop-live', { listingStatus: 'approved' }) }
+    return undefined
+  })
+  await page.goto('/properties/prop-live')
+  await page.getByRole('button', { name: 'Upload Images' }).click({ timeout: 20_000 })
+  await expect(page.getByText('New photos send this listing back to RentOS review. It leaves the public pages until it is approved again.')).toBeVisible()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Upload Images' })).toBeVisible()
+})
+
 test('an owner sees what a reviewer asked to change, edits the listing and resubmits', async ({ page }) => {
   let current = listing('prop-changes', {
     listingStatus: 'changes_requested',

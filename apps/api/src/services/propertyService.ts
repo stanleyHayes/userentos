@@ -4,7 +4,7 @@ import type { Logger } from 'winston'
 import type { PropertyRepository } from '../repositories/index.js'
 import type { IProperty } from '../models/Property.js'
 import { hasDelegatedScope } from './delegation.js'
-import { PUBLICLY_VISIBLE_STATUSES } from './propertyReview.js'
+import { PUBLICLY_VISIBLE_STATUSES, reviewAfterContentChange } from './propertyReview.js'
 import { clearLandingCache } from './seoLanding.js'
 import { recordErasure, completeErasure } from './erasureLedger.js'
 import { propertyImageAssets, eraseStoredAssets } from './propertyImages.js'
@@ -251,9 +251,11 @@ export class PropertyService {
       property.coordinates = { lat, lng }
     }
     const wasPublic = (PUBLICLY_VISIBLE_STATUSES as readonly string[]).includes(property.listingStatus)
-    if (contentChanged && wasPublic) {
-      property.listingStatus = 'pending_review'
-      this.logger.info(`Property ${id} content changed — returned to pending_review`)
+    const review = contentChanged ? reviewAfterContentChange(property) : null
+    if (review) {
+      if (wasPublic) this.logger.info(`Property ${id} content changed — returned to pending_review`)
+      property.listingStatus = review.listingStatus
+      property.reviewVersion = review.reviewVersion
     }
     await property.save()
     // A public listing changed (or left the public pages): the search pages reload on their next request.

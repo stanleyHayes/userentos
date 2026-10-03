@@ -328,6 +328,8 @@ export interface Property {
   rejectionReason?: string
   /** Set with 'changes_requested': what the reviewer asked the owner to fix. */
   reviewIssues?: string[]
+  /** Moves on with each submission and each change during review; a review decision names the version it was made on. */
+  reviewVersion?: number
   reviewedBy?: string
   reviewedAt?: string
   publishedAt?: string

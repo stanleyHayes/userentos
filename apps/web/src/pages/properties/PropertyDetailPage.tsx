@@ -127,6 +127,8 @@ export function PropertyDetailPage() {
     mutationFn: (body: { action: 'approve' | 'reject'; reasonCode?: string; reason?: string }) =>
       api.post(`/properties/${id}/review`, {
         action: body.action,
+        // The version on screen: refused if the owner changed the listing since it was opened.
+        ...(property?.reviewVersion ? { reviewVersion: property.reviewVersion } : {}),
         ...(body.reasonCode ? { reasonCode: body.reasonCode } : {}),
         ...(body.reason?.trim() ? { note: body.reason.trim() } : {}),
       }),
@@ -135,6 +137,8 @@ export function PropertyDetailPage() {
       qc.invalidateQueries({ queryKey: ['review-queue'] })
       setShowRejectModal(false); setRejectReason(''); setRejectReasonCode('')
     },
+    // Refused because the owner changed the listing since it was opened: show the latest version.
+    onError: () => { qc.invalidateQueries({ queryKey: ['property', id] }) },
   })
   const applyMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.post('/applications', body),

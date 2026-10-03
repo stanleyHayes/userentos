@@ -24,6 +24,8 @@ type RejectReason = (typeof REJECT_REASONS)[number]['value']
 export interface RejectableListing {
   id: string
   title: string
+  /** The version the reviewer opened: the API refuses the decision if the owner changed the listing since. */
+  reviewVersion?: number
 }
 
 /**
@@ -68,6 +70,7 @@ function RejectForm({ listing, onClose, onRejected }: {
         action: 'reject',
         reasonCode,
         note: note.trim() || undefined,
+        reviewVersion: listing.reviewVersion,
       })
       onRejected(listing.id)
     } catch (err) {

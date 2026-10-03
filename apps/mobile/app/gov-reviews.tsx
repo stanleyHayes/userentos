@@ -14,6 +14,7 @@ interface PendingProperty {
   address: { street: string; city: string; region: string }
   rentAmount: number
   createdAt: string
+  reviewVersion?: number
 }
 
 export default function GovReviewsScreen() {
@@ -47,7 +48,7 @@ export default function GovReviewsScreen() {
     setRefreshing(false)
   }
 
-  async function handleApprove(id: string) {
+  async function handleApprove(id: string, reviewVersion?: number) {
     Alert.alert('Approve Property', 'Are you sure you want to approve this property listing?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -55,7 +56,7 @@ export default function GovReviewsScreen() {
         onPress: async () => {
           setActioningId(id)
           try {
-            await api.post(`/properties/${id}/review`, { action: 'approve' })
+            await api.post(`/properties/${id}/review`, { action: 'approve', reviewVersion })
             Alert.alert('Approved', 'Property has been approved and is now listed.')
             setProperties((prev) => prev.filter((p) => p.id !== id))
             // The queue is served a page at a time: reload so listings beyond
@@ -112,7 +113,7 @@ export default function GovReviewsScreen() {
         <View style={s.cardActions}>
           <TouchableOpacity
             style={[s.actionBtn, { backgroundColor: c.accent }]}
-            onPress={() => handleApprove(item.id)}
+            onPress={() => handleApprove(item.id, item.reviewVersion)}
             disabled={isActioning}
             activeOpacity={0.8}
           >
@@ -127,7 +128,7 @@ export default function GovReviewsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.actionBtn, { backgroundColor: c.danger }]}
-            onPress={() => setRejecting({ id: item.id, title: item.title })}
+            onPress={() => setRejecting({ id: item.id, title: item.title, reviewVersion: item.reviewVersion })}
             disabled={isActioning}
             activeOpacity={0.8}
           >

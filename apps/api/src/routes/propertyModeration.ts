@@ -39,6 +39,8 @@ const reviewSchema = z.object({
   reasonCode: z.string().max(60).optional(),
   note: z.string().max(2000).optional(),
   issues: z.array(z.string().min(1).max(300)).max(20).default([]),
+  /** The listing version the reviewer opened; a decision on an older one is refused. */
+  reviewVersion: z.number().int().min(1).optional(),
 })
 
 const queueQuerySchema = z.object({
@@ -202,7 +204,7 @@ router.post('/:id/withdraw', authenticate, asyncHandler(async (req, res) => {
 router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
   const parsed = reviewSchema.safeParse(req.body)
   if (!parsed.success) { error(res, parsed.error.issues[0].message); return }
-  const { action, reasonCode, note, issues } = parsed.data
+  const { action, reasonCode, note, issues, reviewVersion } = parsed.data
 
   const me = principal(req)
   const permission = ACTION_PERMISSION[action]
@@ -225,6 +227,17 @@ router.post('/:id/review', authenticate, asyncHandler(async (req, res) => {
 
   const property = await Property.findById(param(req.params.id))
   if (!property) { error(res, 'Property not found', 404); return }
+
+  // The owner edited the listing (or added a photo) after the reviewer opened it.
+  if (reviewVersion !== undefined && reviewVersion !== (property.reviewVersion ?? 1)) {
+    res.status(409).json({
+      success: false,
+      error: 'This listing changed after you opened it. Reload it and review the latest version.',
+      code: 'REVIEW_VERSION_CHANGED',
+      data: { reviewVersion: property.reviewVersion ?? 1 },
+    })
+    return
+  }
 
   const from = (property.listingStatus ?? 'draft') as ReviewStatus
   const to = ACTION_TARGET[action]

@@ -526,7 +526,7 @@ function PropertyGridCard({ property }: { property: PropertyCard }) {
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); publishMutation.mutate() }}
                   disabled={publishMutation.isPending}
                 >
-                  <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : p.listingStatus === 'draft' ? 'Publish' : 'Resubmit'}
+                  <Send size={12} /> {publishMutation.isPending ? 'Submitting...' : p.listingStatus === 'draft' ? 'Submit' : 'Resubmit'}
                 </Button>
                 {publishMutation.isError && (
                   <p className="text-[10px] text-danger mt-1">{publishMutation.error instanceof Error ? publishMutation.error.message : 'Publish failed'}</p>
@@ -592,7 +592,7 @@ function PropertyListCard({ property }: { property: PropertyCard }) {
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); publishMutation.mutate() }}
                 disabled={publishMutation.isPending}
               >
-                <Send size={12} /> {publishMutation.isPending ? 'Publishing...' : p.listingStatus === 'draft' ? 'Publish' : 'Resubmit'}
+                <Send size={12} /> {publishMutation.isPending ? 'Submitting...' : p.listingStatus === 'draft' ? 'Submit' : 'Resubmit'}
               </Button>
             )}
             <span className="ml-auto flex items-center gap-1 text-[10px] text-muted dark:text-gray-600"><Eye size={11} />{p.views ?? 0} views</span>

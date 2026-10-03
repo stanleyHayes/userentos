@@ -191,6 +191,7 @@ function DecisionModal({ property, action, onClose }: {
       {
         id: property.id,
         action,
+        reviewVersion: property.reviewVersion ?? 1,
         note: note.trim() || undefined,
         reasonCode: action === 'reject' ? reasonCode : undefined,
         issues: action === 'request_changes' ? cleanIssues : undefined,

@@ -29,6 +29,8 @@ interface Property {
   status: string; listingStatus?: string; rejectionReason?: string
   /** What the reviewer asked to change (changes_requested). */
   reviewIssues?: string[]
+  /** The version a review decision is made on (the API refuses one made on an older version). */
+  reviewVersion?: number
   address: { street: string; city: string; region: string; digitalAddress?: string }
   rentAmount: number; amenities: string[]; rules: string[]
   bedrooms: number; bathrooms: number; parkingSpaces: number
@@ -280,7 +282,7 @@ export default function PropertyDetailScreen() {
   async function handleApprove() {
     setReviewing(true)
     try {
-      await api.post(`/properties/${id}/review`, { action: 'approve' })
+      await api.post(`/properties/${id}/review`, { action: 'approve', reviewVersion: property?.reviewVersion })
       Alert.alert('Done', 'Property listing approved.')
       await load()
     } catch (err) {
@@ -1502,7 +1504,7 @@ export default function PropertyDetailScreen() {
 
       {/* Reject Modal (Government) */}
       <RejectListingModal
-        listing={showRejectModal ? { id, title: property.title } : null}
+        listing={showRejectModal ? { id, title: property.title, reviewVersion: property.reviewVersion } : null}
         onClose={() => setShowRejectModal(false)}
         onRejected={handleRejected}
       />

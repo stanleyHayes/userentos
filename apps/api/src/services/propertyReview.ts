@@ -56,6 +56,24 @@ export function canTransition(from: ReviewStatus, to: ReviewStatus): boolean {
  */
 export const PUBLICLY_VISIBLE_STATUSES: ReviewStatus[] = ['approved', 'published']
 
+/**
+ * What a content change (an edit, a new photo) does to a listing's review.
+ *
+ * A live listing goes back to review, so nothing reaches the public pages
+ * unreviewed. A listing in review keeps its place in the queue. Either way the
+ * review version moves on: a reviewer's decision names the version they
+ * opened, and one made on the earlier content is refused (409) instead of
+ * approving changes nobody looked at. Null: nothing to change (a draft, or a
+ * listing waiting for its owner to resubmit).
+ */
+export function reviewAfterContentChange(listing: { listingStatus?: string | null; reviewVersion?: number | null }): { listingStatus: ReviewStatus; reviewVersion: number } | null {
+  const from = (listing.listingStatus ?? 'draft') as ReviewStatus
+  const reviewVersion = (listing.reviewVersion ?? 1) + 1
+  if (PUBLICLY_VISIBLE_STATUSES.includes(from)) return { listingStatus: 'pending_review', reviewVersion }
+  if (from === 'pending_review' || from === 'in_review') return { listingStatus: from, reviewVersion }
+  return null
+}
+
 /** Statuses a moderator should see in the review queue. */
 export const REVIEWABLE_STATUSES: ReviewStatus[] = ['pending_review', 'in_review']
 

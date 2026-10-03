@@ -31,6 +31,9 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
   const uploadImages = useUploadPropertyImages()
   const [locationOpen, setLocationOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  // New photos are new content: a live listing goes back to review, so say so before the picker opens.
+  const isLive = listingStatus === 'approved' || listingStatus === 'published'
+  const [confirmPhotos, setConfirmPhotos] = useState(false)
   // Photos and review are for landlords and agents (the API refuses others); any owner can still edit or withdraw.
   const canList = isPropertyProfessional(useAuthStore((s) => s.user?.roles))
 
@@ -66,8 +69,16 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
           e.target.value = ''
         }}
       />
-      {canList ? (
-        <Button variant="outline" className="w-full" onClick={() => imageInputRef.current?.click()} disabled={uploadImages.isPending}>
+      {canList && confirmPhotos ? (
+        <div className="space-y-2 rounded-xl bg-warning/10 p-3 text-xs text-amber-700 dark:text-amber-400" role="alert">
+          <p>New photos send this listing back to RentOS review. It leaves the public pages until it is approved again.</p>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => { setConfirmPhotos(false); imageInputRef.current?.click() }}>Choose photos</Button>
+            <Button size="sm" variant="outline" onClick={() => setConfirmPhotos(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : canList ? (
+        <Button variant="outline" className="w-full" onClick={() => (isLive ? setConfirmPhotos(true) : imageInputRef.current?.click())} disabled={uploadImages.isPending}>
           {uploadImages.isPending ? 'Uploading...' : 'Upload Images'}
         </Button>
       ) : (
@@ -75,7 +86,7 @@ export function OwnerActions({ propertyId, listingStatus, coordinates, rejection
       )}
       {listingStatus === 'draft' && canList && (
         <Button className="w-full" onClick={onPublish} disabled={isPublishing}>
-          <Send size={14} /> {isPublishing ? 'Publishing...' : 'Publish for Review'}
+          <Send size={14} /> {isPublishing ? 'Submitting...' : 'Submit for review'}
         </Button>
       )}
       {listingStatus === 'rejected' && (
