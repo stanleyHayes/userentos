@@ -17,6 +17,7 @@ import { RejectListingModal } from '../../components/RejectListingModal'
 import { useRegulatedFeatureEnabled } from '../../hooks/useRegulatedFeatures'
 import { listingShareContent } from '../../lib/listingShare'
 import { acceptsRentalApplications, listingTypeMeta } from '../../../../packages/shared/listingTypes'
+import { isContactBlocked, showContactBlocked } from '../../lib/contactProtection'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -128,6 +129,7 @@ export default function PropertyDetailScreen() {
 
   // Contact modal
   const [showContactModal, setShowContactModal] = useState(false)
+  const [sendingContact, setSendingContact] = useState(false)
   const [contactMessage, setContactMessage] = useState('')
 
   // Agent lead ("I'm interested") modal
@@ -374,9 +376,32 @@ export default function PropertyDetailScreen() {
     }
   }
 
+  /** A reviewer writes to the owner directly: not an enquiry, so no lead. */
   async function handleMessageLandlord() {
     if (!property) return
     await messageAboutProperty(property.landlordId)
+  }
+
+  /**
+   * "Message on RentOS": through the enquiry endpoint, so the message is
+   * screened, reaches whoever handles the listing (owner, agent or delegate),
+   * becomes a lead and alerts them. The typed text used to be thrown away.
+   */
+  async function sendContactMessage() {
+    const text = contactMessage.trim()
+    if (!text) return
+    setSendingContact(true)
+    try {
+      const lead = await api.post<{ conversationId?: string }>(`/agent/leads/property/${id}`, { message: text.slice(0, 500) })
+      setShowContactModal(false)
+      setContactMessage('')
+      if (lead.conversationId) router.push(`/chat/${lead.conversationId}` as string)
+      else Alert.alert('Message sent', 'The reply will arrive in your RentOS messages.')
+    } catch (err) {
+      // A stopped message keeps its text, so it can be edited and sent again.
+      if (isContactBlocked(err)) showContactBlocked(err)
+      else Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to send your message')
+    } finally { setSendingContact(false) }
   }
 
   async function submitInterest() {
@@ -387,7 +412,7 @@ export default function PropertyDetailScreen() {
       })
       setShowInterestModal(false)
       setInterestMessage('')
-      Alert.alert('Interest Sent', 'The agent will contact you.')
+      Alert.alert('Interest sent', 'The reply will arrive in your RentOS messages.')
     } catch (err) {
       Alert.alert('Error', (err as { message?: string }).message ?? 'Failed to send interest')
     } finally { setSendingInterest(false) }
@@ -1269,7 +1294,7 @@ export default function PropertyDetailScreen() {
         <View style={s.modalOverlay}>
           <View style={[s.modalContent, { backgroundColor: c.white }]}>
             <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Contact Landlord</Text>
+              <Text style={[s.modalTitle, { color: c.primaryDark }]}>Message on RentOS</Text>
               <TouchableOpacity onPress={() => setShowContactModal(false)}>
                 <Ionicons name="close" size={24} color={c.muted} />
               </TouchableOpacity>
@@ -1280,7 +1305,7 @@ export default function PropertyDetailScreen() {
                 label="Message"
                 aiContext="message to a landlord about a rental property"
                 value={contactMessage}
-                onChangeText={setContactMessage}
+                onChangeText={(text) => setContactMessage(text.slice(0, 500))}
                 placeholder={`Hi, I'm interested in "${property.title}".`}
                 numberOfLines={4}
               />
@@ -1293,12 +1318,9 @@ export default function PropertyDetailScreen() {
                   <Text style={[s.outlineBtnText, { color: c.muted }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1 }]}
-                  onPress={async () => {
-                    setShowContactModal(false)
-                    setContactMessage('')
-                    await handleMessageLandlord()
-                  }}
+                  style={[s.primaryBtn, { backgroundColor: c.primary, flex: 1, opacity: sendingContact || !contactMessage.trim() ? 0.6 : 1 }]}
+                  disabled={sendingContact || !contactMessage.trim()}
+                  onPress={() => void sendContactMessage()}
                 >
                   <Ionicons name="send" size={16} color="#fff" />
                   <Text style={s.primaryBtnText}>Send</Text>

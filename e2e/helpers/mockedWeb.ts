@@ -9,7 +9,7 @@ import { allRegulatedFeatures } from './regulatedFeatures'
  * back to an empty list. Socket.io is refused so nothing reaches a real server.
  */
 export type MockedUser = { id: string; email: string; firstName: string; lastName: string; phone: string; roles: string[]; activeRole: string; isVerified?: boolean }
-export type MockHandler = (request: { method: string; path: string; body: unknown }) => { status?: number; data?: unknown; error?: string; code?: string } | undefined
+export type MockHandler = (request: { method: string; path: string; body: unknown }) => { status?: number; data?: unknown; error?: string; code?: string; extra?: Record<string, unknown> } | undefined
 
 export async function signInWithMockedApi(page: Page, user: MockedUser, handle: MockHandler) {
   await page.addInitScript(({ user }) => {
@@ -26,7 +26,8 @@ export async function signInWithMockedApi(page: Page, user: MockedUser, handle: 
     if (answer) {
       const status = answer.status ?? 200
       // Errors may carry a machine-readable code and data (e.g. 409 PAYMENT_IN_PROGRESS with the payment).
-      await route.fulfill({ status, json: status >= 400 ? { success: false, error: answer.error ?? 'Request failed', ...(answer.code ? { code: answer.code } : {}), ...(answer.data !== undefined ? { data: answer.data } : {}) } : { success: true, data: answer.data ?? null } })
+      // `extra` adds top-level fields, e.g. a contact-protection stop (blocked, reason, decisionId).
+      await route.fulfill({ status, json: status >= 400 ? { success: false, error: answer.error ?? 'Request failed', ...(answer.code ? { code: answer.code } : {}), ...(answer.data !== undefined ? { data: answer.data } : {}), ...answer.extra } : { success: true, data: answer.data ?? null } })
       return
     }
     let data: unknown = { items: [], total: 0 }
