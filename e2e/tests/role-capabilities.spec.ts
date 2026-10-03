@@ -50,23 +50,19 @@ test.describe('role capabilities release gate', () => {
     })
   })
 
-  test('landlord can create and see a developer profile workflow', async ({
+  test('developer tools are for developers: a landlord sees no developer profile and the API refuses one', async ({
     authedLandlordPage: page,
   }) => {
-    const title = `E2E developer profile ${Date.now()}`
+    // Developer profiles and off-plan listings belong to developer accounts (capabilityLogic.ts).
     await page.goto('/role-capabilities')
     await expect(page.getByRole('heading', { name: 'Role Capabilities' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Developer profile' })).toHaveCount(0)
 
-    const profileCard = page
-      .getByRole('heading', { name: 'Developer profile' })
-      .locator('xpath=ancestor::div[contains(@class, "border")][1]')
-    await profileCard.getByRole('button', { name: 'Start workflow' }).click()
-
-    await page.locator('#cap-title').fill(title)
-    await page.getByRole('button', { name: 'Create', exact: true }).click()
-
-    // The toast is intentionally short-lived; the persisted ledger row is the
-    // durable proof that the full UI/API/database workflow completed.
-    await expect(page.getByText(title)).toBeVisible()
+    const token = await accessToken(page)
+    const response = await page.request.post('/api/capabilities/workflows', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { kind: 'developer_profile' },
+    })
+    expect(response.status()).toBe(403)
   })
 })
