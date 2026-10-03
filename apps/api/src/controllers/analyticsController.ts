@@ -22,6 +22,7 @@ import { success } from '../utils/response.js'
 import { logger } from '../utils/logger.js'
 import { cache } from '../services/cache.js'
 import { RENTAL_LISTINGS } from '../services/listings.js'
+import { isRegulatedFeatureEnabled } from '../config/regulatedFeatures.js'
 
 function parseDateRange(req: Request): { start: Date; end: Date } {
   const rawStart = req.query.startDate as string | undefined
@@ -60,6 +61,14 @@ function monthlyTotals(payments: { paidAt?: string; amount: number }[]): Record<
     if (month) totals[month] = (totals[month] ?? 0) + p.amount
   }
   return totals
+}
+
+/** Figures that exist only while a regulated service runs (rent collection,
+ * the wallet). While it is off RentOS records none of them, so they are
+ * unknown (null), not zero: GH₵0 revenue and a 0% collection rate read as a
+ * failing business. */
+function whileOffered<T extends Record<string, unknown>>(offered: boolean, figures: T): { [K in keyof T]: T[K] | null } {
+  return offered ? figures : Object.fromEntries(Object.keys(figures).map((key) => [key, null])) as { [K in keyof T]: null }
 }
 
 const createdAtMs = (doc: unknown) => new Date((doc as { createdAt?: Date | string }).createdAt ?? 0).getTime()
@@ -177,21 +186,23 @@ export const analyticsController = {
         activeAgreements: activeAgreements.length,
         totalAgreements: agreements.length,
         activeTenants: new Set(activeAgreements.map((a) => a.tenantId)).size,
-        totalRevenue: payments.reduce((s, p) => s + p.amount, 0),
-        thisMonthRevenue,
-        lastMonthRevenue,
-        revenueChange,
-        monthlyIncome,
-        // Pending and overdue are separate buckets (dashboards show them side
-        // by side); overdue rows are not counted again as pending.
-        pendingPayments: pendingPayments.length - overduePayments.length,
-        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
-        overduePayments: overduePayments.length,
-        overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
+        ...whileOffered(isRegulatedFeatureEnabled('rent_collection'), {
+          totalRevenue: payments.reduce((s, p) => s + p.amount, 0),
+          thisMonthRevenue,
+          lastMonthRevenue,
+          revenueChange,
+          monthlyIncome,
+          // Pending and overdue are separate buckets (dashboards show them side
+          // by side); overdue rows are not counted again as pending.
+          pendingPayments: pendingPayments.length - overduePayments.length,
+          pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
+          overduePayments: overduePayments.length,
+          overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
+          collectionRate: expectedRent > 0 ? Math.min(100, Math.round((rentPaid / expectedRent) * 100)) : 0,
+        }),
         openDisputes: allDisputes.filter((d) => d.status !== 'closed' && d.status !== 'resolved').length,
         totalDisputes: disputes.length,
         disputesByStatus,
-        collectionRate: expectedRent > 0 ? Math.min(100, Math.round((rentPaid / expectedRent) * 100)) : 0,
         expiringLeases,
         propertyTypes,
         avgRentAmount,
@@ -243,22 +254,27 @@ export const analyticsController = {
         period: { start: start.toISOString(), end: end.toISOString() },
         activeAgreements: agreements.filter((a) => a.status === 'active').length,
         totalAgreements: agreements.length,
-        totalPaid: payments.reduce((s, p) => s + p.amount, 0),
-        paymentCount: payments.length,
+        endedAgreements: agreements.filter((a) => a.status === 'expired' || a.status === 'terminated').length,
+        // The agreed rent: a term of the lease, known whether or not RentOS collects it.
         nextPaymentAmount: activeAgreement?.rentAmount ?? 0,
-        walletBalance: wallet?.balance ?? 0,
-        totalSaved,
-        savingsTarget,
-        activePlans: plans.filter((p) => p.status === 'active').length,
-        savingsProgress: savingsTarget > 0 ? Math.round((totalSaved / savingsTarget) * 100) : 0,
-        monthlyPayments,
-        // Pending/overdue
-        // Pending and overdue are separate buckets (dashboards show them side
-        // by side); overdue rows are not counted again as pending.
-        pendingPayments: pendingPayments.length - overduePayments.length,
-        pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
-        overduePayments: overduePayments.length,
-        overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
+        ...whileOffered(isRegulatedFeatureEnabled('rent_collection'), {
+          totalPaid: payments.reduce((s, p) => s + p.amount, 0),
+          paymentCount: payments.length,
+          monthlyPayments,
+          // Pending and overdue are separate buckets (dashboards show them side
+          // by side); overdue rows are not counted again as pending.
+          pendingPayments: pendingPayments.length - overduePayments.length,
+          pendingAmount: pendingPayments.reduce((s, p) => s + p.amount, 0) - overduePayments.reduce((s, p) => s + p.amount, 0),
+          overduePayments: overduePayments.length,
+          overdueAmount: overduePayments.reduce((s, p) => s + p.amount, 0),
+        }),
+        ...whileOffered(isRegulatedFeatureEnabled('wallet'), {
+          walletBalance: wallet?.balance ?? 0,
+          totalSaved,
+          savingsTarget,
+          activePlans: plans.filter((p) => p.status === 'active').length,
+          savingsProgress: savingsTarget > 0 ? Math.round((totalSaved / savingsTarget) * 100) : 0,
+        }),
         // Disputes
         openDisputes: openDisputes.length,
         totalDisputes: disputes.length,

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuthStore } from '@/stores/authStore'
-import { useMyAnalytics, usePlatformAnalytics, useRegistryStats } from '@/hooks/useApi'
+import { useMyAnalytics, usePlatformAnalytics, useRegistryStats, useRegulatedFeatureEnabled } from '@/hooks/useApi'
 import { formatCurrency } from '@/lib/utils'
 import {
   BarChart3, TrendingUp, Users, Building2, DollarSign,
@@ -152,6 +152,9 @@ function UserAnalytics() {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
+  // Rent collection is a regulated service, off in production: without it RentOS records no rent,
+  // so revenue, collection and arrears are unknown (the API sends null), not zero.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
   const monthlyIncome = (a?.monthlyIncome ?? {}) as Record<string, number>
   const months = Object.entries(monthlyIncome).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
   const maxIncome = Math.max(...months.map(([, v]) => v), 1)
@@ -175,20 +178,28 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Properties" value={String(num(a?.totalProperties))} icon={<Building2 size={18} />} sub={`${num(a?.occupiedProperties)} occupied, ${num(a?.availableProperties)} available`} accent="#7c3aed" />
         <StatCard label="Active Tenants" value={String(num(a?.activeTenants))} icon={<Users size={18} />} sub={`${num(a?.newTenantsThisMonth)} new this month`} accent="#2563eb" />
-        <StatCard label="Total Revenue" value={formatCurrency(num(a?.totalRevenue))} icon={<TrendingUp size={18} />} trend={num(a?.revenueChange)} accent="#059669" />
-        <StatCard label="This Month" value={formatCurrency(num(a?.thisMonthRevenue))} icon={<DollarSign size={18} />} sub={`Last: ${formatCurrency(num(a?.lastMonthRevenue))}`} accent="#059669" />
+        {rentCollection ? (<>
+          <StatCard label="Total Revenue" value={formatCurrency(num(a?.totalRevenue))} icon={<TrendingUp size={18} />} trend={num(a?.revenueChange)} accent="#059669" />
+          <StatCard label="This Month" value={formatCurrency(num(a?.thisMonthRevenue))} icon={<DollarSign size={18} />} sub={`Last: ${formatCurrency(num(a?.lastMonthRevenue))}`} accent="#059669" />
+        </>) : (<>
+          <StatCard label="Applications" value={String(num(a?.totalApplications))} icon={<FileText size={18} />} sub={`${num(a?.pendingApplications)} waiting`} accent="#059669" />
+          <StatCard label="Avg. Rent" value={formatCurrency(num(a?.avgRentAmount))} icon={<CreditCard size={18} />} sub="Asking, across your listings" accent="#059669" />
+        </>)}
       </div>
 
-      {/* Second KPI row */}
+      {/* Second KPI row: rent RentOS collects */}
+      {rentCollection && (
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Collection Rate" value={`${Math.min(100, num(a?.collectionRate))}%`} icon={<BarChart3 size={18} />} accent="#059669" />
         <StatCard label="Avg. Rent" value={formatCurrency(num(a?.avgRentAmount))} icon={<CreditCard size={18} />} accent="#059669" />
         <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />
         <StatCard label="Overdue Payments" value={String(num(a?.overduePayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.overdueAmount))} accent="#dc2626" />
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Monthly Revenue */}
+        {rentCollection && (
         <Card>
           <CardHeader><CardTitle>Monthly Revenue (last 6 months)</CardTitle></CardHeader>
           <CardContent>
@@ -201,6 +212,7 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
             ) : <EmptyState preset="payments" title="No revenue data yet" description="Revenue will appear here once payments come in." compact />}
           </CardContent>
         </Card>
+        )}
 
         {/* Property breakdown */}
         <Card>
@@ -232,9 +244,9 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
         <Card>
           <CardHeader><CardTitle>Performance</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className={`grid grid-cols-1 ${rentCollection ? 'sm:grid-cols-2 ' : ''}gap-6`}>
               <ProgressRing value={num(a?.occupancyRate)} label="Occupancy Rate" color="#10b981" detail={`${num(a?.occupiedProperties)}/${num(a?.totalProperties)} properties`} />
-              <ProgressRing value={num(a?.collectionRate)} label="Collection Rate" color="#3b82f6" />
+              {rentCollection && <ProgressRing value={num(a?.collectionRate)} label="Collection Rate" color="#3b82f6" />}
             </div>
           </CardContent>
         </Card>
@@ -313,6 +325,10 @@ function LandlordAnalytics({ a }: { a: Record<string, any> | undefined }) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
+  // Rent collection and the wallet are regulated services, off in production: without them RentOS
+  // records no rent and holds no savings (the API sends null), so those figures stay out.
+  const rentCollection = useRegulatedFeatureEnabled('rent_collection') === true
+  const wallet = useRegulatedFeatureEnabled('wallet') === true
   const monthlyPayments = (a?.monthlyPayments ?? {}) as Record<string, number>
   const months = Object.entries(monthlyPayments).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
   const maxPayment = Math.max(...months.map(([, v]) => v), 1)
@@ -322,25 +338,37 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-primary-dark">My Analytics</h1>
-        <p className="text-sm text-muted mt-1">Your rental and savings overview</p>
+        <p className="text-sm text-muted mt-1">{wallet ? 'Your rental and savings overview' : 'Your rental overview'}</p>
       </div>
 
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Paid" value={formatCurrency(num(a?.totalPaid))} icon={<DollarSign size={18} />} accent="#059669" />
-        <StatCard label="Payments Made" value={String(num(a?.paymentCount))} icon={<CreditCard size={18} />} accent="#2563eb" />
-        <StatCard label="Wallet Balance" value={formatCurrency(num(a?.walletBalance))} icon={<PiggyBank size={18} />} accent="#7c3aed" />
-        <StatCard label="Next Payment" value={formatCurrency(num(a?.nextPaymentAmount))} icon={<TrendingUp size={18} />} accent="#d97706" />
+        {rentCollection ? (<>
+          <StatCard label="Total Paid" value={formatCurrency(num(a?.totalPaid))} icon={<DollarSign size={18} />} accent="#059669" />
+          <StatCard label="Payments Made" value={String(num(a?.paymentCount))} icon={<CreditCard size={18} />} accent="#2563eb" />
+        </>) : (<>
+          <StatCard label="Agreements" value={String(num(a?.activeAgreements))} icon={<FileText size={18} />} sub="Active" accent="#059669" />
+          <StatCard label="Applications" value={String(num(a?.totalApplications))} icon={<Briefcase size={18} />} sub={`${num(a?.pendingApplications)} pending`} accent="#2563eb" />
+        </>)}
+        {wallet
+          ? <StatCard label="Wallet Balance" value={formatCurrency(num(a?.walletBalance))} icon={<PiggyBank size={18} />} accent="#7c3aed" />
+          : <StatCard label="Open Disputes" value={String(num(a?.openDisputes))} icon={<Scale size={18} />} accent="#7c3aed" />}
+        <StatCard label="Next Payment" value={formatCurrency(num(a?.nextPaymentAmount))} icon={<TrendingUp size={18} />} sub="Rent in your lease" accent="#d97706" />
       </div>
 
+      {(wallet || rentCollection) && (
       <div className="stagger-3d grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total Saved" value={formatCurrency(num(a?.totalSaved))} icon={<PiggyBank size={18} />} accent="#059669" />
-        <StatCard label="Savings Target" value={formatCurrency(num(a?.savingsTarget))} icon={<BarChart3 size={18} />} accent="#2563eb" />
-        <StatCard label="Active Plans" value={String(num(a?.activePlans))} icon={<FileText size={18} />} accent="#7c3aed" />
-        <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />
+        {wallet && (<>
+          <StatCard label="Total Saved" value={formatCurrency(num(a?.totalSaved))} icon={<PiggyBank size={18} />} accent="#059669" />
+          <StatCard label="Savings Target" value={formatCurrency(num(a?.savingsTarget))} icon={<BarChart3 size={18} />} accent="#2563eb" />
+          <StatCard label="Active Plans" value={String(num(a?.activePlans))} icon={<FileText size={18} />} accent="#7c3aed" />
+        </>)}
+        {rentCollection && <StatCard label="Pending Payments" value={String(num(a?.pendingPayments))} icon={<AlertTriangle size={18} />} sub={formatCurrency(num(a?.pendingAmount))} accent="#d97706" />}
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Payment history */}
+        {rentCollection && (
         <Card>
           <CardHeader><CardTitle>Payment History (last 6 months)</CardTitle></CardHeader>
           <CardContent>
@@ -353,8 +381,10 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
             ) : <EmptyState preset="payments" title="No payment data yet" description="Payment activity will appear here." compact />}
           </CardContent>
         </Card>
+        )}
 
         {/* Savings progress */}
+        {wallet && (
         <Card>
           <CardHeader><CardTitle>Savings Progress</CardTitle></CardHeader>
           <CardContent>
@@ -377,6 +407,7 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Agreements */}
         <Card>
@@ -396,8 +427,13 @@ function TenantAnalytics({ a }: { a: Record<string, any> | undefined }) {
                 <p className="text-[10px] text-muted">Open Disputes</p>
               </div>
               <div className="rounded-lg bg-surface dark:bg-[#0c0e1a] p-3 text-center">
-                <p className="text-2xl font-bold text-warning">{num(a?.overduePayments)}</p>
-                <p className="text-[10px] text-muted">Overdue</p>
+                {rentCollection ? (<>
+                  <p className="text-2xl font-bold text-warning">{num(a?.overduePayments)}</p>
+                  <p className="text-[10px] text-muted">Overdue</p>
+                </>) : (<>
+                  <p className="text-2xl font-bold text-warning">{num(a?.endedAgreements)}</p>
+                  <p className="text-[10px] text-muted">Ended</p>
+                </>)}
               </div>
             </div>
           </CardContent>

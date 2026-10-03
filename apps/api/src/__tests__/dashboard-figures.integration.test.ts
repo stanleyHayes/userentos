@@ -25,6 +25,7 @@ const { default: analyticsRouter } = await import('../routes/analytics.js')
 const { default: applicationsRouter } = await import('../routes/applications.js')
 const { default: financingRouter } = await import('../routes/financing.js')
 const { default: adminViewsRouter } = await import('../routes/adminViews.js')
+const { reloadRegulatedFeatures } = await import('../config/regulatedFeatures.js')
 
 const DAY = 24 * 60 * 60 * 1000
 const ago = (days: number) => new Date(Date.now() - days * DAY)
@@ -152,6 +153,25 @@ describe.skipIf(!hasTestMongo)('dashboard figures match the records behind them'
     const tenant = (await get('/analytics/me', as(ids.tenant, ['tenant']))).data
     expect(tenant).toMatchObject({ pendingPayments: 2, pendingAmount: 550, overduePayments: 1, overdueAmount: 1000 })
     expect(tenant).toMatchObject({ activeAgreements: 1, nextPaymentAmount: 1000, totalSaved: 300, savingsTarget: 1000, activePlans: 1, pendingApplications: 1 })
+  })
+
+  it('reports rent and savings figures as unknown, not zero, while those services are off', async () => {
+    // Production runs with rent collection and the wallet off: RentOS then records no rent and holds no savings.
+    try {
+      reloadRegulatedFeatures({ REGULATED_FEATURES: '' })
+      const landlord = (await get('/analytics/me', as(ids.landlord, ['landlord', 'tenant']))).data
+      for (const key of ['totalRevenue', 'thisMonthRevenue', 'revenueChange', 'monthlyIncome', 'pendingPayments', 'overdueAmount', 'collectionRate']) expect(landlord[key], key).toBeNull()
+      expect(landlord).toMatchObject({ activeAgreements: 1, activeTenants: 1, pendingApplications: 1, totalApplications: 1 })
+      const tenant = (await get('/analytics/me', as(ids.tenant, ['tenant']))).data
+      for (const key of ['totalPaid', 'paymentCount', 'monthlyPayments', 'overduePayments', 'walletBalance', 'totalSaved', 'savingsProgress']) expect(tenant[key], key).toBeNull()
+      // The agreed rent is a term of the lease, known either way.
+      expect(tenant).toMatchObject({ activeAgreements: 1, endedAgreements: 0, nextPaymentAmount: 1000, pendingApplications: 1 })
+
+      reloadRegulatedFeatures({ REGULATED_FEATURES: 'rent_collection' })
+      expect((await get('/analytics/me', as(ids.tenant, ['tenant']))).data).toMatchObject({ overduePayments: 1, overdueAmount: 1000, totalSaved: null })
+    } finally {
+      reloadRegulatedFeatures()
+    }
   })
 
   it('gives a user holding both roles the view for the role they ask for', async () => {

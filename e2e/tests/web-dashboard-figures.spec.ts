@@ -83,6 +83,46 @@ test('without rent collection the landlord sees leases and applications, not mon
   }
 })
 
+test('portfolio analytics leave out revenue, collection and arrears while RentOS collects no rent', async ({ page }) => {
+  await signInWithMockedApi(page, landlord, ({ method, path }) => {
+    if (method !== 'GET') return undefined
+    if (path === '/platform/features') return { data: noRegulatedFeatures }
+    // With rent collection off the API sends these figures as null.
+    if (path === '/analytics/me') {
+      return { data: { totalProperties: 2, occupiedProperties: 1, availableProperties: 1, occupancyRate: 50, activeTenants: 1, totalApplications: 4, pendingApplications: 2, avgRentAmount: 1800, totalRevenue: null, thisMonthRevenue: null, collectionRate: null, monthlyIncome: null, pendingPayments: null, overduePayments: null } }
+    }
+    return undefined
+  })
+  await page.goto('/analytics')
+  await expect(page.getByText('Portfolio Analytics')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('2 waiting')).toBeVisible()
+  await expect(page.getByText('Asking, across your listings')).toBeVisible()
+  await expect(page.getByText('Occupancy Rate')).toBeVisible()
+  for (const money of ['Total Revenue', 'This Month', 'Collection Rate', 'Pending Payments', 'Overdue Payments', 'Monthly Revenue (last 6 months)']) {
+    await expect(page.getByText(money, { exact: true })).toHaveCount(0)
+  }
+})
+
+test('a tenant’s analytics show leases and applications, not payments or savings, while neither service is offered', async ({ page }) => {
+  await signInWithMockedApi(page, tenant, ({ method, path }) => {
+    if (method !== 'GET') return undefined
+    if (path === '/platform/features') return { data: noRegulatedFeatures }
+    if (path === '/analytics/me') {
+      return { data: { activeAgreements: 1, totalAgreements: 3, endedAgreements: 1, totalApplications: 2, pendingApplications: 1, openDisputes: 0, nextPaymentAmount: 1500, totalPaid: null, paymentCount: null, walletBalance: null, totalSaved: null, savingsTarget: null } }
+    }
+    return undefined
+  })
+  await page.goto('/analytics')
+  await expect(page.getByText('Your rental overview')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('1 pending')).toBeVisible()
+  await expect(page.getByText('Rent in your lease')).toBeVisible()
+  // Ended counts expired and terminated leases only, not drafts awaiting signatures.
+  await expect(page.getByText('Ended', { exact: true }).locator('xpath=..')).toContainText('1')
+  for (const money of ['Total Paid', 'Payments Made', 'Wallet Balance', 'Total Saved', 'Savings Target', 'Pending Payments', 'Payment History (last 6 months)', 'Savings Progress', 'Overdue']) {
+    await expect(page.getByText(money, { exact: true })).toHaveCount(0)
+  }
+})
+
 test('the subscription page says how far over the limit a downgraded landlord is, never more than 100%', async ({ page }) => {
   await signInWithMockedApi(page, landlord, ({ method, path }) => {
     if (method === 'GET' && path === '/subscriptions/my-subscription') {

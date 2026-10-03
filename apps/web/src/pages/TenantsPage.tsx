@@ -237,7 +237,7 @@ export function TenantsPage() {
                   <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.reduce((s, a) => s + a.paymentCount, 0)}</p>
                   <p className="text-[10px] text-muted dark:text-gray-500">Payments</p>
                 </>) : (<>
-                  <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.filter((a) => a.status !== 'active').length}</p>
+                  <p className="text-lg font-extrabold text-secondary">{selectedTenant.agreements.filter((a) => a.status === 'expired' || a.status === 'terminated').length}</p>
                   <p className="text-[10px] text-muted dark:text-gray-500">Ended</p>
                 </>)}
               </div>
